@@ -10,6 +10,7 @@ export const registerUser =async (payload) => {
 export async function login(payload) {
   // payload = { email, password }
   const { data } = await api.post("/login", payload);
+  localStorage.setItem("auth_token", data.token);
   return data; // { message, user }
 }
 
@@ -20,5 +21,6 @@ export async function me() {
 
 export async function logout() {
   const { data } = await api.post("/logout");
+  localStorage.removeItem("auth_token");
   return data; // { message }
 }

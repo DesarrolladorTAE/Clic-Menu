@@ -33,6 +33,7 @@ export function AuthProvider({ children }) {
       },
       async logout() {
         await authService.logout();
+        localStorage.removeItem("auth_token");
         setUser(null);
       },
     };
