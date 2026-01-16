@@ -20,9 +20,16 @@ export default function Login() {
     try {
       const res = await login(email, password);
 
-      // Redirección simple (por ahora)
-      // Luego lo hacemos por rol
-      nav("/app", { replace: true });
+      //nav("/app", { replace: true });
+
+      const roleName = res?.user?.role?.name?.toLowerCase();
+      const roleId = String(res?.user?.role_id);
+
+      //Propietario: Redirecciona  a pagina "Mis restaurantes"
+      const isOwner = roleName === "propietario" || roleId === "2";
+      nav(isOwner ? "/owner/restaurants" : "/app", { replace: true });
+
+
     } catch (e) {
       const msg =
         e?.response?.data?.message ||
