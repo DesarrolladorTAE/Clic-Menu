@@ -14,6 +14,10 @@ import MyRestaurants from "../pages/restaurant/MyRestaurants";
 import RestaurantCreate from "../pages/restaurant/RestaurantCreate";
 import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 
+//Sucursale
+import BranchCreate from "../pages/restaurant/BranchCreate";
+import BranchEdit from "../pages/restaurant/BranchEdit";
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -31,6 +35,10 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
         <Route path="/owner/restaurants/new" element={<RestaurantCreate />} />
         <Route path="/owner/restaurants/:id/edit" element={<RestaurantEdit />} />
+
+        <Route path="/owner/restaurants/:restaurantId/branches/new" element={<BranchCreate />} />
+        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/edit" element={<BranchEdit />} />
+        
       </Route>
       
       
