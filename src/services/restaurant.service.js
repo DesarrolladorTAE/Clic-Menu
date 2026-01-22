@@ -30,3 +30,24 @@ export async function deleteRestaurant(id) {
   const { data } = await api.delete(`/restaurants/${id}`);
   return data;
 }
+
+
+// GET /api/restaurants/:id/subscription
+export async function getRestaurantSubscriptionStatus(restaurantId) {
+  const { data } = await api.get(`/restaurants/${restaurantId}/subscription`);
+  return data;
+}
+
+// POST /api/restaurants/:id/subscription
+export async function subscribeRestaurant(restaurantId, payload) {
+  const res = await api.post(`/restaurants/${restaurantId}/subscribe`, payload);
+  return res.data?.data ?? res.data;
+}
+
+//PUT  /restaurants/${restaurantId}/main-branch
+export async function setRestaurantMainBranch(restaurantId, mainBranchId) {
+  const { data } = await api.put(`/restaurants/${restaurantId}/main-branch`, {
+    main_branch_id: mainBranchId,
+  });
+  return data;
+}

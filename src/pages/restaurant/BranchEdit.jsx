@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getBranch, updateBranch } from "../../services/branch.service";
+import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
 export default function BranchEdit() {
   const nav = useNavigate();
@@ -40,7 +41,9 @@ export default function BranchEdit() {
           status: b?.status ?? "active",
         });
       } catch (e) {
-        setErr(e?.response?.data?.message || "No se pudo cargar la sucursal");
+        const redirected = handleRestaurantApiError(e, nav, restaurantId);
+        if (!redirected) setErr(e?.response?.data?.message || "No se pudo cargar la sucursal");
+
       } finally {
         setLoading(false);
       }
@@ -55,7 +58,9 @@ export default function BranchEdit() {
       await updateBranch(restaurantId, branchId, form);
       nav("/owner/restaurants", { replace: true });
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo guardar cambios");
+      const redirected = handleRestaurantApiError(e, nav, restaurantId);
+      if (!redirected) setErr(e?.response?.data?.message || "No se pudo guardar los cambios de la  sucursal");
+
     } finally {
       setBusy(false);
     }

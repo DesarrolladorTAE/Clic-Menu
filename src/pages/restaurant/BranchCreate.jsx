@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createBranch } from "../../services/branch.service";
+import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
+
+
 
 export default function BranchCreate() {
   const nav = useNavigate();
@@ -28,7 +31,9 @@ export default function BranchCreate() {
       await createBranch(restaurantId, form);
       nav("/owner/restaurants", { replace: true });
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo crear la sucursal");
+      const redirected = handleRestaurantApiError(e, nav, restaurantId);
+      if (!redirected) setErr(e?.response?.data?.message || "No se pudo crear sucursal");
+
     } finally {
       setBusy(false);
     }
