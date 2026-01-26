@@ -25,8 +25,18 @@ export default function RestaurantCreate() {
     setBusy(true);
 
     try {
-      await createRestaurant(form);
-      nav("/owner/restaurants", { replace: true });
+      const res= await createRestaurant(form);
+      
+      const payload = res?.data?.data ? res.data : res; // si res.data.data existe, res es axios response
+
+      const created = payload?.data ?? null; // restaurante creado
+      const rid = created?.id ?? null;
+
+      const nextRoute =
+        payload?.next?.route ||
+        (rid ? `/owner/restaurants/${rid}/settings` : "/owner/restaurants");
+
+      nav(nextRoute, { replace: true });
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo crear el restaurante");
     } finally {
@@ -58,7 +68,7 @@ export default function RestaurantCreate() {
         <div style={{ marginBottom: 10 }}>
           <label>Descripción</label>
           <input
-            value={form.descripction}
+            value={form.description}
             onChange={onChange("description")}
             style={{ width: "100%", padding: 10 }}
           />

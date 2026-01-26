@@ -139,7 +139,7 @@ export default function MyRestaurants() {
     }
   };
 
-  // ✅ NUEVO: antes de ir al form, checa si puede crear
+  // Antes de ir al form, checa si puede crear
   const onClickCreateBranch = async (restaurantId) => {
     try {
       // 1) Asegurar status
@@ -335,6 +335,22 @@ export default function MyRestaurants() {
                     >
                       Editar
                     </button>
+
+
+                    <button
+                      onClick={() => nav(`/owner/restaurants/${rid}/settings`)}
+                      style={{ padding: "8px 10px", cursor: "pointer" }}
+                    >
+                      Administrar
+                    </button>
+
+                    <button
+                      onClick={() => nav(`/owner/restaurants/${rid}/menu`)}
+                      style={{ padding: "8px 10px", cursor: "pointer" }}
+                    >
+                      Menú
+                    </button>
+
 
                     <button
                       onClick={() => onDelete(rid)}

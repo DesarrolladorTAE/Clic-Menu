@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import OwnerRoute from "./OwnerRoute";
 
-
 // Home (nueva página principal)
 //import Home from "../pages/public/Home";// ajusta la ruta si tu carpeta es otra
 
@@ -17,10 +16,16 @@ import Dashboard from "../pages/admin/Dashboard";
 import MyRestaurants from "../pages/restaurant/MyRestaurants";
 import RestaurantCreate from "../pages/restaurant/RestaurantCreate";
 import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
+import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
+
 
 //Sucursales
 import BranchCreate from "../pages/restaurant/BranchCreate";
 import BranchEdit from "../pages/restaurant/BranchEdit";
+
+//Menu y así
+import MenuManager from "../pages/menu/MenuManager";
+
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -47,10 +52,15 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants/new" element={<RestaurantCreate />} />
         <Route path="/owner/restaurants/:id/edit" element={<RestaurantEdit />} />
 
+        <Route path="/owner/restaurants/:restaurantId/settings" element={<RestaurantSettings />} />
+
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
         
         <Route path="/owner/restaurants/:restaurantId/branches/new" element={<BranchCreate />} />
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/edit" element={<BranchEdit />} />
+
+        <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
+
         
       </Route>
       
