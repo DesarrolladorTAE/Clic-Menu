@@ -103,9 +103,10 @@ export default function MenuManager() {
         setBranchId("");
       }
 
-      const query = st?.products_mode === "branch" && chosenBranchId
-        ? { branch_id: chosenBranchId }
-        : {};
+      const query =
+        st?.products_mode === "branch" && chosenBranchId
+          ? { branch_id: chosenBranchId }
+          : {};
 
       const [sec, cat] = await Promise.all([
         getMenuSections(restaurantId, query),
@@ -146,10 +147,23 @@ export default function MenuManager() {
   }, [requiresBranch, effectiveBranchId, restaurantId]);
 
   const resetSectionForm = () =>
-    setSectionForm({ id: null, name: "", description: "", sort_order: 0, status: "active" });
+    setSectionForm({
+      id: null,
+      name: "",
+      description: "",
+      sort_order: 0,
+      status: "active",
+    });
 
   const resetCategoryForm = () =>
-    setCategoryForm({ id: null, section_id: "", name: "", description: "", sort_order: 0, status: "active" });
+    setCategoryForm({
+      id: null,
+      section_id: "",
+      name: "",
+      description: "",
+      sort_order: 0,
+      status: "active",
+    });
 
   const onSubmitSection = async (e) => {
     e.preventDefault();
@@ -277,6 +291,22 @@ export default function MenuManager() {
     }
   };
 
+  // ✅ NUEVO: ir a Sales Channels respetando sucursal si aplica
+  const goSalesChannels = () => {
+    setErr("");
+
+    if (requiresBranch) {
+      if (!effectiveBranchId) {
+        setErr("Selecciona una sucursal para administrar canales (modo por sucursal).");
+        return;
+      }
+      nav(`/owner/restaurants/${restaurantId}/sales-channels?branch_id=${effectiveBranchId}`);
+      return;
+    }
+
+    nav(`/owner/restaurants/${restaurantId}/sales-channels`);
+  };
+
   if (loading) return <div style={{ padding: 16 }}>Cargando módulo de menú...</div>;
 
   return (
@@ -319,10 +349,10 @@ export default function MenuManager() {
         </div>
       )}
 
-      {err && <div style={{ marginTop: 14, background: "#ffe5e5", padding: 10 }}>{err}</div>}
+      {err && <div style={{ marginTop: 14, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line" }}>{err}</div>}
 
       {/* Tabs */}
-      <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+      <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button
           onClick={() => setTab("sections")}
           style={{
@@ -363,6 +393,21 @@ export default function MenuManager() {
           }}
         >
           Ir a Productos →
+        </button>
+
+        {/* ✅ NUEVO BOTÓN: Sales Channels */}
+        <button
+          onClick={goSalesChannels}
+          style={{
+            padding: "10px 12px",
+            cursor: "pointer",
+            borderRadius: 10,
+            border: "1px solid #ddd",
+            background: "#fff",
+          }}
+          title={requiresBranch ? "Abrirá canales filtrados por sucursal" : "Abrirá canales del restaurante"}
+        >
+          Sales Channels →
         </button>
       </div>
 
