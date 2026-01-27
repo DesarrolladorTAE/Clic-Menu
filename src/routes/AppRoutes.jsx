@@ -25,7 +25,7 @@ import BranchEdit from "../pages/restaurant/BranchEdit";
 
 //Menu y así
 import MenuManager from "../pages/menu/MenuManager";
-
+import ProductsPage from "../pages/products/ProductsPage";
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -60,7 +60,7 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/edit" element={<BranchEdit />} />
 
         <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
-
+        <Route path="/owner/restaurants/:restaurantId/products" element={<ProductsPage />} />
         
       </Route>
       
