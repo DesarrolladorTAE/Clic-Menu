@@ -1,233 +1,190 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-
+import { useNavigate, useParams } from "react-router-dom";
 import {
-  getSalesChannels,
   createSalesChannel,
-  updateSalesChannel,
   deleteSalesChannel,
+  getSalesChannels,
+  updateSalesChannel,
 } from "../../services/sales_channels.service";
 
-const STATUS = {
-  active: "active",
-  inactive: "inactive",
-};
+const STATUS_OPTIONS = [
+  { value: "active", label: "Activo" },
+  { value: "inactive", label: "Inactivo" },
+];
 
-function normalizeCode(value) {
-  return String(value || "")
+function normalizeCode(v) {
+  return (v || "")
+    .toString()
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, "_"); // "A DOMICILIO" -> "A_DOMICILIO"
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Z0-9_]/g, "");
 }
 
 export default function SalesChannelsPage() {
   const nav = useNavigate();
   const { restaurantId } = useParams();
-  const rid = Number(restaurantId);
 
-  const [searchParams] = useSearchParams();
-  const branchIdFromUrl = searchParams.get("branch_id"); // string | null
-
-  const isBranchMode = useMemo(() => {
-    return !!branchIdFromUrl && !Number.isNaN(Number(branchIdFromUrl));
-  }, [branchIdFromUrl]);
-
-  const effectiveBranchId = useMemo(() => {
-    if (!isBranchMode) return null;
-    return Number(branchIdFromUrl);
-  }, [isBranchMode, branchIdFromUrl]);
-
-  // filtros
-  const [includeInactive, setIncludeInactive] = useState(false);
-
-  // data
-  const [rows, setRows] = useState([]);
-
-  // ui
-  const [loading, setLoading] = useState(true); // ✅ solo carga inicial
-  const [refreshing, setRefreshing] = useState(false); // ✅ recargas sin tumbar pantalla
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  // form (sin branch_id visible)
+  const [items, setItems] = useState([]);
+
+  // modal simple inline
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // objeto canal o null
+
   const [form, setForm] = useState({
-    id: null,
     code: "",
     name: "",
-    status: STATUS.active,
+    status: "active",
   });
 
-  const params = useMemo(() => {
-    const p = {};
-    if (includeInactive) p.include_inactive = true;
-    if (effectiveBranchId) p.branch_id = effectiveBranchId;
-    return p;
-  }, [includeInactive, effectiveBranchId]);
+  const title = useMemo(() => {
+    return `Canales de venta del restaurante`;
+  }, []);
 
-  // ✅ load con modo: initial vs refresh
-  const load = async ({ silent = false } = {}) => {
+  const load = async () => {
     setErr("");
-    if (silent) setRefreshing(true);
-    else setLoading(true);
-
+    setLoading(true);
     try {
-      const list = await getSalesChannels(rid, params);
-      setRows(list);
+      const res = await getSalesChannels(restaurantId);
+      const list = Array.isArray(res) ? res : res?.data ?? [];
+      setItems(list);
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudieron cargar canales");
+      setErr(e?.response?.data?.message || "No se pudieron cargar los canales");
     } finally {
-      if (silent) setRefreshing(false);
-      else setLoading(false);
+      setLoading(false);
     }
   };
 
-  // ✅ carga inicial (solo cuando cambia restaurantId)
   useEffect(() => {
-    load({ silent: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rid]);
+    load();
+  }, [restaurantId]);
 
-  // ✅ recargas por filtros/sucursal (sin pantalla "Cargando...")
-  useEffect(() => {
-    if (loading) return;
-    load({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ code: "", name: "", status: "active" });
+    setOpen(true);
+  };
 
-  const resetForm = () => {
+  const openEdit = (it) => {
+    setEditing(it);
     setForm({
-      id: null,
-      code: "",
-      name: "",
-      status: STATUS.active,
+      code: it.code ?? "",
+      name: it.name ?? "",
+      status: it.status ?? "active",
     });
+    setOpen(true);
   };
 
-  const onEdit = (ch) => {
+  const closeModal = () => {
+    if (saving) return;
+    setOpen(false);
+    setEditing(null);
+  };
+
+  const onChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const onSubmit = async () => {
     setErr("");
-    setForm({
-      id: ch.id,
-      code: ch.code ?? "",
-      name: ch.name ?? "",
-      status: ch.status ?? STATUS.active,
-    });
-  };
-
-  const validate = () => {
-    const code = normalizeCode(form.code);
-    if (!code) return "El code es requerido (ej. COMEDOR)";
-    if (code.length > 30) return "code máximo 30 caracteres";
-    if (!String(form.name || "").trim()) return "El nombre es requerido";
-    if (String(form.name || "").trim().length > 80) return "name máximo 80 caracteres";
-    if (![STATUS.active, STATUS.inactive].includes(form.status)) return "status inválido";
-    return "";
-  };
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setErr("");
-
-    const msg = validate();
-    if (msg) {
-      setErr(msg);
-      return;
-    }
 
     const payload = {
-      branch_id: effectiveBranchId ?? null,
       code: normalizeCode(form.code),
-      name: String(form.name).trim(),
+      name: (form.name || "").trim(),
       status: form.status,
     };
 
+    if (!payload.code) {
+      setErr("El code es obligatorio. Ej: COMEDOR, DELIVERY, PICKUP");
+      return;
+    }
+    if (!payload.name) {
+      setErr("El nombre es obligatorio. Ej: Comedor, Delivery");
+      return;
+    }
+
+    setSaving(true);
     try {
-      if (form.id) {
-        await updateSalesChannel(rid, form.id, payload);
+      if (editing?.id) {
+        await updateSalesChannel(restaurantId, editing.id, payload);
       } else {
-        await createSalesChannel(rid, payload);
+        await createSalesChannel(restaurantId, payload);
       }
-
-      resetForm();
-      await load({ silent: true }); // ✅ refresh sin tumbar UI
-    } catch (e2) {
-      const m =
-        e2?.response?.data?.message ||
-        (e2?.response?.data?.errors
-          ? Object.values(e2.response.data.errors).flat().join("\n")
-          : "No se pudo guardar el canal");
-      setErr(m);
-    }
-  };
-
-  const onDelete = async (id) => {
-    if (!confirm("¿Eliminar este canal?")) return;
-    setErr("");
-    try {
-      await deleteSalesChannel(rid, id);
-      if (form.id === id) resetForm();
-      await load({ silent: true }); // ✅ refresh sin tumbar UI
+      setOpen(false);
+      setEditing(null);
+      await load();
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo eliminar");
+      setErr(e?.response?.data?.message || "No se pudo guardar el canal");
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) return <div style={{ padding: 16 }}>Cargando canales...</div>;
+  const onToggleStatus = async (it) => {
+    setErr("");
+    setSaving(true);
+    try {
+      const next = it.status === "active" ? "inactive" : "active";
+      await updateSalesChannel(restaurantId, it.id, { status: next });
+      await load();
+    } catch (e) {
+      setErr(e?.response?.data?.message || "No se pudo cambiar el estado");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async (it) => {
+    const ok = confirm(`¿Eliminar canal "${it.name}"?`);
+    if (!ok) return;
+
+    setErr("");
+    setSaving(true);
+    try {
+      await deleteSalesChannel(restaurantId, it.id);
+      await load();
+    } catch (e) {
+      setErr(e?.response?.data?.message || "No se pudo eliminar el canal");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div style={{ padding: 16 }}>Cargando canales…</div>;
 
   return (
-    <div style={{ maxWidth: 1100, margin: "30px auto", padding: 16 }}>
+    <div style={{ maxWidth: 900, margin: "30px auto", padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0 }}>Canales de venta</h2>
-
+          <h2 style={{ margin: 0 }}>{title}</h2>
           <div style={{ marginTop: 6, opacity: 0.85 }}>
-            Restaurante: <strong>#{rid}</strong>
+            Aquí solo defines el catálogo de canales posibles. No hay sucursales, no hay productos.
           </div>
-
-          <div style={{ marginTop: 6, opacity: 0.85 }}>
-            Scope:{" "}
-            <strong>
-              {effectiveBranchId ? `Sucursal #${effectiveBranchId}` : "Global"}
-            </strong>
-
-            {refreshing && (
-              <span style={{ marginLeft: 10, fontSize: 12, opacity: 0.7 }}>
-                actualizando...
-              </span>
-            )}
-          </div>
-
-          {effectiveBranchId && (
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-              Estás en modo sucursal: el canal se guardará automáticamente en esta sucursal.
-            </div>
-          )}
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => nav(-1)}
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/settings`)}
             style={{ padding: "10px 14px", cursor: "pointer" }}
           >
             ← Volver
           </button>
 
           <button
-            onClick={resetForm}
+            onClick={openCreate}
             style={{ padding: "10px 14px", cursor: "pointer" }}
           >
-            + Nuevo canal
+            + Crear canal
           </button>
         </div>
       </div>
 
       {err && (
-        <div
-          style={{
-            marginTop: 12,
-            background: "#ffe5e5",
-            padding: 10,
-            whiteSpace: "pre-line",
-          }}
-        >
+        <div style={{ marginTop: 12, background: "#ffe5e5", padding: 10 }}>
           {err}
         </div>
       )}
@@ -235,165 +192,245 @@ export default function SalesChannelsPage() {
       <div
         style={{
           marginTop: 14,
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
+          border: "1px solid #ddd",
+          borderRadius: 10,
+          overflow: "hidden",
         }}
       >
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="checkbox"
-            checked={includeInactive}
-            onChange={(e) => setIncludeInactive(e.target.checked)}
-          />
-          Incluir inactivos
-        </label>
-      </div>
-
-      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "420px 1fr", gap: 14 }}>
-        {/* Form */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontWeight: 900, marginBottom: 10 }}>
-            {form.id ? `Editar canal #${form.id}` : "Crear canal"}
-          </div>
-
-          <form onSubmit={onSubmit}>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
-                Code (único por restaurante{effectiveBranchId ? " y sucursal" : ""})
-              </div>
-              <input
-                value={form.code}
-                onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
-                placeholder="Ej. COMEDOR"
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                }}
-              />
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                Se normaliza a MAYÚSCULAS y con guiones bajos.
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
-                Nombre
-              </div>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Ej. Comedor"
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
-                Status
-              </div>
-              <select
-                value={form.status}
-                onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
-                style={{ width: "100%", padding: 10, borderRadius: 8 }}
-              >
-                <option value={STATUS.active}>active</option>
-                <option value={STATUS.inactive}>inactive</option>
-              </select>
-            </div>
-
-            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-              <button
-                type="submit"
-                style={{ padding: "10px 12px", cursor: "pointer", borderRadius: 8 }}
-              >
-                Guardar
-              </button>
-
-              {form.id && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  style={{ padding: "10px 12px", cursor: "pointer", borderRadius: 8 }}
-                >
-                  Cancelar edición
-                </button>
-              )}
-            </div>
-          </form>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "200px 1fr 140px 240px",
+            gap: 0,
+            padding: "10px 12px",
+            fontWeight: 800,
+            background: "#f7f7f7",
+            borderBottom: "1px solid #eee",
+          }}
+        >
+          <div>Code</div>
+          <div>Nombre</div>
+          <div>Estado</div>
+          <div style={{ textAlign: "right" }}>Acciones</div>
         </div>
 
-        {/* List */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontWeight: 900, marginBottom: 10 }}>Listado</div>
+        {items.length === 0 ? (
+          <div style={{ padding: 14, opacity: 0.85 }}>
+            No hay canales todavía. Crea el primero (ej. COMEDOR).
+          </div>
+        ) : (
+          items.map((it) => {
+            const active = it.status === "active";
+            return (
+              <div
+                key={it.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "200px 1fr 140px 240px",
+                  padding: "10px 12px",
+                  borderBottom: "1px solid #f0f0f0",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                  {it.code}
+                </div>
 
-          {rows.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No hay canales en este filtro.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {rows.map((ch) => (
-                <div
-                  key={ch.id}
+                <div style={{ fontWeight: 700 }}>{it.name}</div>
+
+                <div>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 800,
+                      background: active ? "#e6ffed" : "#eee",
+                      color: active ? "#0a7a2f" : "#444",
+                      border: "1px solid rgba(0,0,0,0.08)",
+                    }}
+                  >
+                    {active ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button
+                    onClick={() => onToggleStatus(it)}
+                    disabled={saving}
+                    style={{
+                      padding: "8px 10px",
+                      cursor: saving ? "not-allowed" : "pointer",
+                      opacity: saving ? 0.7 : 1,
+                    }}
+                    title="Activar / desactivar"
+                  >
+                    {active ? "Desactivar" : "Activar"}
+                  </button>
+
+                  <button
+                    onClick={() => openEdit(it)}
+                    disabled={saving}
+                    style={{
+                      padding: "8px 10px",
+                      cursor: saving ? "not-allowed" : "pointer",
+                      opacity: saving ? 0.7 : 1,
+                    }}
+                    title="Editar"
+                  >
+                    Editar
+                  </button>
+
+                  <button
+                    onClick={() => onDelete(it)}
+                    disabled={saving}
+                    style={{
+                      padding: "8px 10px",
+                      cursor: saving ? "not-allowed" : "pointer",
+                      opacity: saving ? 0.7 : 1,
+                      background: "#ffe5e5",
+                    }}
+                    title="Eliminar"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modal básico, sin librerías nuevas */}
+      {open && (
+        <div
+          onClick={closeModal}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              background: "#fff",
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.15)",
+              padding: 14,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>
+                  {editing ? "Editar canal" : "Crear canal"}
+                </div>
+                <div style={{ marginTop: 4, opacity: 0.85, fontSize: 13 }}>
+                  Code recomendado: COMEDOR, DELIVERY, PICKUP, UBER_EATS
+                </div>
+              </div>
+
+              <button
+                onClick={closeModal}
+                disabled={saving}
+                style={{ padding: "8px 10px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <div>
+                <div style={{ fontWeight: 800 }}>Code</div>
+                <input
+                  value={form.code}
+                  onChange={(e) => onChange("code", e.target.value)}
+                  placeholder="DELIVERY"
+                  disabled={saving}
                   style={{
-                    border: "1px solid #eee",
-                    borderRadius: 10,
-                    padding: 12,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    alignItems: "start",
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #ccc",
+                  }}
+                />
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
+                  Se normaliza a MAYÚSCULAS con guion bajo.
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800 }}>Nombre</div>
+                <input
+                  value={form.name}
+                  onChange={(e) => onChange("name", e.target.value)}
+                  placeholder="Delivery"
+                  disabled={saving}
+                  style={{
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #ccc",
+                  }}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 800 }}>Estado</div>
+                <select
+                  value={form.status}
+                  onChange={(e) => onChange("status", e.target.value)}
+                  disabled={saving}
+                  style={{
+                    marginTop: 6,
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #ccc",
+                    cursor: "pointer",
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 900 }}>
-                      {ch.name}{" "}
-                      <span style={{ fontSize: 12, opacity: 0.75 }}>
-                        ({ch.code})
-                      </span>
-                    </div>
+                  {STATUS_OPTIONS.map((op) => (
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-                      status: <strong>{ch.status}</strong>
-                      {" · "}
-                      scope:{" "}
-                      <strong>
-                        {ch.branch_id ? `branch #${ch.branch_id}` : "global"}
-                      </strong>
-                    </div>
-                  </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  onClick={closeModal}
+                  disabled={saving}
+                  style={{ padding: "10px 14px", cursor: "pointer" }}
+                >
+                  Cancelar
+                </button>
 
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => onEdit(ch)}
-                      style={{ padding: "8px 10px", cursor: "pointer" }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => onDelete(ch.id)}
-                      style={{
-                        padding: "8px 10px",
-                        cursor: "pointer",
-                        background: "#ffe5e5",
-                      }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              ))}
+                <button
+                  onClick={onSubmit}
+                  disabled={saving}
+                  style={{
+                    padding: "10px 14px",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    opacity: saving ? 0.7 : 1,
+                  }}
+                >
+                  {saving ? "Guardando…" : "Guardar"}
+                </button>
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

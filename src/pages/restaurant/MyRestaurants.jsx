@@ -9,6 +9,8 @@ import {
 } from "../../services/restaurant.service";
 
 import { getBranchesByRestaurant, deleteBranch } from "../../services/branch.service";
+import { getRestaurantSettings } from "../../services/restaurantSettings.service";
+
 import { useAuth } from "../../context/AuthContext";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
@@ -29,6 +31,9 @@ export default function MyRestaurants() {
 
   // Estado para sucursal principal por restaurante
   const [mainBranchMap, setMainBranchMap] = useState({});
+
+  // ✅ settings cache por restaurante (para products_mode)
+  const [settingsMap, setSettingsMap] = useState({}); // { [restaurantId]: { products_mode } }
 
   const load = async () => {
     setErr("");
@@ -61,6 +66,19 @@ export default function MyRestaurants() {
           status: e?.response?.status,
           data: e?.response?.data,
         });
+      }
+
+      // ✅ Cargar settings mínimos (products_mode)
+      try {
+        const settingsPairs = await Promise.all(
+          list.map(async (r) => {
+            const st = await getRestaurantSettings(r.id);
+            return [r.id, st];
+          })
+        );
+        setSettingsMap(Object.fromEntries(settingsPairs));
+      } catch (e) {
+        console.log("No se pudieron cargar settings de restaurantes", e?.response?.data || e?.message);
       }
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudieron cargar restaurantes");
@@ -176,8 +194,7 @@ export default function MyRestaurants() {
         if (activeCount >= Number(max)) {
           nav(`/owner/restaurants/${restaurantId}/plans`, {
             state: {
-              notice:
-                "Excedió su límite máximo de sucursales. Actualice su plan para crear más.",
+              notice: "Excedió su límite máximo de sucursales. Actualice su plan para crear más.",
               code: "BRANCH_LIMIT_REACHED",
               meta: { max_branches: Number(max), active_branches: activeCount },
             },
@@ -186,11 +203,47 @@ export default function MyRestaurants() {
         }
       }
 
-      // 4) OK: ahora sí al form
+      // 4) OK
       nav(`/owner/restaurants/${restaurantId}/branches/new`);
     } catch (e) {
-      // Si truena la validación por red, dejamos que el backend decida al final.
       nav(`/owner/restaurants/${restaurantId}/branches/new`);
+    }
+  };
+
+  // ✅ NUEVO: ir al Catálogo de la sucursal (Paso 2)
+  const onGoCatalog = async (restaurantId, branchId) => {
+    try {
+      // asegurar status y bloquear si no operativo
+      let st = statusMap[restaurantId];
+      if (!st) {
+        st = await getRestaurantSubscriptionStatus(restaurantId);
+        setStatusMap((prev) => ({ ...prev, [restaurantId]: st }));
+      }
+
+      if (st?.is_operational !== true) {
+        nav(`/owner/restaurants/${restaurantId}/plans`, {
+          state: {
+            notice: "Este restaurante está bloqueado. Contrata un plan para operar.",
+            code: st?.code || "SUBSCRIPTION_REQUIRED",
+          },
+        });
+        return;
+      }
+
+      // settings (solo informativo; la página catalog decide la lógica)
+      let cfg = settingsMap[restaurantId];
+      if (!cfg) {
+        cfg = await getRestaurantSettings(restaurantId);
+        setSettingsMap((prev) => ({ ...prev, [restaurantId]: cfg }));
+      }
+
+      // misma ruta en ambos modos
+      nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/catalog`, {
+        state: { products_mode: cfg?.products_mode || "global" },
+      });
+    } catch (e) {
+      // si algo falla, igual dejamos que el backend responda en la pantalla de catálogo
+      nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/catalog`);
     }
   };
 
@@ -282,6 +335,7 @@ export default function MyRestaurants() {
               : "#a10000";
 
             const mainId = mainBranchMap[rid] ?? null;
+            const productsMode = settingsMap[rid]?.products_mode || "global";
 
             return (
               <div
@@ -320,6 +374,10 @@ export default function MyRestaurants() {
                           (Plan 1 sucursal: la principal es la operativa)
                         </span>
                       )}
+
+                      <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.85 }}>
+                        Modo productos: <strong>{productsMode}</strong>
+                      </span>
                     </div>
 
                     <div style={{ opacity: 0.8, marginTop: 4 }}>
@@ -336,7 +394,6 @@ export default function MyRestaurants() {
                       Editar
                     </button>
 
-
                     <button
                       onClick={() => nav(`/owner/restaurants/${rid}/settings`)}
                       style={{ padding: "8px 10px", cursor: "pointer" }}
@@ -350,7 +407,6 @@ export default function MyRestaurants() {
                     >
                       Menú
                     </button>
-
 
                     <button
                       onClick={() => onDelete(rid)}
@@ -384,7 +440,6 @@ export default function MyRestaurants() {
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <h3 style={{ margin: 0 }}>Sucursales</h3>
 
-                      {/* ✅ CAMBIADO: ahora valida antes de ir al form */}
                       <button
                         onClick={() => onClickCreateBranch(rid)}
                         style={{ padding: "8px 10px", cursor: "pointer" }}
@@ -478,7 +533,25 @@ export default function MyRestaurants() {
                                 </div>
                               </div>
 
-                              <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "start", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                {/* ✅ NUEVO BOTÓN: Catálogo */}
+                                <button
+                                  onClick={() => onGoCatalog(rid, b.id)}
+                                  style={{
+                                    padding: "8px 10px",
+                                    cursor: "pointer",
+                                    background: "#f3f3ff",
+                                    border: "1px solid #d8d8ff",
+                                  }}
+                                  title={
+                                    productsMode === "global"
+                                      ? "Define qué productos globales vende esta sucursal"
+                                      : "Define qué productos de esta sucursal se venden"
+                                  }
+                                >
+                                  Catálogo
+                                </button>
+
                                 <button
                                   onClick={() => nav(`/owner/restaurants/${rid}/branches/${b.id}/edit`)}
                                   style={{ padding: "8px 10px", cursor: "pointer" }}

@@ -60,7 +60,7 @@ export default function MenuManager() {
     return branchId ? Number(branchId) : null;
   }, [requiresBranch, branchId]);
 
-  // ✅ Mapa: section_id -> section.name (NO mostrar IDs al usuario)
+  // Mapa: section_id -> section.name (NO mostrar IDs al usuario)
   const sectionNameById = useMemo(() => {
     const map = {};
     sections.forEach((s) => {
@@ -291,7 +291,7 @@ export default function MenuManager() {
     }
   };
 
-  // ✅ NUEVO: ir a Sales Channels respetando sucursal si aplica
+  // Ir a Sales Channels respetando sucursal si aplica
   const goSalesChannels = () => {
     setErr("");
 
@@ -392,10 +392,10 @@ export default function MenuManager() {
             background: "#fff",
           }}
         >
-          Ir a Productos →
+          Administrar Productos
         </button>
 
-        {/* ✅ NUEVO BOTÓN: Sales Channels */}
+        {/* BOTÓN: Sales Channels */}
         <button
           onClick={goSalesChannels}
           style={{
@@ -407,7 +407,7 @@ export default function MenuManager() {
           }}
           title={requiresBranch ? "Abrirá canales filtrados por sucursal" : "Abrirá canales del restaurante"}
         >
-          Sales Channels →
+          Canales de venta
         </button>
       </div>
 

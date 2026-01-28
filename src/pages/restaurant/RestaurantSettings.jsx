@@ -129,6 +129,32 @@ export default function RestaurantSettings() {
           help="Global: receta base compartida. Por sucursal: receta puede variar por sucursal."
         />
 
+        <div
+          style={{
+            borderTop: "1px solid #eee",
+            paddingTop: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 800 }}>Canales de venta</div>
+            <div style={{ marginTop: 4, fontSize: 13, opacity: 0.85 }}>
+              Define los canales a nivel restaurante (sin sucursales, sin productos).
+            </div>
+          </div>
+
+          <button
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/sales-channels`)}
+            style={{ padding: "10px 14px", cursor: "pointer" }}
+          >
+            Canales de venta →
+          </button>
+        </div>
+
+
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button
             onClick={() => nav("/owner/restaurants")}
