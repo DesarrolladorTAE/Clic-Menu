@@ -395,20 +395,6 @@ export default function MenuManager() {
           Administrar Productos
         </button>
 
-        {/* BOTÓN: Sales Channels */}
-        <button
-          onClick={goSalesChannels}
-          style={{
-            padding: "10px 12px",
-            cursor: "pointer",
-            borderRadius: 10,
-            border: "1px solid #ddd",
-            background: "#fff",
-          }}
-          title={requiresBranch ? "Abrirá canales filtrados por sucursal" : "Abrirá canales del restaurante"}
-        >
-          Canales de venta
-        </button>
       </div>
 
       {/* Secciones */}

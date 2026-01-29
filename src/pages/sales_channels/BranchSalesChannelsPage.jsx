@@ -185,13 +185,13 @@ export default function BranchSalesChannelsPage() {
   };
 
   const onConfig = (row) => {
-    const ch = row?.sales_channel;
-    const br = row?.branch;
+  const ch = row?.sales_channel;
+  const br = row?.branch;
 
-    const salesChannelId = ch?.id;
+  const salesChannelId = ch?.id;
     if (!salesChannelId) return;
 
-    // Solo si efectivo activo (o sea, está habilitado para esta sucursal)
+    // Solo si efectivo activo (habilitado realmente en la sucursal)
     if (br?.effective_is_active !== true) {
       setErr("Activa este canal en la sucursal antes de configurar productos.");
       return;
@@ -201,13 +201,14 @@ export default function BranchSalesChannelsPage() {
       `/owner/restaurants/${effectiveRestaurantId}/branches/${effectiveBranchId}/sales-channels/${salesChannelId}/products`,
       {
         state: {
-          sales_channel: ch,
-          branch_name: branchName,
-          products_mode: mode,
+          sales_channel: ch,          // opcional, por si quieres mostrar nombre sin recargar
+          branch_name: branchName,    // opcional
+          products_mode: mode,        // opcional
         },
       }
     );
   };
+
 
   if (loading) return <div style={{ padding: 16 }}>Cargando canales…</div>;
 
@@ -441,24 +442,25 @@ export default function BranchSalesChannelsPage() {
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       onClick={() => onConfig(r)}
-                      disabled={!enabled}
+                      disabled={br?.effective_is_active !== true}
                       style={{
                         padding: "8px 10px",
-                        cursor: enabled ? "pointer" : "not-allowed",
-                        opacity: enabled ? 1 : 0.6,
+                        cursor: br?.effective_is_active === true ? "pointer" : "not-allowed",
+                        opacity: br?.effective_is_active === true ? 1 : 0.6,
                         background: "#f0f0ff",
                         border: "1px solid #cfcfff",
                         borderRadius: 8,
                         fontWeight: 900,
                       }}
                       title={
-                        enabled
+                        br?.effective_is_active === true
                           ? "Configurar productos (siguiente pantalla)"
                           : "Activa el canal primero"
                       }
                     >
                       🔧 Configurar productos
                     </button>
+
                   </div>
                 </div>
               );
