@@ -553,6 +553,21 @@ export default function MyRestaurants() {
                                 </button>
 
                                 <button
+                                  onClick={() => nav(`/owner/restaurants/${rid}/branches/${b.id}/sales-channels`)}
+                                  style={{
+                                    padding: "8px 10px",
+                                    cursor: "pointer",
+                                    background: "#f0f0ff",
+                                    border: "1px solid #cfcfff",
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Canales de venta
+                                </button>
+
+
+                                <button
                                   onClick={() => nav(`/owner/restaurants/${rid}/branches/${b.id}/edit`)}
                                   style={{ padding: "8px 10px", cursor: "pointer" }}
                                 >

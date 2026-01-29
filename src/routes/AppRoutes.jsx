@@ -29,6 +29,8 @@ import ProductsPage from "../pages/products/ProductsPage";
 
 import BranchCatalogPage from "../pages/restaurant/catalog/BranchCatalogPage";
 import SalesChannelsPage from "../pages/sales_channels/SalesChannelsPage";
+import BranchSalesChannelsPage from "../pages/sales_channels/BranchSalesChannelsPage";
+
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -65,6 +67,8 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
         <Route path="/owner/restaurants/:restaurantId/products" element={<ProductsPage />} />
         <Route path="/owner/restaurants/:restaurantId/sales-channels" element={<SalesChannelsPage /> }/>
+        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels" element={<BranchSalesChannelsPage />} />
+
 
 
         <Route
