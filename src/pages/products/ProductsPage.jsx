@@ -283,6 +283,20 @@ export default function ProductsPage() {
     }
   };
 
+  //Varianteees 29/01
+  const onVariants = (p) => {
+    if (!p?.id) return;
+    nav(`/owner/restaurants/${restaurantId}/products/${p.id}/variants`, {
+      state: {
+        product_name: p?.name || "",
+        // opcional: para que la pantalla Variantes sepa desde qué modo vienes
+        products_mode: productsMode,
+        // opcional: para recordar sucursal si quieres mostrarla arriba
+        branch_id: effectiveBranchId,
+      },
+    });
+  };
+
   const onUpload = async (file) => {
     if (!selectedProductId) return setErr("Primero guarda el producto");
     if (!file) return;
@@ -651,6 +665,21 @@ export default function ProductsPage() {
                   </div>
 
                   <div style={{ display: "flex", gap: 8 }}>
+                    {/* ✅ NUEVO BOTÓN */}
+                    <button
+                      onClick={() => onVariants(p)}
+                      style={{
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                        background: "#f0f0ff",
+                        border: "1px solid #cfcfff",
+                        borderRadius: 8,
+                        fontWeight: 900,
+                      }}
+                      title="Gestionar variantes del producto"
+                    >
+                      Variantes
+                    </button>
                     <button onClick={() => onEdit(p)} style={{ padding: "8px 10px", cursor: "pointer" }}>
                       Editar
                     </button>
