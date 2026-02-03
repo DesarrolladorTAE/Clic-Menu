@@ -13,6 +13,10 @@ import { normalizeErr } from "../../../utils/err";
 
 import RepairVariantModal from "../../../components/variants/RepairVariantModal";
 
+import VariantChannelsModal from "../../../components/variants/VariantChannelsModal";
+
+
+
 function money(n) {
   if (n == null || n === "") return "—";
   const num = Number(n);
@@ -51,6 +55,11 @@ export default function ProductVariantsPage() {
   //Modal reparar (2)
   const [repairOpen, setRepairOpen] = useState(false);
   const [repairTarget, setRepairTarget] = useState(null); 
+
+  //Modal productos variantes
+  const [channelsOpen, setChannelsOpen] = useState(false);
+  const [channelsTarget, setChannelsTarget] = useState(null);
+
 
 
   // anti race-conditions
@@ -305,6 +314,8 @@ export default function ProductVariantsPage() {
                   const isInvalid = !!v.is_invalid;
                   const invalidReason = v.invalid_reason || "";
 
+                  const canOpenChannels = !isInvalid && !!v.is_enabled;
+
                   return (
                     <tr key={v.id} style={isInvalid ? { background: "#fff7f7" } : undefined}>
                       {/* Variante */}
@@ -417,13 +428,31 @@ export default function ProductVariantsPage() {
                       {/* Acciones */}
                       <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          
+
                           <button
-                            disabled
-                            title="Pantalla de canales aún no existe"
-                            style={{ padding: "8px 10px", cursor: "not-allowed", opacity: 0.6 }}
+                            onClick={() => {
+                              setChannelsTarget(v);
+                              setChannelsOpen(true);
+                            }}
+                            disabled={!canOpenChannels}
+                            title={
+                              !canOpenChannels
+                                ? isInvalid
+                                  ? "Variante inválida: corrige o elimina"
+                                  : "Variante inactiva: actívala para configurar canales"
+                                : "Configurar precio por canal (override)"
+                            }
+                            style={{
+                              padding: "8px 10px",
+                              cursor: canOpenChannels ? "pointer" : "not-allowed",
+                              opacity: canOpenChannels ? 1 : 0.6,
+                              fontWeight: 900,
+                            }}
                           >
                             💲 Canales
                           </button>
+
 
                           {/* ✅ Editar habilitado SOLO si inválida (placeholder) */}
                           <button
@@ -498,6 +527,19 @@ export default function ProductVariantsPage() {
           await load({ initial: false });
         }}
       />
+
+
+      <VariantChannelsModal
+        open={channelsOpen}
+        onClose={() => {
+          setChannelsOpen(false);
+          setChannelsTarget(null);
+        }}
+        restaurantId={restaurantId}
+        productId={productId}
+        variant={channelsTarget}
+      />
+
 
     </div>
   );
