@@ -18,7 +18,6 @@ import RestaurantCreate from "../pages/restaurant/RestaurantCreate";
 import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
-
 //Sucursales
 import BranchCreate from "../pages/restaurant/BranchCreate";
 import BranchEdit from "../pages/restaurant/BranchEdit";
@@ -33,6 +32,9 @@ import BranchCatalogPage from "../pages/restaurant/catalog/BranchCatalogPage";
 import SalesChannelsPage from "../pages/sales_channels/SalesChannelsPage";
 import BranchSalesChannelsPage from "../pages/sales_channels/BranchSalesChannelsPage";
 import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsConfigPage";
+
+//Inventario
+import IngredientsPage from "../pages/inventory/IngredientsPage";
 
 
 //Planes
@@ -77,9 +79,10 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels" element={<BranchSalesChannelsPage />} />
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
 
-
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
-        
+
+        <Route path="/owner/restaurants/:restaurantId/settings/ingredients" element={<IngredientsPage />} />
+
       </Route>
       
       

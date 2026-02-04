@@ -409,6 +409,13 @@ export default function MyRestaurants() {
                     </button>
 
                     <button
+                      onClick={() => nav(`/owner/restaurants/${rid}/settings/ingredients`)}
+                      style={{ padding: "8px 10px", cursor: "pointer" }}
+                    >
+                      Ingredientes
+                    </button>
+
+                    <button
                       onClick={() => onDelete(rid)}
                       style={{
                         padding: "8px 10px",
