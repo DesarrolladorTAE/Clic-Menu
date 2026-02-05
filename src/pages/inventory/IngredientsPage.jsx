@@ -41,6 +41,7 @@ export default function IngredientsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
 
   const [rows, setRows] = useState([]);
 
@@ -59,6 +60,7 @@ export default function IngredientsPage() {
   const load = async ({ initial = false } = {}) => {
     const myReq = ++reqRef.current;
     setErr("");
+    setInfo("");
 
     if (initial) setLoading(true);
     else setRefreshing(true);
@@ -101,32 +103,91 @@ export default function IngredientsPage() {
 
   const onDelete = async (row) => {
     setErr("");
-    const ok = confirm(`¿Eliminar ingrediente?\n\n${row.name}\n\nSi ya tiene presentaciones, tu backend lo bloqueará.`);
+    setInfo("");
+
+    const ok = confirm(
+      `¿Eliminar ingrediente?\n\n${row.name}\n\n` +
+        `Si tiene historial, el backend NO lo borrará y solo lo desactivará.`
+    );
     if (!ok) return;
 
     const snapshot = rows;
     setRows((prev) => prev.filter((x) => x.id !== row.id));
 
     try {
-      await deleteIngredient(restaurantId, row.id);
+      const res = await deleteIngredient(restaurantId, row.id);
+
+      const mode = res?.mode;
+      const message = res?.message;
+
+      if (mode === "inactivated") {
+        setInfo(message || "Este ingrediente tiene historial. Solo puede desactivarse.");
+      } else if (mode === "already_inactive") {
+        setInfo(message || "Ingrediente ya estaba inactivo.");
+      } else if (mode === "deleted") {
+        setInfo(message || "Ingrediente eliminado.");
+      } else {
+        setInfo(message || "Acción realizada.");
+      }
+
+      await load({ initial: false });
     } catch (e) {
       setRows(snapshot);
       setErr(normalizeErr(e, "No se pudo eliminar"));
     }
   };
 
+  /**
+   * ✅ FIX CLAVE:
+   * Tu backend está validando PUT como “update completo”.
+   * Entonces para cambiar status, mandamos payload mínimo completo:
+   * name, unit, ingredient_group_id, is_stock_item, waste_percentage, code (si existe) + status.
+   */
+  const buildFullUpdatePayloadForStatus = (row, nextStatus) => {
+    const payload = {
+      status: nextStatus,
+      name: row.name,
+      unit: row.unit,
+      ingredient_group_id: row.ingredient_group_id ?? null,
+      is_stock_item: !!row.is_stock_item,
+      waste_percentage: row.waste_percentage ?? null,
+      code: row.code ?? null,
+    };
+
+    // limpia undefined
+    Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
+    return payload;
+  };
+
   const onToggleStatus = async (row) => {
     setErr("");
+    setInfo("");
+
+    const needsGroup = Number(row.needs_group) === 1;
+
+    // ✅ Si falta grupo: esto sí es ERROR (rojo) y abrimos wizard
+    if (needsGroup) {
+      setErr("Este ingrediente no tiene grupo. Está inactivo. Edita y elige un grupo para poder activarlo.");
+      onEdit(row);
+      return;
+    }
+
     const next = row.status === "active" ? "inactive" : "active";
 
+    // optimistic
     const snapshot = rows;
     setRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, status: next } : x)));
 
     try {
-      await updateIngredient(restaurantId, row.id, { status: next });
+      const payload = buildFullUpdatePayloadForStatus(row, next);
+      await updateIngredient(restaurantId, row.id, payload);
+      await load({ initial: false });
     } catch (e) {
       setRows(snapshot);
-      setErr(normalizeErr(e, "No se pudo actualizar estado"));
+
+      // si backend manda mensaje claro, úsalo
+      const msg = normalizeErr(e, "No se pudo actualizar estado");
+      setErr(msg);
     }
   };
 
@@ -162,6 +223,21 @@ export default function IngredientsPage() {
       {err && (
         <div style={{ marginTop: 12, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line", borderRadius: 10 }}>
           <strong>Error:</strong> {err}
+        </div>
+      )}
+
+      {info && (
+        <div
+          style={{
+            marginTop: 12,
+            background: "#eef2ff",
+            padding: 10,
+            whiteSpace: "pre-line",
+            borderRadius: 10,
+            border: "1px solid #c7d2fe",
+          }}
+        >
+          <strong>Info:</strong> {info}
         </div>
       )}
 
@@ -222,8 +298,8 @@ export default function IngredientsPage() {
                 </tr>
               ) : (
                 rows.map((r) => {
-                  const groupLabel = r.group_name || "—";
-                  const groupMissing = !r.ingredient_group_id || !r.group_name;
+                  const needsGroup = Number(r.needs_group) === 1;
+                  const statusEffective = needsGroup ? "inactive" : r.status;
 
                   return (
                     <tr key={r.id}>
@@ -236,15 +312,30 @@ export default function IngredientsPage() {
 
                       <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0", fontWeight: 800 }}>{r.unit}</td>
 
-                      {/* ✅ Grupo actualizado */}
                       <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        {groupMissing ? (
-                          <span style={pill("#fff3cd", "#ffeeba")} title="No tiene grupo asignado (revisa migración/datos)">
-                            ⚠️ Sin grupo
-                          </span>
+                        {needsGroup ? (
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <span style={pill("#fff3cd", "#ffeeba")}>
+                              ⚠️ {r.group_name || "Falta grupo de ingredientes"}
+                            </span>
+                            <button
+                              onClick={() => onEdit(r)}
+                              style={{
+                                padding: "6px 10px",
+                                cursor: "pointer",
+                                borderRadius: 10,
+                                border: "1px solid #ffeeba",
+                                background: "#fff3cd",
+                                fontWeight: 900,
+                              }}
+                              title="Elegir grupo (editar)"
+                            >
+                              🧩 Elegir grupo
+                            </button>
+                          </div>
                         ) : (
                           <span style={pill("#eef2ff", "#c7d2fe")} title={`Grupo ID: ${r.ingredient_group_id}`}>
-                            {groupLabel}
+                            {r.group_name || "—"}
                           </span>
                         )}
                       </td>
@@ -260,7 +351,7 @@ export default function IngredientsPage() {
                       </td>
 
                       <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        {r.status === "active" ? (
+                        {statusEffective === "active" ? (
                           <span style={pill("#e8f5e9", "#c8e6c9")}>Activo</span>
                         ) : (
                           <span style={pill("#ffe5e5", "#ffb3b3")}>Inactivo</span>
@@ -269,33 +360,37 @@ export default function IngredientsPage() {
 
                       <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button onClick={() => onEdit(r)} style={{ padding: "8px 10px", cursor: "pointer" }}>
+                          <button onClick={() => onEdit(r)} style={{ padding: "8px 10px", cursor: "pointer" }} title="Editar">
                             ✏️
                           </button>
 
                           <button
                             onClick={() => onDelete(r)}
                             style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
-                            title="Eliminar"
+                            title="Eliminar (o desactivar si tiene historial)"
                           >
                             🗑️
                           </button>
 
-                          <button onClick={() => onPresentations(r)} style={{ padding: "8px 10px", cursor: "pointer" }} title="Presentaciones (8.2)">
+                          <button
+                            onClick={() => onPresentations(r)}
+                            style={{ padding: "8px 10px", cursor: "pointer" }}
+                            title="Presentaciones (8.2)"
+                          >
                             📦
                           </button>
 
                           <button
-                            onClick={() => onToggleStatus(r)}
+                            onClick={() => onToggleStatus({ ...r, status: statusEffective })}
                             style={{
                               padding: "8px 10px",
                               cursor: "pointer",
-                              background: r.status === "active" ? "#fff3cd" : "#e8f5e9",
+                              background: statusEffective === "active" ? "#fff3cd" : "#e8f5e9",
                               fontWeight: 900,
                             }}
-                            title="Activar / Desactivar"
+                            title={needsGroup ? "No puedes activar sin grupo. Edita para elegir grupo." : "Activar / Desactivar"}
                           >
-                            {r.status === "active" ? "⏸" : "▶️"}
+                            {statusEffective === "active" ? "⏸" : "▶️"}
                           </button>
                         </div>
                       </td>
