@@ -36,7 +36,7 @@ import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsC
 //Inventario
 import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
-
+import ProductRecipesPage from "../pages/menu/ProductRecipesPage";
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -84,6 +84,8 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/settings/ingredients" element={<IngredientsPage />} />
         <Route path="/owner/restaurants/:restaurantId/settings/ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
+
+        <Route path="/owner/restaurants/:restaurantId/products/:productId/recipes" element={<ProductRecipesPage />} />
 
       </Route>
       

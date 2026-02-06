@@ -17,6 +17,25 @@ import {
   reorderProductImages,
 } from "../../services/products.service";
 
+// UI en español, values en inglés (BD)
+const PRODUCT_TYPES = [
+  { value: "simple", label: "Simple" },
+  { value: "composite", label: "Compuesto" },
+];
+
+const INVENTORY_TYPES = [
+  { value: "ingredients", label: "Ingredientes" },
+  { value: "product", label: "Producto" },
+  { value: "none", label: "Sin inventario" },
+];
+
+// Helpers para mostrar labels sin cambiar values
+function labelFromOptions(options, value, fallback = "—") {
+  const v = value ?? "";
+  const found = options.find((x) => x.value === v);
+  return found ? found.label : fallback;
+}
+
 export default function ProductsPage() {
   const nav = useNavigate();
   const { restaurantId } = useParams();
@@ -53,6 +72,9 @@ export default function ProductsPage() {
     name: "",
     description: "",
     status: "active",
+
+    product_type: "simple",
+    inventory_type: "ingredients",
   });
 
   // ===== images state =====
@@ -86,6 +108,8 @@ export default function ProductsPage() {
       name: "",
       description: "",
       status: "active",
+      product_type: "simple",
+      inventory_type: "ingredients",
     });
     setImages([]);
   };
@@ -209,12 +233,25 @@ export default function ProductsPage() {
     if (!form.category_id) return setErr("Selecciona categoría");
     if (!form.name?.trim()) return setErr("Nombre obligatorio");
 
+
+    const pt = form.product_type || "simple";
+    const it = form.inventory_type || "ingredients";
+    const ptOk = ["simple", "composite"].includes(pt);
+    const itOk = ["ingredients", "product", "none"].includes(it);
+    if (!ptOk) return setErr("product_type inválido (simple | composite)");
+    if (!itOk) return setErr("inventory_type inválido (ingredients | product | none)");
+
     try {
       const payload = {
         category_id: Number(form.category_id),
         name: form.name.trim(),
         description: form.description?.trim() || null,
         status: form.status,
+
+        // values en inglés para BD
+        product_type: pt,
+        inventory_type: it,
+
         // FORZAR según modo
         is_global: productsMode === "global",
         branch_id: productsMode === "branch" ? effectiveBranchId : null,
@@ -231,6 +268,10 @@ export default function ProductsPage() {
         ...p,
         id: saved.id,
         category_id: String(saved.category_id),
+
+        // refrescar nuevos campos (por si backend normaliza/defaults)
+        product_type: saved.product_type || p.product_type || "simple",
+        inventory_type: saved.inventory_type || p.inventory_type || "ingredients",
       }));
 
       await loadImages(saved.id);
@@ -254,6 +295,8 @@ export default function ProductsPage() {
         name: fresh.name || "",
         description: fresh.description || "",
         status: fresh.status || "active",
+        product_type: fresh.product_type || "simple",
+        inventory_type: fresh.inventory_type || "ingredients",
       });
     } catch {
       setForm({
@@ -262,6 +305,8 @@ export default function ProductsPage() {
         name: p.name || "",
         description: p.description || "",
         status: p.status || "active",
+        product_type: p.product_type || "simple",
+        inventory_type: p.inventory_type || "ingredients",
       });
     }
 
@@ -289,9 +334,18 @@ export default function ProductsPage() {
     nav(`/owner/restaurants/${restaurantId}/products/${p.id}/variants`, {
       state: {
         product_name: p?.name || "",
-        // opcional: para que la pantalla Variantes sepa desde qué modo vienes
         products_mode: productsMode,
-        // opcional: para recordar sucursal si quieres mostrarla arriba
+        branch_id: effectiveBranchId,
+      },
+    });
+  };
+
+  const onRecipes = (p) => {
+    if (!p?.id) return;
+    nav(`/owner/restaurants/${restaurantId}/products/${p.id}/recipes`, {
+      state: {
+        product_name: p?.name || "",
+        products_mode: productsMode,
         branch_id: effectiveBranchId,
       },
     });
@@ -515,6 +569,41 @@ export default function ProductsPage() {
               </div>
             </div>
 
+            {/* (UI en español / values en inglés) */}
+            <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Tipo de producto</div>
+                <select
+                  value={form.product_type}
+                  onChange={(e) => setForm((p) => ({ ...p, product_type: e.target.value }))}
+                  style={{ width: "100%", padding: 10, borderRadius: 8 }}
+                >
+                  {PRODUCT_TYPES.map((op) => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Simple: normal · Compuesto: armado 
+                </div>
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Tipo de inventario</div>
+                <select
+                  value={form.inventory_type}
+                  onChange={(e) => setForm((p) => ({ ...p, inventory_type: e.target.value }))}
+                  style={{ width: "100%", padding: 10, borderRadius: 8 }}
+                >
+                  {INVENTORY_TYPES.map((op) => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Ingredientes: descuenta insumos · Producto: descuenta stock · Sin inventario: no descuenta
+                </div>
+              </div>
+            </div>
+
             <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
               <button type="submit" style={{ padding: "10px 12px", cursor: "pointer", borderRadius: 8 }}>
                 Guardar
@@ -635,63 +724,99 @@ export default function ProductsPage() {
             <div style={{ opacity: 0.8 }}>No hay productos en este filtro.</div>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
-              {products.map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    border: "1px solid #eee",
-                    borderRadius: 10,
-                    padding: 12,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 900 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      Estado: <strong>{p.status}</strong> · Tipo:{" "}
-                      <strong>{p.is_global ? "global" : "branch"}</strong>
-                      {p.branch_id ? (
-                        <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                          (branch_id: {p.branch_id})
-                        </span>
-                      ) : null}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-                      Categoría: <strong>{p.category?.name || "—"}</strong>
-                    </div>
-                    {p.description && <div style={{ marginTop: 6 }}>{p.description}</div>}
-                  </div>
+              {products.map((p) => {
+                const pt = p.product_type || "simple";
+                const it = p.inventory_type || "ingredients";
 
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {/* ✅ NUEVO BOTÓN */}
-                    <button
-                      onClick={() => onVariants(p)}
-                      style={{
-                        padding: "8px 10px",
-                        cursor: "pointer",
-                        background: "#f0f0ff",
-                        border: "1px solid #cfcfff",
-                        borderRadius: 8,
-                        fontWeight: 900,
-                      }}
-                      title="Gestionar variantes del producto"
-                    >
-                      Variantes
-                    </button>
-                    <button onClick={() => onEdit(p)} style={{ padding: "8px 10px", cursor: "pointer" }}>
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => onDelete(p)}
-                      style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
-                    >
-                      Eliminar
-                    </button>
+                const ptLabel = labelFromOptions(PRODUCT_TYPES, pt, pt);
+                const itLabel = labelFromOptions(INVENTORY_TYPES, it, it);
+
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      border: "1px solid #eee",
+                      borderRadius: 10,
+                      padding: 12,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 900 }}>{p.name}</div>
+
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>
+                        Estado: <strong>{p.status}</strong> · Tipo:{" "}
+                        <strong>{p.is_global ? "global" : "branch"}</strong>
+
+                        {/* ✅ Campos EN ESPAÑOL (sin romper valores) */}
+                        <span style={{ marginLeft: 8 }}>
+                          · Tipo de producto: <strong>{ptLabel}</strong>
+                        </span>
+                        <span style={{ marginLeft: 8 }}>
+                          · Tipo de inventario: <strong>{itLabel}</strong>
+                        </span>
+
+                        {p.branch_id ? (
+                          <span style={{ marginLeft: 8, opacity: 0.75 }}>
+                            (branch_id: {p.branch_id})
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
+                        Categoría: <strong>{p.category?.name || "—"}</strong>
+                      </div>
+                      {p.description && <div style={{ marginTop: 6 }}>{p.description}</div>}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {/* BOTÓN VARIANTES*/}
+                      <button
+                        onClick={() => onVariants(p)}
+                        style={{
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          background: "#f0f0ff",
+                          border: "1px solid #cfcfff",
+                          borderRadius: 8,
+                          fontWeight: 900,
+                        }}
+                        title="Gestionar variantes del producto"
+                      >
+                        Variantes
+                      </button>
+
+                      {/* BOTÓN RECETAS */}
+                      <button
+                        onClick={() => onRecipes(p)}
+                        style={{
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          background: "#e8fff3",
+                          border: "1px solid #b8f0ce",
+                          borderRadius: 8,
+                          fontWeight: 900,
+                        }}
+                        title="Recetas (ingredientes)"
+                      >
+                        Recetas
+                      </button>
+
+                      <button onClick={() => onEdit(p)} style={{ padding: "8px 10px", cursor: "pointer" }}>
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => onDelete(p)}
+                        style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

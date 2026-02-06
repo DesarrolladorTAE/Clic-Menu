@@ -15,7 +15,6 @@ export async function getProduct(restaurantId, productId) {
   return data?.data;
 }
 
-
 export async function updateProduct(restaurantId, productId, payload) {
   const { data } = await api.put(`/restaurants/${restaurantId}/products/${productId}`, payload);
   return data?.data;
@@ -25,7 +24,6 @@ export async function deleteProduct(restaurantId, productId) {
   const { data } = await api.delete(`/restaurants/${restaurantId}/products/${productId}`);
   return data;
 }
-
 
 //Imageneees
 export async function getProductImages(restaurantId, productId) {
@@ -62,4 +60,3 @@ export async function reorderProductImages(restaurantId, productId, items) {
   );
   return data?.data ?? [];
 }
-
