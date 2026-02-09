@@ -26,6 +26,7 @@ import BranchEdit from "../pages/restaurant/BranchEdit";
 import MenuManager from "../pages/menu/MenuManager";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductVariantsPage from "../pages/products/products_variants/ProductVariantsPage";
+import ProductCompositionPage from "../pages/products/ProductCompositionPage";
 
 
 import BranchCatalogPage from "../pages/restaurant/catalog/BranchCatalogPage";
@@ -37,6 +38,8 @@ import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsC
 import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
 import ProductRecipesPage from "../pages/menu/ProductRecipesPage";
+
+
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -72,7 +75,7 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
         <Route path="/owner/restaurants/:restaurantId/products" element={<ProductsPage />} />
-        
+        <Route path="/owner/restaurants/:restaurantId/products/:productId/components" element={<ProductCompositionPage />}/>
         <Route path="/owner/restaurants/:restaurantId/products/:productId/variants"element={<ProductVariantsPage />}/>
 
 

@@ -3,8 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { getRestaurantSettings } from "../../services/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/branch.service";
-
 import { getCategories } from "../../services/categories.service";
+
 import {
   getProducts,
   getProduct,
@@ -16,6 +16,9 @@ import {
   deleteProductImage,
   reorderProductImages,
 } from "../../services/products.service";
+
+import { changeProductType } from "../../services/catalog/products/productType.service";
+import { changeInventoryType } from "../../services/catalog/products/productInventoryType.service";
 
 // UI en español, values en inglés (BD)
 const PRODUCT_TYPES = [
@@ -29,11 +32,57 @@ const INVENTORY_TYPES = [
   { value: "none", label: "Sin inventario" },
 ];
 
-// Helpers para mostrar labels sin cambiar values
+// Helpers
 function labelFromOptions(options, value, fallback = "—") {
   const v = value ?? "";
   const found = options.find((x) => x.value === v);
   return found ? found.label : fallback;
+}
+
+function apiErrorToMessage(e, fallback = "Ocurrió un error") {
+  return (
+    e?.response?.data?.message ||
+    (e?.response?.data?.errors
+      ? Object.entries(e.response.data.errors)
+          .map(([k, arr]) => `${k}: ${Array.isArray(arr) ? arr.join(", ") : String(arr)}`)
+          .join("\n")
+      : "") ||
+    fallback
+  );
+}
+
+// === Reglas UI (parte 2) ===
+function allowedInventoryTypesForProductType(productType) {
+  if (productType === "composite") return ["none"];
+  return ["ingredients", "product"];
+}
+
+function normalizeInventoryForProductType(productType, inventoryType) {
+  const allowed = allowedInventoryTypesForProductType(productType);
+  return allowed.includes(inventoryType) ? inventoryType : allowed[0];
+}
+
+function getModeKey(productType, inventoryType) {
+  const pt = productType || "simple";
+  const it = inventoryType || (pt === "composite" ? "none" : "ingredients");
+  return `${pt}:${it}`;
+}
+
+function buttonsRules(productType, inventoryType) {
+  const key = getModeKey(productType, inventoryType);
+  const rules = { recipes: false, variants: false, components: false };
+
+  if (key === "simple:ingredients") {
+    rules.recipes = true;
+    rules.variants = true;
+  }
+  if (key === "simple:product") {
+    rules.variants = true;
+  }
+  if (key === "composite:none") {
+    rules.components = true;
+  }
+  return rules;
 }
 
 export default function ProductsPage() {
@@ -48,7 +97,7 @@ export default function ProductsPage() {
   const productsMode = settings?.products_mode || "global";
   const requiresBranch = productsMode === "branch";
 
-  // branches (solo branch mode)
+  // branches
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState(""); // string para <select>
 
@@ -72,25 +121,19 @@ export default function ProductsPage() {
     name: "",
     description: "",
     status: "active",
-
     product_type: "simple",
     inventory_type: "ingredients",
   });
 
-  // ===== images state =====
+  // images
   const [images, setImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(false);
-  const canUploadMore = images.length < 6;
   const selectedProductId = form.id;
+  const canUploadMore = images.length < 6;
 
   const listParams = useMemo(() => {
     const p = {};
-
-    // Branch filtering (solo en modo branch)
-    if (requiresBranch && effectiveBranchId) {
-      p.branch_id = effectiveBranchId;
-    }
-
+    if (requiresBranch && effectiveBranchId) p.branch_id = effectiveBranchId;
     if (categoryId) p.category_id = categoryId;
 
     if (includeInactive) {
@@ -102,6 +145,7 @@ export default function ProductsPage() {
   }, [requiresBranch, effectiveBranchId, categoryId, includeInactive, statusFilter]);
 
   const resetForm = () => {
+    setErr("");
     setForm({
       id: null,
       category_id: categoryId || "",
@@ -121,10 +165,15 @@ export default function ProductsPage() {
       const imgs = await getProductImages(restaurantId, productId);
       setImages(imgs);
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudieron cargar imágenes");
+      setErr(apiErrorToMessage(e, "No se pudieron cargar imágenes"));
     } finally {
       setImagesLoading(false);
     }
+  };
+
+  const reloadProducts = async () => {
+    const list = await getProducts(restaurantId, listParams);
+    setProducts(list || []);
   };
 
   const loadAll = async () => {
@@ -154,7 +203,6 @@ export default function ProductsPage() {
         setBranchId("");
       }
 
-      // Cargar categorías según modo
       const catQuery =
         st?.products_mode === "branch" && chosenBranchId
           ? { status: "active", branch_id: chosenBranchId }
@@ -163,13 +211,11 @@ export default function ProductsPage() {
       const cats = await getCategories(restaurantId, catQuery);
       setCategories(cats || []);
 
-      // Elegir categoría efectiva (primera si no hay seleccionada)
       const firstCatId = cats?.[0]?.id ? String(cats[0].id) : "";
       const effectiveCategoryId = categoryId || firstCatId;
 
       if (!categoryId && firstCatId) setCategoryId(firstCatId);
 
-      // Cargar productos según modo
       const prodQuery =
         st?.products_mode === "branch" && chosenBranchId
           ? { ...listParams, branch_id: chosenBranchId, category_id: effectiveCategoryId || undefined }
@@ -178,38 +224,35 @@ export default function ProductsPage() {
       const list = await getProducts(restaurantId, prodQuery);
       setProducts(list || []);
 
-      // Ajustar form category
       setForm((p) => ({
         ...p,
         category_id: p.category_id || effectiveCategoryId || "",
       }));
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo cargar productos");
+      setErr(apiErrorToMessage(e, "No se pudo cargar productos"));
     } finally {
       setLoading(false);
     }
   };
 
-  // carga inicial
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line
   }, [restaurantId]);
 
-  // recargar cuando cambien filtros o sucursal (si aplica)
   useEffect(() => {
     if (loading) return;
-
     if (requiresBranch && !effectiveBranchId) return;
 
     (async () => {
       try {
-        // categorías también deben seguir a la sucursal en modo branch
         if (requiresBranch && effectiveBranchId) {
-          const cats = await getCategories(restaurantId, { status: "active", branch_id: effectiveBranchId });
+          const cats = await getCategories(restaurantId, {
+            status: "active",
+            branch_id: effectiveBranchId,
+          });
           setCategories(cats || []);
 
-          // Si la categoría seleccionada ya no existe en esa sucursal, se resetea
           const exists = (cats || []).some((c) => String(c.id) === String(categoryId));
           if (!exists) {
             const first = cats?.[0]?.id ? String(cats[0].id) : "";
@@ -218,13 +261,95 @@ export default function ProductsPage() {
           }
         }
 
-        const list = await getProducts(restaurantId, listParams);
-        setProducts(list || []);
-      } catch {}
+        await reloadProducts();
+      } catch {
+        // silencioso
+      }
     })();
     // eslint-disable-next-line
   }, [listParams, restaurantId, requiresBranch, effectiveBranchId]);
 
+  // ======= Selectores inteligentes =======
+  const inventoryOptions = useMemo(() => {
+    const allowed = allowedInventoryTypesForProductType(form.product_type);
+    return INVENTORY_TYPES.filter((x) => allowed.includes(x.value));
+  }, [form.product_type]);
+
+  const onChangeProductType = async (nextType) => {
+    setErr("");
+
+    const prevType = form.product_type || "simple";
+    const prevInventory = form.inventory_type || "ingredients";
+
+    const nextInventory = normalizeInventoryForProductType(nextType, prevInventory);
+
+    setForm((p) => ({
+      ...p,
+      product_type: nextType,
+      inventory_type: nextInventory,
+    }));
+
+    if (!form.id) return;
+
+    try {
+      const res = await changeProductType(restaurantId, form.id, nextType);
+      const updated = res?.data || res || null;
+
+      setForm((p) => ({
+        ...p,
+        product_type: updated?.product_type || nextType,
+        inventory_type:
+          updated?.inventory_type ||
+          normalizeInventoryForProductType(updated?.product_type || nextType, p.inventory_type),
+        status: updated?.status || p.status,
+      }));
+
+      await reloadProducts();
+    } catch (e) {
+      setForm((p) => ({
+        ...p,
+        product_type: prevType,
+        inventory_type: prevInventory,
+      }));
+      setErr(apiErrorToMessage(e, "No se pudo cambiar el tipo de producto"));
+    }
+  };
+
+  const onChangeInventoryType = async (nextInventory) => {
+    setErr("");
+
+    const prevInventory = form.inventory_type || "ingredients";
+    const productType = form.product_type || "simple";
+
+    const allowed = allowedInventoryTypesForProductType(productType);
+    if (!allowed.includes(nextInventory)) {
+      const forced = allowed[0];
+      setForm((p) => ({ ...p, inventory_type: forced }));
+      return;
+    }
+
+    setForm((p) => ({ ...p, inventory_type: nextInventory }));
+
+    if (!form.id) return;
+
+    try {
+      const res = await changeInventoryType(restaurantId, form.id, nextInventory);
+      const updated = res?.data || res || null;
+
+      setForm((p) => ({
+        ...p,
+        inventory_type: updated?.inventory_type || nextInventory,
+        status: updated?.status || p.status,
+      }));
+
+      await reloadProducts();
+    } catch (e) {
+      setForm((p) => ({ ...p, inventory_type: prevInventory }));
+      setErr(apiErrorToMessage(e, "No se pudo cambiar el tipo de inventario"));
+    }
+  };
+
+  // ✅ CLAVE: CREATE vs UPDATE payload
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr("");
@@ -233,55 +358,59 @@ export default function ProductsPage() {
     if (!form.category_id) return setErr("Selecciona categoría");
     if (!form.name?.trim()) return setErr("Nombre obligatorio");
 
-
     const pt = form.product_type || "simple";
-    const it = form.inventory_type || "ingredients";
-    const ptOk = ["simple", "composite"].includes(pt);
-    const itOk = ["ingredients", "product", "none"].includes(it);
-    if (!ptOk) return setErr("product_type inválido (simple | composite)");
-    if (!itOk) return setErr("inventory_type inválido (ingredients | product | none)");
+    const it = normalizeInventoryForProductType(pt, form.inventory_type || "ingredients");
 
     try {
-      const payload = {
-        category_id: Number(form.category_id),
-        name: form.name.trim(),
-        description: form.description?.trim() || null,
-        status: form.status,
-
-        // values en inglés para BD
-        product_type: pt,
-        inventory_type: it,
-
-        // FORZAR según modo
-        is_global: productsMode === "global",
-        branch_id: productsMode === "branch" ? effectiveBranchId : null,
-      };
-
       let saved = null;
-      if (form.id) saved = await updateProduct(restaurantId, form.id, payload);
-      else saved = await createProduct(restaurantId, payload);
 
-      const list = await getProducts(restaurantId, listParams);
-      setProducts(list || []);
+      if (form.id) {
+        // ✅ UPDATE: NO mandar branch_id ni is_global (son prohibited)
+        // y no mezclar tipo/inventario aquí (ya tienes endpoints dedicados)
+        const updatePayload = {
+          category_id: Number(form.category_id),
+          name: form.name.trim(),
+          description: form.description?.trim() || null,
+          status: form.status,
+          // si quieres permitir update también por aquí, se puede:
+          // product_type: pt,
+          // inventory_type: it,
+        };
+
+        saved = await updateProduct(restaurantId, form.id, updatePayload);
+      } else {
+        // ✅ CREATE: aquí sí puedes mandar branch_id/is_global (tu store lo permite)
+        const createPayload = {
+          category_id: Number(form.category_id),
+          name: form.name.trim(),
+          description: form.description?.trim() || null,
+          status: form.status,
+          product_type: pt,
+          inventory_type: it,
+
+          is_global: productsMode === "global",
+          branch_id: productsMode === "branch" ? effectiveBranchId : null,
+        };
+
+        saved = await createProduct(restaurantId, createPayload);
+      }
+
+      await reloadProducts();
 
       setForm((p) => ({
         ...p,
         id: saved.id,
         category_id: String(saved.category_id),
-
-        // refrescar nuevos campos (por si backend normaliza/defaults)
+        name: saved.name ?? p.name,
+        description: saved.description ?? p.description,
         product_type: saved.product_type || p.product_type || "simple",
         inventory_type: saved.inventory_type || p.inventory_type || "ingredients",
+        status: saved.status || p.status || "active",
       }));
 
       await loadImages(saved.id);
     } catch (e2) {
-      const m =
-        e2?.response?.data?.message ||
-        (e2?.response?.data?.errors
-          ? Object.values(e2.response.data.errors).flat().join("\n")
-          : "No se pudo guardar producto");
-      setErr(m);
+      setErr(apiErrorToMessage(e2, "No se pudo guardar producto"));
     }
   };
 
@@ -296,21 +425,14 @@ export default function ProductsPage() {
         description: fresh.description || "",
         status: fresh.status || "active",
         product_type: fresh.product_type || "simple",
-        inventory_type: fresh.inventory_type || "ingredients",
+        inventory_type:
+          fresh.inventory_type ||
+          normalizeInventoryForProductType(fresh.product_type || "simple", "ingredients"),
       });
-    } catch {
-      setForm({
-        id: p.id,
-        category_id: String(p.category_id),
-        name: p.name || "",
-        description: p.description || "",
-        status: p.status || "active",
-        product_type: p.product_type || "simple",
-        inventory_type: p.inventory_type || "ingredients",
-      });
+      await loadImages(fresh.id);
+    } catch (e) {
+      setErr(apiErrorToMessage(e, "No se pudo cargar producto"));
     }
-
-    await loadImages(p.id);
   };
 
   const onDelete = async (p) => {
@@ -319,38 +441,41 @@ export default function ProductsPage() {
       setErr("");
       await deleteProduct(restaurantId, p.id);
 
-      const list = await getProducts(restaurantId, listParams);
-      setProducts(list || []);
-
+      await reloadProducts();
       if (form.id === p.id) resetForm();
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo eliminar");
+      setErr(apiErrorToMessage(e, "No se pudo eliminar"));
     }
   };
 
-  //Varianteees 29/01
+  // Navegación
+  const buildBranchQuery = () => {
+    if (requiresBranch && effectiveBranchId) return `?branch_id=${encodeURIComponent(effectiveBranchId)}`;
+    return "";
+  };
+
   const onVariants = (p) => {
     if (!p?.id) return;
     nav(`/owner/restaurants/${restaurantId}/products/${p.id}/variants`, {
-      state: {
-        product_name: p?.name || "",
-        products_mode: productsMode,
-        branch_id: effectiveBranchId,
-      },
+      state: { product_name: p?.name || "", products_mode: productsMode, branch_id: effectiveBranchId },
     });
   };
 
   const onRecipes = (p) => {
     if (!p?.id) return;
     nav(`/owner/restaurants/${restaurantId}/products/${p.id}/recipes`, {
-      state: {
-        product_name: p?.name || "",
-        products_mode: productsMode,
-        branch_id: effectiveBranchId,
-      },
+      state: { product_name: p?.name || "", products_mode: productsMode, branch_id: effectiveBranchId },
     });
   };
 
+  const onComponents = (p) => {
+    if (!p?.id) return;
+    nav(`/owner/restaurants/${restaurantId}/products/${p.id}/components${buildBranchQuery()}`, {
+      state: { product_name: p?.name || "", products_mode: productsMode, branch_id: effectiveBranchId },
+    });
+  };
+
+  // Imágenes
   const onUpload = async (file) => {
     if (!selectedProductId) return setErr("Primero guarda el producto");
     if (!file) return;
@@ -360,12 +485,7 @@ export default function ProductsPage() {
       await uploadProductImage(restaurantId, selectedProductId, file, images.length);
       await loadImages(selectedProductId);
     } catch (e) {
-      const m =
-        e?.response?.data?.message ||
-        (e?.response?.data?.errors
-          ? Object.values(e.response.data.errors).flat().join("\n")
-          : "No se pudo subir imagen");
-      setErr(m);
+      setErr(apiErrorToMessage(e, "No se pudo subir imagen"));
     }
   };
 
@@ -375,7 +495,7 @@ export default function ProductsPage() {
       await deleteProductImage(restaurantId, selectedProductId, imageId);
       await loadImages(selectedProductId);
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo eliminar imagen");
+      setErr(apiErrorToMessage(e, "No se pudo eliminar imagen"));
     }
   };
 
@@ -385,9 +505,7 @@ export default function ProductsPage() {
     if (newIndex < 0 || newIndex >= images.length) return;
 
     const copy = [...images];
-    const tmp = copy[index];
-    copy[index] = copy[newIndex];
-    copy[newIndex] = tmp;
+    [copy[index], copy[newIndex]] = [copy[newIndex], copy[index]];
 
     const items = copy.map((img, i) => ({ id: img.id, sort_order: i }));
     setImages(copy);
@@ -396,12 +514,14 @@ export default function ProductsPage() {
       const updated = await reorderProductImages(restaurantId, selectedProductId, items);
       setImages(updated);
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo reordenar");
+      setErr(apiErrorToMessage(e, "No se pudo reordenar"));
       await loadImages(selectedProductId);
     }
   };
 
   if (loading) return <div style={{ padding: 16 }}>Cargando productos...</div>;
+
+  const formRules = buttonsRules(form.product_type, form.inventory_type);
 
   return (
     <div style={{ maxWidth: 1100, margin: "30px auto", padding: 16 }}>
@@ -409,8 +529,7 @@ export default function ProductsPage() {
         <div>
           <h2 style={{ margin: 0 }}>Productos</h2>
           <div style={{ marginTop: 6, opacity: 0.85 }}>
-            Restaurante: <strong>{restaurantId}</strong> · Modo:{" "}
-            <strong>{productsMode}</strong>
+            Restaurante: <strong>{restaurantId}</strong> · Modo: <strong>{productsMode}</strong>
           </div>
         </div>
 
@@ -459,7 +578,9 @@ export default function ProductsPage() {
             disabled={!categories.length}
           >
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
         </div>
@@ -519,7 +640,9 @@ export default function ProductsPage() {
                 disabled={!categories.length}
               >
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -553,60 +676,124 @@ export default function ProductsPage() {
                   <option value="active">active</option>
                   <option value="inactive">inactive</option>
                 </select>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                  Nota: Laravel puede rechazar “active” si faltan receta/componentes.
+                </div>
               </div>
 
-              {/* Nota visual según modo, sin checkbox is_global */}
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Tipo</div>
                 <div style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #ddd", background: "#fafafa" }}>
                   {productsMode === "global" ? "Global (catálogo base)" : "Sucursal (catálogo base)"}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                  {productsMode === "global"
-                    ? "Se guardará como producto global."
-                    : "Se guardará ligado a la sucursal seleccionada."}
-                </div>
               </div>
             </div>
 
-            {/* (UI en español / values en inglés) */}
+            {/* tipo + inventario */}
             <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Tipo de producto</div>
                 <select
                   value={form.product_type}
-                  onChange={(e) => setForm((p) => ({ ...p, product_type: e.target.value }))}
+                  onChange={(e) => onChangeProductType(e.target.value)}
                   style={{ width: "100%", padding: 10, borderRadius: 8 }}
                 >
                   {PRODUCT_TYPES.map((op) => (
-                    <option key={op.value} value={op.value}>{op.label}</option>
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
                   ))}
                 </select>
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                  Simple: normal · Compuesto: armado 
-                </div>
               </div>
 
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>Tipo de inventario</div>
                 <select
                   value={form.inventory_type}
-                  onChange={(e) => setForm((p) => ({ ...p, inventory_type: e.target.value }))}
+                  onChange={(e) => onChangeInventoryType(e.target.value)}
                   style={{ width: "100%", padding: 10, borderRadius: 8 }}
                 >
-                  {INVENTORY_TYPES.map((op) => (
-                    <option key={op.value} value={op.value}>{op.label}</option>
+                  {inventoryOptions.map((op) => (
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
                   ))}
                 </select>
+
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                  Ingredientes: descuenta insumos · Producto: descuenta stock · Sin inventario: no descuenta
+                  {getModeKey(form.product_type, form.inventory_type) === "simple:ingredients" &&
+                    "Descuenta ingredientes (requiere receta)."}
+                  {getModeKey(form.product_type, form.inventory_type) === "simple:product" &&
+                    "Descuenta stock del producto (no usa receta)."}
+                  {getModeKey(form.product_type, form.inventory_type) === "composite:none" &&
+                    "No descuenta directo. Los componentes descuentan por su propia lógica."}
                 </div>
               </div>
             </div>
 
-            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="submit" style={{ padding: "10px 12px", cursor: "pointer", borderRadius: 8 }}>
                 Guardar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.id) return setErr("Guarda el producto primero.");
+                  onComponents({ id: form.id, name: form.name });
+                }}
+                disabled={!form.id || !formRules.components}
+                style={{
+                  padding: "10px 12px",
+                  cursor: !form.id || !formRules.components ? "not-allowed" : "pointer",
+                  borderRadius: 8,
+                  background: form.id && formRules.components ? "#fff2cc" : "#f3f3f3",
+                  border: "1px solid #ddd",
+                  fontWeight: 900,
+                  opacity: form.id && formRules.components ? 1 : 0.6,
+                }}
+              >
+                Componentes
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.id) return setErr("Guarda el producto primero.");
+                  onVariants({ id: form.id, name: form.name });
+                }}
+                disabled={!form.id || !formRules.variants}
+                style={{
+                  padding: "10px 12px",
+                  cursor: !form.id || !formRules.variants ? "not-allowed" : "pointer",
+                  borderRadius: 8,
+                  background: form.id && formRules.variants ? "#f0f0ff" : "#f3f3f3",
+                  border: "1px solid #cfcfff",
+                  fontWeight: 900,
+                  opacity: form.id && formRules.variants ? 1 : 0.6,
+                }}
+              >
+                Variantes
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!form.id) return setErr("Guarda el producto primero.");
+                  onRecipes({ id: form.id, name: form.name });
+                }}
+                disabled={!form.id || !formRules.recipes}
+                style={{
+                  padding: "10px 12px",
+                  cursor: !form.id || !formRules.recipes ? "not-allowed" : "pointer",
+                  borderRadius: 8,
+                  background: form.id && formRules.recipes ? "#e8fff3" : "#f3f3f3",
+                  border: "1px solid #b8f0ce",
+                  fontWeight: 900,
+                  opacity: form.id && formRules.recipes ? 1 : 0.6,
+                }}
+              >
+                Recetas
               </button>
             </div>
           </form>
@@ -615,15 +802,11 @@ export default function ProductsPage() {
           <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #eee" }}>
             <div style={{ fontWeight: 900, marginBottom: 8 }}>
               Imágenes (máx 6)
-              {imagesLoading && (
-                <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>cargando...</span>
-              )}
+              {imagesLoading && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>cargando...</span>}
             </div>
 
             {!form.id ? (
-              <div style={{ fontSize: 12, opacity: 0.8 }}>
-                Guarda el producto para poder subir imágenes.
-              </div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Guarda el producto para poder subir imágenes.</div>
             ) : (
               <>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -633,11 +816,7 @@ export default function ProductsPage() {
                     disabled={!canUploadMore}
                     onChange={(e) => onUpload(e.target.files?.[0])}
                   />
-                  {!canUploadMore && (
-                    <span style={{ fontSize: 12, color: "#a10000" }}>
-                      Ya tienes 6 imágenes.
-                    </span>
-                  )}
+                  {!canUploadMore && <span style={{ fontSize: 12, color: "#a10000" }}>Ya tienes 6 imágenes.</span>}
                 </div>
 
                 <div
@@ -683,7 +862,6 @@ export default function ProductsPage() {
                           onClick={() => moveImage(idx, -1)}
                           style={{ flex: 1, padding: "8px 10px", cursor: "pointer" }}
                           disabled={idx === 0}
-                          title="Subir"
                         >
                           ↑
                         </button>
@@ -691,7 +869,6 @@ export default function ProductsPage() {
                           onClick={() => moveImage(idx, 1)}
                           style={{ flex: 1, padding: "8px 10px", cursor: "pointer" }}
                           disabled={idx === images.length - 1}
-                          title="Bajar"
                         >
                           ↓
                         </button>
@@ -699,12 +876,7 @@ export default function ProductsPage() {
 
                       <button
                         onClick={() => onRemoveImage(img.id)}
-                        style={{
-                          width: "100%",
-                          padding: "8px 10px",
-                          cursor: "pointer",
-                          background: "#ffe5e5",
-                        }}
+                        style={{ width: "100%", padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
                       >
                         Eliminar
                       </button>
@@ -726,10 +898,11 @@ export default function ProductsPage() {
             <div style={{ display: "grid", gap: 10 }}>
               {products.map((p) => {
                 const pt = p.product_type || "simple";
-                const it = p.inventory_type || "ingredients";
+                const it = p.inventory_type || normalizeInventoryForProductType(pt, "ingredients");
 
                 const ptLabel = labelFromOptions(PRODUCT_TYPES, pt, pt);
                 const itLabel = labelFromOptions(INVENTORY_TYPES, it, it);
+                const rules = buttonsRules(pt, it);
 
                 return (
                   <div
@@ -745,61 +918,69 @@ export default function ProductsPage() {
                   >
                     <div>
                       <div style={{ fontWeight: 900 }}>{p.name}</div>
-
                       <div style={{ fontSize: 12, opacity: 0.8 }}>
                         Estado: <strong>{p.status}</strong> · Tipo:{" "}
                         <strong>{p.is_global ? "global" : "branch"}</strong>
-
-                        {/* ✅ Campos EN ESPAÑOL (sin romper valores) */}
                         <span style={{ marginLeft: 8 }}>
-                          · Tipo de producto: <strong>{ptLabel}</strong>
+                          · Producto: <strong>{ptLabel}</strong>
                         </span>
                         <span style={{ marginLeft: 8 }}>
-                          · Tipo de inventario: <strong>{itLabel}</strong>
+                          · Inventario: <strong>{itLabel}</strong>
                         </span>
-
-                        {p.branch_id ? (
-                          <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                            (branch_id: {p.branch_id})
-                          </span>
-                        ) : null}
                       </div>
 
                       <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
                         Categoría: <strong>{p.category?.name || "—"}</strong>
                       </div>
+
                       {p.description && <div style={{ marginTop: 6 }}>{p.description}</div>}
                     </div>
 
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {/* BOTÓN VARIANTES*/}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                       <button
-                        onClick={() => onVariants(p)}
+                        onClick={() => onComponents(p)}
+                        disabled={!rules.components}
                         style={{
                           padding: "8px 10px",
-                          cursor: "pointer",
-                          background: "#f0f0ff",
+                          cursor: rules.components ? "pointer" : "not-allowed",
+                          background: rules.components ? "#fff2cc" : "#f3f3f3",
+                          border: "1px solid #ddd",
+                          borderRadius: 8,
+                          fontWeight: 900,
+                          opacity: rules.components ? 1 : 0.6,
+                        }}
+                      >
+                        Componentes
+                      </button>
+
+                      <button
+                        onClick={() => onVariants(p)}
+                        disabled={!rules.variants}
+                        style={{
+                          padding: "8px 10px",
+                          cursor: rules.variants ? "pointer" : "not-allowed",
+                          background: rules.variants ? "#f0f0ff" : "#f3f3f3",
                           border: "1px solid #cfcfff",
                           borderRadius: 8,
                           fontWeight: 900,
+                          opacity: rules.variants ? 1 : 0.6,
                         }}
-                        title="Gestionar variantes del producto"
                       >
                         Variantes
                       </button>
 
-                      {/* BOTÓN RECETAS */}
                       <button
                         onClick={() => onRecipes(p)}
+                        disabled={!rules.recipes}
                         style={{
                           padding: "8px 10px",
-                          cursor: "pointer",
-                          background: "#e8fff3",
+                          cursor: rules.recipes ? "pointer" : "not-allowed",
+                          background: rules.recipes ? "#e8fff3" : "#f3f3f3",
                           border: "1px solid #b8f0ce",
                           borderRadius: 8,
                           fontWeight: 900,
+                          opacity: rules.recipes ? 1 : 0.6,
                         }}
-                        title="Recetas (ingredientes)"
                       >
                         Recetas
                       </button>
@@ -807,6 +988,7 @@ export default function ProductsPage() {
                       <button onClick={() => onEdit(p)} style={{ padding: "8px 10px", cursor: "pointer" }}>
                         Editar
                       </button>
+
                       <button
                         onClick={() => onDelete(p)}
                         style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
@@ -822,7 +1004,8 @@ export default function ProductsPage() {
 
           {productsMode === "global" && (
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.75 }}>
-              Nota: Estos productos solo son “catálogo base”. Lo que realmente vende cada sucursal se define en <strong>Sucursal → Catálogo</strong>.
+              Nota: Estos productos solo son “catálogo base”. Lo que realmente vende cada sucursal se define en{" "}
+              <strong>Sucursal → Catálogo</strong>.
             </div>
           )}
         </div>
