@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { getRestaurantSettings } from "../../services/restaurantSettings.service";
@@ -44,7 +44,9 @@ function apiErrorToMessage(e, fallback = "Ocurrió un error") {
     e?.response?.data?.message ||
     (e?.response?.data?.errors
       ? Object.entries(e.response.data.errors)
-          .map(([k, arr]) => `${k}: ${Array.isArray(arr) ? arr.join(", ") : String(arr)}`)
+          .map(([k, arr]) =>
+            `${k}: ${Array.isArray(arr) ? arr.join(", ") : String(arr)}`
+          )
           .join("\n")
       : "") ||
     fallback
@@ -128,8 +130,12 @@ export default function ProductsPage() {
   // images
   const [images, setImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const fileInputRef = useRef(null);
+
   const selectedProductId = form.id;
-  const canUploadMore = images.length < 6;
+
+  const maxImages = 6;
+  const canUploadMore = images.length < maxImages;
 
   const listParams = useMemo(() => {
     const p = {};
@@ -156,6 +162,7 @@ export default function ProductsPage() {
       inventory_type: "ingredients",
     });
     setImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const loadImages = async (productId) => {
@@ -365,21 +372,15 @@ export default function ProductsPage() {
       let saved = null;
 
       if (form.id) {
-        // ✅ UPDATE: NO mandar branch_id ni is_global (son prohibited)
-        // y no mezclar tipo/inventario aquí (ya tienes endpoints dedicados)
         const updatePayload = {
           category_id: Number(form.category_id),
           name: form.name.trim(),
           description: form.description?.trim() || null,
           status: form.status,
-          // si quieres permitir update también por aquí, se puede:
-          // product_type: pt,
-          // inventory_type: it,
         };
 
         saved = await updateProduct(restaurantId, form.id, updatePayload);
       } else {
-        // ✅ CREATE: aquí sí puedes mandar branch_id/is_global (tu store lo permite)
         const createPayload = {
           category_id: Number(form.category_id),
           name: form.name.trim(),
@@ -387,7 +388,6 @@ export default function ProductsPage() {
           status: form.status,
           product_type: pt,
           inventory_type: it,
-
           is_global: productsMode === "global",
           branch_id: productsMode === "branch" ? effectiveBranchId : null,
         };
@@ -430,6 +430,7 @@ export default function ProductsPage() {
           normalizeInventoryForProductType(fresh.product_type || "simple", "ingredients"),
       });
       await loadImages(fresh.id);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (e) {
       setErr(apiErrorToMessage(e, "No se pudo cargar producto"));
     }
@@ -475,22 +476,37 @@ export default function ProductsPage() {
     });
   };
 
-  // Imágenes
+  // ====== IMÁGENES ======
+  // 1) React debe usar img.public_url (contrato Laravel)
+  const imageSrc = (img) => img?.public_url || img?.url || "";
+
   const onUpload = async (file) => {
     if (!selectedProductId) return setErr("Primero guarda el producto");
     if (!file) return;
+
+    if (!canUploadMore) {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return setErr(`Ya tienes ${maxImages} imágenes.`);
+    }
 
     setErr("");
     try {
       await uploadProductImage(restaurantId, selectedProductId, file, images.length);
       await loadImages(selectedProductId);
     } catch (e) {
-      setErr(apiErrorToMessage(e, "No se pudo subir imagen"));
+      // Manejo específico del límite (422)
+      const msg = apiErrorToMessage(e, "No se pudo subir imagen");
+      setErr(msg);
+    } finally {
+      // reset del input file para permitir subir el mismo archivo otra vez
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const onRemoveImage = async (imageId) => {
     if (!selectedProductId) return;
+    if (!confirm("¿Eliminar imagen?")) return;
+
     try {
       await deleteProductImage(restaurantId, selectedProductId, imageId);
       await loadImages(selectedProductId);
@@ -801,7 +817,7 @@ export default function ProductsPage() {
           {/* Images */}
           <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #eee" }}>
             <div style={{ fontWeight: 900, marginBottom: 8 }}>
-              Imágenes (máx 6)
+              Imágenes (máx {maxImages})
               {imagesLoading && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>cargando...</span>}
             </div>
 
@@ -811,12 +827,17 @@ export default function ProductsPage() {
               <>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     disabled={!canUploadMore}
                     onChange={(e) => onUpload(e.target.files?.[0])}
                   />
-                  {!canUploadMore && <span style={{ fontSize: 12, color: "#a10000" }}>Ya tienes 6 imágenes.</span>}
+                  {!canUploadMore && (
+                    <span style={{ fontSize: 12, color: "#a10000" }}>
+                      Ya tienes {maxImages} imágenes.
+                    </span>
+                  )}
                 </div>
 
                 <div
@@ -850,10 +871,26 @@ export default function ProductsPage() {
                         }}
                       >
                         <img
-                          src={img.url}
+                          src={imageSrc(img)}
                           alt=""
                           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                           loading="lazy"
+                          onError={(ev) => {
+                            // fallback visual si el archivo no existe o se rompe la URL
+                            ev.currentTarget.style.display = "none";
+                            const parent = ev.currentTarget.parentElement;
+                            if (parent && !parent.querySelector(".img-fallback")) {
+                              const d = document.createElement("div");
+                              d.className = "img-fallback";
+                              d.style.height = "100%";
+                              d.style.display = "grid";
+                              d.style.placeItems = "center";
+                              d.style.fontSize = "12px";
+                              d.style.opacity = "0.7";
+                              d.innerText = "Sin imagen";
+                              parent.appendChild(d);
+                            }
+                          }}
                         />
                       </div>
 

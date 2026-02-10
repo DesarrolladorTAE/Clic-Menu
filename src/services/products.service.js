@@ -25,21 +25,24 @@ export async function deleteProduct(restaurantId, productId) {
   return data;
 }
 
-//Imageneees
+// ========= IMÁGENES =========
 export async function getProductImages(restaurantId, productId) {
-  const { data } = await api.get(`/restaurants/${restaurantId}/products/${productId}/images`);
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/products/${productId}/images`
+  );
   return data?.data ?? [];
 }
 
 export async function uploadProductImage(restaurantId, productId, file, sort_order = null) {
   const fd = new FormData();
   fd.append("image", file);
-  if (sort_order !== null && sort_order !== undefined) fd.append("sort_order", String(sort_order));
+  if (sort_order !== null && sort_order !== undefined) {
+    fd.append("sort_order", String(sort_order));
+  }
 
   const { data } = await api.post(
     `/restaurants/${restaurantId}/products/${productId}/images`,
-    fd,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    fd
   );
 
   return data?.data;
@@ -53,7 +56,6 @@ export async function deleteProductImage(restaurantId, productId, imageId) {
 }
 
 export async function reorderProductImages(restaurantId, productId, items) {
-  // items: [{id, sort_order}]
   const { data } = await api.put(
     `/restaurants/${restaurantId}/products/${productId}/images/reorder`,
     { items }
