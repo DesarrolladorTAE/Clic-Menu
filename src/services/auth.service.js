@@ -15,6 +15,11 @@ export async function login(payload) {
 }
 
 export async function me() {
+  const token = localStorage.getItem("auth_token");
+
+  // Si no hay token, no llames al API (evita 401 en consola)
+  if (!token) return { user: null };
+  
   const { data } = await api.get("/me");
   return data; // { user }
 }
