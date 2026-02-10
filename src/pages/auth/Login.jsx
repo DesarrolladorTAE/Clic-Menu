@@ -78,6 +78,22 @@ export default function Login() {
         <button disabled={busy} style={{ width: "100%", padding: 10 }}>
           {busy ? "Entrando..." : "Entrar"}
         </button>
+         
+        <button
+          type="button"
+          onClick={() => nav("/auth/register")}
+          style={{
+            width: "100%",
+            padding: 10,
+            marginTop: 10,
+            background: "transparent",
+            border: "1px solid #ccc",
+            cursor: "pointer",
+          }}
+        >
+          Crear cuenta
+        </button>
+
       </form>
     </div>
   );

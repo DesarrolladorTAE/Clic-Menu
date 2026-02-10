@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { registerUser } from "../../services/auth.service"; //funcion registerUser otro archivo
+import { useNavigate } from "react-router-dom";
+
 
 export default function Register() {
+  const nav = useNavigate();
+
 
   //Definir constantes
   const [form, setForm] = useState({
@@ -98,6 +102,22 @@ export default function Register() {
         <button disabled={loading} type="submit">
             {loading ? "Registrando..." : "Registrar"}
         </button>
+
+
+        <button
+          type="button"
+          onClick={() => nav("/auth/login")}
+          style={{
+            marginTop: 10,
+            padding: 10,
+            background: "transparent",
+            border: "1px solid #ccc",
+            cursor: "pointer",
+          }}
+        >
+          Ya tengo cuenta · Iniciar sesión
+        </button>
+
 
       </form>
 

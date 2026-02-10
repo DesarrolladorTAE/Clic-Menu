@@ -26,11 +26,19 @@ export function AuthProvider({ children }) {
       user,
       loading,
       isAuthenticated: !!user,
+
+      clearAuth() {
+        localStorage.removeItem("auth_token");
+        setUser(null);
+      },
+
+
       async login(email, password) {
         const res = await authService.login({ email, password });
         setUser(res.user);
         return res;
       },
+      
       async logout() {
         await authService.logout();
         localStorage.removeItem("auth_token");
