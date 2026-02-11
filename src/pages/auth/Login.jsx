@@ -1,16 +1,27 @@
-// src/pages/auth/Login.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
+
+  const fromState = location.state?.from;
+  const fromSession = sessionStorage.getItem("auth_from");
+  const from = fromState || fromSession;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const isSafeRedirect = (path) => {
+    if (!path || typeof path !== "string") return false;
+    if (path.startsWith("/auth")) return false;
+    if (!path.startsWith("/")) return false;
+    return true;
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -20,16 +31,20 @@ export default function Login() {
     try {
       const res = await login(email, password);
 
-      //nav("/app", { replace: true });
-
       const roleName = res?.user?.role?.name?.toLowerCase();
       const roleId = String(res?.user?.role_id);
 
-      //Propietario: Redirecciona  a pagina "Mis restaurantes"
       const isOwner = roleName === "propietario" || roleId === "2";
-      nav(isOwner ? "/owner/restaurants" : "/app", { replace: true });
+      const fallback = isOwner ? "/owner/restaurants" : "/app";
 
+      // 🔥 si cambió usuario, NO uses "from"
+      const target =
+        !res?.userChanged && isSafeRedirect(from) ? from : fallback;
 
+      // Limpia el "from" guardado para que no se reutilice
+      sessionStorage.removeItem("auth_from");
+
+      nav(target, { replace: true });
     } catch (e) {
       const msg =
         e?.response?.data?.message ||
@@ -58,7 +73,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             required
           />
         </div>
@@ -78,7 +93,7 @@ export default function Login() {
         <button disabled={busy} style={{ width: "100%", padding: 10 }}>
           {busy ? "Entrando..." : "Entrar"}
         </button>
-         
+
         <button
           type="button"
           onClick={() => nav("/auth/register")}
@@ -93,7 +108,6 @@ export default function Login() {
         >
           Crear cuenta
         </button>
-
       </form>
     </div>
   );
