@@ -1,4 +1,3 @@
-//Estructura de MisRestaurantes
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,6 +12,76 @@ import { getRestaurantSettings } from "../../services/restaurantSettings.service
 
 import { useAuth } from "../../context/AuthContext";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
+
+import RestaurantFormModal from "../../components/restaurant/RestaurantFormModal";
+
+// ✅ Toast simple sin librerías (porque la vida es dura)
+function Toast({ open, message, type = "info", onClose }) {
+  if (!open) return null;
+
+  const bg =
+    type === "success"
+      ? "#e6ffed"
+      : type === "warning"
+      ? "#fff3cd"
+      : type === "error"
+      ? "#ffe5e5"
+      : "#eef2ff";
+
+  const border =
+    type === "success"
+      ? "#8ae99c"
+      : type === "warning"
+      ? "#ffe08a"
+      : type === "error"
+      ? "#ffb3b3"
+      : "#cfcfff";
+
+  const color =
+    type === "success"
+      ? "#0a7a2f"
+      : type === "warning"
+      ? "#8a6d3b"
+      : type === "error"
+      ? "#a10000"
+      : "#2d2d7a";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        right: 16,
+        bottom: 16,
+        zIndex: 99999,
+        maxWidth: 420,
+        background: bg,
+        border: `1px solid ${border}`,
+        color,
+        borderRadius: 12,
+        padding: "12px 14px",
+        boxShadow: "0 12px 24px rgba(0,0,0,0.18)",
+        cursor: "pointer",
+        whiteSpace: "pre-line",
+      }}
+      title="Clic para cerrar"
+    >
+      <div style={{ fontWeight: 900, marginBottom: 6 }}>
+        {type === "warning"
+          ? "Ojo"
+          : type === "error"
+          ? "Error"
+          : type === "success"
+          ? "Listo"
+          : "Aviso"}
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.35 }}>{message}</div>
+      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+        (clic para cerrar)
+      </div>
+    </div>
+  );
+}
 
 export default function MyRestaurants() {
   const nav = useNavigate();
@@ -32,8 +101,39 @@ export default function MyRestaurants() {
   // Estado para sucursal principal por restaurante
   const [mainBranchMap, setMainBranchMap] = useState({});
 
-  // ✅ settings cache por restaurante (para products_mode)
+  // settings cache por restaurante (para products_mode)
   const [settingsMap, setSettingsMap] = useState({}); // { [restaurantId]: { products_mode } }
+
+  // ✅ MODAL create/edit
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState("create"); // create | edit
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+
+  // ✅ TOAST
+  const [toast, setToast] = useState({ open: false, message: "", type: "info" });
+  const showToast = (message, type = "info") => {
+    setToast({ open: true, message, type });
+    // auto-cierre
+    setTimeout(() => setToast((t) => ({ ...t, open: false })), 5000);
+  };
+  const closeToast = () => setToast((t) => ({ ...t, open: false }));
+
+  const openCreate = () => {
+    setSelectedRestaurant(null);
+    setModalMode("create");
+    setModalOpen(true);
+  };
+
+  const openEdit = (restaurant) => {
+    setSelectedRestaurant(restaurant || null);
+    setModalMode("edit");
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedRestaurant(null);
+  };
 
   const load = async () => {
     setErr("");
@@ -68,7 +168,7 @@ export default function MyRestaurants() {
         });
       }
 
-      // ✅ Cargar settings mínimos (products_mode)
+      // Cargar settings mínimos (products_mode)
       try {
         const settingsPairs = await Promise.all(
           list.map(async (r) => {
@@ -210,7 +310,7 @@ export default function MyRestaurants() {
     }
   };
 
-  // ✅ NUEVO: ir al Catálogo de la sucursal (Paso 2)
+  // ir al Catálogo de la sucursal (Paso 2)
   const onGoCatalog = async (restaurantId, branchId) => {
     try {
       // asegurar status y bloquear si no operativo
@@ -230,19 +330,17 @@ export default function MyRestaurants() {
         return;
       }
 
-      // settings (solo informativo; la página catalog decide la lógica)
+      // settings
       let cfg = settingsMap[restaurantId];
       if (!cfg) {
         cfg = await getRestaurantSettings(restaurantId);
         setSettingsMap((prev) => ({ ...prev, [restaurantId]: cfg }));
       }
 
-      // misma ruta en ambos modos
       nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/catalog`, {
         state: { products_mode: cfg?.products_mode || "global" },
       });
     } catch (e) {
-      // si algo falla, igual dejamos que el backend responda en la pantalla de catálogo
       nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/catalog`);
     }
   };
@@ -255,10 +353,34 @@ export default function MyRestaurants() {
     }
   };
 
+  const onModalSaved = async (payload) => {
+    // refrescar lista
+    await load();
+
+    // ✅ warnings => toast (bonito) NO alert
+    const w = payload?.warnings;
+    if (Array.isArray(w) && w.length) {
+      const txt = w.map((x) => `• ${x?.message || "Dato repetido"}`).join("\n");
+      showToast(`Se guardó, pero ojo:\n${txt}`, "warning");
+    } else {
+      showToast("Guardado correctamente.", "success");
+    }
+  };
+
   if (loading) return <div style={{ padding: 16 }}>Cargando restaurantes...</div>;
 
   return (
     <div style={{ maxWidth: 900, margin: "30px auto", padding: 16 }}>
+      <Toast open={toast.open} message={toast.message} type={toast.type} onClose={closeToast} />
+
+      <RestaurantFormModal
+        open={modalOpen}
+        mode={modalMode}
+        restaurant={selectedRestaurant}
+        onClose={closeModal}
+        onSaved={onModalSaved}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0 }}>Mis restaurantes</h2>
@@ -270,10 +392,7 @@ export default function MyRestaurants() {
           )}
         </div>
 
-        <button
-          onClick={() => nav("/owner/restaurants/new")}
-          style={{ padding: "10px 14px", cursor: "pointer" }}
-        >
+        <button onClick={openCreate} style={{ padding: "10px 14px", cursor: "pointer" }}>
           + Registrar restaurante
         </button>
       </div>
@@ -388,7 +507,7 @@ export default function MyRestaurants() {
 
                   <div style={{ display: "flex", gap: 8, alignItems: "start" }}>
                     <button
-                      onClick={() => nav(`/owner/restaurants/${rid}/edit`)}
+                      onClick={() => openEdit(r)}
                       style={{ padding: "8px 10px", cursor: "pointer" }}
                     >
                       Editar
@@ -541,7 +660,6 @@ export default function MyRestaurants() {
                               </div>
 
                               <div style={{ display: "flex", gap: 8, alignItems: "start", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                                {/* ✅ NUEVO BOTÓN: Catálogo */}
                                 <button
                                   onClick={() => onGoCatalog(rid, b.id)}
                                   style={{
@@ -572,7 +690,6 @@ export default function MyRestaurants() {
                                 >
                                   Canales de venta
                                 </button>
-
 
                                 <button
                                   onClick={() => nav(`/owner/restaurants/${rid}/branches/${b.id}/edit`)}

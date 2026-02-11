@@ -14,8 +14,6 @@ import Dashboard from "../pages/admin/Dashboard";
 
 //Restaurantes
 import MyRestaurants from "../pages/restaurant/MyRestaurants";
-import RestaurantCreate from "../pages/restaurant/RestaurantCreate";
-import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
 //Sucursales
@@ -63,9 +61,6 @@ export default function AppRoutes() {
       {/* Restaurantes */}
       <Route element={<OwnerRoute />}>
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
-        <Route path="/owner/restaurants/new" element={<RestaurantCreate />} />
-        <Route path="/owner/restaurants/:id/edit" element={<RestaurantEdit />} />
-
         <Route path="/owner/restaurants/:restaurantId/settings" element={<RestaurantSettings />} />
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
