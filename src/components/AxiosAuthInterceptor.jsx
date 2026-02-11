@@ -47,17 +47,16 @@ export default function AxiosAuthInterceptor() {
           return Promise.reject(error);
         }
 
-        // ✅ Caso B: 403 sin token (muchos backends lo hacen así) => login
+        // ✅ Caso B: 403 => si NO hay token, entonces sí parece sesión muerta => login
+
         if (status === 403 && !isAuthEndpoint) {
           const token = localStorage.getItem("auth_token");
+          const lowerMsg = msg.toLowerCase();
 
-          // si no hay token, es sesión muerta disfrazada
-          const looksUnauth =
-            !token ||
-            msg.toLowerCase().includes("unauthenticated") ||
-            msg.toLowerCase().includes("no autorizado");
+          const isActuallyUnauth =
+            !token || lowerMsg.includes("unauthenticated");
 
-          if (looksUnauth) {
+          if (isActuallyUnauth) {
             if (redirecting.current) return Promise.reject(error);
             redirecting.current = true;
 
@@ -72,8 +71,8 @@ export default function AxiosAuthInterceptor() {
             return Promise.reject(error);
           }
 
-          // si sí hay token, es forbidden real: NO login, solo saca al usuario del recurso
-          sessionStorage.removeItem("auth_from");
+          // 🔥 Token existe: NO es “no logueado”, es “no permitido”.
+          // Mantén sesión y llévalo a un lugar válido para ese usuario.
           navigate("/owner/restaurants", {
             replace: true,
             state: { notice: "No tienes permisos para acceder a ese recurso." },
@@ -81,6 +80,7 @@ export default function AxiosAuthInterceptor() {
 
           return Promise.reject(error);
         }
+
 
         return Promise.reject(error);
       }

@@ -4,17 +4,6 @@ import * as authService from "../services/auth.service";
 
 const AuthContext = createContext(null);
 
-function pickToken(res) {
-  // soporta varios formatos típicos
-  return (
-    res?.token ||
-    res?.access_token ||
-    res?.data?.token ||
-    res?.data?.access_token ||
-    null
-  );
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,8 +14,11 @@ export function AuthProvider({ children }) {
         const res = await authService.me();
         setUser(res.user || null);
 
-        if (res?.user?.id) sessionStorage.setItem("auth_user_id", String(res.user.id));
-        else sessionStorage.removeItem("auth_user_id");
+        if (res?.user?.id) {
+          sessionStorage.setItem("auth_user_id", String(res.user.id));
+        } else {
+          sessionStorage.removeItem("auth_user_id");
+        }
       } catch {
         setUser(null);
         sessionStorage.removeItem("auth_user_id");
@@ -52,11 +44,8 @@ export function AuthProvider({ children }) {
       async login(email, password) {
         const prevUserId = sessionStorage.getItem("auth_user_id");
 
+        // authService.login() ya guarda el token en localStorage
         const res = await authService.login({ email, password });
-
-        // ✅ GUARDA TOKEN AQUÍ (lo que te está faltando)
-        const token = pickToken(res);
-        if (token) localStorage.setItem("auth_token", token);
 
         const nextUserId = res?.user?.id ? String(res.user.id) : "";
         setUser(res.user || null);
@@ -64,7 +53,8 @@ export function AuthProvider({ children }) {
         if (nextUserId) sessionStorage.setItem("auth_user_id", nextUserId);
         else sessionStorage.removeItem("auth_user_id");
 
-        const userChanged = !!prevUserId && !!nextUserId && prevUserId !== nextUserId;
+        const userChanged =
+          !!prevUserId && !!nextUserId && prevUserId !== nextUserId;
 
         return { ...res, userChanged };
       },
