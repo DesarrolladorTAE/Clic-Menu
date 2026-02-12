@@ -2,9 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import OperationalSettingsModal from "../../components/floor/OperationalSettingsModal";
-import { getOperationalSettings } from "../../services/floor/operationalSettings.service";
+import ZoneModal from "../../components/floor/ZoneModal";
+import TableModal from "../../components/floor/TableModal";
 
-// Toast simple (mismo estilo que ya usas)
+import { getOperationalSettings } from "../../services/floor/operationalSettings.service";
+import { getZones, deleteZone } from "../../services/floor/zones.service";
+import { getTables, deleteTable } from "../../services/floor/tables.service";
+
+// Toast simple
 function Toast({ open, message, type = "info", onClose }) {
   if (!open) return null;
 
@@ -70,21 +75,18 @@ function Toast({ open, message, type = "info", onClose }) {
   );
 }
 
-// estados en sistema (inglés) pero usuario ve español
 const STATUS_LABELS_ES = {
   available: "Disponible",
   occupied: "Ocupado",
   reserved: "Reservado",
 };
 
-// estilos por estado (no mostrar key al usuario)
 const STATUS_META = [
   { key: "available", label: "Disponible", color: "#e6ffed", border: "#8ae99c" },
   { key: "occupied", label: "Ocupado", color: "#ffe5e5", border: "#ffb3b3" },
   { key: "reserved", label: "Reservado", color: "#fff3cd", border: "#ffe08a" },
 ];
 
-// --- helpers para mostrar configuración en español
 const ORDERING_MODE_ES = {
   waiter_only: "Solo mesero",
   customer_assisted: "Cliente asistido",
@@ -104,11 +106,27 @@ export default function BranchFloorPlanPage() {
   const { restaurantId, branchId } = useParams();
 
   const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState(null);
 
-  // modal inicial si no existe config
+  const [settings, setSettings] = useState(null);
+  const [zones, setZones] = useState([]);
+  const [tables, setTables] = useState([]);
+
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
+
+  // settings modal
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [settingsModalMode, setSettingsModalMode] = useState("create"); // create|edit
+  const [settingsModalMode, setSettingsModalMode] = useState("create");
+
+  // zone modal
+  const [zoneModalOpen, setZoneModalOpen] = useState(false);
+  const [zoneModalMode, setZoneModalMode] = useState("create");
+  const [zoneModalInitial, setZoneModalInitial] = useState(null);
+
+  // table modal
+  const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [tableModalMode, setTableModalMode] = useState("create");
+  const [tableModalInitial, setTableModalInitial] = useState(null);
 
   const [toast, setToast] = useState({ open: false, message: "", type: "info" });
   const showToast = (message, type = "info") => {
@@ -117,37 +135,9 @@ export default function BranchFloorPlanPage() {
   };
   const closeToast = () => setToast((t) => ({ ...t, open: false }));
 
-  // --- DATA DUMMY (hasta que exista API de zonas/mesas)
-  const dummyZones = useMemo(
-    () => [
-      {
-        id: 1,
-        name: "Zona 1",
-        tables: [
-          { id: 11, name: "M01", seats: 4, status: "available" },
-          { id: 12, name: "M02", seats: 2, status: "occupied" },
-          { id: 13, name: "M03", seats: 6, status: "reserved" },
-          { id: 14, name: "M04", seats: 4, status: "available" },
-          { id: 15, name: "M05", seats: 4, status: "available" },
-        ],
-      },
-      {
-        id: 2,
-        name: "Zona 2",
-        tables: [
-          { id: 21, name: "M06", seats: 2, status: "available" },
-          { id: 22, name: "M07", seats: 4, status: "available" },
-          { id: 23, name: "M08", seats: 8, status: "occupied" },
-        ],
-      },
-    ],
-    []
-  );
-
   const [zoneFilter, setZoneFilter] = useState("all");
 
   const loadSettings = async () => {
-    setLoading(true);
     try {
       const s = await getOperationalSettings(restaurantId, branchId);
       setSettings(s);
@@ -160,17 +150,46 @@ export default function BranchFloorPlanPage() {
         setSettingsModalMode("create");
         setSettingsModalOpen(true);
       } else {
-        const msg =
-          e?.response?.data?.message || e?.message || "No se pudo cargar la configuración";
+        const msg = e?.response?.data?.message || e?.message || "No se pudo cargar la configuración";
         showToast(msg, "error");
       }
+    }
+  };
+
+  const loadZones = async () => {
+    setZonesLoading(true);
+    try {
+      const z = await getZones(restaurantId, branchId);
+      setZones(z);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar las zonas";
+      showToast(msg, "error");
     } finally {
-      setLoading(false);
+      setZonesLoading(false);
+    }
+  };
+
+  const loadTables = async () => {
+    setTablesLoading(true);
+    try {
+      const t = await getTables(restaurantId, branchId);
+      setTables(t);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar las mesas";
+      showToast(msg, "error");
+    } finally {
+      setTablesLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSettings();
+    (async () => {
+      setLoading(true);
+      await loadSettings();
+      await loadZones();
+      await loadTables();
+      setLoading(false);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, branchId]);
 
@@ -184,19 +203,11 @@ export default function BranchFloorPlanPage() {
     showToast("Configuración guardada.", "success");
   };
 
-  const zonesForView = useMemo(() => {
-    if (zoneFilter === "all") return dummyZones;
-    return dummyZones.filter((z) => String(z.id) === String(zoneFilter));
-  }, [dummyZones, zoneFilter]);
-
   const settingsSummary = useMemo(() => {
     if (!settings) return null;
 
-    const orderingLabel =
-      ORDERING_MODE_ES[settings.ordering_mode] || "Sin definir";
-
-    const tableServiceLabel =
-      TABLE_SERVICE_MODE_ES[settings.table_service_mode] || "Sin definir";
+    const orderingLabel = ORDERING_MODE_ES[settings.ordering_mode] || "Sin definir";
+    const tableServiceLabel = TABLE_SERVICE_MODE_ES[settings.table_service_mode] || "Sin definir";
 
     return {
       orderingLabel,
@@ -204,6 +215,95 @@ export default function BranchFloorPlanPage() {
       qrLabel: boolES(!!settings.is_qr_enabled),
     };
   }, [settings]);
+
+  const openCreateZone = () => {
+    setZoneModalMode("create");
+    setZoneModalInitial(null);
+    setZoneModalOpen(true);
+  };
+
+  const openEditZone = (zone) => {
+    setZoneModalMode("edit");
+    setZoneModalInitial(zone);
+    setZoneModalOpen(true);
+  };
+
+  const onZoneSaved = async () => {
+    await loadZones();
+  };
+
+  const onDeleteZone = async (zone) => {
+    const ok = window.confirm("¿De verdad desea eliminar esta zona?");
+    if (!ok) return;
+
+    try {
+      await deleteZone(restaurantId, branchId, zone.id);
+      showToast("Zona eliminada.", "success");
+
+      if (String(zoneFilter) === String(zone.id)) setZoneFilter("all");
+
+      await loadZones();
+      await loadTables(); // por si cascade borra mesas
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo eliminar la zona";
+      showToast(msg, "error");
+    }
+  };
+
+  // ---- Mesas
+  const openCreateTable = () => {
+    if (!zones || zones.length === 0) {
+      showToast("Primero debe de crear una zona", "warning");
+      return;
+    }
+    setTableModalMode("create");
+    setTableModalInitial(null);
+    setTableModalOpen(true);
+  };
+
+  const openEditTable = (table) => {
+    setTableModalMode("edit");
+    setTableModalInitial(table);
+    setTableModalOpen(true);
+  };
+
+  const onTableSaved = async () => {
+    await loadTables();
+  };
+
+  const onDeleteTable = async (table) => {
+    const ok = window.confirm("¿De verdad desea eliminar esta mesa?");
+    if (!ok) return;
+
+    try {
+      await deleteTable(restaurantId, branchId, table.id);
+      showToast("Mesa eliminada.", "success");
+      await loadTables();
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo eliminar la mesa";
+      showToast(msg, "error");
+    }
+  };
+
+  // agrupar mesas por zone_id
+  const tablesByZone = useMemo(() => {
+    const map = {};
+    for (const t of tables || []) {
+      const zid = String(t.zone_id ?? t.zone?.id ?? "");
+      if (!map[zid]) map[zid] = [];
+      map[zid].push(t);
+    }
+    // orden por name dentro
+    Object.keys(map).forEach((k) => {
+      map[k].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    });
+    return map;
+  }, [tables]);
+
+  const zonesForView = useMemo(() => {
+    if (zoneFilter === "all") return zones;
+    return zones.filter((z) => String(z.id) === String(zoneFilter));
+  }, [zones, zoneFilter]);
 
   if (loading) {
     return <div style={{ padding: 16 }}>Cargando diseño del salón...</div>;
@@ -220,9 +320,8 @@ export default function BranchFloorPlanPage() {
         branchId={branchId}
         initialData={settingsModalMode === "edit" ? settings : null}
         onClose={() => {
-          // si está en create y cierran sin guardar, no tiene sentido dejarlos aquí
           if (settingsModalMode === "create" && !settings) {
-            nav("/owner/restaurants"); // Mis restaurantes
+            nav("/owner/restaurants");
             return;
           }
           setSettingsModalOpen(false);
@@ -231,25 +330,34 @@ export default function BranchFloorPlanPage() {
         showToast={showToast}
       />
 
+      <ZoneModal
+        open={zoneModalOpen}
+        mode={zoneModalMode}
+        restaurantId={restaurantId}
+        branchId={branchId}
+        initialData={zoneModalMode === "edit" ? zoneModalInitial : null}
+        onClose={() => setZoneModalOpen(false)}
+        onSaved={onZoneSaved}
+        showToast={showToast}
+      />
+
+      <TableModal
+        open={tableModalOpen}
+        mode={tableModalMode}
+        restaurantId={restaurantId}
+        branchId={branchId}
+        zones={zones}
+        settings={settings}
+        initialData={tableModalMode === "edit" ? tableModalInitial : null}
+        onClose={() => setTableModalOpen(false)}
+        onSaved={onTableSaved}
+        showToast={showToast}
+      />
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={() => nav("/owner/restaurants")}
-              style={{
-                padding: "8px 10px",
-                cursor: "pointer",
-                borderRadius: 10,
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: "#fff",
-                fontWeight: 900,
-              }}
-              title="Regresar a Mis restaurantes"
-            >
-              ← Regresar
-            </button>
-
             <h2 style={{ margin: 0 }}>Diseño del salón</h2>
           </div>
 
@@ -259,6 +367,13 @@ export default function BranchFloorPlanPage() {
                 Modo de toma de pedidos: <strong>{settingsSummary.orderingLabel}</strong>{" "}
                 · Modo de asignación de mesas: <strong>{settingsSummary.tableServiceLabel}</strong>{" "}
                 · QR: <strong>{settingsSummary.qrLabel}</strong>
+                {typeof settings?.min_seats !== "undefined" && typeof settings?.max_seats !== "undefined" && (
+                  <>
+                    {" "}
+                    · Asientos por mesa: <strong>{settings.min_seats}</strong> a{" "}
+                    <strong>{settings.max_seats}</strong>
+                  </>
+                )}
               </>
             ) : (
               "Sin configuración operativa (debería abrirse el modal)"
@@ -266,17 +381,31 @@ export default function BranchFloorPlanPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", width: "100%" }}>
           <button
-            onClick={() => showToast("Modal pendiente: Nueva zona (próximo paso).", "info")}
-            style={{ padding: "10px 12px", cursor: "pointer", fontWeight: 800 }}
+            onClick={openCreateZone}
+            style={{
+              padding: "10px 12px",
+              cursor: "pointer",
+              fontWeight: 800,
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              background: "#fff",
+            }}
           >
             + Nueva zona
           </button>
 
           <button
-            onClick={() => showToast("Modal pendiente: Nueva mesa (próximo paso).", "info")}
-            style={{ padding: "10px 12px", cursor: "pointer", fontWeight: 800 }}
+            onClick={openCreateTable}
+            style={{
+              padding: "10px 12px",
+              cursor: "pointer",
+              fontWeight: 800,
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 10,
+              background: "#fff",
+            }}
           >
             + Nueva mesa
           </button>
@@ -289,12 +418,29 @@ export default function BranchFloorPlanPage() {
               fontWeight: 900,
               background: "#f0f0ff",
               border: "1px solid #cfcfff",
-              borderRadius: 8,
+              borderRadius: 10,
             }}
           >
             Configuración operativa
           </button>
+
+          <button
+            onClick={() => nav("/owner/restaurants")}
+            style={{
+              marginLeft: "auto", 
+              padding: "8px 10px",
+              cursor: "pointer",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.12)",
+              background: "#fff",
+              fontWeight: 900,
+            }}
+            title="Regresar a Mis restaurantes"
+          >
+            ← Regresar
+          </button>
         </div>
+
       </div>
 
       {/* Filter */}
@@ -325,10 +471,10 @@ export default function BranchFloorPlanPage() {
               borderRadius: 10,
             }}
           >
-            Todas las mesas
+            Todas las zonas
           </button>
 
-          {dummyZones.map((z) => (
+          {zones.map((z) => (
             <button
               key={z.id}
               onClick={() => setZoneFilter(String(z.id))}
@@ -344,95 +490,196 @@ export default function BranchFloorPlanPage() {
               {z.name}
             </button>
           ))}
+
+          {(zonesLoading || tablesLoading) && (
+            <div style={{ fontSize: 12, opacity: 0.7, padding: "8px 10px" }}>
+              Cargando...
+            </div>
+          )}
         </div>
       </div>
 
       {/* Zones + Tables */}
       <div style={{ marginTop: 18, display: "grid", gap: 16 }}>
-        {zonesForView.map((zone) => {
-          const count = zone.tables.length;
+        {zonesForView.length === 0 ? (
+          <div
+            style={{
+              border: "1px solid rgba(0,0,0,0.12)",
+              borderRadius: 14,
+              padding: 14,
+              background: "#fff",
+            }}
+          >
+            <div style={{ fontWeight: 900 }}>No hay zonas aún</div>
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+              Crea tu primera zona para empezar a organizar el salón.
+            </div>
+          </div>
+        ) : (
+          zonesForView.map((zone) => {
+            const zoneTables = tablesByZone[String(zone.id)] || [];
+            const count = zoneTables.length;
 
-          return (
-            <div
-              key={zone.id}
-              style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                borderRadius: 14,
-                padding: 14,
-                background: "#fff",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ fontWeight: 900, fontSize: 14 }}>
-                  {zone.name}{" "}
-                  <span style={{ fontWeight: 700, opacity: 0.7 }}>· {count} mesas</span>
-                </div>
-              </div>
-
+            return (
               <div
+                key={zone.id}
                 style={{
-                  marginTop: 12,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: "1px dashed rgba(0,0,0,0.18)",
-                  background: "#fafafa",
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  borderRadius: 14,
+                  padding: 14,
+                  background: "#fff",
                 }}
               >
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  
+                  {/* Lado izquierdo */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 900, fontSize: 14 }}>
+                      {zone.name}{" "}
+                      <span style={{ fontWeight: 700, opacity: 0.7 }}>
+                        · {count} mesas
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Lado derecho */}
+                  <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+                    <button
+                      onClick={() => openEditZone(zone)}
+                      style={{
+                        cursor: "pointer",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.12)",
+                        background: "#fff",
+                        padding: "6px 10px",
+                        fontWeight: 900,
+                      }}
+                      title="Editar zona"
+                    >
+                      ✏️
+                    </button>
+
+                    <button
+                      onClick={() => onDeleteZone(zone)}
+                      style={{
+                        cursor: "pointer",
+                        borderRadius: 10,
+                        border: "1px solid rgba(255,0,0,0.25)",
+                        background: "#ffe5e5",
+                        padding: "6px 10px",
+                        fontWeight: 900,
+                        color: "#a10000",
+                      }}
+                      title="Eliminar zona"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+
+                </div>
+
+
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                    gap: 12,
+                    marginTop: 12,
+                    padding: 12,
+                    borderRadius: 12,
+                    border: "1px dashed rgba(0,0,0,0.18)",
+                    background: "#fafafa",
                   }}
                 >
-                  {zone.tables.map((t) => {
-                    const meta = STATUS_META.find((x) => x.key === t.status) || STATUS_META[0];
+                  {zoneTables.length === 0 ? (
+                    <div style={{ fontSize: 13, opacity: 0.75 }}>
+                      Sin mesas en esta zona. Usa <strong>+ Nueva mesa</strong>.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                        gap: 12,
+                      }}
+                    >
+                      {zoneTables.map((t) => {
+                        const meta = STATUS_META.find((x) => x.key === t.status) || STATUS_META[0];
 
-                    return (
-                      <div
-                        key={t.id}
-                        style={{
-                          borderRadius: 12,
-                          border: `1px solid ${meta.border}`,
-                          background: meta.color,
-                          padding: 12,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 10,
-                          minHeight: 96,
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontWeight: 900 }}>{t.name}</div>
-                          <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>
-                            {STATUS_LABELS_ES[t.status] || "Disponible"}
-                          </div>
-                        </div>
-
-                        <div style={{ fontSize: 13 }}>
-                          Asientos: <strong>{t.seats}</strong>
-                        </div>
-
-                        <div style={{ marginTop: "auto" }}>
-                          <button
-                            onClick={() => showToast(`Modal pendiente: Editar mesa ${t.name}`, "info")}
-                            style={{ padding: "8px 10px", cursor: "pointer" }}
+                        return (
+                          <div
+                            key={t.id}
+                            style={{
+                              borderRadius: 12,
+                              border: `1px solid ${meta.border}`,
+                              background: meta.color,
+                              padding: 12,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 10,
+                              minHeight: 110,
+                              position: "relative",
+                            }}
                           >
-                            Editar
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", paddingRight: 46 }}>
+                              <div style={{ fontWeight: 900 }}>{t.name}</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>
+                                {STATUS_LABELS_ES[t.status] || "Disponible"}
+                              </div>
+                            </div>
 
-                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-                  * Layout: 4 columnas por fila. En pantallas pequeñas se ajusta después.
+                            <div style={{ fontSize: 13 }}>
+                              Asientos: <strong>{t.seats}</strong>
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: "auto",
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: 8,
+                              }}
+                            >
+                              <button
+                                onClick={() => openEditTable(t)}
+                                style={{
+                                  cursor: "pointer",
+                                  borderRadius: 10,
+                                  border: "1px solid rgba(0,0,0,0.12)",
+                                  background: "#fff",
+                                  padding: "6px 10px",
+                                  fontWeight: 900,
+                                }}
+                                title="Editar mesa"
+                              >
+                                ✏️
+                              </button>
+
+                              <button
+                                onClick={() => onDeleteTable(t)}
+                                style={{
+                                  cursor: "pointer",
+                                  borderRadius: 10,
+                                  border: "1px solid rgba(255,0,0,0.25)",
+                                  background: "#ffe5e5",
+                                  padding: "6px 10px",
+                                  fontWeight: 900,
+                                  color: "#a10000",
+                                }}
+                                title="Eliminar mesa"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Legend */}
@@ -472,8 +719,6 @@ export default function BranchFloorPlanPage() {
                   />
                   <span style={{ fontWeight: 800 }}>{s.label}</span>
                 </div>
-
-                {/* ya NO mostramos la key en inglés */}
               </div>
             ))}
           </div>

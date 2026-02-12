@@ -1,3 +1,5 @@
+//Para manejar el modal del botón "Configuraci+on operativa"
+
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
@@ -55,6 +57,24 @@ const noticeStyle = {
   lineHeight: 1.35,
 };
 
+const subtleNoteStyle = {
+  marginTop: 10,
+  fontSize: 12,
+  opacity: 0.75,
+  lineHeight: 1.35,
+};
+
+const helperStyle = {
+  marginTop: 6,
+  fontSize: 12,
+  color: "rgba(0,0,0,0.70)",
+  lineHeight: 1.35,
+  fontWeight: 700, // negrito suave
+};
+
+// opciones fuera del componente (sin hooks, sin dramas)
+const SEAT_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1);
+
 function FieldError({ message }) {
   if (!message) return null;
   return (
@@ -62,6 +82,11 @@ function FieldError({ message }) {
       {message}
     </div>
   );
+}
+
+function HelperNote({ children }) {
+  if (!children) return null;
+  return <div style={helperStyle}>{children}</div>;
 }
 
 export default function OperationalSettingsModal({
@@ -76,7 +101,7 @@ export default function OperationalSettingsModal({
 }) {
   const [saving, setSaving] = useState(false);
 
-  // Si NO hay registro, tu pantalla abre el modal en create.
+  // Si NO hay registro,  abre el modal en create.
   // Este flag controla el aviso.
   const showMissingConfigNotice = mode === "create" && !initialData;
 
@@ -86,6 +111,10 @@ export default function OperationalSettingsModal({
       ordering_mode: initialData?.ordering_mode ?? "waiter_only",
       table_service_mode: initialData?.table_service_mode ?? "free_for_all",
       is_qr_enabled: !!initialData?.is_qr_enabled,
+
+      // nuevos campos (enteros) obligatorios
+      min_seats: Number.isInteger(initialData?.min_seats) ? initialData.min_seats : 1,
+      max_seats: Number.isInteger(initialData?.max_seats) ? initialData.max_seats : 6,
     }),
     [initialData]
   );
@@ -99,7 +128,11 @@ export default function OperationalSettingsModal({
     formState: { errors },
   } = useForm({ defaultValues });
 
+  const orderingMode = watch("ordering_mode");
+  const tableServiceMode = watch("table_service_mode");
   const isQrEnabled = watch("is_qr_enabled");
+  const minSeats = watch("min_seats");
+  const maxSeats = watch("max_seats");
 
   useEffect(() => {
     if (!open) return;
@@ -110,14 +143,29 @@ export default function OperationalSettingsModal({
 
   const title = mode === "create" ? "Configuración Operativa Inicial" : "Configuración Operativa";
 
+  const orderingHelper =
+    orderingMode === "waiter_only"
+      ? "El cliente solo visualiza QR, el mesero captura el pedido."
+      : orderingMode === "customer_assisted"
+      ? "El cliente puede generar su pedido desde el QR (sin login, solo nombre)."
+      : "";
+
+  const tableServiceHelper =
+    tableServiceMode === "assigned_waiter"
+      ? "Mesas asignadas a meseros específicos."
+      : tableServiceMode === "free_for_all"
+      ? "Cualquier mesero puede tomar una mesa disponible."
+      : "";
+
   const onSubmit = async (form) => {
     setSaving(true);
     try {
       const payload = {
-        // backend espera valores en inglés
         ordering_mode: form.ordering_mode || null,
         table_service_mode: form.table_service_mode || null,
         is_qr_enabled: !!form.is_qr_enabled,
+        min_seats: Number(form.min_seats),
+        max_seats: Number(form.max_seats),
       };
 
       const saved =
@@ -162,7 +210,7 @@ export default function OperationalSettingsModal({
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={bodyStyle}>
             <div style={{ display: "grid", gap: 14 }}>
-              {/* ✅ AVISO SOLO CUANDO NO EXISTE REGISTRO */}
+              {/* AVISO SOLO CUANDO NO EXISTE REGISTRO */}
               {showMissingConfigNotice && (
                 <div style={noticeStyle}>
                   <div style={{ fontWeight: 900, marginBottom: 4 }}>Importante</div>
@@ -175,6 +223,7 @@ export default function OperationalSettingsModal({
                 <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
                   Modo de toma de pedidos
                 </div>
+
                 <select
                   {...register("ordering_mode")}
                   style={{
@@ -187,6 +236,11 @@ export default function OperationalSettingsModal({
                   <option value="waiter_only">Solo mesero</option>
                   <option value="customer_assisted">Cliente asistido</option>
                 </select>
+
+                {/* ✅ aviso informativo (gris/negrito) */}
+                <HelperNote>{orderingHelper}</HelperNote>
+
+                {/* ❌ errores (rojo) */}
                 <FieldError message={errors?.ordering_mode?.message} />
               </div>
 
@@ -195,6 +249,7 @@ export default function OperationalSettingsModal({
                 <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
                   Modo de asignación de mesas
                 </div>
+
                 <select
                   {...register("table_service_mode")}
                   style={{
@@ -207,6 +262,11 @@ export default function OperationalSettingsModal({
                   <option value="free_for_all">Libre</option>
                   <option value="assigned_waiter">Mesero asignado</option>
                 </select>
+
+                {/* ✅ aviso informativo (gris/negrito) */}
+                <HelperNote>{tableServiceHelper}</HelperNote>
+
+                {/* ❌ errores (rojo) */}
                 <FieldError message={errors?.table_service_mode?.message} />
               </div>
 
@@ -238,9 +298,84 @@ export default function OperationalSettingsModal({
                 </label>
               </div>
 
-              <div style={{ fontSize: 12, opacity: 0.75 }}>
-                Nota: las validaciones vienen del backend (422) y se muestran en cada campo.
+              {/* ASIENTOS (DESPUÉS DE QR) */}
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontWeight: 900, marginBottom: 8 }}>Asientos</div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                  }}
+                >
+                  {/* min_seats */}
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
+                      Mínimo
+                    </div>
+
+                    <select
+                      {...register("min_seats")}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      {SEAT_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+
+                    <FieldError message={errors?.min_seats?.message} />
+                  </div>
+
+                  {/* max_seats */}
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
+                      Máximo
+                    </div>
+
+                    <select
+                      {...register("max_seats")}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        border: "1px solid rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      {SEAT_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+
+                    <FieldError message={errors?.max_seats?.message} />
+                  </div>
+                </div>
+
+                <div style={subtleNoteStyle}>
+                  Estos valores serán el limitante del número de posibles asientos que contenga una
+                  mesa (por ejemplo, no podrás crear mesas con menos de{" "}
+                  <strong>{Number(minSeats) || 1}</strong> ni más de{" "}
+                  <strong>{Number(maxSeats) || 6}</strong> asientos).
+                </div>
               </div>
+
+            
             </div>
           </div>
 
