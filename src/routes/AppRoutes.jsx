@@ -37,6 +37,9 @@ import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
 import ProductRecipesPage from "../pages/menu/ProductRecipesPage";
 
+//Piso
+import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
+
 
 
 //Planes
@@ -85,6 +88,9 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/products/:productId/recipes" element={<ProductRecipesPage />} />
 
+        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/tables" element={<BranchFloorPlanPage />} />
+      
+      
       </Route>
       
       
