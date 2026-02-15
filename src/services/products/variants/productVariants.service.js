@@ -1,5 +1,5 @@
 // src/services/productVariants.service.js
-import api from "./api";
+import api from "../../api";
 
 /**
  * GET /api/restaurants/{restaurant}/products/{product}/variants

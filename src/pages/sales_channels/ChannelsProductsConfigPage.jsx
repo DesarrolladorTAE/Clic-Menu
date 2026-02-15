@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getBranch } from "../../services/branch.service"; // si no tienes, comenta bloque
-import { getChannelProducts, upsertChannelProduct } from "../../services/productChannel.service";
+import { getBranch } from "../../services/restaurant/branch.service"; // si no tienes, comenta bloque
+import { getChannelProducts, upsertChannelProduct } from "../../services/products/sales_channels/productChannel.service";
 
 function money(v) {
   if (v == null || v === "") return "—";

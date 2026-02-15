@@ -1,5 +1,5 @@
 //Punto de acceso para menu restaurant
-import api from "./api";
+import api from "../api";
 
 export async function getMenuSections(restaurantId, params = {}) {
   const { data } = await api.get(`/restaurants/${restaurantId}/menu-sections`, { params });

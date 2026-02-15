@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getBranch, updateBranch } from "../../services/branch.service";
+import { getBranch, updateBranch } from "../../services/restaurant/branch.service";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
 export default function BranchEdit() {

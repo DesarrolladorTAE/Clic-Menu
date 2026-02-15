@@ -2,15 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
-import { getRestaurantSubscriptionStatus } from "../../../services/restaurant.service";
-import { getRestaurantSettings } from "../../../services/restaurantSettings.service";
-import { getBranch } from "../../../services/branch.service"; // si no tienes, quítalo y deja nombre genérico
+import { getRestaurantSubscriptionStatus } from "../../../services/restaurant/restaurant.service";
+import { getRestaurantSettings } from "../../../services/restaurant/restaurantSettings.service";
+import { getBranch } from "../../../services/restaurant/branch.service"; // si no tienes, quítalo y deja nombre genérico
 
 import {
   getBranchCatalog,
   upsertProductOverride,
   deleteProductOverride,
-} from "../../../services/branchCatalog.service";
+} from "../../../services/restaurant/branchCatalog.service";
 
 export default function BranchCatalogPage() {
   const nav = useNavigate();

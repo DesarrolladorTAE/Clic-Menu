@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   getRestaurantSettings,
   upsertRestaurantSettings,
-} from "../../services/restaurantSettings.service";
+} from "../../services/restaurant/restaurantSettings.service";
 
 const MODES = [
   { value: "global", label: "Global (compartido)" },

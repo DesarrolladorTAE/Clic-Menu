@@ -5,14 +5,14 @@ import {
   createVariantAttribute,
   updateVariantAttribute,
   deleteVariantAttribute,
-} from "../../services/variantAttributes.service";
+} from "../../services/products/variants/variantAttributes.service";
 
 import {
   getVariantAttributeValues,
   createVariantAttributeValue,
   updateVariantAttributeValue,
   deleteVariantAttributeValue,
-} from "../../services/variantAttributeValues.service";
+} from "../../services/products/variants/variantAttributeValues.service";
 
 function normalizeErr(e) {
   return (

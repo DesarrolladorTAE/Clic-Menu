@@ -1,5 +1,5 @@
 // src/services/branchCatalog.service.js
-import api from "./api";
+import api from "../api";
 
 export async function getBranchCatalog(restaurantId, branchId) {
   const { data } = await api.get(

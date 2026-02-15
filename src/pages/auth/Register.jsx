@@ -3,14 +3,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
-import TermsModal from "../../components/registro/TermsModal";
+import TermsModal from "../../components/auth/TermsModal";
 import { normalizePhone } from "../../utils/phone";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import {
   requestRegisterCode,
   verifyRegisterCode,
   resendRegisterCode,
-} from "../../services/auth.service";
+} from "../../services/auth/auth.service";
 
 export default function Register() {
   const nav = useNavigate();

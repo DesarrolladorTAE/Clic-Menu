@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../api";
 
 // GET /restaurants/:restaurantId/branches
 export async function getBranchesByRestaurant(restaurantId) {

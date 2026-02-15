@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getVariantAttributes } from "../../services/variantAttributes.service";
-import { getVariantAttributeValues } from "../../services/variantAttributeValues.service";
-import { repairProductVariant } from "../../services/productVariants.service";
+import { getVariantAttributes } from "../../services/products/variants/variantAttributes.service";
+import { getVariantAttributeValues } from "../../services/products/variants/variantAttributeValues.service";
+import { repairProductVariant } from "../../services/products/variants/productVariants.service";
 
 function normalizeErr(e) {
   return (

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { getPlans } from "../../services/plan.service";
+import { getPlans } from "../../services/owner/plan.service";
 import {
   getRestaurantSubscriptionStatus,
   subscribeRestaurant,
-} from "../../services/restaurant.service";
+} from "../../services/restaurant/restaurant.service";
 
 export default function RestaurantPlans() {
   const nav = useNavigate();

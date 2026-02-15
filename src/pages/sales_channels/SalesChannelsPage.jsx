@@ -5,7 +5,7 @@ import {
   deleteSalesChannel,
   getSalesChannels,
   updateSalesChannel,
-} from "../../services/sales_channels.service";
+} from "../../services/products/sales_channels/sales_channels.service";
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Activo" },

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getRestaurantSettings } from "../../services/restaurantSettings.service";
-import { getBranchesByRestaurant } from "../../services/branch.service";
-import { getCategories } from "../../services/categories.service";
+import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
+import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
+import { getCategories } from "../../services/menu/categories.service";
 
 import {
   getProducts,
@@ -15,10 +15,10 @@ import {
   uploadProductImage,
   deleteProductImage,
   reorderProductImages,
-} from "../../services/products.service";
+} from "../../services/products/products.service";
 
-import { changeProductType } from "../../services/catalog/products/productType.service";
-import { changeInventoryType } from "../../services/catalog/products/productInventoryType.service";
+import { changeProductType } from "../../services/products/catalog/productType.service";
+import { changeInventoryType } from "../../services/products/catalog/productInventoryType.service";
 
 // UI en español, values en inglés (BD)
 const PRODUCT_TYPES = [

@@ -1,5 +1,5 @@
 
-import api from "./api";
+import api from "../api";
 
 // Lista canales del restaurante + override (is_active) para esta sucursal
 export async function getBranchSalesChannels(restaurantId, branchId) {

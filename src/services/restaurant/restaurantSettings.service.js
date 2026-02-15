@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../api";
 
 export async function getRestaurantSettings(restaurantId) {
   const { data } = await api.get(`/restaurants/${restaurantId}/settings`);

@@ -5,10 +5,10 @@ import {
   deleteRestaurant,
   getRestaurantSubscriptionStatus,
   setRestaurantMainBranch,
-} from "../../services/restaurant.service";
+} from "../../services/restaurant/restaurant.service";
 
-import { getBranchesByRestaurant, deleteBranch } from "../../services/branch.service";
-import { getRestaurantSettings } from "../../services/restaurantSettings.service";
+import { getBranchesByRestaurant, deleteBranch } from "../../services/restaurant/branch.service";
+import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 
 import { useAuth } from "../../context/AuthContext";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";

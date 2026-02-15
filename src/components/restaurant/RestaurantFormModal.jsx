@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { createRestaurant, updateRestaurant } from "../../services/restaurant.service";
+import { createRestaurant, updateRestaurant } from "../../services/restaurant/restaurant.service";
 
 export default function RestaurantFormModal({
   open,

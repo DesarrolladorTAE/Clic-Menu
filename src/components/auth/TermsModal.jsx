@@ -1,6 +1,6 @@
 // src/components/registro/TermsModal.jsx
 import React, { useMemo, useState } from "react";
-import { acceptTerms } from "../../services/auth.service";
+import { acceptTerms } from "../../services/auth/auth.service";
 
 /**
  * Props:

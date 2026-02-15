@@ -1,7 +1,7 @@
 //import Register from "./pages/auth/Register"; //Ruta de archivo de registro 
 
 import AppRoutes from "./routes/AppRoutes";
-import AxiosAuthInterceptor from "./components/AxiosAuthInterceptor";
+import AxiosAuthInterceptor from "./components/shared/AxiosAuthInterceptor";
 
 export default function App() {
   return (

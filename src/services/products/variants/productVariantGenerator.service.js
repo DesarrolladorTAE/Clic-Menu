@@ -1,5 +1,5 @@
 // src/services/productVariantGenerator.service.js
-import api from "./api";
+import api from "../../api";
 
 /**
  * POST /api/restaurants/{restaurant}/products/{product}/variants/generate

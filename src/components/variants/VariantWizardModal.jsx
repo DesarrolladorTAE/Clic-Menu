@@ -1,8 +1,8 @@
 // src/components/variants/VariantWizardModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getVariantAttributes } from "../../services/variantAttributes.service";
-import { getVariantAttributeValues } from "../../services/variantAttributeValues.service";
-import { generateProductVariants } from "../../services/productVariantGenerator.service";
+import { getVariantAttributes } from "../../services/products/variants/variantAttributes.service";
+import { getVariantAttributeValues } from "../../services/products/variants/variantAttributeValues.service";
+import { generateProductVariants } from "../../services/products/variants/productVariantGenerator.service";
 import VariantAttributesAdminModal from "./VariantAttributesAdminModal";
 
 function normalizeErr(e) {

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
-import { getRestaurantSettings } from "../../services/restaurantSettings.service";
-import { getBranchesByRestaurant } from "../../services/branch.service";
+import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
+import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 import { getIngredients } from "../../services/inventory/ingredients/ingredients.service";// ajusta si tu path real es otro
 
 import {

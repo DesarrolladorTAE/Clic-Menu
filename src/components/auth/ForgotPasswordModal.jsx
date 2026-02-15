@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { normalizePhone } from "../../utils/phone";
 import { handleFormApiError } from "../../utils/useFormApiHandler.js";
-import { requestPasswordResetCode, resetPassword } from "../../services/auth.service";
+import { requestPasswordResetCode, resetPassword } from "../../services/auth/auth.service";
 
 export default function ForgotPasswordModal({ open, onClose }) {
   const [step, setStep] = useState(1);

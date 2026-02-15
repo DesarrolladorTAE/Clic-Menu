@@ -10,7 +10,7 @@ import {
 } from "../../services/inventory/ingredients/ingredients.service";
 
 import { normalizeErr } from "../../utils/err";
-import IngredientFormModal from "../../components/ingredients/IngredientFormModal";
+import IngredientFormModal from "../../components/inventory/IngredientFormModal";
 
 function pct(v) {
   if (v === null || v === undefined || v === "") return "—";

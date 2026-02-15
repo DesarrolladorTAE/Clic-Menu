@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../api";
 
 export async function getProducts(restaurantId, params = {}) {
   const { data } = await api.get(`/restaurants/${restaurantId}/products`, { params });

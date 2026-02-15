@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../../api";
 
 // GET /api/restaurants/{restaurant}/sales-channels
 export async function getSalesChannels(restaurantId) {

@@ -9,8 +9,8 @@ import {
   deleteIngredientPresentation,
 } from "../../services/inventory/ingredients/ingredientPresentations.service";
 
-import IngredientPresentationFormModal from "../../components/ingredients/IngredientPresentationFormModal";
-import SupplierWizard from "../../components/suppliers/SupplierWizard";
+import IngredientPresentationFormModal from "../../components/inventory/IngredientPresentationFormModal";
+import SupplierWizard from "../../components/inventory/SupplierWizard";
 
 function money(v) {
   const n = Number(v);

@@ -1,5 +1,5 @@
 // src/services/auth.service.js
-import api from "./api";
+import api from "../api";
 
 /**
  * Registro

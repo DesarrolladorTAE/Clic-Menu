@@ -1,9 +1,9 @@
 // src/components/variants/VariantChannelsModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getBranchesByRestaurant } from "../../services/branch.service";
+import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 
 
-import { getVariantChannels, upsertVariantChannels } from "../../services/productVariantChannels.service";
+import { getVariantChannels, upsertVariantChannels } from "../../services/products/variants/productVariantChannels.service";
 
 function money(n) {
   if (n == null || n === "") return "—";

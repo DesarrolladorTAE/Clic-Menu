@@ -6,7 +6,7 @@ import {
   toggleProductVariant,
   setDefaultProductVariant,
   deleteProductVariant,
-} from "../../../services/productVariants.service";
+} from "../../../services/products/variants/productVariants.service";
 
 import VariantWizardModal from "../../../components/variants/VariantWizardModal";
 import { normalizeErr } from "../../../utils/err";

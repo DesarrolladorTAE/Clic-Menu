@@ -5,8 +5,8 @@ import { useForm } from "react-hook-form";
 
 import { useAuth } from "../../context/AuthContext";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
-import ForgotPasswordModal from "../../components/registro/ForgotPasswordModal";
-import TermsModal from "../../components/registro/TermsModal";
+import ForgotPasswordModal from "../../components/auth/ForgotPasswordModal";
+import TermsModal from "../../components/auth/TermsModal";
 
 export default function Login() {
   const { login } = useAuth();

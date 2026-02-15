@@ -1,5 +1,5 @@
 // src/services/productVariantChannels.service.js
-import api from "./api"; // ajusta si tu cliente se llama diferente
+import api from "../../api"; // ajusta si tu cliente se llama diferente
 
 export async function getVariantChannels(restaurantId, productId, variantId, branchId) {
   const { data } = await api.get(

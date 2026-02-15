@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { normalizeErr } from "../../utils/err";
 import { getSuppliers } from "../../services/inventory/suppliers/suppliers.service";
-import SupplierWizard from "../suppliers/SupplierWizard";
+import SupplierWizard from "./SupplierWizard";
 
 const YIELD_UNITS = [
   { value: "g", label: "g (gramos)" },

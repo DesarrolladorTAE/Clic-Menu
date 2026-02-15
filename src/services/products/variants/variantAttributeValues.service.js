@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../../api";
 
 /**
  * GET /api/restaurants/{restaurant}/variant-attributes/{attribute}/values?only_active=1|0

@@ -1,5 +1,5 @@
 //Punto de acceso para restaurant
-import api from "./api";
+import api from "../api";
 
 //GET /restautants
 export async function getMyRestaurants() {

@@ -1,4 +1,4 @@
-import api from "./api";
+import api from "../../api";
 
 // Lista de productos configurables para este canal en esta sucursal
 export async function getChannelProducts(restaurantId, branchId, salesChannelId) {

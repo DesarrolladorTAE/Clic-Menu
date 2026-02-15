@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { createBranch } from "../../services/branch.service";
+import { createBranch } from "../../services/restaurant/branch.service";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
 

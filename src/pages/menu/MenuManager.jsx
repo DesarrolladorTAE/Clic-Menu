@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getRestaurantSettings } from "../../services/restaurantSettings.service";
-import { getBranchesByRestaurant } from "../../services/branch.service";
+import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
+import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 
 import {
   getMenuSections,
   createMenuSection,
   updateMenuSection,
   deleteMenuSection,
-} from "../../services/menuSections.service";
+} from "../../services/menu/menuSections.service";
 
 import {
   getCategories,
   createCategory,
   updateCategory,
   deleteCategory,
-} from "../../services/categories.service";
+} from "../../services/menu/categories.service";
 
 export default function MenuManager() {
   const nav = useNavigate();

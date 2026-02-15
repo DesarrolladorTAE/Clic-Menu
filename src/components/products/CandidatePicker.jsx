@@ -1,6 +1,6 @@
 // src/pages/owner/products/components/CandidatePicker.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { getComponentCandidates } from "../../services/catalog/products/productComponents.service";
+import { getComponentCandidates } from "../../services/products/catalog/productComponents.service";
 
 function apiErrorToMessage(e, fallback) {
   return (

@@ -25,7 +25,7 @@ import MenuManager from "../pages/menu/MenuManager";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductVariantsPage from "../pages/products/products_variants/ProductVariantsPage";
 import ProductCompositionPage from "../pages/products/ProductCompositionPage";
-
+import ProductRecipesPage from "../pages/products/ProductRecipesPage";
 
 import BranchCatalogPage from "../pages/restaurant/catalog/BranchCatalogPage";
 import SalesChannelsPage from "../pages/sales_channels/SalesChannelsPage";
@@ -35,7 +35,7 @@ import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsC
 //Inventario
 import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
-import ProductRecipesPage from "../pages/menu/ProductRecipesPage";
+
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";

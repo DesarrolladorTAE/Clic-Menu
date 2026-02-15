@@ -1,8 +1,8 @@
 // src/components/AxiosAuthInterceptor.jsx
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import api from "../services/api";
-import { useAuth } from "../context/AuthContext";
+import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AxiosAuthInterceptor() {
   const navigate = useNavigate();
