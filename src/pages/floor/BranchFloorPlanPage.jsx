@@ -437,6 +437,22 @@ export default function BranchFloorPlanPage() {
           </button>
 
           <button
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/qr-codes`)}
+            style={{
+              padding: "10px 12px",
+              cursor: "pointer",
+              fontWeight: 900,
+              background: "#e6ffed",
+              border: "1px solid #8ae99c",
+              borderRadius: 10,
+            }}
+            title="Administración de QRs para esta sucursal"
+          >
+            📱 Administrar QRs
+          </button>
+
+
+          <button
             onClick={() => nav("/owner/restaurants")}
             style={{
               marginLeft: "auto",

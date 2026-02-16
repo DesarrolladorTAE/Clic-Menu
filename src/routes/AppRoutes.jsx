@@ -42,6 +42,7 @@ import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 
+import BranchQrCodesPage from "../pages/floor/BranchQrCodesPage";
 
 export default function AppRoutes() {
   return (
@@ -88,7 +89,8 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/tables" element={<BranchFloorPlanPage />} />
       
-      
+        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/qr-codes" element={<BranchQrCodesPage />} />
+
       </Route>
       
       
