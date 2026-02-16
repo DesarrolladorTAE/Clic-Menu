@@ -8,6 +8,15 @@ export async function getTables(restaurantId, branchId) {
   return data?.data || [];
 }
 
+// GET /api/restaurants/:restaurantId/branches/:branchId/available-waiters?q=
+export async function getAvailableWaiters(restaurantId, branchId, q = "") {
+  const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/branches/${branchId}/available-waiters${qs}`
+  );
+  return data?.data || [];
+}
+
 // POST /api/restaurants/:restaurantId/branches/:branchId/tables
 export async function createTable(restaurantId, branchId, payload) {
   const { data } = await api.post(

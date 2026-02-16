@@ -101,6 +101,18 @@ function boolES(v) {
   return v ? "Verdadero" : "Falso";
 }
 
+function formatWaiterFromTable(t) {
+  // Si luego agregas ->with('assignedWaiter') esto lo tomará
+  const w = t?.assigned_waiter || t?.assignedWaiter || t?.assignedWaiterUser || null;
+  if (w && typeof w === "object") {
+    const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
+    return parts.join(" ").trim();
+  }
+  // fallback: solo id
+  if (t?.assigned_waiter_id) return `#${t.assigned_waiter_id}`;
+  return "";
+}
+
 export default function BranchFloorPlanPage() {
   const nav = useNavigate();
   const { restaurantId, branchId } = useParams();
@@ -427,7 +439,7 @@ export default function BranchFloorPlanPage() {
           <button
             onClick={() => nav("/owner/restaurants")}
             style={{
-              marginLeft: "auto", 
+              marginLeft: "auto",
               padding: "8px 10px",
               cursor: "pointer",
               borderRadius: 10,
@@ -440,7 +452,6 @@ export default function BranchFloorPlanPage() {
             ← Regresar
           </button>
         </div>
-
       </div>
 
       {/* Filter */}
@@ -531,7 +542,6 @@ export default function BranchFloorPlanPage() {
                 }}
               >
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-  
                   {/* Lado izquierdo */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontWeight: 900, fontSize: 14 }}>
@@ -575,9 +585,7 @@ export default function BranchFloorPlanPage() {
                       🗑️
                     </button>
                   </div>
-
                 </div>
-
 
                 <div
                   style={{
@@ -602,6 +610,7 @@ export default function BranchFloorPlanPage() {
                     >
                       {zoneTables.map((t) => {
                         const meta = STATUS_META.find((x) => x.key === t.status) || STATUS_META[0];
+                        const waiterText = formatWaiterFromTable(t);
 
                         return (
                           <div
@@ -614,7 +623,7 @@ export default function BranchFloorPlanPage() {
                               display: "flex",
                               flexDirection: "column",
                               gap: 10,
-                              minHeight: 110,
+                              minHeight: 120,
                               position: "relative",
                             }}
                           >
@@ -628,6 +637,12 @@ export default function BranchFloorPlanPage() {
                             <div style={{ fontSize: 13 }}>
                               Asientos: <strong>{t.seats}</strong>
                             </div>
+
+                            {waiterText ? (
+                              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                                Mesero: <strong>{waiterText}</strong>
+                              </div>
+                            ) : null}
 
                             <div
                               style={{
@@ -668,13 +683,11 @@ export default function BranchFloorPlanPage() {
                                 🗑️
                               </button>
                             </div>
-
                           </div>
                         );
                       })}
                     </div>
                   )}
-
                 </div>
               </div>
             );
