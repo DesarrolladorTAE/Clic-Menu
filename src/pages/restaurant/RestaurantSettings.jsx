@@ -257,6 +257,32 @@ export default function RestaurantSettings() {
           </button>
         </div>
 
+        {/* ---- NUEVO BLOQUE: EMPLEADOS ---- */}
+        <div
+          style={{
+            borderTop: "1px solid #eee",
+            paddingTop: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 800 }}>Empleados</div>
+            <div style={{ marginTop: 4, fontSize: 13, opacity: 0.85 }}>
+              Crea cuentas de staff y asigna sus sucursales y roles operativos.
+            </div>
+          </div>
+
+          <button
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/staff`)}
+            style={{ padding: "10px 14px", cursor: "pointer" }}
+          >
+            Empleados →
+          </button>
+        </div>
+
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button
             onClick={() => nav("/owner/restaurants")}

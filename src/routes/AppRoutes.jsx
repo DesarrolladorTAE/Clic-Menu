@@ -11,7 +11,7 @@ import Login from "../pages/auth/Login";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
-
+import StaffPage from "../pages/staff/RestaurantStaffPage";
 //Restaurantes
 import MyRestaurants from "../pages/restaurant/MyRestaurants";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
@@ -36,11 +36,8 @@ import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsC
 import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
 
-
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
-
-
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -65,6 +62,7 @@ export default function AppRoutes() {
       <Route element={<OwnerRoute />}>
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
         <Route path="/owner/restaurants/:restaurantId/settings" element={<RestaurantSettings />} />
+        <Route path="/owner/restaurants/:restaurantId/staff" element={<StaffPage />} />
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
         
