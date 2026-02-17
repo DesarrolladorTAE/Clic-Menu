@@ -585,9 +585,6 @@ export default function BranchQrCodesPage() {
                     </option>
                   ))}
                 </select>
-                <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6 }}>
-                  Si no te aparecen canales aquí, es porque aún no configuraste canales por sucursal.
-                </div>
               </div>
 
               <div>

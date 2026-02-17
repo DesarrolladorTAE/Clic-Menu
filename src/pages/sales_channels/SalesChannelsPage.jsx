@@ -12,6 +12,9 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "Inactivo" },
 ];
 
+// ✅ Canal fijo
+const SALON_CODE = "SALON";
+
 function normalizeCode(v) {
   return (v || "")
     .toString()
@@ -19,6 +22,12 @@ function normalizeCode(v) {
     .toUpperCase()
     .replace(/\s+/g, "_")
     .replace(/[^A-Z0-9_]/g, "");
+}
+
+// ✅ helper: detectar SALON de forma tolerante
+function isSalonChannel(it) {
+  const code = normalizeCode(it?.code);
+  return code === SALON_CODE;
 }
 
 export default function SalesChannelsPage() {
@@ -70,6 +79,12 @@ export default function SalesChannelsPage() {
   };
 
   const openEdit = (it) => {
+    // ✅ Si es SALON, ni siquiera abrimos edición
+    if (isSalonChannel(it)) {
+      setErr('El canal "Salón" es fijo y no puede editarse.');
+      return;
+    }
+
     setEditing(it);
     setForm({
       code: it.code ?? "",
@@ -92,6 +107,12 @@ export default function SalesChannelsPage() {
   const onSubmit = async () => {
     setErr("");
 
+    // ✅ Protección extra: si por alguna razón intentan guardar SALON desde aquí, lo bloqueamos
+    if (editing?.id && isSalonChannel(editing)) {
+      setErr('El canal "Salón" es fijo y no puede modificarse.');
+      return;
+    }
+
     const payload = {
       code: normalizeCode(form.code),
       name: (form.name || "").trim(),
@@ -104,6 +125,12 @@ export default function SalesChannelsPage() {
     }
     if (!payload.name) {
       setErr("El nombre es obligatorio. Ej: Comedor, Delivery");
+      return;
+    }
+
+    // ✅ Protección extra: no permitir que creen otro canal con code SALON desde UI
+    if (!editing?.id && payload.code === SALON_CODE) {
+      setErr('El code "SALON" está reservado y se crea automáticamente.');
       return;
     }
 
@@ -125,6 +152,12 @@ export default function SalesChannelsPage() {
   };
 
   const onToggleStatus = async (it) => {
+    // ✅ SALON no se desactiva
+    if (isSalonChannel(it)) {
+      setErr('El canal "Salón" es fijo y no puede desactivarse.');
+      return;
+    }
+
     setErr("");
     setSaving(true);
     try {
@@ -139,6 +172,12 @@ export default function SalesChannelsPage() {
   };
 
   const onDelete = async (it) => {
+    // ✅ SALON no se elimina
+    if (isSalonChannel(it)) {
+      setErr('El canal "Salón" es fijo y no puede eliminarse.');
+      return;
+    }
+
     const ok = confirm(`¿Eliminar canal "${it.name}"?`);
     if (!ok) return;
 
@@ -155,6 +194,8 @@ export default function SalesChannelsPage() {
   };
 
   if (loading) return <div style={{ padding: 16 }}>Cargando canales…</div>;
+
+  const editingIsSalon = isSalonChannel(editing);
 
   return (
     <div style={{ maxWidth: 900, margin: "30px auto", padding: 16 }}>
@@ -221,6 +262,8 @@ export default function SalesChannelsPage() {
         ) : (
           items.map((it) => {
             const active = it.status === "active";
+            const locked = isSalonChannel(it); // ✅ SALON bloqueado
+
             return (
               <div
                 key={it.id}
@@ -236,7 +279,25 @@ export default function SalesChannelsPage() {
                   {it.code}
                 </div>
 
-                <div style={{ fontWeight: 700 }}>{it.name}</div>
+                <div style={{ fontWeight: 700, display: "flex", gap: 10, alignItems: "center" }}>
+                  <span>{it.name}</span>
+
+                  {locked && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: "#eef2ff",
+                        fontWeight: 900,
+                      }}
+                      title="Canal fijo del sistema"
+                    >
+                      Fijo
+                    </span>
+                  )}
+                </div>
 
                 <div>
                   <span
@@ -258,40 +319,40 @@ export default function SalesChannelsPage() {
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                   <button
                     onClick={() => onToggleStatus(it)}
-                    disabled={saving}
+                    disabled={saving || locked}
                     style={{
                       padding: "8px 10px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                      opacity: saving ? 0.7 : 1,
+                      cursor: saving || locked ? "not-allowed" : "pointer",
+                      opacity: saving || locked ? 0.55 : 1,
                     }}
-                    title="Activar / desactivar"
+                    title={locked ? 'El canal "Salón" no se puede desactivar' : "Activar / desactivar"}
                   >
                     {active ? "Desactivar" : "Activar"}
                   </button>
 
                   <button
                     onClick={() => openEdit(it)}
-                    disabled={saving}
+                    disabled={saving || locked}
                     style={{
                       padding: "8px 10px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                      opacity: saving ? 0.7 : 1,
+                      cursor: saving || locked ? "not-allowed" : "pointer",
+                      opacity: saving || locked ? 0.55 : 1,
                     }}
-                    title="Editar"
+                    title={locked ? 'El canal "Salón" no se puede editar' : "Editar"}
                   >
                     Editar
                   </button>
 
                   <button
                     onClick={() => onDelete(it)}
-                    disabled={saving}
+                    disabled={saving || locked}
                     style={{
                       padding: "8px 10px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                      opacity: saving ? 0.7 : 1,
+                      cursor: saving || locked ? "not-allowed" : "pointer",
+                      opacity: saving || locked ? 0.55 : 1,
                       background: "#ffe5e5",
                     }}
-                    title="Eliminar"
+                    title={locked ? 'El canal "Salón" no se puede eliminar' : "Eliminar"}
                   >
                     Eliminar
                   </button>
@@ -331,9 +392,16 @@ export default function SalesChannelsPage() {
                 <div style={{ fontWeight: 900, fontSize: 16 }}>
                   {editing ? "Editar canal" : "Crear canal"}
                 </div>
+
                 <div style={{ marginTop: 4, opacity: 0.85, fontSize: 13 }}>
                   Code recomendado: COMEDOR, DELIVERY, PICKUP, UBER_EATS
                 </div>
+
+                {editing && editingIsSalon && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: "#333", opacity: 0.9 }}>
+                    Este canal es <strong>fijo</strong> y no se puede modificar.
+                  </div>
+                )}
               </div>
 
               <button
@@ -352,13 +420,14 @@ export default function SalesChannelsPage() {
                   value={form.code}
                   onChange={(e) => onChange("code", e.target.value)}
                   placeholder="DELIVERY"
-                  disabled={saving}
+                  disabled={saving || editingIsSalon}
                   style={{
                     marginTop: 6,
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: 8,
                     border: "1px solid #ccc",
+                    opacity: saving || editingIsSalon ? 0.7 : 1,
                   }}
                 />
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
@@ -372,13 +441,14 @@ export default function SalesChannelsPage() {
                   value={form.name}
                   onChange={(e) => onChange("name", e.target.value)}
                   placeholder="Delivery"
-                  disabled={saving}
+                  disabled={saving || editingIsSalon}
                   style={{
                     marginTop: 6,
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: 8,
                     border: "1px solid #ccc",
+                    opacity: saving || editingIsSalon ? 0.7 : 1,
                   }}
                 />
               </div>
@@ -388,14 +458,15 @@ export default function SalesChannelsPage() {
                 <select
                   value={form.status}
                   onChange={(e) => onChange("status", e.target.value)}
-                  disabled={saving}
+                  disabled={saving || editingIsSalon}
                   style={{
                     marginTop: 6,
                     width: "100%",
                     padding: "10px 12px",
                     borderRadius: 8,
                     border: "1px solid #ccc",
-                    cursor: "pointer",
+                    cursor: saving || editingIsSalon ? "not-allowed" : "pointer",
+                    opacity: saving || editingIsSalon ? 0.7 : 1,
                   }}
                 >
                   {STATUS_OPTIONS.map((op) => (
@@ -417,12 +488,13 @@ export default function SalesChannelsPage() {
 
                 <button
                   onClick={onSubmit}
-                  disabled={saving}
+                  disabled={saving || editingIsSalon}
                   style={{
                     padding: "10px 14px",
-                    cursor: saving ? "not-allowed" : "pointer",
-                    opacity: saving ? 0.7 : 1,
+                    cursor: saving || editingIsSalon ? "not-allowed" : "pointer",
+                    opacity: saving || editingIsSalon ? 0.7 : 1,
                   }}
+                  title={editingIsSalon ? 'El canal "Salón" no se puede guardar porque es fijo' : "Guardar"}
                 >
                   {saving ? "Guardando…" : "Guardar"}
                 </button>

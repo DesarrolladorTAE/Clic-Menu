@@ -78,9 +78,9 @@ export default function BranchSalesChannelsPage() {
       }
 
       // 4) cargar canales de venta (restaurant channels + override por sucursal)
-      const res = await getBranchSalesChannels(effectiveRestaurantId, effectiveBranchId);
-      const list = Array.isArray(res?.data) ? res.data : [];
-      setRows(list);
+      const list = await getBranchSalesChannels(effectiveRestaurantId, effectiveBranchId);
+      setRows(Array.isArray(list) ? list : []);
+
     } catch (e) {
       setErr(
         e?.response?.data?.message || "No se pudieron cargar los canales de venta"
@@ -170,8 +170,9 @@ export default function BranchSalesChannelsPage() {
       );
 
       // recarga para mantener consistencia
-      const res = await getBranchSalesChannels(effectiveRestaurantId, effectiveBranchId);
-      setRows(Array.isArray(res?.data) ? res.data : []);
+      const list = await getBranchSalesChannels(effectiveRestaurantId, effectiveBranchId);
+      setRows(Array.isArray(list) ? list : []);
+
     } catch (e) {
       // rollback: recarga completa
       setErr(
