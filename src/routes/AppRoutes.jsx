@@ -43,6 +43,7 @@ import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 
 import BranchQrCodesPage from "../pages/floor/BranchQrCodesPage";
+import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 
 export default function AppRoutes() {
   return (
@@ -50,8 +51,11 @@ export default function AppRoutes() {
       {/* Home */}
      
       {/* Registros */}
+      <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
       <Route path="/auth/register" element={<Register />} />
       <Route path="/auth/login" element={<Login />} />
+
+
 
       {/* Protegidas */}
       <Route element={<ProtectedRoute />}>
