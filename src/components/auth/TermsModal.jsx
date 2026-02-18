@@ -42,14 +42,14 @@ export default function TermsModal({
     setBusy(true);
 
     try {
-      // ✅ MODO REGISTRO: no intentes pegarle al API
+      // MODO REGISTRO: no intentes pegarle al API
       if (!isLoginMode) {
         onAccepted?.({ accepted: true });
         onClose?.();
         return;
       }
 
-      // ✅ MODO LOGIN: sí o sí debe venir user_id/email
+      // MODO LOGIN: sí o sí debe venir user_id/email
       if (!canSubmit) {
         setErr(
           "No se pudo identificar al usuario para aceptar términos. Cierra el modal e intenta iniciar sesión de nuevo."
@@ -84,7 +84,7 @@ export default function TermsModal({
 
         <div style={{ marginTop: 12, maxHeight: 320, overflow: "auto", paddingRight: 6 }}>
           <p style={{ marginTop: 0 }}>
-            Sí, ya sé. Nadie los lee. Pero aquí va lo básico:
+            Términos y condiciones:
           </p>
           <ul>
             <li>El usuario es responsable de la información que registra.</li>
@@ -93,11 +93,8 @@ export default function TermsModal({
             <li>La cuenta requiere verificación de teléfono para iniciar sesión.</li>
             <li>Al registrarte aceptas recibir mensajes operativos del sistema.</li>
           </ul>
-          <p>
-            Esto es un placeholder. Reemplázalo por tus TyC reales cuando los tengas.
-          </p>
 
-          {/* ✅ Solo mostrar warning en modo LOGIN */}
+          {/* Solo mostrar warning en modo LOGIN */}
           {isLoginMode && !canSubmit && (
             <div style={msgBoxWarn}>
               No se encontró <b>user_id/email</b> para aceptar términos. Cierra el

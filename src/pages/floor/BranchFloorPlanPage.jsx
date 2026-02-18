@@ -1,3 +1,4 @@
+// src/pages/floor/BranchFloorPlanPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -97,20 +98,37 @@ const TABLE_SERVICE_MODE_ES = {
   assigned_waiter: "Mesero asignado",
 };
 
+// Normaliza booleanos raros: 1/"1"/"true"/true/"on"/"yes"
+function toBool(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (["1", "true", "yes", "y", "on", "si", "sí"].includes(s)) return true;
+    if (["0", "false", "no", "n", "off"].includes(s)) return false;
+  }
+  return !!v;
+}
+
 function boolES(v) {
   return v ? "Verdadero" : "Falso";
 }
 
 function formatWaiterFromTable(t) {
-  // Si luego agregas ->with('assignedWaiter') esto lo tomará
   const w = t?.assigned_waiter || t?.assignedWaiter || t?.assignedWaiterUser || null;
   if (w && typeof w === "object") {
     const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
     return parts.join(" ").trim();
   }
-  // fallback: solo id
   if (t?.assigned_waiter_id) return `#${t.assigned_waiter_id}`;
   return "";
+}
+
+// Extrae la config real aunque te manden {data:{...}} o directamente {...}
+function unwrapSettings(maybe) {
+  if (!maybe) return null;
+  if (typeof maybe === "object" && maybe.data && typeof maybe.data === "object") return maybe.data;
+  return maybe;
 }
 
 export default function BranchFloorPlanPage() {
@@ -119,6 +137,7 @@ export default function BranchFloorPlanPage() {
 
   const [loading, setLoading] = useState(true);
 
+  // ✅ IMPORTANT: aquí guardamos SOLO el objeto settings real (no el wrapper {data,ui,notices})
   const [settings, setSettings] = useState(null);
   const [zones, setZones] = useState([]);
   const [tables, setTables] = useState([]);
@@ -151,7 +170,8 @@ export default function BranchFloorPlanPage() {
 
   const loadSettings = async () => {
     try {
-      const s = await getOperationalSettings(restaurantId, branchId);
+      const res = await getOperationalSettings(restaurantId, branchId);
+      const s = unwrapSettings(res);
       setSettings(s);
       setSettingsModalOpen(false);
     } catch (e) {
@@ -210,8 +230,10 @@ export default function BranchFloorPlanPage() {
     setSettingsModalOpen(true);
   };
 
+  // ✅ ahora soporta que el modal mande {data,...} o {...}
   const onSettingsSaved = (saved) => {
-    setSettings(saved);
+    const s = unwrapSettings(saved);
+    setSettings(s);
     showToast("Configuración guardada.", "success");
   };
 
@@ -224,7 +246,7 @@ export default function BranchFloorPlanPage() {
     return {
       orderingLabel,
       tableServiceLabel,
-      qrLabel: boolES(!!settings.is_qr_enabled),
+      qrLabel: boolES(toBool(settings.is_qr_enabled)),
     };
   }, [settings]);
 
@@ -255,7 +277,7 @@ export default function BranchFloorPlanPage() {
       if (String(zoneFilter) === String(zone.id)) setZoneFilter("all");
 
       await loadZones();
-      await loadTables(); // por si cascade borra mesas
+      await loadTables();
     } catch (e) {
       const msg = e?.response?.data?.message || e?.message || "No se pudo eliminar la zona";
       showToast(msg, "error");
@@ -305,7 +327,6 @@ export default function BranchFloorPlanPage() {
       if (!map[zid]) map[zid] = [];
       map[zid].push(t);
     }
-    // orden por name dentro
     Object.keys(map).forEach((k) => {
       map[k].sort((a, b) => String(a.name).localeCompare(String(b.name)));
     });
@@ -316,6 +337,31 @@ export default function BranchFloorPlanPage() {
     if (zoneFilter === "all") return zones;
     return zones.filter((z) => String(z.id) === String(zoneFilter));
   }, [zones, zoneFilter]);
+
+  // ✅ Gate real (ya no se equivoca por wrapper/strings)
+  const canManageQr = useMemo(() => {
+    if (!settings) return false;
+    return toBool(settings.is_qr_enabled);
+  }, [settings]);
+
+  const onManageQrClick = () => {
+    if (!settings) {
+      showToast("Primero crea la Configuración Operativa en esta sucursal.", "warning");
+      setSettingsModalMode("create");
+      setSettingsModalOpen(true);
+      return;
+    }
+
+    if (!toBool(settings.is_qr_enabled)) {
+      showToast(
+        "No tienes la opción de QR habilitada. Actívala en Configuración Operativa para crear y administrar QRs.",
+        "warning"
+      );
+      return;
+    }
+
+    nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/qr-codes`);
+  };
 
   if (loading) {
     return <div style={{ padding: 16 }}>Cargando diseño del salón...</div>;
@@ -437,20 +483,23 @@ export default function BranchFloorPlanPage() {
           </button>
 
           <button
-            onClick={() => nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/qr-codes`)}
+            onClick={onManageQrClick}
             style={{
               padding: "10px 12px",
               cursor: "pointer",
               fontWeight: 900,
-              background: "#e6ffed",
-              border: "1px solid #8ae99c",
+              background: canManageQr ? "#e6ffed" : "#fff3cd",
+              border: canManageQr ? "1px solid #8ae99c" : "1px solid #ffe08a",
               borderRadius: 10,
             }}
-            title="Administración de QRs para esta sucursal"
+            title={
+              canManageQr
+                ? "Administración de QRs para esta sucursal"
+                : "QR desactivado: actívalo en Configuración Operativa"
+            }
           >
             📱 Administrar QRs
           </button>
-
 
           <button
             onClick={() => nav("/owner/restaurants")}
@@ -519,9 +568,7 @@ export default function BranchFloorPlanPage() {
           ))}
 
           {(zonesLoading || tablesLoading) && (
-            <div style={{ fontSize: 12, opacity: 0.7, padding: "8px 10px" }}>
-              Cargando...
-            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, padding: "8px 10px" }}>Cargando...</div>
           )}
         </div>
       </div>
@@ -558,17 +605,13 @@ export default function BranchFloorPlanPage() {
                 }}
               >
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  {/* Lado izquierdo */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ fontWeight: 900, fontSize: 14 }}>
                       {zone.name}{" "}
-                      <span style={{ fontWeight: 700, opacity: 0.7 }}>
-                        · {count} mesas
-                      </span>
+                      <span style={{ fontWeight: 700, opacity: 0.7 }}>· {count} mesas</span>
                     </div>
                   </div>
 
-                  {/* Lado derecho */}
                   <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
                     <button
                       onClick={() => openEditZone(zone)}
@@ -660,14 +703,7 @@ export default function BranchFloorPlanPage() {
                               </div>
                             ) : null}
 
-                            <div
-                              style={{
-                                marginTop: "auto",
-                                display: "flex",
-                                justifyContent: "flex-end",
-                                gap: 8,
-                              }}
-                            >
+                            <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end", gap: 8 }}>
                               <button
                                 onClick={() => openEditTable(t)}
                                 style={{
@@ -751,6 +787,25 @@ export default function BranchFloorPlanPage() {
               </div>
             ))}
           </div>
+
+          {!canManageQr ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 10,
+                borderRadius: 12,
+                border: "1px solid #ffe08a",
+                background: "#fff3cd",
+                color: "#8a6d3b",
+                fontWeight: 850,
+                fontSize: 12,
+                lineHeight: 1.3,
+              }}
+            >
+              QR está desactivado: no podrás entrar a <strong>Administrar QRs</strong> hasta activarlo en{" "}
+              <strong>Configuración operativa</strong>.
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

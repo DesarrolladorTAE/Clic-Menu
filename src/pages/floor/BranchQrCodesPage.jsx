@@ -12,7 +12,7 @@ import { getTables } from "../../services/floor/tables.service";
 import { getBranchSalesChannels } from "../../services/restaurant/branchSalesChannels.service";
 import { getOperationalSettings } from "../../services/floor/operationalSettings.service";
 
-// Toast simple (reusamos tu estilo)
+// Toast simple
 function Toast({ open, message, type = "info", onClose }) {
   if (!open) return null;
 
@@ -84,6 +84,36 @@ const TYPE_LABEL = {
   delivery: "Delivery",
 };
 
+function Banner({ tone = "warning", title, body }) {
+  const map = {
+    warning: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b" },
+    error: { bg: "#ffe5e5", bd: "#ffb3b3", fg: "#a10000" },
+    info: { bg: "#eef2ff", bd: "#cfcfff", fg: "#2d2d7a" },
+    ok: { bg: "#e6ffed", bd: "#8ae99c", fg: "#0a7a2f" },
+  };
+  const c = map[tone] || map.info;
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        border: `1px solid ${c.bd}`,
+        background: c.bg,
+        borderRadius: 14,
+        padding: 12,
+        color: c.fg,
+      }}
+    >
+      <div style={{ fontWeight: 950 }}>{title}</div>
+      {body ? (
+        <div style={{ marginTop: 6, fontSize: 13, whiteSpace: "pre-line", fontWeight: 750 }}>
+          {body}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function BranchQrCodesPage() {
   const nav = useNavigate();
   const { restaurantId, branchId } = useParams();
@@ -91,9 +121,11 @@ export default function BranchQrCodesPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const [settings, setSettings] = useState(null);
-  const [items, setItems] = useState([]);
+  // settings response: { data, ui, notices }
+  const [settingsRes, setSettingsRes] = useState(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  const [items, setItems] = useState([]);
   const [tables, setTables] = useState([]);
   const [channels, setChannels] = useState([]);
 
@@ -104,7 +136,7 @@ export default function BranchQrCodesPage() {
   };
   const closeToast = () => setToast((t) => ({ ...t, open: false }));
 
-  // modal simple “create” (sin MUI, estilo igual al proyecto)
+  // modal create
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -114,6 +146,10 @@ export default function BranchQrCodesPage() {
     is_active: true,
   });
 
+  const settings = settingsRes?.data ?? null;
+  const uiMeta = settingsRes?.ui ?? null;
+  const notices = Array.isArray(settingsRes?.notices) ? settingsRes.notices : [];
+
   const canCreate = useMemo(() => {
     return (
       String(form.name || "").trim().length > 0 &&
@@ -121,6 +157,16 @@ export default function BranchQrCodesPage() {
       String(form.type || "").length > 0
     );
   }, [form]);
+
+  // Gate real:
+  // - si backend manda ui.can_manage_qr => usarlo
+  // - si no, fallback a settings.is_qr_enabled
+  const canManageQr = useMemo(() => {
+    if (uiMeta && typeof uiMeta.can_manage_qr === "boolean") return uiMeta.can_manage_qr;
+    return !!settings?.is_qr_enabled;
+  }, [uiMeta, settings]);
+
+  const manageQrBlockReason = uiMeta?.manage_qr_block_reason || null;
 
   const loadAll = async () => {
     setLoading(true);
@@ -130,24 +176,22 @@ export default function BranchQrCodesPage() {
       try {
         s = await getOperationalSettings(restaurantId, branchId);
       } catch (e) {
-        // si no existe config, no puede crear. mostramos aviso.
         s = null;
       }
-      setSettings(s);
+      setSettingsRes(s);
+      setSettingsLoaded(true);
 
       // 2) list qrs
       const list = await getBranchQrCodes(restaurantId, branchId);
       setItems(list);
 
-      // 3) deps (para crear)
+      // 3) deps
       const [t, ch] = await Promise.all([
         getTables(restaurantId, branchId),
         getBranchSalesChannels(restaurantId, branchId),
       ]);
 
       setTables(t || []);
-      // OJO: tu endpoint de branch sales channels normalmente regresa pivot (branch_sales_channels)
-      // aquí solo intentamos pintar algo usable.
       setChannels(ch || []);
     } catch (e) {
       const msg = e?.response?.data?.message || e?.message || "No se pudo cargar QRs";
@@ -172,6 +216,11 @@ export default function BranchQrCodesPage() {
   };
 
   const onToggleActive = async (qr) => {
+    if (!canManageQr) {
+      showToast(manageQrBlockReason || "QR no habilitado para esta sucursal.", "warning");
+      return;
+    }
+
     setBusy(true);
     try {
       const updated = await updateBranchQrCode(restaurantId, branchId, qr.id, {
@@ -206,13 +255,13 @@ export default function BranchQrCodesPage() {
   };
 
   const openCreate = () => {
-    // gate UI
-    if (!settings) {
-      showToast("Primero crea la Configuración Operativa en esta sucursal.", "warning");
+    if (!settingsLoaded || !settingsRes || !settings) {
+      showToast("No puedes administrar QRs sin Configuración Operativa en esta sucursal.", "warning");
       return;
     }
-    if (!settings.is_qr_enabled) {
-      showToast("Activa QR en Configuración Operativa para poder generar códigos.", "warning");
+
+    if (!canManageQr) {
+      showToast(manageQrBlockReason || "No tienes la opción de QR habilitada.", "warning");
       return;
     }
 
@@ -232,6 +281,11 @@ export default function BranchQrCodesPage() {
       return;
     }
 
+    if (!canManageQr) {
+      showToast(manageQrBlockReason || "No tienes la opción de QR habilitada.", "warning");
+      return;
+    }
+
     setBusy(true);
     try {
       const payload = {
@@ -240,7 +294,26 @@ export default function BranchQrCodesPage() {
         sales_channel_id: Number(form.sales_channel_id),
         table_id: form.table_id ? Number(form.table_id) : null,
         is_active: !!form.is_active,
+        intended_ordering_mode: null,
       };
+
+      // Reglas UI alineadas a backend:
+      // - web/delivery => general (sin mesa), intended null
+      if (payload.type === "web" || payload.type === "delivery") {
+        payload.table_id = null;
+        payload.intended_ordering_mode = null;
+      }
+
+      // - physical:
+      //   - general => intended null
+      //   - con mesa => intended = settings.ordering_mode actual (para que no lo bloquee luego)
+      if (payload.type === "physical") {
+        if (payload.table_id) {
+          payload.intended_ordering_mode = String(settings?.ordering_mode || "waiter_only");
+        } else {
+          payload.intended_ordering_mode = null;
+        }
+      }
 
       const created = await createBranchQrCode(restaurantId, branchId, payload);
 
@@ -256,9 +329,6 @@ export default function BranchQrCodesPage() {
   };
 
   const channelOptions = useMemo(() => {
-    // Soportar varias formas de payload:
-    // - [{id,name}]
-    // - [{sales_channel_id, salesChannel:{id,name}}] etc.
     return (channels || [])
       .map((row) => {
         const sc = row?.salesChannel || row?.sales_channel || row;
@@ -274,6 +344,45 @@ export default function BranchQrCodesPage() {
     return (tables || []).map((t) => ({ id: Number(t.id), name: t.name }));
   }, [tables]);
 
+  const topBanner = useMemo(() => {
+    if (!settingsLoaded) return null;
+
+    if (!settingsRes || !settings) {
+      return {
+        tone: "warning",
+        title: "Configuración Operativa faltante",
+        body:
+          "No puedes administrar QRs sin crear la Configuración Operativa de la sucursal.\n" +
+          "Crea la configuración y activa QR si deseas generar códigos.",
+      };
+    }
+
+    if (!canManageQr) {
+      return {
+        tone: "warning",
+        title: "QR desactivado",
+        body:
+          (manageQrBlockReason
+            ? `${manageQrBlockReason}\n\n`
+            : "") +
+          "• No se pueden crear códigos QR en esta sucursal.\n" +
+          "• Si ya existían QRs, quedan deshabilitados hasta que el usuario los reactive manualmente.\n" +
+          "• Cuando actives QR, el sistema NO reactiva QRs automáticamente.",
+      };
+    }
+
+    // Si está activado, mostramos notices del backend (si hay).
+    if (notices.length > 0) {
+      return {
+        tone: "info",
+        title: "Avisos del sistema",
+        body: notices.map((n) => `• ${n}`).join("\n"),
+      };
+    }
+
+    return null;
+  }, [settingsLoaded, settingsRes, settings, canManageQr, manageQrBlockReason, notices]);
+
   if (loading) return <div style={{ padding: 16 }}>Cargando QRs...</div>;
 
   return (
@@ -288,7 +397,13 @@ export default function BranchQrCodesPage() {
             Sucursal: <strong>#{branchId}</strong> · Restaurante: <strong>#{restaurantId}</strong>
             {" · "}
             QR habilitado:{" "}
-            <strong>{settings ? (settings.is_qr_enabled ? "Sí" : "No") : "Sin config"}</strong>
+            <strong>{settings ? (canManageQr ? "Sí" : "No") : "Sin config"}</strong>
+            {settings?.ordering_mode ? (
+              <>
+                {" · "}
+                Modo: <strong>{settings.ordering_mode}</strong>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -305,6 +420,7 @@ export default function BranchQrCodesPage() {
               borderRadius: 10,
               opacity: busy ? 0.6 : 1,
             }}
+            title={!canManageQr ? (manageQrBlockReason || "QR no habilitado") : "Crear un nuevo QR"}
           >
             + Crear QR
           </button>
@@ -326,6 +442,8 @@ export default function BranchQrCodesPage() {
         </div>
       </div>
 
+      {topBanner ? <Banner tone={topBanner.tone} title={topBanner.title} body={topBanner.body} /> : null}
+
       {/* List */}
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {items.length === 0 ? (
@@ -339,140 +457,167 @@ export default function BranchQrCodesPage() {
           >
             <div style={{ fontWeight: 900 }}>Sin QRs aún</div>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-              Crea un QR para comedor, delivery, o por mesa.
+              Crea un QR para comedor, web, delivery o por mesa.
             </div>
           </div>
         ) : (
-          items.map((qr) => (
-            <div
-              key={qr.id}
-              style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                borderRadius: 14,
-                padding: 14,
-                background: "#fff",
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                gap: 12,
-                alignItems: "start",
-              }}
-            >
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <div style={{ fontWeight: 950, fontSize: 14 }}>{qr.name}</div>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 900,
-                      padding: "3px 8px",
-                      borderRadius: 999,
-                      border: "1px solid rgba(0,0,0,0.12)",
-                      background: qr.is_active ? "#e6ffed" : "#ffe5e5",
-                      color: qr.is_active ? "#0a7a2f" : "#a10000",
-                    }}
-                  >
-                    {qr.is_active ? "Activo" : "Inactivo"}
-                  </span>
-                  <span style={{ fontSize: 12, opacity: 0.8 }}>
-                    Tipo: <strong>{TYPE_LABEL[qr.type] || qr.type}</strong>
-                  </span>
-                </div>
+          items.map((qr) => {
+            const toggleDisabled = busy || !canManageQr;
 
-                <div style={{ fontSize: 13 }}>
-                  Canal: <strong>{qr.sales_channel?.name || `#${qr.sales_channel_id}`}</strong>
-                  {" · "}
-                  Mesa: <strong>{qr.table?.name || (qr.table_id ? `#${qr.table_id}` : "General")}</strong>
-                </div>
+            const mismatchHint =
+              qr?.table_id && qr?.intended_ordering_mode && settings?.ordering_mode
+                ? String(qr.intended_ordering_mode) !== String(settings.ordering_mode)
+                : false;
 
-                <div style={{ fontSize: 12, opacity: 0.85, wordBreak: "break-all" }}>
-                  URL: <strong>{qr.public_url}</strong>
-                </div>
-
-                {qr.qr_image_url ? (
-                  <div style={{ marginTop: 6 }}>
-                    <img
-                      src={qr.qr_image_url}
-                      alt="QR"
+            return (
+              <div
+                key={qr.id}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  borderRadius: 14,
+                  padding: 14,
+                  background: "#fff",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  gap: 12,
+                  alignItems: "start",
+                }}
+              >
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <div style={{ fontWeight: 950, fontSize: 14 }}>{qr.name}</div>
+                    <span
                       style={{
-                        width: 140,
-                        height: 140,
-                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 900,
+                        padding: "3px 8px",
+                        borderRadius: 999,
                         border: "1px solid rgba(0,0,0,0.12)",
-                        background: "#fafafa",
+                        background: qr.is_active ? "#e6ffed" : "#ffe5e5",
+                        color: qr.is_active ? "#0a7a2f" : "#a10000",
                       }}
-                    />
+                    >
+                      {qr.is_active ? "Activo" : "Inactivo"}
+                    </span>
+                    <span style={{ fontSize: 12, opacity: 0.8 }}>
+                      Tipo: <strong>{TYPE_LABEL[qr.type] || qr.type}</strong>
+                    </span>
                   </div>
-                ) : null}
+
+                  <div style={{ fontSize: 13 }}>
+                    Canal: <strong>{qr.sales_channel?.name || `#${qr.sales_channel_id}`}</strong>
+                    {" · "}
+                    Mesa: <strong>{qr.table?.name || (qr.table_id ? `#${qr.table_id}` : "General")}</strong>
+                  </div>
+
+                  {qr?.table_id ? (
+                    <div style={{ fontSize: 12, opacity: 0.85 }}>
+                      intended_ordering_mode:{" "}
+                      <strong>{qr.intended_ordering_mode || "legacy/null"}</strong>
+                      {mismatchHint ? (
+                        <span style={{ marginLeft: 10, fontWeight: 950, color: "#a10000" }}>
+                          (No coincide con modo actual: {String(settings.ordering_mode)})
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div style={{ fontSize: 12, opacity: 0.85, wordBreak: "break-all" }}>
+                    URL: <strong>{qr.public_url}</strong>
+                  </div>
+
+                  {!canManageQr ? (
+                    <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "#8a6d3b" }}>
+                      ⚠️ QR feature desactivado: no puedes activar/crear QRs hasta re-habilitarlo.
+                    </div>
+                  ) : null}
+
+                  {qr.qr_image_url ? (
+                    <div style={{ marginTop: 6 }}>
+                      <img
+                        src={qr.qr_image_url}
+                        alt="QR"
+                        style={{
+                          width: 140,
+                          height: 140,
+                          borderRadius: 12,
+                          border: "1px solid rgba(0,0,0,0.12)",
+                          background: "#fafafa",
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 170 }}>
+                  <button
+                    onClick={() => copyToClipboard(qr.public_url)}
+                    style={{
+                      cursor: "pointer",
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "#fff",
+                      padding: "8px 10px",
+                      fontWeight: 900,
+                    }}
+                    title="Copiar URL"
+                  >
+                    📋 Copiar URL
+                  </button>
+
+                  <button
+                    onClick={() => onToggleActive(qr)}
+                    disabled={toggleDisabled}
+                    style={{
+                      cursor: toggleDisabled ? "not-allowed" : "pointer",
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: qr.is_active ? "#fff3cd" : "#e6ffed",
+                      padding: "8px 10px",
+                      fontWeight: 900,
+                      opacity: toggleDisabled ? 0.55 : 1,
+                    }}
+                    title={!canManageQr ? (manageQrBlockReason || "QR no habilitado") : "Activar / Desactivar"}
+                  >
+                    {qr.is_active ? "⛔ Desactivar" : "✅ Activar"}
+                  </button>
+
+                  <button
+                    onClick={() => window.open(qr.public_url, "_blank")}
+                    style={{
+                      cursor: "pointer",
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "#eef2ff",
+                      padding: "8px 10px",
+                      fontWeight: 900,
+                    }}
+                    title="Abrir menú público (debug)"
+                  >
+                    🔗 Abrir
+                  </button>
+
+                  <button
+                    onClick={() => onDelete(qr)}
+                    disabled={busy}
+                    style={{
+                      cursor: busy ? "not-allowed" : "pointer",
+                      borderRadius: 10,
+                      border: "1px solid rgba(255,0,0,0.25)",
+                      background: "#ffe5e5",
+                      padding: "8px 10px",
+                      fontWeight: 900,
+                      color: "#a10000",
+                      opacity: busy ? 0.6 : 1,
+                    }}
+                    title="Eliminar"
+                  >
+                    🗑️ Eliminar
+                  </button>
+                </div>
               </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 170 }}>
-                <button
-                  onClick={() => copyToClipboard(qr.public_url)}
-                  style={{
-                    cursor: "pointer",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                    padding: "8px 10px",
-                    fontWeight: 900,
-                  }}
-                  title="Copiar URL"
-                >
-                  📋 Copiar URL
-                </button>
-
-                <button
-                  onClick={() => onToggleActive(qr)}
-                  disabled={busy}
-                  style={{
-                    cursor: busy ? "not-allowed" : "pointer",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: qr.is_active ? "#fff3cd" : "#e6ffed",
-                    padding: "8px 10px",
-                    fontWeight: 900,
-                    opacity: busy ? 0.6 : 1,
-                  }}
-                  title="Activar / Desactivar"
-                >
-                  {qr.is_active ? "⛔ Desactivar" : "✅ Activar"}
-                </button>
-
-                <button
-                  onClick={() => window.open(qr.public_url, "_blank")}
-                  style={{
-                    cursor: "pointer",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#eef2ff",
-                    padding: "8px 10px",
-                    fontWeight: 900,
-                  }}
-                  title="Abrir menú público (debug)"
-                >
-                  🔗 Abrir
-                </button>
-
-                <button
-                  onClick={() => onDelete(qr)}
-                  disabled={busy}
-                  style={{
-                    cursor: busy ? "not-allowed" : "pointer",
-                    borderRadius: 10,
-                    border: "1px solid rgba(255,0,0,0.25)",
-                    background: "#ffe5e5",
-                    padding: "8px 10px",
-                    fontWeight: 900,
-                    color: "#a10000",
-                    opacity: busy ? 0.6 : 1,
-                  }}
-                  title="Eliminar"
-                >
-                  🗑️ Eliminar
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -548,7 +693,7 @@ export default function BranchQrCodesPage() {
                 <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>Tipo</div>
                 <select
                   value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value, table_id: "" }))}
                   style={{
                     width: "100%",
                     padding: "10px 12px",
@@ -562,6 +707,12 @@ export default function BranchQrCodesPage() {
                   <option value="web">Web</option>
                   <option value="delivery">Delivery</option>
                 </select>
+
+                {form.type === "web" || form.type === "delivery" ? (
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, fontWeight: 750 }}>
+                    {form.type === "web" ? "Web" : "Delivery"}: se fuerza “General (sin mesa)”.
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -585,12 +736,16 @@ export default function BranchQrCodesPage() {
                     </option>
                   ))}
                 </select>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, fontWeight: 750 }}>
+                  Físico (por reglas backend): canal debe ser Salón.
+                </div>
               </div>
 
               <div>
                 <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>Mesa (opcional)</div>
                 <select
                   value={form.table_id}
+                  disabled={form.type !== "physical"} // ✅ alineado: solo physical puede usar mesa
                   onChange={(e) => setForm((f) => ({ ...f, table_id: e.target.value }))}
                   style={{
                     width: "100%",
@@ -599,6 +754,8 @@ export default function BranchQrCodesPage() {
                     border: "1px solid rgba(0,0,0,0.14)",
                     outline: "none",
                     fontWeight: 800,
+                    opacity: form.type !== "physical" ? 0.6 : 1,
+                    cursor: form.type !== "physical" ? "not-allowed" : "pointer",
                   }}
                 >
                   <option value="">General (sin mesa)</option>
@@ -608,6 +765,12 @@ export default function BranchQrCodesPage() {
                     </option>
                   ))}
                 </select>
+
+                {form.type === "physical" && form.table_id ? (
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8, fontWeight: 850 }}>
+                    Este QR se marcará con intended_ordering_mode = <strong>{String(settings?.ordering_mode || "waiter_only")}</strong>
+                  </div>
+                ) : null}
               </div>
             </div>
 

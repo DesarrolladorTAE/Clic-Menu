@@ -1,5 +1,3 @@
-//Para manejar el modal del botón "Configuraci+on operativa"
-
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
@@ -57,6 +55,16 @@ const noticeStyle = {
   lineHeight: 1.35,
 };
 
+const noticesListStyle = {
+  marginTop: 10,
+  border: "1px solid rgba(0,0,0,0.10)",
+  background: "#fff",
+  borderRadius: 12,
+  padding: 12,
+  fontSize: 13,
+  lineHeight: 1.35,
+};
+
 const subtleNoteStyle = {
   marginTop: 10,
   fontSize: 12,
@@ -94,29 +102,43 @@ export default function OperationalSettingsModal({
   mode = "create", // create | edit
   restaurantId,
   branchId,
-  initialData = null, // cuando edit
+  initialData = null, // cuando edit (puede ser {data, ui, notices} o solo data)
   onClose,
   onSaved,
   showToast, // opcional
 }) {
   const [saving, setSaving] = useState(false);
+  const [serverNotices, setServerNotices] = useState([]);
+
+  // initialData puede venir como:
+  // - data directo (viejo)
+  // - { data, ui, notices } (nuevo)
+  const initial = useMemo(() => {
+    if (!initialData) return null;
+    if (initialData?.data) return initialData.data;
+    return initialData;
+  }, [initialData]);
+
+  const initialNotices = useMemo(() => {
+    if (!initialData) return [];
+    return Array.isArray(initialData?.notices) ? initialData.notices : [];
+  }, [initialData]);
 
   // Si NO hay registro,  abre el modal en create.
-  // Este flag controla el aviso.
-  const showMissingConfigNotice = mode === "create" && !initialData;
+  const showMissingConfigNotice = mode === "create" && !initial;
 
   const defaultValues = useMemo(
     () => ({
       // valores en inglés para sistema
-      ordering_mode: initialData?.ordering_mode ?? "waiter_only",
-      table_service_mode: initialData?.table_service_mode ?? "free_for_all",
-      is_qr_enabled: !!initialData?.is_qr_enabled,
+      ordering_mode: initial?.ordering_mode ?? "waiter_only",
+      table_service_mode: initial?.table_service_mode ?? "free_for_all",
+      is_qr_enabled: !!initial?.is_qr_enabled,
 
-      // nuevos campos (enteros) obligatorios
-      min_seats: Number.isInteger(initialData?.min_seats) ? initialData.min_seats : 1,
-      max_seats: Number.isInteger(initialData?.max_seats) ? initialData.max_seats : 6,
+      // campos asientos (si tu backend los valida/guarda)
+      min_seats: Number.isInteger(initial?.min_seats) ? initial.min_seats : 1,
+      max_seats: Number.isInteger(initial?.max_seats) ? initial.max_seats : 6,
     }),
-    [initialData]
+    [initial]
   );
 
   const {
@@ -137,7 +159,8 @@ export default function OperationalSettingsModal({
   useEffect(() => {
     if (!open) return;
     reset(defaultValues);
-  }, [open, reset, defaultValues]);
+    setServerNotices(initialNotices);
+  }, [open, reset, defaultValues, initialNotices]);
 
   if (!open) return null;
 
@@ -145,9 +168,9 @@ export default function OperationalSettingsModal({
 
   const orderingHelper =
     orderingMode === "waiter_only"
-      ? "El cliente solo visualiza QR, el mesero captura el pedido."
+      ? "El cliente solo visualiza el menú. El mesero captura el pedido."
       : orderingMode === "customer_assisted"
-      ? "El cliente puede generar su pedido desde el QR (sin login, solo nombre)."
+      ? "El cliente puede seleccionar productos desde el QR (y opcional llamar mesero)."
       : "";
 
   const tableServiceHelper =
@@ -164,6 +187,8 @@ export default function OperationalSettingsModal({
         ordering_mode: form.ordering_mode || null,
         table_service_mode: form.table_service_mode || null,
         is_qr_enabled: !!form.is_qr_enabled,
+
+        // asientos (si backend lo soporta)
         min_seats: Number(form.min_seats),
         max_seats: Number(form.max_seats),
       };
@@ -173,8 +198,12 @@ export default function OperationalSettingsModal({
           ? await createOperationalSettings(restaurantId, branchId, payload)
           : await updateOperationalSettings(restaurantId, branchId, payload);
 
-      if (showToast) showToast("Guardado correctamente.", "success");
+      // saved => { data, ui, notices, message }
+      setServerNotices(Array.isArray(saved?.notices) ? saved.notices : []);
+
+      if (showToast) showToast(saved?.message || "Guardado correctamente.", "success");
       if (onSaved) onSaved(saved);
+
       onClose();
     } catch (e) {
       const handled = handleFormApiError(e, setError, {
@@ -210,7 +239,6 @@ export default function OperationalSettingsModal({
         <form onSubmit={handleSubmit(onSubmit)}>
           <div style={bodyStyle}>
             <div style={{ display: "grid", gap: 14 }}>
-              {/* AVISO SOLO CUANDO NO EXISTE REGISTRO */}
               {showMissingConfigNotice && (
                 <div style={noticeStyle}>
                   <div style={{ fontWeight: 900, marginBottom: 4 }}>Importante</div>
@@ -237,10 +265,7 @@ export default function OperationalSettingsModal({
                   <option value="customer_assisted">Cliente asistido</option>
                 </select>
 
-                {/* ✅ aviso informativo (gris/negrito) */}
                 <HelperNote>{orderingHelper}</HelperNote>
-
-                {/* ❌ errores (rojo) */}
                 <FieldError message={errors?.ordering_mode?.message} />
               </div>
 
@@ -263,10 +288,7 @@ export default function OperationalSettingsModal({
                   <option value="assigned_waiter">Mesero asignado</option>
                 </select>
 
-                {/* ✅ aviso informativo (gris/negrito) */}
                 <HelperNote>{tableServiceHelper}</HelperNote>
-
-                {/* ❌ errores (rojo) */}
                 <FieldError message={errors?.table_service_mode?.message} />
               </div>
 
@@ -286,7 +308,7 @@ export default function OperationalSettingsModal({
                 <div>
                   <div style={{ fontWeight: 900 }}>Habilitar QR</div>
                   <div style={{ fontSize: 12, opacity: 0.75 }}>
-                    Si está desactivado, no se debe permitir generar ni resolver códigos QR.
+                    Si está desactivado, no se debe permitir crear, administrar ni resolver códigos QR.
                   </div>
                 </div>
 
@@ -298,7 +320,7 @@ export default function OperationalSettingsModal({
                 </label>
               </div>
 
-              {/* ASIENTOS (DESPUÉS DE QR) */}
+              {/* ASIENTOS */}
               <div
                 style={{
                   padding: 12,
@@ -316,7 +338,6 @@ export default function OperationalSettingsModal({
                     gap: 12,
                   }}
                 >
-                  {/* min_seats */}
                   <div>
                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
                       Mínimo
@@ -341,7 +362,6 @@ export default function OperationalSettingsModal({
                     <FieldError message={errors?.min_seats?.message} />
                   </div>
 
-                  {/* max_seats */}
                   <div>
                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
                       Máximo
@@ -368,14 +388,24 @@ export default function OperationalSettingsModal({
                 </div>
 
                 <div style={subtleNoteStyle}>
-                  Estos valores serán el limitante del número de posibles asientos que contenga una
-                  mesa (por ejemplo, no podrás crear mesas con menos de{" "}
-                  <strong>{Number(minSeats) || 1}</strong> ni más de{" "}
-                  <strong>{Number(maxSeats) || 6}</strong> asientos).
+                  No podrás crear mesas con menos de <strong>{Number(minSeats) || 1}</strong> ni más de{" "}
+                  <strong>{Number(maxSeats) || 6}</strong> asientos.
                 </div>
               </div>
 
-            
+              {/* NOTICES DEL BACKEND */}
+              {Array.isArray(serverNotices) && serverNotices.length > 0 ? (
+                <div style={noticesListStyle}>
+                  <div style={{ fontWeight: 950, marginBottom: 8 }}>Avisos del sistema</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {serverNotices.map((n, idx) => (
+                      <li key={idx} style={{ marginBottom: 6, fontWeight: 750 }}>
+                        {n}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </div>
 

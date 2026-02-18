@@ -5,13 +5,29 @@ import api from "../api";
  * GET  /api/restaurants/:restaurantId/branches/:branchId/operational-settings
  * POST /api/restaurants/:restaurantId/branches/:branchId/operational-settings
  * PUT  /api/restaurants/:restaurantId/branches/:branchId/operational-settings
+ *
+ * Backend ahora responde:
+ * { data: {...}, ui: {...}, notices: [...] }
  */
+
+function normalizeOperationalResponse(resData) {
+  // Compat: si backend viejo mandara solo {data}, no rompemos.
+  const payload = resData || {};
+  return {
+    data: payload.data ?? payload,
+    ui: payload.ui ?? null,
+    notices: payload.notices ?? [],
+    message: payload.message ?? null,
+  };
+}
 
 export async function getOperationalSettings(restaurantId, branchId) {
   const { data } = await api.get(
     `/restaurants/${restaurantId}/branches/${branchId}/operational-settings`
   );
-  return data?.data; // { id, branch_id, ordering_mode, table_service_mode, is_qr_enabled }
+
+  const norm = normalizeOperationalResponse(data);
+  return norm; // { data, ui, notices, message }
 }
 
 export async function createOperationalSettings(restaurantId, branchId, payload) {
@@ -19,7 +35,9 @@ export async function createOperationalSettings(restaurantId, branchId, payload)
     `/restaurants/${restaurantId}/branches/${branchId}/operational-settings`,
     payload
   );
-  return data?.data;
+
+  const norm = normalizeOperationalResponse(data);
+  return norm;
 }
 
 export async function updateOperationalSettings(restaurantId, branchId, payload) {
@@ -27,5 +45,7 @@ export async function updateOperationalSettings(restaurantId, branchId, payload)
     `/restaurants/${restaurantId}/branches/${branchId}/operational-settings`,
     payload
   );
-  return data?.data;
+
+  const norm = normalizeOperationalResponse(data);
+  return norm;
 }
