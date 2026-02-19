@@ -51,7 +51,7 @@ function Toast({ open, message, type = "info", onClose }) {
         right: 16,
         bottom: 16,
         zIndex: 99999,
-        maxWidth: 420,
+        maxWidth: 520,
         background: bg,
         border: `1px solid ${border}`,
         color,
@@ -114,6 +114,38 @@ function Banner({ tone = "warning", title, body }) {
   );
 }
 
+/**
+ * Detecta “Salón” por nombre (lo mismo que tu back).
+ */
+function isSalonName(name) {
+  const n = String(name || "").trim().toLowerCase();
+  return n === "salón" || n === "salon" || n === "salón " || n === "salon ";
+}
+
+function getQrNoticeForCreate({ type, tableId, orderingMode }) {
+  const hasTable = !!tableId;
+
+  // Delivery / Web: siempre read-only
+  if (type === "delivery") {
+    return "Menú por canal (Delivery), solo lectura.";
+  }
+  if (type === "web") {
+    return "Menú web, solo lectura. Selecciona el canal a visualizar.";
+  }
+
+  // Physical
+  if (!hasTable) {
+    return "Menú completo, solo lectura.";
+  }
+
+  // Physical + mesa => depende ordering_mode
+  if (String(orderingMode) === "customer_assisted") {
+    return "Menú para pedidos del cliente (cliente asistido).";
+  }
+
+  return "Menú para pedidos del mesero (solo mesero).";
+}
+
 export default function BranchQrCodesPage() {
   const nav = useNavigate();
   const { restaurantId, branchId } = useParams();
@@ -150,14 +182,6 @@ export default function BranchQrCodesPage() {
   const uiMeta = settingsRes?.ui ?? null;
   const notices = Array.isArray(settingsRes?.notices) ? settingsRes.notices : [];
 
-  const canCreate = useMemo(() => {
-    return (
-      String(form.name || "").trim().length > 0 &&
-      String(form.sales_channel_id || "").length > 0 &&
-      String(form.type || "").length > 0
-    );
-  }, [form]);
-
   // Gate real:
   // - si backend manda ui.can_manage_qr => usarlo
   // - si no, fallback a settings.is_qr_enabled
@@ -167,6 +191,105 @@ export default function BranchQrCodesPage() {
   }, [uiMeta, settings]);
 
   const manageQrBlockReason = uiMeta?.manage_qr_block_reason || null;
+
+  const channelOptionsRaw = useMemo(() => {
+    return (channels || [])
+      .map((row) => {
+        const sc = row?.salesChannel || row?.sales_channel || row;
+        const id = row?.sales_channel_id ?? sc?.id ?? row?.id;
+        const name = sc?.name ?? row?.name ?? null;
+        if (!id || !name) return null;
+        return { id: Number(id), name: String(name) };
+      })
+      .filter(Boolean);
+  }, [channels]);
+
+  const salonChannel = useMemo(() => {
+    return channelOptionsRaw.find((c) => isSalonName(c.name)) || null;
+  }, [channelOptionsRaw]);
+
+  const filteredChannelOptions = useMemo(() => {
+    const type = String(form.type || "");
+    if (!type) return [];
+
+    // 1) physical => SOLO Salón
+    if (type === "physical") {
+      return salonChannel ? [salonChannel] : [];
+    }
+
+    // 2) delivery => TODOS MENOS salón
+    if (type === "delivery") {
+      return (channelOptionsRaw || []).filter((c) => !isSalonName(c.name));
+    }
+
+    // 3) web => SOLO salón
+    if (type === "web") {
+      return salonChannel ? [salonChannel] : [];
+    }
+
+    return channelOptionsRaw || [];
+  }, [form.type, channelOptionsRaw, salonChannel]);
+
+  const tableOptions = useMemo(() => {
+    return (tables || []).map((t) => ({ id: Number(t.id), name: t.name }));
+  }, [tables]);
+
+  const filteredTableOptions = useMemo(() => {
+    const type = String(form.type || "");
+    if (type === "delivery" || type === "web") {
+      // solo “General”
+      return [];
+    }
+    return tableOptions;
+  }, [form.type, tableOptions]);
+
+  // Corrige selects cuando cambias tipo: fuerza canal/mesa válidos según reglas
+  useEffect(() => {
+    const type = String(form.type || "");
+    const currentChannelId = form.sales_channel_id ? Number(form.sales_channel_id) : null;
+
+    // delivery/web => mesa general
+    if (type === "delivery" || type === "web") {
+      if (form.table_id) {
+        setForm((f) => ({ ...f, table_id: "" }));
+      }
+    }
+
+    // Ajustar canal por tipo
+    if (type === "physical" || type === "web") {
+      const wanted = salonChannel?.id ? String(salonChannel.id) : "";
+      if (wanted && form.sales_channel_id !== wanted) {
+        setForm((f) => ({ ...f, sales_channel_id: wanted }));
+      }
+      if (!wanted && form.sales_channel_id) {
+        setForm((f) => ({ ...f, sales_channel_id: "" }));
+      }
+      return;
+    }
+
+    if (type === "delivery") {
+      // si trae salón seleccionado, límpialo
+      if (currentChannelId && salonChannel?.id && currentChannelId === salonChannel.id) {
+        setForm((f) => ({ ...f, sales_channel_id: "" }));
+        return;
+      }
+      // si no hay canal y hay opciones, preselecciona el primero
+      if (!form.sales_channel_id && filteredChannelOptions.length > 0) {
+        setForm((f) => ({ ...f, sales_channel_id: String(filteredChannelOptions[0].id) }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.type, salonChannel?.id]);
+
+  const canCreate = useMemo(() => {
+    const hasName = String(form.name || "").trim().length > 0;
+    const hasType = String(form.type || "").length > 0;
+    const hasChannel = String(form.sales_channel_id || "").length > 0;
+
+    // En delivery/web: mesa no importa (siempre general)
+    // En physical: mesa opcional, sigue pudiendo crear sin mesa
+    return hasName && hasType && hasChannel;
+  }, [form]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -265,10 +388,15 @@ export default function BranchQrCodesPage() {
       return;
     }
 
+    // default:
+    // physical => salón si existe
+    const defaultType = "physical";
+    const defaultSalon = salonChannel?.id ? String(salonChannel.id) : "";
+
     setForm({
       name: "",
-      type: "physical",
-      sales_channel_id: "",
+      type: defaultType,
+      sales_channel_id: defaultSalon,
       table_id: "",
       is_active: true,
     });
@@ -328,22 +456,6 @@ export default function BranchQrCodesPage() {
     }
   };
 
-  const channelOptions = useMemo(() => {
-    return (channels || [])
-      .map((row) => {
-        const sc = row?.salesChannel || row?.sales_channel || row;
-        const id = row?.sales_channel_id ?? sc?.id ?? row?.id;
-        const name = sc?.name ?? row?.name ?? `Canal #${id}`;
-        if (!id) return null;
-        return { id: Number(id), name };
-      })
-      .filter(Boolean);
-  }, [channels]);
-
-  const tableOptions = useMemo(() => {
-    return (tables || []).map((t) => ({ id: Number(t.id), name: t.name }));
-  }, [tables]);
-
   const topBanner = useMemo(() => {
     if (!settingsLoaded) return null;
 
@@ -362,16 +474,12 @@ export default function BranchQrCodesPage() {
         tone: "warning",
         title: "QR desactivado",
         body:
-          (manageQrBlockReason
-            ? `${manageQrBlockReason}\n\n`
-            : "") +
+          (manageQrBlockReason ? `${manageQrBlockReason}\n\n` : "") +
           "• No se pueden crear códigos QR en esta sucursal.\n" +
-          "• Si ya existían QRs, quedan deshabilitados hasta que el usuario los reactive manualmente.\n" +
-          "• Cuando actives QR, el sistema NO reactiva QRs automáticamente.",
+          "• Si ya existían QRs, quedan deshabilitados hasta que el usuario los reactive manualmente.",
       };
     }
 
-    // Si está activado, mostramos notices del backend (si hay).
     if (notices.length > 0) {
       return {
         tone: "info",
@@ -394,10 +502,7 @@ export default function BranchQrCodesPage() {
         <div>
           <h2 style={{ margin: 0 }}>Administración de QRs</h2>
           <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-            Sucursal: <strong>#{branchId}</strong> · Restaurante: <strong>#{restaurantId}</strong>
-            {" · "}
-            QR habilitado:{" "}
-            <strong>{settings ? (canManageQr ? "Sí" : "No") : "Sin config"}</strong>
+            QR habilitado: <strong>{settings ? (canManageQr ? "Sí" : "No") : "Sin config"}</strong>
             {settings?.ordering_mode ? (
               <>
                 {" · "}
@@ -457,7 +562,7 @@ export default function BranchQrCodesPage() {
           >
             <div style={{ fontWeight: 900 }}>Sin QRs aún</div>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-              Crea un QR para comedor, web, delivery o por mesa.
+              Crea un QR Físico, Web o Delivery. Si es Físico, también puedes crearlo por mesa.
             </div>
           </div>
         ) : (
@@ -468,6 +573,9 @@ export default function BranchQrCodesPage() {
               qr?.table_id && qr?.intended_ordering_mode && settings?.ordering_mode
                 ? String(qr.intended_ordering_mode) !== String(settings.ordering_mode)
                 : false;
+
+            const channelName = qr?.sales_channel?.name || "";
+            const tableName = qr?.table?.name || "";
 
             return (
               <div
@@ -505,9 +613,9 @@ export default function BranchQrCodesPage() {
                   </div>
 
                   <div style={{ fontSize: 13 }}>
-                    Canal: <strong>{qr.sales_channel?.name || `#${qr.sales_channel_id}`}</strong>
+                    Canal: <strong>{channelName || "—"}</strong>
                     {" · "}
-                    Mesa: <strong>{qr.table?.name || (qr.table_id ? `#${qr.table_id}` : "General")}</strong>
+                    Mesa: <strong>{tableName || "General"}</strong>
                   </div>
 
                   {qr?.table_id ? (
@@ -693,7 +801,14 @@ export default function BranchQrCodesPage() {
                 <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>Tipo</div>
                 <select
                   value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value, table_id: "" }))}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      type: e.target.value,
+                      // reset mesa al cambiar tipo (y se fuerza por reglas)
+                      table_id: "",
+                    }))
+                  }
                   style={{
                     width: "100%",
                     padding: "10px 12px",
@@ -729,23 +844,30 @@ export default function BranchQrCodesPage() {
                     fontWeight: 800,
                   }}
                 >
-                  <option value="">Selecciona...</option>
-                  {channelOptions.map((c) => (
+                  <option value="">
+                    {filteredChannelOptions.length ? "Selecciona..." : "Sin canales disponibles"}
+                  </option>
+                  {filteredChannelOptions.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
                 </select>
+
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, fontWeight: 750 }}>
-                  Físico (por reglas backend): canal debe ser Salón.
+                  {form.type === "physical"
+                    ? "Físico: solo permite Salón."
+                    : form.type === "delivery"
+                    ? "Delivery: permite todos los canales menos Salón."
+                    : "Web: solo permite Salón (pero el menú público permite elegir canal a visualizar)."}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>Mesa (opcional)</div>
+                <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 6 }}>Mesa</div>
                 <select
                   value={form.table_id}
-                  disabled={form.type !== "physical"} // ✅ alineado: solo physical puede usar mesa
+                  disabled={form.type !== "physical"} // solo physical puede seleccionar mesa
                   onChange={(e) => setForm((f) => ({ ...f, table_id: e.target.value }))}
                   style={{
                     width: "100%",
@@ -759,18 +881,41 @@ export default function BranchQrCodesPage() {
                   }}
                 >
                   <option value="">General (sin mesa)</option>
-                  {tableOptions.map((t) => (
+                  {filteredTableOptions.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>
                   ))}
                 </select>
 
+                {/* Donde pediste los avisos: justo aquí */}
                 {form.type === "physical" && form.table_id ? (
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8, fontWeight: 850 }}>
-                    Este QR se marcará con intended_ordering_mode = <strong>{String(settings?.ordering_mode || "waiter_only")}</strong>
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9, fontWeight: 850 }}>
+                    Este QR de mesa se marcará con intended_ordering_mode ={" "}
+                    <strong>{String(settings?.ordering_mode || "waiter_only")}</strong>
+                    <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 12, background: "#eef2ff" }}>
+                      <div style={{ fontWeight: 950 }}>¿Qué crea este QR?</div>
+                      <div style={{ marginTop: 4, fontWeight: 800 }}>
+                        {getQrNoticeForCreate({
+                          type: form.type,
+                          tableId: form.table_id,
+                          orderingMode: settings?.ordering_mode,
+                        })}
+                      </div>
+                    </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 12, background: "#eef2ff" }}>
+                    <div style={{ fontWeight: 950 }}>¿Qué crea este QR?</div>
+                    <div style={{ marginTop: 4, fontWeight: 800 }}>
+                      {getQrNoticeForCreate({
+                        type: form.type,
+                        tableId: form.type === "physical" ? form.table_id : null,
+                        orderingMode: settings?.ordering_mode,
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

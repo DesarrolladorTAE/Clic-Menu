@@ -78,14 +78,7 @@ function Badge({ children, tone = "default", title }) {
 
 function SkeletonCard() {
   const row = (w) => (
-    <div
-      style={{
-        height: 12,
-        width: w,
-        borderRadius: 8,
-        background: "rgba(0,0,0,0.08)",
-      }}
-    />
+    <div style={{ height: 12, width: w, borderRadius: 8, background: "rgba(0,0,0,0.08)" }} />
   );
 
   return (
@@ -140,7 +133,6 @@ function PillButton({ onClick, children, tone = "default", title, disabled }) {
 
 function ProductThumb({ imageUrl, title }) {
   const [failed, setFailed] = useState(false);
-
   useEffect(() => setFailed(false), [imageUrl]);
 
   const wrapStyle = {
@@ -264,13 +256,7 @@ function SearchBar({ value, onChange }) {
 
 function Collapse({ open, children }) {
   return (
-    <div
-      style={{
-        maxHeight: open ? 800 : 0,
-        overflow: "hidden",
-        transition: "max-height 220ms ease",
-      }}
-    >
+    <div style={{ maxHeight: open ? 800 : 0, overflow: "hidden", transition: "max-height 220ms ease" }}>
       <div style={{ paddingTop: open ? 10 : 0 }}>{children}</div>
     </div>
   );
@@ -286,9 +272,7 @@ function isQrDisabledPublicError(e) {
   const status = e?.response?.status;
   if (status !== 403) return false;
 
-  const msg = String(
-    e?.response?.data?.message || e?.response?.data?.error || e?.message || ""
-  ).toLowerCase();
+  const msg = String(e?.response?.data?.message || e?.response?.data?.error || e?.message || "").toLowerCase();
 
   return (
     msg.includes("qr desactivado") ||
@@ -303,9 +287,7 @@ function isQrWrongModeError(e) {
   const status = e?.response?.status;
   if (status !== 403) return false;
 
-  const msg = String(
-    e?.response?.data?.message || e?.response?.data?.error || e?.message || ""
-  ).toLowerCase();
+  const msg = String(e?.response?.data?.message || e?.response?.data?.error || e?.message || "").toLowerCase();
 
   return (
     msg.includes("qr no válido") ||
@@ -321,6 +303,9 @@ export default function PublicMenuEntryPage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [data, setData] = useState(null);
+
+  // WEB selector
+  const [webChannelId, setWebChannelId] = useState("");
 
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [q, setQ] = useState("");
@@ -352,7 +337,22 @@ export default function PublicMenuEntryPage() {
     try {
       const payload = await fetchResolvedMenu(token);
       const normalized = payload;
-      const h = safeHash(normalized?.sections || []);
+
+      // Si es WEB y no hay canal seleccionado, usar default_channel_id
+      if (String(normalized?.type) === "web") {
+        const def = normalized?.default_channel_id ? String(normalized.default_channel_id) : "";
+        setWebChannelId((prev) => prev || def);
+      } else {
+        setWebChannelId("");
+      }
+
+      // Hash basado en “sections activas” (depende si web o no)
+      const sectionsForHash =
+        String(normalized?.type) === "web"
+          ? normalized?.menus_by_channel?.[String(normalized?.default_channel_id || "")]?.sections || []
+          : normalized?.sections || [];
+
+      const h = safeHash(sectionsForHash);
       if (h !== lastPayloadHashRef.current) {
         lastPayloadHashRef.current = h;
         setData(normalized);
@@ -368,11 +368,7 @@ export default function PublicMenuEntryPage() {
           setErrorMsg(PUBLIC_QR_DISABLED_MSG);
           setData(null);
         } else {
-          const msg =
-            e?.response?.data?.message ||
-            e?.response?.data?.error ||
-            e?.message ||
-            "No se pudo cargar el menú.";
+          const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo cargar el menú.";
           setErrorMsg(msg);
           setData(null);
         }
@@ -405,12 +401,53 @@ export default function PublicMenuEntryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const header = useMemo(() => {
+  const isWeb = useMemo(() => String(data?.type) === "web", [data]);
+
+  const webChannels = useMemo(() => {
+    if (!isWeb) return [];
+    return Array.isArray(data?.channels) ? data.channels : [];
+  }, [data, isWeb]);
+
+  const activeWebChannelId = useMemo(() => {
+    if (!isWeb) return "";
+    const chosen = String(webChannelId || "");
+    if (chosen) return chosen;
+    const def = data?.default_channel_id ? String(data.default_channel_id) : "";
+    return def;
+  }, [isWeb, webChannelId, data]);
+
+  const activeMenuPayload = useMemo(() => {
     if (!data) return null;
-    const r = data.restaurant;
-    const b = data.branch;
-    const sc = data.sales_channel;
-    const t = data.table;
+    if (!isWeb) return data;
+
+    const by = data?.menus_by_channel || {};
+    const picked = by?.[String(activeWebChannelId)] || null;
+
+    // Si no existe (caso raro), intenta con el default
+    if (picked) return { ...picked, ui: data?.ui, table: data?.table, ordering_mode: data?.ordering_mode, table_service_mode: data?.table_service_mode, type: data?.type };
+
+    const def = data?.default_channel_id ? String(data.default_channel_id) : "";
+    const fallback = def ? by?.[def] : null;
+    return fallback
+      ? { ...fallback, ui: data?.ui, table: data?.table, ordering_mode: data?.ordering_mode, table_service_mode: data?.table_service_mode, type: data?.type }
+      : { ...data, sections: [] };
+  }, [data, isWeb, activeWebChannelId]);
+
+  // Para evitar basura de filtros cuando cambias canal WEB
+  useEffect(() => {
+    setCategoryFilter("all");
+    setQ("");
+    setExpanded(new Set());
+    setSelected(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWebChannelId]);
+
+  const header = useMemo(() => {
+    if (!activeMenuPayload) return null;
+    const r = activeMenuPayload.restaurant;
+    const b = activeMenuPayload.branch;
+    const sc = activeMenuPayload.sales_channel;
+    const t = activeMenuPayload.table;
 
     return {
       restaurantName: r?.trade_name || "Restaurante",
@@ -419,13 +456,13 @@ export default function PublicMenuEntryPage() {
       branchStatus: b?.status,
       channelName: sc?.name || "Canal",
       tableName: t?.name || null,
-      orderingMode: data.ordering_mode || null,
-      tableServiceMode: data.table_service_mode || null,
+      orderingMode: activeMenuPayload.ordering_mode || null,
+      tableServiceMode: activeMenuPayload.table_service_mode || null,
     };
-  }, [data]);
+  }, [activeMenuPayload]);
 
-  const ui = useMemo(() => data?.ui || {}, [data]);
-  const hasTable = !!data?.table?.id;
+  const ui = useMemo(() => activeMenuPayload?.ui || {}, [activeMenuPayload]);
+  const hasTable = !!activeMenuPayload?.table?.id;
 
   const badgeUi = useMemo(() => {
     if (!ui?.ui_mode) return { tone: "default", label: "Menú" };
@@ -433,20 +470,22 @@ export default function PublicMenuEntryPage() {
     return { tone: "default", label: "Solo lectura" };
   }, [ui]);
 
+  const sections = useMemo(() => activeMenuPayload?.sections || [], [activeMenuPayload]);
+
   const categoryNameById = useMemo(() => {
     const map = new Map();
-    for (const s of data?.sections || []) {
+    for (const s of sections || []) {
       for (const c of s?.categories || []) {
         if (c?.id) map.set(Number(c.id), c?.name || "");
       }
     }
     return map;
-  }, [data]);
+  }, [sections]);
 
   const categoryOptions = useMemo(() => {
     const opts = [{ value: "all", label: "Todos" }];
     const seen = new Set();
-    for (const s of data?.sections || []) {
+    for (const s of sections || []) {
       for (const c of s?.categories || []) {
         if (!c?.id || seen.has(c.id)) continue;
         seen.add(c.id);
@@ -454,18 +493,18 @@ export default function PublicMenuEntryPage() {
       }
     }
     return opts;
-  }, [data]);
+  }, [sections]);
 
   const allProducts = useMemo(() => {
     const out = [];
-    for (const s of data?.sections || []) {
+    for (const s of sections || []) {
       for (const c of s?.categories || []) {
         const catName = c?.name || "";
         for (const p of c?.products || []) out.push({ ...p, __categoryName: catName });
       }
     }
     return out;
-  }, [data]);
+  }, [sections]);
 
   const filteredProducts = useMemo(() => {
     const needle = (q || "").trim().toLowerCase();
@@ -519,11 +558,7 @@ export default function PublicMenuEntryPage() {
       setTimeout(() => setCallToast(""), 4500);
     } catch (e) {
       const status = e?.response?.status;
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
-        "No se pudo llamar al mesero.";
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo llamar al mesero.";
 
       if (status === 404) {
         setCallToast("⚠️ Botón listo, endpoint aún no está publicado. (POST call waiter)");
@@ -543,6 +578,7 @@ export default function PublicMenuEntryPage() {
           <div>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Cargando menú…</div>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+              {/* público: el token existe, no es “ID interno”, aquí sí es útil */}
               Token: <strong style={{ letterSpacing: 0.5 }}>{token}</strong>
             </div>
           </div>
@@ -589,11 +625,7 @@ export default function PublicMenuEntryPage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontWeight: 950, color: isQrDisabledMsg ? "#8a6d3b" : "#a10000" }}>
-                {isWrongModeMsg
-                  ? "QR inválido"
-                  : isQrDisabledMsg
-                  ? "Menú no disponible"
-                  : "No se pudo cargar el menú"}
+                {isWrongModeMsg ? "QR inválido" : isQrDisabledMsg ? "Menú no disponible" : "No se pudo cargar el menú"}
               </div>
               <div style={{ marginTop: 6, fontSize: 13, whiteSpace: "pre-line" }}>{errorMsg}</div>
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
@@ -612,7 +644,7 @@ export default function PublicMenuEntryPage() {
     );
   }
 
-  if (!data) {
+  if (!data || !activeMenuPayload) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
         <div
@@ -632,7 +664,6 @@ export default function PublicMenuEntryPage() {
     );
   }
 
-  // ===== Render normal (idéntico a tu versión) =====
   const uiFlags = ui || {};
   const showCallBtn = !!uiFlags?.show_call_waiter_button && hasTable;
 
@@ -662,6 +693,32 @@ export default function PublicMenuEntryPage() {
               {header?.tableName ? ` · Mesa ${header.tableName}` : " · General"}
             </div>
 
+            {/* ✅ WEB selector (aquí estaba tu bug: ahora sí muestra canales) */}
+            {isWeb ? (
+              <div style={{ marginTop: 10, display: "grid", gap: 6, maxWidth: 420 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Canal a visualizar</div>
+                <select
+                  value={activeWebChannelId}
+                  onChange={(e) => setWebChannelId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    outline: "none",
+                    fontWeight: 850,
+                    background: "#fff",
+                  }}
+                >
+                  {(webChannels || []).map((ch) => (
+                    <option key={ch.id} value={String(ch.id)}>
+                      {ch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
             <div style={{ marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Badge tone={header?.restaurantStatus === "active" ? "ok" : "warn"}>
                 Restaurante: {translateStatus(header?.restaurantStatus)}
@@ -687,8 +744,7 @@ export default function PublicMenuEntryPage() {
                 {header?.orderingMode && header?.tableServiceMode ? " · " : null}
                 {header?.tableServiceMode ? (
                   <>
-                    Servicio de mesa:{" "}
-                    <strong>{translateTableServiceMode(header.tableServiceMode)}</strong>
+                    Servicio de mesa: <strong>{translateTableServiceMode(header.tableServiceMode)}</strong>
                   </>
                 ) : null}
               </div>
@@ -696,9 +752,7 @@ export default function PublicMenuEntryPage() {
 
             {canSelect && hasTable ? (
               <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
-                  Nombre (solo UI por ahora)
-                </div>
+                <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Nombre (solo UI por ahora)</div>
                 <input
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
@@ -718,12 +772,7 @@ export default function PublicMenuEntryPage() {
 
           <div style={{ display: "flex", gap: 10, alignItems: "start", flexWrap: "wrap" }}>
             {showCallBtn ? (
-              <PillButton
-                tone="soft"
-                onClick={onCallWaiter}
-                disabled={calling}
-                title="Enviar una solicitud al mesero"
-              >
+              <PillButton tone="soft" onClick={onCallWaiter} disabled={calling} title="Enviar una solicitud al mesero">
                 {calling ? "⏳ Llamando..." : "🔔 Llamar al mesero"}
               </PillButton>
             ) : null}
@@ -763,22 +812,9 @@ export default function PublicMenuEntryPage() {
         ) : null}
 
         <div style={{ marginTop: 14 }}>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              overflowX: "auto",
-              paddingBottom: 6,
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
+          <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
             {categoryOptions.map((c) => (
-              <CategoryChip
-                key={c.value}
-                label={c.label}
-                active={categoryFilter === c.value}
-                onClick={() => setCategoryFilter(c.value)}
-              />
+              <CategoryChip key={c.value} label={c.label} active={categoryFilter === c.value} onClick={() => setCategoryFilter(c.value)} />
             ))}
           </div>
 
@@ -812,7 +848,8 @@ export default function PublicMenuEntryPage() {
         </div>
       </div>
 
-      {data.warning ? (
+      {/* warnings por canal (en web, depende del canal) */}
+      {activeMenuPayload?.warning ? (
         <div
           style={{
             marginTop: 12,
@@ -825,7 +862,7 @@ export default function PublicMenuEntryPage() {
             whiteSpace: "pre-line",
           }}
         >
-          {data.warning}
+          {activeMenuPayload.warning}
         </div>
       ) : null}
 
@@ -850,8 +887,7 @@ export default function PublicMenuEntryPage() {
               const variants = Array.isArray(p.variants) ? p.variants : [];
               const hasVariants = variants.length > 0;
 
-              const categoryName =
-                p.__categoryName || categoryNameById.get(Number(p.category_id)) || "Sin categoría";
+              const categoryName = p.__categoryName || categoryNameById.get(Number(p.category_id)) || "Sin categoría";
 
               const isOpen = expanded.has(p.id);
               const isSelected = selected.has(`p:${p.id}`);
@@ -875,9 +911,7 @@ export default function PublicMenuEntryPage() {
                   <div style={{ padding: "0 12px 12px 12px", display: "grid", gap: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
                       <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>{title}</div>
-                      <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>
-                        {money(p.price)}
-                      </div>
+                      <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>{money(p.price)}</div>
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.72 }}>
@@ -938,9 +972,7 @@ export default function PublicMenuEntryPage() {
                                     <div style={{ fontWeight: 850, fontSize: 13, minWidth: 0 }}>
                                       {v.name || v.display_name || `Variante ${idx + 1}`}
                                     </div>
-                                    <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>
-                                      {money(v.price)}
-                                    </div>
+                                    <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>{money(v.price)}</div>
                                   </div>
 
                                   {showSelectBtn ? (
@@ -979,9 +1011,7 @@ export default function PublicMenuEntryPage() {
               }}
             >
               <div style={{ fontWeight: 950 }}>Sin resultados</div>
-              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
-                Con esos filtros no hay nada que mostrar.
-              </div>
+              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>Con esos filtros no hay nada que mostrar.</div>
             </div>
           )}
         </div>
