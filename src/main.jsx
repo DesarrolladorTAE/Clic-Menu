@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { StaffAuthProvider } from "./context/StaffAuthContext.jsx";
 import "./index.css";
 
 
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <StaffAuthProvider>
+          <App />
+        </StaffAuthProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
