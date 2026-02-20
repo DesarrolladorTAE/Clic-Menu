@@ -89,6 +89,14 @@ export default function StaffDashboard() {
           )}
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+            <button
+              style={btnPrimary}
+              onClick={() => nav("/staff/waiter/tables/grid")}
+              title="Ir al panel de mesas (mesero)"
+            >
+              🍽️ Ir a Mesas
+            </button>
+
             <button style={btnSecondary} onClick={onExitBranch}>
               Salir de sucursal
             </button>
@@ -115,6 +123,15 @@ const card = {
 const row = { display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, padding: "8px 0" };
 const k = { fontWeight: 900, fontSize: 12, opacity: 0.7 };
 const v = { fontWeight: 800 };
+
+const btnPrimary = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #cfcfff",
+  background: "#eef2ff",
+  cursor: "pointer",
+  fontWeight: 950,
+};
 
 const btnSecondary = {
   padding: "10px 12px",

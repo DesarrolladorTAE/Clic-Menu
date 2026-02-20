@@ -1,3 +1,4 @@
+// src/routes/AppRoutes.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import OwnerRoute from "./OwnerRoute";
@@ -10,7 +11,8 @@ import Login from "../pages/auth/Login";
 //STAFF
 import StaffLogin from "../pages/staff/StaffLogin";
 import StaffSelectBranch from "../pages/staff/StaffSelectBranch";
-import StaffDashboard from "../pages/staff/StaffDashboard";
+import StaffDashboard from "../pages/staff/StaffDashboard"; 
+import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -66,6 +68,7 @@ export default function AppRoutes() {
       <Route element={<StaffProtectedRoute />}>
         <Route path="/staff/select-branch" element={<StaffSelectBranch />} />
         <Route path="/staff/app" element={<StaffDashboard />} />
+        <Route path="/staff/waiter/tables/grid" element={<WaiterTablesGrid />} />
       </Route>
 
       {/* OWNER PROTECTED */}
@@ -86,7 +89,9 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
         <Route path="/owner/restaurants/:restaurantId/products" element={<ProductsPage />} />
-        <Route path="/owner/restaurants/:restaurantId/products/:productId/components" element={<ProductCompositionPage />}
+        <Route
+          path="/owner/restaurants/:restaurantId/products/:productId/components"
+          element={<ProductCompositionPage />}
         />
         <Route
           path="/owner/restaurants/:restaurantId/products/:productId/variants"

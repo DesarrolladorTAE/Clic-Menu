@@ -1,7 +1,13 @@
 // src/pages/public/PublicMenuEntryPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { fetchResolvedMenu, callWaiter } from "../../services/public/publicMenu.service";
+import {
+  fetchResolvedMenu,
+  callWaiterByTable,
+  scanTable,
+  getTableSession,
+  heartbeatTableSession,
+} from "../../services/public/publicMenu.service";
 
 // Helpers UI
 function money(n) {
@@ -262,6 +268,48 @@ function Collapse({ open, children }) {
   );
 }
 
+// Overlay (no cambia tu layout, solo se superpone)
+function FullOverlay({ open, tone = "default", title, message, actions }) {
+  if (!open) return null;
+
+  const tones = {
+    default: { bg: "rgba(17,24,39,0.55)", card: "#fff", bd: "rgba(0,0,0,0.12)" },
+    warn: { bg: "rgba(255,122,0,0.20)", card: "#fff", bd: "#ffe08a" },
+    err: { bg: "rgba(255,0,0,0.12)", card: "#fff", bd: "rgba(255,0,0,0.25)" },
+  };
+
+  const t = tones[tone] || tones.default;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999,
+        background: t.bg,
+        display: "grid",
+        placeItems: "center",
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: "min(620px, 94vw)",
+          background: t.card,
+          borderRadius: 18,
+          border: `1px solid ${t.bd}`,
+          boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
+          padding: 14,
+        }}
+      >
+        <div style={{ fontWeight: 950, fontSize: 16 }}>{title}</div>
+        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85, whiteSpace: "pre-line" }}>{message}</div>
+        {actions ? <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>{actions}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 const PUBLIC_QR_DISABLED_MSG =
   "Menú digital temporalmente fuera de servicio. Por favor, solicita una carta física";
 
@@ -297,6 +345,13 @@ function isQrWrongModeError(e) {
   );
 }
 
+function fmtMMSS(totalSeconds) {
+  const s = Math.max(0, Number(totalSeconds || 0));
+  const mm = String(Math.floor(s / 60)).padStart(2, "0");
+  const ss = String(Math.floor(s % 60)).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
 
@@ -317,8 +372,17 @@ export default function PublicMenuEntryPage() {
   const [calling, setCalling] = useState(false);
   const [callToast, setCallToast] = useState("");
 
+  // ====== Sesión QR (solo un dispositivo + contador) ======
+  const [session, setSession] = useState(null); // { session_id, status, remaining_seconds, expires_at }
+  const [sessionBusy, setSessionBusy] = useState(null); // { session_id, status }
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [remainingSec, setRemainingSec] = useState(0);
+
   const pollRef = useRef(null);
   const lastPayloadHashRef = useRef("");
+  const sessionPollRef = useRef(null);
+  const tickRef = useRef(null);
+  const heartbeatRef = useRef(null);
 
   const safeHash = (obj) => {
     try {
@@ -346,7 +410,7 @@ export default function PublicMenuEntryPage() {
         setWebChannelId("");
       }
 
-      // Hash basado en “sections activas” (depende si web o no)
+      // Hash basado en “sections activas”
       const sectionsForHash =
         String(normalized?.type) === "web"
           ? normalized?.menus_by_channel?.[String(normalized?.default_channel_id || "")]?.sections || []
@@ -423,13 +487,27 @@ export default function PublicMenuEntryPage() {
     const by = data?.menus_by_channel || {};
     const picked = by?.[String(activeWebChannelId)] || null;
 
-    // Si no existe (caso raro), intenta con el default
-    if (picked) return { ...picked, ui: data?.ui, table: data?.table, ordering_mode: data?.ordering_mode, table_service_mode: data?.table_service_mode, type: data?.type };
+    if (picked)
+      return {
+        ...picked,
+        ui: data?.ui,
+        table: data?.table,
+        ordering_mode: data?.ordering_mode,
+        table_service_mode: data?.table_service_mode,
+        type: data?.type,
+      };
 
     const def = data?.default_channel_id ? String(data.default_channel_id) : "";
     const fallback = def ? by?.[def] : null;
     return fallback
-      ? { ...fallback, ui: data?.ui, table: data?.table, ordering_mode: data?.ordering_mode, table_service_mode: data?.table_service_mode, type: data?.type }
+      ? {
+          ...fallback,
+          ui: data?.ui,
+          table: data?.table,
+          ordering_mode: data?.ordering_mode,
+          table_service_mode: data?.table_service_mode,
+          type: data?.type,
+        }
       : { ...data, sections: [] };
   }, [data, isWeb, activeWebChannelId]);
 
@@ -463,6 +541,7 @@ export default function PublicMenuEntryPage() {
 
   const ui = useMemo(() => activeMenuPayload?.ui || {}, [activeMenuPayload]);
   const hasTable = !!activeMenuPayload?.table?.id;
+  const tableId = activeMenuPayload?.table?.id ? Number(activeMenuPayload.table.id) : null;
 
   const badgeUi = useMemo(() => {
     if (!ui?.ui_mode) return { tone: "default", label: "Menú" };
@@ -538,7 +617,9 @@ export default function PublicMenuEntryPage() {
 
   const canSelect = !!ui?.can_select_products && ui?.ui_mode === "selectable";
   const showSelectBtn = !!ui?.show_select_button && canSelect;
-  const showCallWaiterBtn = !!ui?.show_call_waiter_button && hasTable;
+
+  // Llamar mesero: SOLO si backend dice, y existe mesa
+  const showCallBtn = !!ui?.show_call_waiter_button && !!ui?.call_waiter_enabled && hasTable;
 
   const toggleSelectProduct = (id) => {
     setSelected((prev) => {
@@ -549,22 +630,181 @@ export default function PublicMenuEntryPage() {
     });
   };
 
+  // ====== Sesión: scan + polling + tick local ======
+  const startScanSession = async () => {
+    if (!tableId) return;
+
+    setSessionLoading(true);
+    setSessionBusy(null);
+    setCallToast("");
+
+    try {
+      const res = await scanTable(tableId);
+      const s = res?.data || null;
+
+      if (s?.session_id) {
+        setSession(s);
+        setRemainingSec(Number(s.remaining_seconds || 0));
+      } else {
+        setSession(null);
+        setRemainingSec(0);
+      }
+    } catch (e) {
+      const status = e?.response?.status;
+      const code = e?.response?.data?.code;
+
+      if (status === 409 && code === "TABLE_BUSY") {
+        const s = e?.response?.data?.data || {};
+        setSessionBusy({ session_id: s.session_id, status: s.status });
+        setSession(null);
+        setRemainingSec(0);
+      } else {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.message ||
+          "No se pudo iniciar la sesión de mesa.";
+        setCallToast(`⚠️ ${msg}`);
+        setTimeout(() => setCallToast(""), 4500);
+      }
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  // auto scan cuando haya mesa y el QR sea físico (tu backend: solo physical con mesa aplica)
+  useEffect(() => {
+    if (!activeMenuPayload) return;
+    if (!hasTable) return;
+
+    // delivery/web no tienen mesa por reglas, pero por si acaso:
+    if (String(activeMenuPayload?.type) !== "physical") return;
+
+    startScanSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMenuPayload?.table?.id, activeMenuPayload?.type]);
+
+  // tick local (cada 1s) para no depender del poll
+  useEffect(() => {
+    if (tickRef.current) {
+      clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+
+    tickRef.current = setInterval(() => {
+      setRemainingSec((prev) => {
+        const n = Math.max(0, Number(prev || 0) - 1);
+        return n;
+      });
+    }, 1000);
+
+    return () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      tickRef.current = null;
+    };
+  }, []);
+
+  // poll sesión (cada 10s) para estado real (expired, mismatch, etc.)
+  useEffect(() => {
+    const stop = () => {
+      if (sessionPollRef.current) clearInterval(sessionPollRef.current);
+      sessionPollRef.current = null;
+    };
+
+    if (!session?.session_id) {
+      stop();
+      return;
+    }
+
+    if (sessionPollRef.current) return;
+
+    sessionPollRef.current = setInterval(async () => {
+      try {
+        const res = await getTableSession(session.session_id);
+        const s = res?.data || null;
+        if (!s) return;
+
+        setSession(s);
+        setRemainingSec(Number(s.remaining_seconds || 0));
+      } catch (e) {
+        // Si device mismatch, básicamente es “otro navegador”
+        const status = e?.response?.status;
+        const code = e?.response?.data?.code;
+
+        if (status === 403 && code === "DEVICE_MISMATCH") {
+          setSessionBusy({ session_id: session.session_id, status: "active" });
+          setSession(null);
+          setRemainingSec(0);
+        }
+
+        // Si 410 expired, marcamos expired local
+        if (status === 410) {
+          setSession((prev) => (prev ? { ...prev, status: "expired", remaining_seconds: 0 } : prev));
+          setRemainingSec(0);
+        }
+      }
+    }, 10000);
+
+    return stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.session_id]);
+
+  // heartbeat ligero (cada 30s) para registrar actividad (no extiende TTL, solo “last_activity_at”)
+  useEffect(() => {
+    const stop = () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    };
+
+    if (!session?.session_id) {
+      stop();
+      return;
+    }
+
+    if (heartbeatRef.current) return;
+
+    heartbeatRef.current = setInterval(async () => {
+      try {
+        await heartbeatTableSession(session.session_id);
+      } catch {
+        // no spamear UI por heartbeat fallido
+      }
+    }, 30000);
+
+    return stop;
+  }, [session?.session_id]);
+
+  const sessionStatus = String(session?.status || "");
+  const sessionExpired = hasTable && (sessionStatus === "expired" || remainingSec <= 0);
+  const sessionActive = hasTable && !!session?.session_id && !sessionExpired;
+
   const onCallWaiter = async () => {
+    if (!tableId) return;
+
+    // Si está ocupada por otro o expirada, no dejamos llamar
+    if (!sessionActive) {
+      setCallToast("⚠️ La sesión de la mesa no está activa. Escanea de nuevo el QR.");
+      setTimeout(() => setCallToast(""), 4500);
+      return;
+    }
+
     setCalling(true);
     setCallToast("");
     try {
-      await callWaiter(token);
-      setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
+      const res = await callWaiterByTable(tableId);
+
+      // backend puede responder 200 "Llamada ya registrada." o 201 "Mesero llamado."
+      const msg = res?.message || "Listo.";
+      if (String(msg).toLowerCase().includes("ya registrada")) {
+        setCallToast("✅ Ya estaba registrada la llamada. No hace falta spamear al mesero.");
+      } else {
+        setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
+      }
+
       setTimeout(() => setCallToast(""), 4500);
     } catch (e) {
-      const status = e?.response?.status;
       const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo llamar al mesero.";
-
-      if (status === 404) {
-        setCallToast("⚠️ Botón listo, endpoint aún no está publicado. (POST call waiter)");
-      } else {
-        setCallToast(`⚠️ ${msg}`);
-      }
+      setCallToast(`⚠️ ${msg}`);
       setTimeout(() => setCallToast(""), 4500);
     } finally {
       setCalling(false);
@@ -578,7 +818,6 @@ export default function PublicMenuEntryPage() {
           <div>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Cargando menú…</div>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-              {/* público: el token existe, no es “ID interno”, aquí sí es útil */}
               Token: <strong style={{ letterSpacing: 0.5 }}>{token}</strong>
             </div>
           </div>
@@ -656,16 +895,13 @@ export default function PublicMenuEntryPage() {
           }}
         >
           <div style={{ fontWeight: 950 }}>Sin data</div>
-          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
-            Esto no debería pasar… pero aquí estamos.
-          </div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>Esto no debería pasar… pero aquí estamos.</div>
         </div>
       </div>
     );
   }
 
   const uiFlags = ui || {};
-  const showCallBtn = !!uiFlags?.show_call_waiter_button && hasTable;
 
   return (
     <div
@@ -676,6 +912,56 @@ export default function PublicMenuEntryPage() {
         background: "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
       }}
     >
+      {/* OVERLAY: Mesa ocupada por otro dispositivo */}
+      <FullOverlay
+        open={!!sessionBusy}
+        tone="warn"
+        title="Esta mesa ya está en uso"
+        message={
+          "Solo un usuario a la vez puede usar este QR.\n\n" +
+          "Parece que otra persona ya escaneó la mesa en otro dispositivo.\n" +
+          "Si se desocupa (o expira), podrás entrar."
+        }
+        actions={
+          <>
+            <PillButton
+              tone="soft"
+              onClick={() => startScanSession()}
+              disabled={sessionLoading}
+              title="Reintentar scan"
+            >
+              {sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
+            </PillButton>
+            <PillButton tone="default" onClick={() => setSessionBusy(null)} title="Cerrar aviso">
+              Entendido
+            </PillButton>
+          </>
+        }
+      />
+
+      {/* OVERLAY: Expirado */}
+      <FullOverlay
+        open={hasTable && !sessionBusy && sessionExpired}
+        tone="err"
+        title="Tiempo agotado"
+        message={
+          "La sesión de esta mesa expiró (5 minutos).\n\n" +
+          "Vuelve a escanear para activar otra sesión y poder llamar al mesero."
+        }
+        actions={
+          <>
+            <PillButton
+              tone="soft"
+              onClick={() => startScanSession()}
+              disabled={sessionLoading}
+              title="Reiniciar sesión"
+            >
+              {sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
+            </PillButton>
+          </>
+        }
+      />
+
       <div
         style={{
           border: "1px solid rgba(0,0,0,0.12)",
@@ -693,7 +979,7 @@ export default function PublicMenuEntryPage() {
               {header?.tableName ? ` · Mesa ${header.tableName}` : " · General"}
             </div>
 
-            {/* ✅ WEB selector (aquí estaba tu bug: ahora sí muestra canales) */}
+            {/* ✅ WEB selector */}
             {isWeb ? (
               <div style={{ marginTop: 10, display: "grid", gap: 6, maxWidth: 420 }}>
                 <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Canal a visualizar</div>
@@ -732,6 +1018,16 @@ export default function PublicMenuEntryPage() {
               <Badge tone="dark" title="Se actualiza cada 15s si la pestaña está visible">
                 🔁 Auto
               </Badge>
+
+              {/* ⏳ contador de sesión (solo si hay mesa física) */}
+              {hasTable && String(activeMenuPayload?.type) === "physical" ? (
+                <Badge
+                  tone={sessionActive ? "ok" : "warn"}
+                  title={sessionActive ? "Sesión activa (5 min)" : "Sesión no activa"}
+                >
+                  ⏳ {fmtMMSS(remainingSec)}
+                </Badge>
+              ) : null}
             </div>
 
             {(header?.orderingMode || header?.tableServiceMode) && (
@@ -772,8 +1068,28 @@ export default function PublicMenuEntryPage() {
 
           <div style={{ display: "flex", gap: 10, alignItems: "start", flexWrap: "wrap" }}>
             {showCallBtn ? (
-              <PillButton tone="soft" onClick={onCallWaiter} disabled={calling} title="Enviar una solicitud al mesero">
+              <PillButton
+                tone="soft"
+                onClick={onCallWaiter}
+                disabled={calling || !sessionActive || sessionLoading || !!sessionBusy}
+                title={
+                  !sessionActive
+                    ? "Sesión no activa. Escanea de nuevo."
+                    : "Enviar una solicitud al mesero"
+                }
+              >
                 {calling ? "⏳ Llamando..." : "🔔 Llamar al mesero"}
+              </PillButton>
+            ) : null}
+
+            {/* Forzar scan manual por si el usuario quiere */}
+            {hasTable && String(activeMenuPayload?.type) === "physical" ? (
+              <PillButton
+                onClick={() => startScanSession()}
+                disabled={sessionLoading || !!sessionBusy}
+                title="Revalidar sesión de mesa"
+              >
+                {sessionLoading ? "⏳ Validando..." : "📷 Validar QR"}
               </PillButton>
             ) : null}
 
@@ -814,7 +1130,12 @@ export default function PublicMenuEntryPage() {
         <div style={{ marginTop: 14 }}>
           <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
             {categoryOptions.map((c) => (
-              <CategoryChip key={c.value} label={c.label} active={categoryFilter === c.value} onClick={() => setCategoryFilter(c.value)} />
+              <CategoryChip
+                key={c.value}
+                label={c.label}
+                active={categoryFilter === c.value}
+                onClick={() => setCategoryFilter(c.value)}
+              />
             ))}
           </div>
 
@@ -848,7 +1169,7 @@ export default function PublicMenuEntryPage() {
         </div>
       </div>
 
-      {/* warnings por canal (en web, depende del canal) */}
+      {/* warnings por canal */}
       {activeMenuPayload?.warning ? (
         <div
           style={{
@@ -972,7 +1293,9 @@ export default function PublicMenuEntryPage() {
                                     <div style={{ fontWeight: 850, fontSize: 13, minWidth: 0 }}>
                                       {v.name || v.display_name || `Variante ${idx + 1}`}
                                     </div>
-                                    <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>{money(v.price)}</div>
+                                    <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>
+                                      {money(v.price)}
+                                    </div>
                                   </div>
 
                                   {showSelectBtn ? (
