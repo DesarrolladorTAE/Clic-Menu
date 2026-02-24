@@ -1,4 +1,3 @@
-// src/pages/floor/BranchFloorPlanPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -7,8 +6,8 @@ import ZoneModal from "../../components/floor/ZoneModal";
 import TableModal from "../../components/floor/TableModal";
 
 import { getOperationalSettings } from "../../services/floor/operationalSettings.service";
-import { getZones, deleteZone } from "../../services/floor/zones.service";
-import { getTables, deleteTable } from "../../services/floor/tables.service";
+import { getZones, deleteZone, assignZoneWaiter } from "../../services/floor/zones.service";
+import { getTables, deleteTable, getAvailableWaiters } from "../../services/floor/tables.service";
 
 // Toast simple
 function Toast({ open, message, type = "info", onClose }) {
@@ -98,6 +97,11 @@ const TABLE_SERVICE_MODE_ES = {
   assigned_waiter: "Mesero asignado",
 };
 
+const ASSIGNMENT_STRATEGY_ES = {
+  table_only: "Mesa",
+  zone: "Zona",
+};
+
 // Normaliza booleanos raros: 1/"1"/"true"/true/"on"/"yes"
 function toBool(v) {
   if (typeof v === "boolean") return v;
@@ -131,13 +135,61 @@ function unwrapSettings(maybe) {
   return maybe;
 }
 
+function waiterLabel(w) {
+  if (!w) return "";
+  const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
+  const full = parts.join(" ").trim();
+  const phone = w.phone ? ` · ${w.phone}` : "";
+  return `${full}${phone}`.trim();
+}
+
+// Modal inline: asignar mesero a zona (SIN archivo nuevo)
+const overlayStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.35)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 99999,
+  padding: 16,
+};
+
+const modalStyle = {
+  width: "100%",
+  maxWidth: 560,
+  background: "#fff",
+  borderRadius: 14,
+  border: "1px solid rgba(0,0,0,0.12)",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.25)",
+  overflow: "hidden",
+};
+
+const headerStyle = {
+  padding: "14px 16px",
+  borderBottom: "1px solid rgba(0,0,0,0.08)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const bodyStyle = { padding: 16 };
+const footerStyle = {
+  padding: "12px 16px",
+  borderTop: "1px solid rgba(0,0,0,0.08)",
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+};
+
 export default function BranchFloorPlanPage() {
   const nav = useNavigate();
   const { restaurantId, branchId } = useParams();
 
   const [loading, setLoading] = useState(true);
 
-  // ✅ IMPORTANT: aquí guardamos SOLO el objeto settings real (no el wrapper {data,ui,notices})
+  // guardamos SOLO el objeto settings real
   const [settings, setSettings] = useState(null);
   const [zones, setZones] = useState([]);
   const [tables, setTables] = useState([]);
@@ -158,6 +210,14 @@ export default function BranchFloorPlanPage() {
   const [tableModalOpen, setTableModalOpen] = useState(false);
   const [tableModalMode, setTableModalMode] = useState("create");
   const [tableModalInitial, setTableModalInitial] = useState(null);
+
+  // assign waiter modal (inline)
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignZone, setAssignZone] = useState(null);
+  const [assignWaitersLoading, setAssignWaitersLoading] = useState(false);
+  const [assignWaiters, setAssignWaiters] = useState([]);
+  const [assignSelectedWaiterId, setAssignSelectedWaiterId] = useState("");
+  const [assignSaving, setAssignSaving] = useState(false);
 
   const [toast, setToast] = useState({ open: false, message: "", type: "info" });
   const showToast = (message, type = "info") => {
@@ -230,7 +290,6 @@ export default function BranchFloorPlanPage() {
     setSettingsModalOpen(true);
   };
 
-  // ✅ ahora soporta que el modal mande {data,...} o {...}
   const onSettingsSaved = (saved) => {
     const s = unwrapSettings(saved);
     setSettings(s);
@@ -242,10 +301,14 @@ export default function BranchFloorPlanPage() {
 
     const orderingLabel = ORDERING_MODE_ES[settings.ordering_mode] || "Sin definir";
     const tableServiceLabel = TABLE_SERVICE_MODE_ES[settings.table_service_mode] || "Sin definir";
+    const strategyLabel = settings.assignment_strategy
+      ? (ASSIGNMENT_STRATEGY_ES[settings.assignment_strategy] || settings.assignment_strategy)
+      : null;
 
     return {
       orderingLabel,
       tableServiceLabel,
+      strategyLabel,
       qrLabel: boolES(toBool(settings.is_qr_enabled)),
     };
   }, [settings]);
@@ -264,6 +327,7 @@ export default function BranchFloorPlanPage() {
 
   const onZoneSaved = async () => {
     await loadZones();
+    await loadTables();
   };
 
   const onDeleteZone = async (zone) => {
@@ -338,7 +402,6 @@ export default function BranchFloorPlanPage() {
     return zones.filter((z) => String(z.id) === String(zoneFilter));
   }, [zones, zoneFilter]);
 
-  // ✅ Gate real (ya no se equivoca por wrapper/strings)
   const canManageQr = useMemo(() => {
     if (!settings) return false;
     return toBool(settings.is_qr_enabled);
@@ -361,6 +424,68 @@ export default function BranchFloorPlanPage() {
     }
 
     nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/qr-codes`);
+  };
+
+  // ---- NUEVO: asignación de mesero por zona (solo si assigned_waiter + zone)
+  const isZoneAssignmentEnabled = useMemo(() => {
+    return (
+      String(settings?.table_service_mode || "") === "assigned_waiter" &&
+      String(settings?.assignment_strategy || "") === "zone"
+    );
+  }, [settings]);
+
+  const openAssignWaiter = async (zone) => {
+    if (!isZoneAssignmentEnabled) return;
+
+    setAssignZone(zone);
+    setAssignSelectedWaiterId("");
+    setAssignModalOpen(true);
+
+    setAssignWaitersLoading(true);
+    try {
+      const list = await getAvailableWaiters(restaurantId, branchId, "");
+      setAssignWaiters(Array.isArray(list) ? list : []);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar los meseros";
+      showToast(msg, "error");
+    } finally {
+      setAssignWaitersLoading(false);
+    }
+  };
+
+  const closeAssignModal = () => {
+    setAssignModalOpen(false);
+    setAssignZone(null);
+    setAssignSelectedWaiterId("");
+    setAssignSaving(false);
+    setAssignWaiters([]);
+  };
+
+  const saveAssignWaiter = async () => {
+    if (!assignZone) return;
+    const waiterId = Number(assignSelectedWaiterId);
+    if (!waiterId) {
+      showToast("Debes seleccionar un mesero.", "warning");
+      return;
+    }
+
+    setAssignSaving(true);
+    try {
+      await assignZoneWaiter(restaurantId, branchId, assignZone.id, waiterId);
+      showToast("Mesero asignado a la zona.", "success");
+      closeAssignModal();
+
+      // backend auto-asigna mesas => refrescamos todo
+      await loadZones();
+      await loadTables();
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo asignar el mesero a la zona";
+      showToast(msg, "error");
+      setAssignSaving(false);
+    }
   };
 
   if (loading) {
@@ -412,6 +537,76 @@ export default function BranchFloorPlanPage() {
         showToast={showToast}
       />
 
+      {/* Modal inline: Asignar mesero */}
+      {assignModalOpen && (
+        <div style={overlayStyle} onMouseDown={closeAssignModal} role="dialog" aria-modal="true">
+          <div style={modalStyle} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={headerStyle}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>
+                  Asignar mesero a zona
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  Zona: <strong>{assignZone?.name || "-"}</strong>
+                </div>
+              </div>
+
+              <button onClick={closeAssignModal} style={{ cursor: "pointer" }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={bodyStyle}>
+              <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
+                Mesero
+              </div>
+
+              <select
+                value={assignSelectedWaiterId}
+                onChange={(e) => setAssignSelectedWaiterId(e.target.value)}
+                disabled={assignWaitersLoading || assignSaving}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.18)",
+                }}
+              >
+                <option value="">Selecciona un mesero...</option>
+                {assignWaiters.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {waiterLabel(w)}
+                  </option>
+                ))}
+              </select>
+
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>
+                Esto también asigna automáticamente el mesero a todas las mesas de esta zona.
+              </div>
+            </div>
+
+            <div style={footerStyle}>
+              <button type="button" onClick={closeAssignModal} style={{ cursor: "pointer" }}>
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={saveAssignWaiter}
+                disabled={assignSaving}
+                style={{
+                  cursor: assignSaving ? "not-allowed" : "pointer",
+                  padding: "10px 14px",
+                  fontWeight: 900,
+                }}
+              >
+                {assignSaving ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
@@ -423,7 +618,14 @@ export default function BranchFloorPlanPage() {
             {settingsSummary ? (
               <>
                 Modo de toma de pedidos: <strong>{settingsSummary.orderingLabel}</strong>{" "}
-                · Modo de asignación de mesas: <strong>{settingsSummary.tableServiceLabel}</strong>{" "}
+                · Modo de asignación de mesas: <strong>{settingsSummary.tableServiceLabel}</strong>
+                {settingsSummary.strategyLabel ? (
+                  <>
+                    {" "}
+                    · Estrategia: <strong>{settingsSummary.strategyLabel}</strong>
+                  </>
+                ) : null}
+                {" "}
                 · QR: <strong>{settingsSummary.qrLabel}</strong>
                 {typeof settings?.min_seats !== "undefined" && typeof settings?.max_seats !== "undefined" && (
                   <>
@@ -594,6 +796,9 @@ export default function BranchFloorPlanPage() {
             const zoneTables = tablesByZone[String(zone.id)] || [];
             const count = zoneTables.length;
 
+            const missingZoneWaiter =
+              isZoneAssignmentEnabled && (zone?.assigned_waiter_id === null || typeof zone?.assigned_waiter_id === "undefined");
+
             return (
               <div
                 key={zone.id}
@@ -610,9 +815,45 @@ export default function BranchFloorPlanPage() {
                       {zone.name}{" "}
                       <span style={{ fontWeight: 700, opacity: 0.7 }}>· {count} mesas</span>
                     </div>
+
+                    {/* Aviso falta asignar mesero */}
+                    {missingZoneWaiter ? (
+                      <div
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #ffe08a",
+                          background: "#fff3cd",
+                          color: "#8a6d3b",
+                          fontWeight: 900,
+                          fontSize: 12,
+                        }}
+                        title="Esta zona no tiene mesero asignado"
+                      >
+                        Falta asignar mesero
+                      </div>
+                    ) : null}
                   </div>
 
                   <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+                    {/* NUEVO: Asignar mesero (solo cuando aplica) */}
+                    {isZoneAssignmentEnabled && (
+                      <button
+                        onClick={() => openAssignWaiter(zone)}
+                        style={{
+                          cursor: "pointer",
+                          borderRadius: 10,
+                          border: "1px solid rgba(0,0,0,0.12)",
+                          background: "#eef2ff",
+                          padding: "6px 10px",
+                          fontWeight: 900,
+                        }}
+                        title="Asignar mesero a esta zona"
+                      >
+                        👨‍🍳 Asignar mesero
+                      </button>
+                    )}
+
                     <button
                       onClick={() => openEditZone(zone)}
                       style={{

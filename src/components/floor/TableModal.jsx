@@ -88,8 +88,8 @@ export default function TableModal({
   mode = "create", // create | edit
   restaurantId,
   branchId,
-  zones = [], // [{id, name}]
-  settings = null, // {min_seats, max_seats, table_service_mode}
+  zones = [], // [{id, name, assigned_waiter_id?}]
+  settings = null, // {min_seats, max_seats, table_service_mode, assignment_strategy}
   initialData = null, // edit: {id, zone_id, name, seats, status, assigned_waiter_id, zone?}
   onClose,
   onSaved,
@@ -97,12 +97,14 @@ export default function TableModal({
 }) {
   const [saving, setSaving] = useState(false);
 
-  // ---- Meseros disponibles (solo selector)
+  // ---- Meseros disponibles
   const [waitersLoading, setWaitersLoading] = useState(false);
   const [waiters, setWaiters] = useState([]);
 
-  const isAssignedWaiterMode =
-    String(settings?.table_service_mode || "") === "assigned_waiter";
+  const isAssignedWaiterMode = String(settings?.table_service_mode || "") === "assigned_waiter";
+  const assignmentStrategy = String(settings?.assignment_strategy || "table_only"); // table_only | zone
+  const isZoneStrategy = isAssignedWaiterMode && assignmentStrategy === "zone";
+  const isTableOnlyStrategy = isAssignedWaiterMode && assignmentStrategy === "table_only";
 
   const minSeats = Number(settings?.min_seats ?? 1);
   const maxSeats = Number(settings?.max_seats ?? 6);
@@ -115,17 +117,14 @@ export default function TableModal({
 
   const defaultValues = useMemo(() => {
     const firstZoneId = zones?.[0]?.id ?? "";
-    const initialZoneId =
-      initialData?.zone_id ?? initialData?.zone?.id ?? firstZoneId;
+    const initialZoneId = initialData?.zone_id ?? initialData?.zone?.id ?? firstZoneId;
 
     const safeMin = seatOptions[0] ?? 1;
     const safeMax = seatOptions[seatOptions.length - 1] ?? 6;
 
     const initialSeats = Number(initialData?.seats);
     const seatsInRange =
-      Number.isFinite(initialSeats) &&
-      initialSeats >= safeMin &&
-      initialSeats <= safeMax
+      Number.isFinite(initialSeats) && initialSeats >= safeMin && initialSeats <= safeMax
         ? initialSeats
         : safeMin;
 
@@ -134,7 +133,7 @@ export default function TableModal({
         ? initialData.assigned_waiter_id
         : initialData?.assigned_waiter_id
         ? Number(initialData.assigned_waiter_id)
-        : null;
+        : "";
 
     return {
       zone_id: initialZoneId,
@@ -155,6 +154,24 @@ export default function TableModal({
     formState: { errors },
   } = useForm({ defaultValues });
 
+  const selectedZoneId = watch("zone_id");
+
+  const selectedZone = useMemo(() => {
+    const zid = String(selectedZoneId ?? "");
+    return (zones || []).find((z) => String(z.id) === zid) || null;
+  }, [zones, selectedZoneId]);
+
+  const zoneWaiterId = useMemo(() => {
+    const id = selectedZone?.assigned_waiter_id ?? initialData?.zone?.assigned_waiter_id ?? null;
+    return id ? Number(id) : null;
+  }, [selectedZone, initialData]);
+
+  const zoneWaiterLabel = useMemo(() => {
+    if (!zoneWaiterId) return "Sin mesero asignado en esta zona";
+    const found = (waiters || []).find((w) => Number(w.id) === Number(zoneWaiterId));
+    return found ? waiterLabel(found) : `Mesero #${zoneWaiterId}`;
+  }, [zoneWaiterId, waiters]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -163,11 +180,16 @@ export default function TableModal({
     // Si no aplica el modo, limpia el campo para evitar mandar basura
     if (!isAssignedWaiterMode) {
       setValue("assigned_waiter_id", "");
-      setWaiters([]); // opcional: limpiar lista para que no se vea rara si abre/cierra
+      setWaiters([]);
     }
-  }, [open, reset, defaultValues, isAssignedWaiterMode, setValue]);
 
-  // Cargar meseros al abrir (solo si aplica el modo)
+    // Si es estrategia por zona, aseguramos que el select no “se quede” con algo raro
+    if (isZoneStrategy) {
+      setValue("assigned_waiter_id", "");
+    }
+  }, [open, reset, defaultValues, isAssignedWaiterMode, isZoneStrategy, setValue]);
+
+  // Cargar meseros al abrir (si aplica el modo, aunque sea por zona, para mostrar label bonito)
   useEffect(() => {
     if (!open) return;
     if (!isAssignedWaiterMode) return;
@@ -177,13 +199,11 @@ export default function TableModal({
     (async () => {
       setWaitersLoading(true);
       try {
-        // Sin búsqueda: trae todo
         const list = await getAvailableWaiters(restaurantId, branchId, "");
         if (!alive) return;
         setWaiters(Array.isArray(list) ? list : []);
       } catch (e) {
-        const msg =
-          e?.response?.data?.message || e?.message || "No se pudieron cargar los meseros";
+        const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar los meseros";
         if (showToast) showToast(msg, "error");
       } finally {
         if (alive) setWaitersLoading(false);
@@ -202,8 +222,6 @@ export default function TableModal({
   const onSubmit = async (form) => {
     setSaving(true);
     try {
-      const assignedWaiterIdRaw = form.assigned_waiter_id;
-
       const payload = {
         zone_id: Number(form.zone_id),
         name: (form.name || "").trim(),
@@ -211,16 +229,18 @@ export default function TableModal({
         status: form.status || "available",
       };
 
-      // Solo enviar assigned_waiter_id si el modo lo permite
-      if (isAssignedWaiterMode) {
+      // Reglas de payload:
+      // - Si NO está en modo assigned_waiter => mandamos null (backend limpia si aplica)
+      // - Si assigned_waiter + strategy table_only => mandamos assigned_waiter_id (puede ser null)
+      // - Si assigned_waiter + strategy zone => NO mandar la key assigned_waiter_id (update truena si viene)
+      if (!isAssignedWaiterMode) {
+        payload.assigned_waiter_id = null;
+      } else if (isTableOnlyStrategy) {
+        const raw = form.assigned_waiter_id;
         payload.assigned_waiter_id =
-          assignedWaiterIdRaw === "" ||
-          assignedWaiterIdRaw === null ||
-          typeof assignedWaiterIdRaw === "undefined"
-            ? null
-            : Number(assignedWaiterIdRaw);
-      } else {
-        payload.assigned_waiter_id = null; // limpiar en backend si aplica
+          raw === "" || raw === null || typeof raw === "undefined" ? null : Number(raw);
+      } else if (isZoneStrategy) {
+        // NO enviar assigned_waiter_id
       }
 
       const saved =
@@ -354,7 +374,7 @@ export default function TableModal({
                 <FieldError message={errors?.status?.message} />
               </div>
 
-              {/* Mesero asignado (solo si aplica el modo) */}
+              {/* Mesero asignado */}
               {isAssignedWaiterMode && (
                 <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
@@ -363,8 +383,15 @@ export default function TableModal({
                         Mesero asignado
                       </div>
                       <div style={{ fontSize: 12, opacity: 0.75 }}>
-                        Solo aparecen empleados con rol operativo{" "}
-                        <strong>waiter/mesero</strong> activos.
+                        {isZoneStrategy ? (
+                          <>
+                            Estrategia: <strong>Zona</strong> (solo lectura).
+                          </>
+                        ) : (
+                          <>
+                            Estrategia: <strong>Mesa</strong> (editable).
+                          </>
+                        )}
                       </div>
                     </div>
                     <div style={{ fontSize: 12, opacity: 0.75 }}>
@@ -373,30 +400,57 @@ export default function TableModal({
                   </div>
 
                   <div style={{ marginTop: 10 }}>
-                    <select
-                      {...register("assigned_waiter_id")}
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        borderRadius: 10,
-                        border: "1px solid rgba(0,0,0,0.18)",
-                      }}
-                      disabled={waitersLoading}
-                    >
-                      <option value="">Sin mesero asignado</option>
-                      {waiters.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {waiterLabel(w)}
-                        </option>
-                      ))}
-                    </select>
+                    {/* Strategy ZONE: mostrar read-only */}
+                    {isZoneStrategy ? (
+                      <div>
+                        <div
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: 10,
+                            border: "1px solid rgba(0,0,0,0.18)",
+                            background: "#f8fafc",
+                            fontWeight: 900,
+                          }}
+                          title="Mesero heredado por zona"
+                        >
+                          {zoneWaiterLabel}
+                        </div>
 
-                    <FieldError message={errors?.assigned_waiter_id?.message} />
+                        <div style={subtleNoteStyle}>
+                          En modo <strong>Mesero por zona</strong> no puedes asignar mesero desde la mesa.
+                          Debes hacerlo en la zona con <strong>Asignar mesero</strong>.
+                        </div>
+                      </div>
+                    ) : (
+                      /* Strategy TABLE: selector editable */
+                      <div>
+                        <select
+                          {...register("assigned_waiter_id")}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: 10,
+                            border: "1px solid rgba(0,0,0,0.18)",
+                          }}
+                          disabled={waitersLoading || !isTableOnlyStrategy}
+                        >
+                          <option value="">Sin mesero asignado</option>
+                          {waiters.map((w) => (
+                            <option key={w.id} value={w.id}>
+                              {waiterLabel(w)}
+                            </option>
+                          ))}
+                        </select>
 
-                    <div style={subtleNoteStyle}>
-                      Si el modo es <strong>Mesero asignado</strong>, puedes asignar uno aquí.
-                      Si el modo cambia a <strong>Libre</strong>, el sistema lo ignorará.
-                    </div>
+                        <FieldError message={errors?.assigned_waiter_id?.message} />
+
+                        <div style={subtleNoteStyle}>
+                          Si el modo es <strong>Mesero asignado</strong>, puedes asignar uno aquí.
+                          Si el modo cambia a <strong>Libre</strong>, el sistema lo ignorará.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

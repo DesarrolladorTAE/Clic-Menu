@@ -378,6 +378,12 @@ export default function PublicMenuEntryPage() {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [remainingSec, setRemainingSec] = useState(0);
 
+  // ✅ NUEVO: QR “desactivado temporalmente” por atención atendida (solo NO customer_assisted)
+  const [sessionUnavailable, setSessionUnavailable] = useState(null); // { message, code }
+
+  // ✅ NUEVO: desactivar botón “Llamar mesero” en customer_assisted si ya está attended
+  const [callLocked, setCallLocked] = useState(false);
+
   const pollRef = useRef(null);
   const lastPayloadHashRef = useRef("");
   const sessionPollRef = useRef(null);
@@ -422,6 +428,15 @@ export default function PublicMenuEntryPage() {
         setData(normalized);
       } else if (!data) {
         setData(normalized);
+      }
+
+      // ✅ NUEVO: si estabas con callLocked, intenta “desbloquear” si el backend lo refleja en ui
+      // (hoy no lo mandas, pero esto queda listo para cuando lo agregues)
+      if (callLocked) {
+        const uiFromPayload = normalized?.ui || normalized?.menus_by_channel?.[String(normalized?.default_channel_id || "")]?.ui;
+        if (uiFromPayload && uiFromPayload.call_waiter_enabled === true) {
+          setCallLocked(false);
+        }
       }
     } catch (e) {
       if (!silent) {
@@ -636,6 +651,7 @@ export default function PublicMenuEntryPage() {
 
     setSessionLoading(true);
     setSessionBusy(null);
+    setSessionUnavailable(null);
     setCallToast("");
 
     try {
@@ -653,9 +669,17 @@ export default function PublicMenuEntryPage() {
       const status = e?.response?.status;
       const code = e?.response?.data?.code;
 
+      // ✅ Caso 1: “solo un usuario a la vez”
       if (status === 409 && code === "TABLE_BUSY") {
         const s = e?.response?.data?.data || {};
         setSessionBusy({ session_id: s.session_id, status: s.status });
+        setSession(null);
+        setRemainingSec(0);
+      }
+      // ✅ Caso 2: “QR desactivado porque ya atendieron” (waiter_only / no customer_assisted)
+      else if (status === 409 && code === "SESSION_UNAVAILABLE") {
+        const msg = e?.response?.data?.message || "Sesión no disponible, intente más tarde.";
+        setSessionUnavailable({ code, message: msg });
         setSession(null);
         setRemainingSec(0);
       } else {
@@ -788,6 +812,13 @@ export default function PublicMenuEntryPage() {
       return;
     }
 
+    // ✅ Si está “bloqueado” por attended en customer_assisted, no spamees
+    if (callLocked) {
+      setCallToast("⚠️ El mesero ya está atendiendo. Intente más tarde.");
+      setTimeout(() => setCallToast(""), 4500);
+      return;
+    }
+
     setCalling(true);
     setCallToast("");
     try {
@@ -801,8 +832,27 @@ export default function PublicMenuEntryPage() {
         setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
       }
 
+      // si logró llamar, lo desbloqueamos por si estaba bloqueado antes
+      setCallLocked(false);
+
       setTimeout(() => setCallToast(""), 4500);
     } catch (e) {
+      const status = e?.response?.status;
+      const code = e?.response?.data?.code;
+
+      // ✅ NUEVO: customer_assisted + attended => desactivar botón
+      if (status === 409 && code === "CALL_DISABLED_ATTENDED") {
+        const msg = e?.response?.data?.message || "El mesero ya está atendiendo. Intente más tarde.";
+        setCallLocked(true);
+        setCallToast(`⚠️ ${msg}`);
+        setTimeout(() => setCallToast(""), 4500);
+
+        // Intento suave de “desbloqueo” con el auto-refresh
+        // (si luego mandas ui.call_waiter_enabled false/true desde backend, se desbloquea solo)
+        load({ silent: true }).catch(() => {});
+        return;
+      }
+
       const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo llamar al mesero.";
       setCallToast(`⚠️ ${msg}`);
       setTimeout(() => setCallToast(""), 4500);
@@ -903,6 +953,12 @@ export default function PublicMenuEntryPage() {
 
   const uiFlags = ui || {};
 
+  // ✅ Botón “Llamar mesero” debe bloquearse si:
+  // - QR está en “sessionUnavailable” (mesero ya atendió en waiter_only)
+  // - o callLocked (customer_assisted + attended)
+  const callButtonDisabled =
+    calling || !sessionActive || sessionLoading || !!sessionBusy || !!sessionUnavailable || callLocked;
+
   return (
     <div
       style={{
@@ -939,9 +995,37 @@ export default function PublicMenuEntryPage() {
         }
       />
 
+      {/* ✅ NUEVO OVERLAY: Sesión no disponible (mesero ya atendió) */}
+      <FullOverlay
+        open={!!sessionUnavailable}
+        tone="warn"
+        title="Sesión no disponible"
+        message={
+          (sessionUnavailable?.message || "Sesión no disponible, intente más tarde.") +
+          "\n\n" +
+          "El mesero ya atendió esta mesa.\n" +
+          "Cuando finalice la atención, este QR volverá a estar disponible."
+        }
+        actions={
+          <>
+            <PillButton
+              tone="soft"
+              onClick={() => startScanSession()}
+              disabled={sessionLoading}
+              title="Reintentar"
+            >
+              {sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
+            </PillButton>
+            <PillButton tone="default" onClick={() => setSessionUnavailable(null)} title="Cerrar aviso">
+              Entendido
+            </PillButton>
+          </>
+        }
+      />
+
       {/* OVERLAY: Expirado */}
       <FullOverlay
-        open={hasTable && !sessionBusy && sessionExpired}
+        open={hasTable && !sessionBusy && !sessionUnavailable && sessionExpired}
         tone="err"
         title="Tiempo agotado"
         message={
@@ -1028,6 +1112,13 @@ export default function PublicMenuEntryPage() {
                   ⏳ {fmtMMSS(remainingSec)}
                 </Badge>
               ) : null}
+
+              {/* ✅ Indicador callLocked (solo UI, no cambia layout) */}
+              {callLocked ? (
+                <Badge tone="warn" title="El mesero ya atendió. Botón desactivado hasta finalizar.">
+                  🔕 Llamada desactivada
+                </Badge>
+              ) : null}
             </div>
 
             {(header?.orderingMode || header?.tableServiceMode) && (
@@ -1071,14 +1162,18 @@ export default function PublicMenuEntryPage() {
               <PillButton
                 tone="soft"
                 onClick={onCallWaiter}
-                disabled={calling || !sessionActive || sessionLoading || !!sessionBusy}
+                disabled={callButtonDisabled}
                 title={
-                  !sessionActive
+                  sessionUnavailable
+                    ? "Sesión no disponible (ya atendida)."
+                    : callLocked
+                    ? "El mesero ya está atendiendo. Intente más tarde."
+                    : !sessionActive
                     ? "Sesión no activa. Escanea de nuevo."
                     : "Enviar una solicitud al mesero"
                 }
               >
-                {calling ? "⏳ Llamando..." : "🔔 Llamar al mesero"}
+                {calling ? "⏳ Llamando..." : callLocked ? "🔕 Llamada desactivada" : "🔔 Llamar al mesero"}
               </PillButton>
             ) : null}
 

@@ -81,7 +81,9 @@ function Toast({ open, message, type = "info", onClose }) {
           : "Aviso"}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.35 }}>{message}</div>
-      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>(clic para cerrar)</div>
+      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+        (clic para cerrar)
+      </div>
     </div>
   );
 }
@@ -128,7 +130,7 @@ function stateVisual(uiState) {
   const map = {
     free: { bg: "#e6ffed", bd: "#8ae99c", fg: "#0a7a2f", label: "Libre" },
     call: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b", label: "Llamando" },
-    mine: { bg: "#e8f1ff", bd: "#95b9ff", fg: "#0b4db3", label: "Mi mesa" },
+    mine: { bg: "#e8f1ff", bd: "#95b9ff", fg: "#0b4db3", label: "Atendiendo" },
     locked: { bg: "#f3f4f6", bd: "#d1d5db", fg: "#374151", label: "Ocupada" },
     blocked: { bg: "#efeff3", bd: "#c7c7d0", fg: "#4b5563", label: "Bloqueada" },
   };
@@ -136,7 +138,7 @@ function stateVisual(uiState) {
   return map[uiState] || map.free;
 }
 
-export default function StaffTablesGrid() {
+export default function WaiterTablesGrid() {
   const nav = useNavigate();
   const { clearStaff } = useStaffAuth() || {};
 
@@ -174,7 +176,10 @@ export default function StaffTablesGrid() {
         return;
       }
 
-      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar las mesas.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudieron cargar las mesas.";
       showToast(msg, "error");
     } finally {
       setBusy(false);
@@ -230,11 +235,16 @@ export default function StaffTablesGrid() {
     } catch (e) {
       const st = e?.response?.status;
       const code = e?.response?.data?.code;
-      const msg = e?.response?.data?.message || e?.message || "No se pudo atender la mesa.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo atender la mesa.";
 
-      // ✅ el caso que pediste: “otro mesero me ganó”
       if (st === 409 && (code === "TAKEN" || String(msg).toLowerCase().includes("ya tomó"))) {
-        showToast(`Te ganaron la mesa ${table?.name || id}. Otro mesero la atendió primero.`, "warning");
+        showToast(
+          `Te ganaron la mesa ${table?.name || id}. Otro mesero la atendió primero.`,
+          "warning"
+        );
         await load({ silent: true });
         return;
       }
@@ -254,10 +264,22 @@ export default function StaffTablesGrid() {
     } catch (e) {
       const st = e?.response?.status;
       const code = e?.response?.data?.code;
-      const msg = e?.response?.data?.message || e?.message || "No se pudo finalizar la atención.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo finalizar la atención.";
 
       if (st === 403 && code === "NOT_YOURS") {
-        showToast(`No puedes finalizar: esa mesa ya no es tuya (otro mesero la tiene).`, "warning");
+        showToast(
+          "No puedes finalizar: esa mesa ya no es tuya (otro mesero la tiene).",
+          "warning"
+        );
+        await load({ silent: true });
+        return;
+      }
+
+      if (st === 409 && code === "HAS_ACTIVE_ORDER") {
+        showToast("No puedes finalizar: ya existe una comanda activa en esta mesa.", "warning");
         await load({ silent: true });
         return;
       }
@@ -272,7 +294,10 @@ export default function StaffTablesGrid() {
       showToast("No hay comanda activa para ver.", "warning");
       return;
     }
-    showToast(`Comanda #${orderId} (ajusta la ruta de “Ver Pedido” a tu pantalla real).`, "info");
+    showToast(
+      `Comanda #${orderId} (ajusta la ruta real de “Ver Pedido” a tu pantalla).`,
+      "info"
+    );
   };
 
   return (
@@ -290,18 +315,20 @@ export default function StaffTablesGrid() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 18, fontWeight: 950 }}>Mesas (Staff)</div>
+            <div style={{ fontSize: 18, fontWeight: 950 }}>Mesas (Mesero)</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Sucursal: <strong>{meta?.branch_id ?? "—"}</strong> · Staff: <strong>{meta?.staff_id ?? "—"}</strong> ·
-              Modo: <strong>{meta?.table_service_mode ?? "—"}</strong>
+              Sucursal: <strong>{meta?.branch_id ?? "—"}</strong> · Staff:{" "}
+              <strong>{meta?.staff_id ?? "—"}</strong> · Modo:{" "}
+              <strong>{meta?.table_service_mode ?? "—"}</strong>
               {refreshing ? <span style={{ marginLeft: 10, opacity: 0.75 }}>🔄 actualizando…</span> : null}
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
               <span style={{ ...pillMini("#e6ffed", "#8ae99c") }}>Libre: {summary.free}</span>
               <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>Llamando: {summary.call}</span>
-              <span style={{ ...pillMini("#e8f1ff", "#95b9ff") }}>Mi mesa: {summary.mine}</span>
-              <span style={{ ...pillMini("#f3f4f6", "#d1d5db") }}>Otro: {summary.locked}</span>
+              <span style={{ ...pillMini("#e8f1ff", "#95b9ff") }}>Atendiendo: {summary.mine}</span>
+              <span style={{ ...pillMini("#f3f4f6", "#d1d5db") }}>Ocupada: {summary.locked}</span>
+              <span style={{ ...pillMini("#efeff3", "#c7c7d0") }}>Bloqueada: {summary.blocked}</span>
             </div>
           </div>
 
@@ -396,13 +423,17 @@ export default function StaffTablesGrid() {
                   </div>
 
                   {t?.ui_reason ? (
-                    <div style={{ fontSize: 12, opacity: 0.9, color: v.fg, fontWeight: 800 }}>{t.ui_reason}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9, color: v.fg, fontWeight: 800 }}>
+                      {t.ui_reason}
+                    </div>
                   ) : null}
 
                   {hasCall ? (
                     <div style={{ fontSize: 12, opacity: 0.85 }}>
                       🔔 Llamada #{t.call.id} ·{" "}
-                      {t.call.called_at ? <span style={{ fontWeight: 900 }}>{t.call.called_at}</span> : null}
+                      {t.call.called_at ? (
+                        <span style={{ fontWeight: 900 }}>{t.call.called_at}</span>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -457,8 +488,9 @@ export default function StaffTablesGrid() {
               <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
                 <LegendRow colorBg="#e6ffed" colorBd="#8ae99c" label="Verde: Libre" />
                 <LegendRow colorBg="#fff3cd" colorBd="#ffe08a" label='Amarillo: Llamada (botón "Atender")' />
-                <LegendRow colorBg="#e8f1ff" colorBd="#95b9ff" label='Azul: Mi mesa (Ver Pedido / Finalizar)' />
-                <LegendRow colorBg="#f3f4f6" colorBd="#d1d5db" label="Gris: Ocupada por otro (bloqueada)" />
+                <LegendRow colorBg="#e8f1ff" colorBd="#95b9ff" label='Azul: Atendiendo (Ver Pedido / Finalizar)' />
+                <LegendRow colorBg="#f3f4f6" colorBd="#d1d5db" label="Gris: Ocupada por otro" />
+                <LegendRow colorBg="#efeff3" colorBd="#c7c7d0" label="Gris suave: Bloqueada" />
               </div>
             </div>
           </div>

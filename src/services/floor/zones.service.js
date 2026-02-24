@@ -26,6 +26,15 @@ export async function updateZone(restaurantId, branchId, zoneId, payload) {
   return data?.data;
 }
 
+// PUT /api/restaurants/:restaurantId/branches/:branchId/zones/:zoneId/assign-waiter
+export async function assignZoneWaiter(restaurantId, branchId, zoneId, assigned_waiter_id) {
+  const { data } = await api.put(
+    `/restaurants/${restaurantId}/branches/${branchId}/zones/${zoneId}/assign-waiter`,
+    { assigned_waiter_id }
+  );
+  return data?.data;
+}
+
 // DELETE /api/restaurants/:restaurantId/branches/:branchId/zones/:zoneId
 export async function deleteZone(restaurantId, branchId, zoneId) {
   const { data } = await api.delete(

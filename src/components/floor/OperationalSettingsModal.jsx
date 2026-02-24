@@ -124,7 +124,7 @@ export default function OperationalSettingsModal({
     return Array.isArray(initialData?.notices) ? initialData.notices : [];
   }, [initialData]);
 
-  // Si NO hay registro,  abre el modal en create.
+  // Si NO hay registro, abre el modal en create.
   const showMissingConfigNotice = mode === "create" && !initial;
 
   const defaultValues = useMemo(
@@ -134,7 +134,10 @@ export default function OperationalSettingsModal({
       table_service_mode: initial?.table_service_mode ?? "free_for_all",
       is_qr_enabled: !!initial?.is_qr_enabled,
 
-      // campos asientos (si tu backend los valida/guarda)
+      // NUEVO: estrategia (solo aplica si assigned_waiter)
+      assignment_strategy: initial?.assignment_strategy ?? "table_only",
+
+      // campos asientos
       min_seats: Number.isInteger(initial?.min_seats) ? initial.min_seats : 1,
       max_seats: Number.isInteger(initial?.max_seats) ? initial.max_seats : 6,
     }),
@@ -147,14 +150,25 @@ export default function OperationalSettingsModal({
     setError,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm({ defaultValues });
 
   const orderingMode = watch("ordering_mode");
   const tableServiceMode = watch("table_service_mode");
+  const assignmentStrategy = watch("assignment_strategy");
   const isQrEnabled = watch("is_qr_enabled");
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
+
+  // Si cambia a modo libre => limpiamos assignment_strategy localmente para no “enseñar” opciones que no aplican
+  useEffect(() => {
+    if (!open) return;
+    if (String(tableServiceMode) !== "assigned_waiter") {
+      // dejamos un valor por UI, pero NO lo enviaremos (mandaremos null)
+      setValue("assignment_strategy", "table_only");
+    }
+  }, [open, tableServiceMode, setValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -180,15 +194,30 @@ export default function OperationalSettingsModal({
       ? "Cualquier mesero puede tomar una mesa disponible."
       : "";
 
+  const strategyHelper =
+    assignmentStrategy === "zone"
+      ? "Se asigna mesero por zona. Las mesas heredan el mesero de su zona."
+      : assignmentStrategy === "table_only"
+      ? "Se asigna mesero por mesa. Cada mesa puede tener un mesero distinto."
+      : "";
+
   const onSubmit = async (form) => {
     setSaving(true);
     try {
+      const effectiveTableServiceMode = form.table_service_mode || null;
+
       const payload = {
         ordering_mode: form.ordering_mode || null,
-        table_service_mode: form.table_service_mode || null,
+        table_service_mode: effectiveTableServiceMode,
         is_qr_enabled: !!form.is_qr_enabled,
 
-        // asientos (si backend lo soporta)
+        // NUEVO: SOLO SI assigned_waiter, si no => null
+        assignment_strategy:
+          String(effectiveTableServiceMode) === "assigned_waiter"
+            ? (form.assignment_strategy || "table_only")
+            : null,
+
+        // asientos
         min_seats: Number(form.min_seats),
         max_seats: Number(form.max_seats),
       };
@@ -219,6 +248,8 @@ export default function OperationalSettingsModal({
       setSaving(false);
     }
   };
+
+  const showStrategy = String(tableServiceMode) === "assigned_waiter";
 
   return (
     <div style={overlayStyle} onMouseDown={onClose} role="dialog" aria-modal="true">
@@ -291,6 +322,36 @@ export default function OperationalSettingsModal({
                 <HelperNote>{tableServiceHelper}</HelperNote>
                 <FieldError message={errors?.table_service_mode?.message} />
               </div>
+
+              {/* NUEVO: assignment_strategy (solo si assigned_waiter) */}
+              {showStrategy && (
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
+                    assignment_strategy
+                  </div>
+
+                  <select
+                    {...register("assignment_strategy")}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    <option value="table_only">Mesa</option>
+                    <option value="zone">Zona</option>
+                  </select>
+
+                  <HelperNote>{strategyHelper}</HelperNote>
+                  <FieldError message={errors?.assignment_strategy?.message} />
+
+                  <div style={subtleNoteStyle}>
+                    Si eliges <strong>Zona</strong>, asignarás mesero desde cada zona. Si eliges{" "}
+                    <strong>Mesa</strong>, lo harás desde cada mesa.
+                  </div>
+                </div>
+              )}
 
               {/* is_qr_enabled */}
               <div
