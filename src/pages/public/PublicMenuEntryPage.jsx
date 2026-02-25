@@ -1,866 +1,204 @@
 // src/pages/public/PublicMenuEntryPage.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// Page principal: SOLO orquesta hooks + render
+
+import React, { useState } from "react";
 import { useParams } from "react-router-dom";
+
+import { callWaiterByTable } from "../../services/public/publicMenu.service";
+
 import {
-  fetchResolvedMenu,
-  callWaiterByTable,
-  scanTable,
-  getTableSession,
-  heartbeatTableSession,
-} from "../../services/public/publicMenu.service";
+  PUBLIC_QR_DISABLED_MSG,
+  PUBLIC_QR_WRONG_MODE_MSG,
+  fmtMMSS,
+  makeKey,
+  money,
+  safeNum,
+  translateOrderingMode,
+  translateStatus,
+  translateTableServiceMode,
+} from "../../hooks/public/publicMenu.utils";
 
-// Helpers UI
-function money(n) {
-  const num = Number(n || 0);
-  try {
-    return num.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-  } catch {
-    return `$${num.toFixed(2)}`;
-  }
-}
+import {
+  Badge,
+  CategoryChip,
+  Collapse,
+  FullOverlay,
+  Modal,
+  PillButton,
+  ProductThumb,
+  SearchBar,
+  SkeletonCard,
+} from "./publicMenu.ui";
 
-function translateStatus(value) {
-  const v = String(value || "").toLowerCase();
-  const map = {
-    active: "Activo",
-    inactive: "Inactivo",
-    disabled: "Deshabilitado",
-    suspended: "Suspendido",
-    deleted: "Eliminado",
-    pending: "Pendiente",
-  };
-  return map[v] || (value ? String(value) : "—");
-}
-
-function translateOrderingMode(value) {
-  const v = String(value || "").toLowerCase();
-  const map = {
-    waiter_only: "Solo mesero",
-    customer_assisted: "Cliente asistido",
-  };
-  return map[v] || (value ? String(value) : "—");
-}
-
-function translateTableServiceMode(value) {
-  const v = String(value || "").toLowerCase();
-  const map = {
-    assigned_waiter: "Mesero asignado",
-    free_for_all: "Libre",
-  };
-  return map[v] || (value ? String(value) : "—");
-}
-
-function Badge({ children, tone = "default", title }) {
-  const map = {
-    default: { bg: "#eef2ff", bd: "#cfcfff", fg: "#2d2d7a" },
-    ok: { bg: "#e6ffed", bd: "#8ae99c", fg: "#0a7a2f" },
-    warn: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b" },
-    err: { bg: "#ffe5e5", bd: "#ffb3b3", fg: "#a10000" },
-    dark: { bg: "#111827", bd: "#1f2937", fg: "#ffffff" },
-  };
-  const c = map[tone] || map.default;
-
-  return (
-    <span
-      title={title}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 10px",
-        borderRadius: 999,
-        border: `1px solid ${c.bd}`,
-        background: c.bg,
-        color: c.fg,
-        fontSize: 12,
-        fontWeight: 900,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function SkeletonCard() {
-  const row = (w) => (
-    <div style={{ height: 12, width: w, borderRadius: 8, background: "rgba(0,0,0,0.08)" }} />
-  );
-
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(0,0,0,0.10)",
-        borderRadius: 16,
-        padding: 14,
-        background: "#fff",
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      <div style={{ height: 120, borderRadius: 14, background: "rgba(0,0,0,0.06)" }} />
-      {row("70%")}
-      {row("45%")}
-      {row("55%")}
-    </div>
-  );
-}
-
-function PillButton({ onClick, children, tone = "default", title, disabled }) {
-  const map = {
-    default: { bg: "#fff", bd: "rgba(0,0,0,0.12)", fg: "#111" },
-    soft: { bg: "#eef2ff", bd: "#cfcfff", fg: "#111" },
-    dark: { bg: "#111827", bd: "#1f2937", fg: "#fff" },
-    danger: { bg: "#ffe5e5", bd: "#ffb3b3", fg: "#a10000" },
-  };
-  const c = map[tone] || map.default;
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={!!disabled}
-      title={title}
-      style={{
-        cursor: disabled ? "not-allowed" : "pointer",
-        borderRadius: 12,
-        border: `1px solid ${c.bd}`,
-        background: c.bg,
-        color: c.fg,
-        padding: "10px 12px",
-        fontWeight: 950,
-        height: 40,
-        opacity: disabled ? 0.55 : 1,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ProductThumb({ imageUrl, title }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [imageUrl]);
-
-  const wrapStyle = {
-    width: "100%",
-    height: 130,
-    borderRadius: 16,
-    border: "1px solid rgba(0,0,0,0.10)",
-    background: "#f3f4f6",
-    overflow: "hidden",
-    display: "grid",
-    placeItems: "center",
-  };
-
-  const labelStyle = {
-    fontSize: 12,
-    fontWeight: 900,
-    opacity: 0.75,
-    textAlign: "center",
-    padding: 10,
-    lineHeight: 1.1,
-  };
-
-  if (!imageUrl) {
-    return (
-      <div style={wrapStyle} aria-label="Sin imagen">
-        <div style={labelStyle}>Sin imagen</div>
-      </div>
-    );
-  }
-
-  if (failed) {
-    return (
-      <div style={wrapStyle} aria-label="Imagen no disponible">
-        <div style={labelStyle}>Imagen no disponible</div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={wrapStyle}>
-      <img
-        src={imageUrl}
-        alt={title}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-      />
-    </div>
-  );
-}
-
-function CategoryChip({ active, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        cursor: "pointer",
-        borderRadius: 999,
-        border: `1px solid ${active ? "#ff7a00" : "rgba(0,0,0,0.12)"}`,
-        background: active ? "#ff7a00" : "#fff",
-        color: active ? "#fff" : "#111",
-        padding: "10px 14px",
-        fontWeight: 950,
-        fontSize: 13,
-        boxShadow: active ? "0 8px 18px rgba(255,122,0,0.22)" : "none",
-        whiteSpace: "nowrap",
-      }}
-      title={label}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SearchBar({ value, onChange }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 10,
-        alignItems: "center",
-        border: "1px solid rgba(0,0,0,0.12)",
-        borderRadius: 14,
-        background: "#fff",
-        padding: "10px 12px",
-      }}
-    >
-      <span style={{ fontSize: 14, opacity: 0.6 }}>🔎</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Buscar plato…"
-        style={{
-          border: "none",
-          outline: "none",
-          width: "100%",
-          fontSize: 14,
-          fontWeight: 700,
-          background: "transparent",
-        }}
-      />
-      {value ? (
-        <button
-          onClick={() => onChange("")}
-          title="Limpiar"
-          style={{
-            cursor: "pointer",
-            border: "1px solid rgba(0,0,0,0.12)",
-            background: "#fff",
-            borderRadius: 10,
-            padding: "6px 10px",
-            fontWeight: 900,
-          }}
-        >
-          ✕
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function Collapse({ open, children }) {
-  return (
-    <div style={{ maxHeight: open ? 800 : 0, overflow: "hidden", transition: "max-height 220ms ease" }}>
-      <div style={{ paddingTop: open ? 10 : 0 }}>{children}</div>
-    </div>
-  );
-}
-
-// Overlay (no cambia tu layout, solo se superpone)
-function FullOverlay({ open, tone = "default", title, message, actions }) {
-  if (!open) return null;
-
-  const tones = {
-    default: { bg: "rgba(17,24,39,0.55)", card: "#fff", bd: "rgba(0,0,0,0.12)" },
-    warn: { bg: "rgba(255,122,0,0.20)", card: "#fff", bd: "#ffe08a" },
-    err: { bg: "rgba(255,0,0,0.12)", card: "#fff", bd: "rgba(255,0,0,0.25)" },
-  };
-
-  const t = tones[tone] || tones.default;
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 999,
-        background: t.bg,
-        display: "grid",
-        placeItems: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          width: "min(620px, 94vw)",
-          background: t.card,
-          borderRadius: 18,
-          border: `1px solid ${t.bd}`,
-          boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
-          padding: 14,
-        }}
-      >
-        <div style={{ fontWeight: 950, fontSize: 16 }}>{title}</div>
-        <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85, whiteSpace: "pre-line" }}>{message}</div>
-        {actions ? <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>{actions}</div> : null}
-      </div>
-    </div>
-  );
-}
-
-const PUBLIC_QR_DISABLED_MSG =
-  "Menú digital temporalmente fuera de servicio. Por favor, solicita una carta física";
-
-const PUBLIC_QR_WRONG_MODE_MSG =
-  "Este QR ya no es válido para el modo actual de toma de pedidos. Solicita que generen un QR nuevo.";
-
-function isQrDisabledPublicError(e) {
-  const status = e?.response?.status;
-  if (status !== 403) return false;
-
-  const msg = String(e?.response?.data?.message || e?.response?.data?.error || e?.message || "").toLowerCase();
-
-  return (
-    msg.includes("qr desactivado") ||
-    msg.includes("no está habilitado") ||
-    msg.includes("servicio por qr") ||
-    msg.includes("no está habilitado aquí") ||
-    msg.includes("desactivado")
-  );
-}
-
-function isQrWrongModeError(e) {
-  const status = e?.response?.status;
-  if (status !== 403) return false;
-
-  const msg = String(e?.response?.data?.message || e?.response?.data?.error || e?.message || "").toLowerCase();
-
-  return (
-    msg.includes("qr no válido") ||
-    msg.includes("modo actual") ||
-    msg.includes("toma de pedidos") ||
-    msg.includes("genera un qr nuevo")
-  );
-}
-
-function fmtMMSS(totalSeconds) {
-  const s = Math.max(0, Number(totalSeconds || 0));
-  const mm = String(Math.floor(s / 60)).padStart(2, "0");
-  const ss = String(Math.floor(s % 60)).padStart(2, "0");
-  return `${mm}:${ss}`;
-}
+import { usePublicMenuLoader } from "../../hooks/public/usePublicMenuLoader";
+import { useActiveMenuPayload } from "../../hooks/public/useActiveMenuPayload";
+import { useTableQrSession } from "../../hooks/public/useTableQrSession";
+import { useMenuProducts } from "../../hooks/public/useMenuProducts";
+import { useCartAndOrder } from "../../hooks/public/useCartAndOrder";
+import { useCompositeDrafts } from "../../hooks/public/useCompositeDrafts";
 
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
 
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [data, setData] = useState(null);
-
-  // WEB selector
-  const [webChannelId, setWebChannelId] = useState("");
-
+  // filtros UI
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(() => new Set());
 
-  const [selected, setSelected] = useState(() => new Set());
-  const [guestName, setGuestName] = useState("");
+  // carga/polling
+  const {
+    loading,
+    errorMsg,
+    data,
+    load,
+    webChannelId,
+    setWebChannelId,
+    callLocked,
+    setCallLocked,
+  } = usePublicMenuLoader({ token });
 
-  const [calling, setCalling] = useState(false);
-  const [callToast, setCallToast] = useState("");
+  // carrito + submit comanda
+  const cartOrder = useCartAndOrder({
+    token,
+    canSelect: false,
+    hasTable: false,
+    sessionActive: false,
+    orderingMode: "",
+    sessionBusy: null,
+    sessionUnavailable: null,
+  });
 
-  // ====== Sesión QR (solo un dispositivo + contador) ======
-  const [session, setSession] = useState(null); // { session_id, status, remaining_seconds, expires_at }
-  const [sessionBusy, setSessionBusy] = useState(null); // { session_id, status }
-  const [sessionLoading, setSessionLoading] = useState(false);
-  const [remainingSec, setRemainingSec] = useState(0);
+  // ✅ Hook de componentes (composite drafts) para no inflar el page
+  const composite = useCompositeDrafts({ cartOrder });
 
-  // ✅ NUEVO: QR “desactivado temporalmente” por atención atendida (solo NO customer_assisted)
-  const [sessionUnavailable, setSessionUnavailable] = useState(null); // { message, code }
+  // payload activo + derivados
+  const {
+    isWeb,
+    webChannels,
+    activeWebChannelId,
+    activeMenuPayload,
+    header,
+    ui,
+    hasTable,
+    tableId,
+    badgeUi,
+    sections,
+  } = useActiveMenuPayload({
+    data,
+    webChannelId,
+    setWebChannelId,
+    resetOnChannelChange: () => {
+      setCategoryFilter("all");
+      setQ("");
+      setExpanded(new Set());
+      composite.resetCompositeDrafts();
+      cartOrder.resetOnChannelChange();
+    },
+    setCallLocked,
+  });
 
-  // ✅ NUEVO: desactivar botón “Llamar mesero” en customer_assisted si ya está attended
-  const [callLocked, setCallLocked] = useState(false);
+  // productos + filtrado
+  const { categoryNameById, categoryOptions, filteredProducts } = useMenuProducts({
+    sections,
+    categoryFilter,
+    q,
+    expanded,
+  });
 
-  const pollRef = useRef(null);
-  const lastPayloadHashRef = useRef("");
-  const sessionPollRef = useRef(null);
-  const tickRef = useRef(null);
-  const heartbeatRef = useRef(null);
+  // sesión QR
+  const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
 
-  const safeHash = (obj) => {
-    try {
-      const s = JSON.stringify(obj || []);
-      return `${s.length}:${s.slice(0, 160)}`;
-    } catch {
-      return String(Date.now());
-    }
-  };
-
-  const load = async ({ silent = false } = {}) => {
-    if (!silent) {
-      setLoading(true);
-      setErrorMsg("");
-    }
-    try {
-      const payload = await fetchResolvedMenu(token);
-      const normalized = payload;
-
-      // Si es WEB y no hay canal seleccionado, usar default_channel_id
-      if (String(normalized?.type) === "web") {
-        const def = normalized?.default_channel_id ? String(normalized.default_channel_id) : "";
-        setWebChannelId((prev) => prev || def);
-      } else {
-        setWebChannelId("");
-      }
-
-      // Hash basado en “sections activas”
-      const sectionsForHash =
-        String(normalized?.type) === "web"
-          ? normalized?.menus_by_channel?.[String(normalized?.default_channel_id || "")]?.sections || []
-          : normalized?.sections || [];
-
-      const h = safeHash(sectionsForHash);
-      if (h !== lastPayloadHashRef.current) {
-        lastPayloadHashRef.current = h;
-        setData(normalized);
-      } else if (!data) {
-        setData(normalized);
-      }
-
-      // ✅ NUEVO: si estabas con callLocked, intenta “desbloquear” si el backend lo refleja en ui
-      // (hoy no lo mandas, pero esto queda listo para cuando lo agregues)
-      if (callLocked) {
-        const uiFromPayload = normalized?.ui || normalized?.menus_by_channel?.[String(normalized?.default_channel_id || "")]?.ui;
-        if (uiFromPayload && uiFromPayload.call_waiter_enabled === true) {
-          setCallLocked(false);
-        }
-      }
-    } catch (e) {
-      if (!silent) {
-        if (isQrWrongModeError(e)) {
-          setErrorMsg(PUBLIC_QR_WRONG_MODE_MSG);
-          setData(null);
-        } else if (isQrDisabledPublicError(e)) {
-          setErrorMsg(PUBLIC_QR_DISABLED_MSG);
-          setData(null);
-        } else {
-          const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo cargar el menú.";
-          setErrorMsg(msg);
-          setData(null);
-        }
-      }
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  useEffect(() => {
-    const start = () => {
-      if (pollRef.current) return;
-      pollRef.current = setInterval(() => {
-        if (document.visibilityState === "visible") load({ silent: true });
-      }, 15000);
-    };
-    const stop = () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-    start();
-    return stop;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  const isWeb = useMemo(() => String(data?.type) === "web", [data]);
-
-  const webChannels = useMemo(() => {
-    if (!isWeb) return [];
-    return Array.isArray(data?.channels) ? data.channels : [];
-  }, [data, isWeb]);
-
-  const activeWebChannelId = useMemo(() => {
-    if (!isWeb) return "";
-    const chosen = String(webChannelId || "");
-    if (chosen) return chosen;
-    const def = data?.default_channel_id ? String(data.default_channel_id) : "";
-    return def;
-  }, [isWeb, webChannelId, data]);
-
-  const activeMenuPayload = useMemo(() => {
-    if (!data) return null;
-    if (!isWeb) return data;
-
-    const by = data?.menus_by_channel || {};
-    const picked = by?.[String(activeWebChannelId)] || null;
-
-    if (picked)
-      return {
-        ...picked,
-        ui: data?.ui,
-        table: data?.table,
-        ordering_mode: data?.ordering_mode,
-        table_service_mode: data?.table_service_mode,
-        type: data?.type,
-      };
-
-    const def = data?.default_channel_id ? String(data.default_channel_id) : "";
-    const fallback = def ? by?.[def] : null;
-    return fallback
-      ? {
-          ...fallback,
-          ui: data?.ui,
-          table: data?.table,
-          ordering_mode: data?.ordering_mode,
-          table_service_mode: data?.table_service_mode,
-          type: data?.type,
-        }
-      : { ...data, sections: [] };
-  }, [data, isWeb, activeWebChannelId]);
-
-  // Para evitar basura de filtros cuando cambias canal WEB
-  useEffect(() => {
-    setCategoryFilter("all");
-    setQ("");
-    setExpanded(new Set());
-    setSelected(new Set());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWebChannelId]);
-
-  const header = useMemo(() => {
-    if (!activeMenuPayload) return null;
-    const r = activeMenuPayload.restaurant;
-    const b = activeMenuPayload.branch;
-    const sc = activeMenuPayload.sales_channel;
-    const t = activeMenuPayload.table;
-
-    return {
-      restaurantName: r?.trade_name || "Restaurante",
-      restaurantStatus: r?.status,
-      branchName: b?.name || "Sucursal",
-      branchStatus: b?.status,
-      channelName: sc?.name || "Canal",
-      tableName: t?.name || null,
-      orderingMode: activeMenuPayload.ordering_mode || null,
-      tableServiceMode: activeMenuPayload.table_service_mode || null,
-    };
-  }, [activeMenuPayload]);
-
-  const ui = useMemo(() => activeMenuPayload?.ui || {}, [activeMenuPayload]);
-  const hasTable = !!activeMenuPayload?.table?.id;
-  const tableId = activeMenuPayload?.table?.id ? Number(activeMenuPayload.table.id) : null;
-
-  const badgeUi = useMemo(() => {
-    if (!ui?.ui_mode) return { tone: "default", label: "Menú" };
-    if (ui.ui_mode === "selectable") return { tone: "ok", label: "Seleccionable" };
-    return { tone: "default", label: "Solo lectura" };
-  }, [ui]);
-
-  const sections = useMemo(() => activeMenuPayload?.sections || [], [activeMenuPayload]);
-
-  const categoryNameById = useMemo(() => {
-    const map = new Map();
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        if (c?.id) map.set(Number(c.id), c?.name || "");
-      }
-    }
-    return map;
-  }, [sections]);
-
-  const categoryOptions = useMemo(() => {
-    const opts = [{ value: "all", label: "Todos" }];
-    const seen = new Set();
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        if (!c?.id || seen.has(c.id)) continue;
-        seen.add(c.id);
-        opts.push({ value: String(c.id), label: c.name || "Categoría" });
-      }
-    }
-    return opts;
-  }, [sections]);
-
-  const allProducts = useMemo(() => {
-    const out = [];
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        const catName = c?.name || "";
-        for (const p of c?.products || []) out.push({ ...p, __categoryName: catName });
-      }
-    }
-    return out;
-  }, [sections]);
-
-  const filteredProducts = useMemo(() => {
-    const needle = (q || "").trim().toLowerCase();
-    const catId = categoryFilter === "all" ? null : Number(categoryFilter);
-
-    const matchText = (txt) => {
-      if (!needle) return true;
-      return String(txt || "").toLowerCase().includes(needle);
-    };
-
-    return (allProducts || []).filter((p) => {
-      if (catId && Number(p.category_id) !== catId) return false;
-      if (!needle) return true;
-
-      const title = p.display_name || p.name;
-      if (matchText(title)) return true;
-
-      const vars = Array.isArray(p.variants) ? p.variants : [];
-      return vars.some((v) => matchText(v?.name || v?.display_name));
-    });
-  }, [allProducts, categoryFilter, q]);
-
-  const toggleVariants = (pid) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(pid)) next.delete(pid);
-      else next.add(pid);
-      return next;
-    });
-  };
-
+  const uiFlags = ui || {};
   const canSelect = !!ui?.can_select_products && ui?.ui_mode === "selectable";
   const showSelectBtn = !!ui?.show_select_button && canSelect;
-
-  // Llamar mesero: SOLO si backend dice, y existe mesa
   const showCallBtn = !!ui?.show_call_waiter_button && !!ui?.call_waiter_enabled && hasTable;
 
-  const toggleSelectProduct = (id) => {
-    setSelected((prev) => {
+  const orderingMode = String(header?.orderingMode || "");
+  const allowOrderSubmit =
+    canSelect &&
+    hasTable &&
+    qr.sessionActive &&
+    orderingMode === "customer_assisted" &&
+    cartOrder.cart.length > 0 &&
+    !qr.sessionBusy &&
+    !qr.sessionUnavailable;
+
+  // ✅ Expand keys para no chocar variantes vs componentes
+  const togglePanel = (key) => {
+    setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
-  // ====== Sesión: scan + polling + tick local ======
-  const startScanSession = async () => {
+  // ✅ calling state mantiene UX sin tocar lógica
+  const [calling, setCalling] = useState(false);
+
+  const onCallWaiterReal = async () => {
     if (!tableId) return;
 
-    setSessionLoading(true);
-    setSessionBusy(null);
-    setSessionUnavailable(null);
-    setCallToast("");
-
-    try {
-      const res = await scanTable(tableId);
-      const s = res?.data || null;
-
-      if (s?.session_id) {
-        setSession(s);
-        setRemainingSec(Number(s.remaining_seconds || 0));
-      } else {
-        setSession(null);
-        setRemainingSec(0);
-      }
-    } catch (e) {
-      const status = e?.response?.status;
-      const code = e?.response?.data?.code;
-
-      // ✅ Caso 1: “solo un usuario a la vez”
-      if (status === 409 && code === "TABLE_BUSY") {
-        const s = e?.response?.data?.data || {};
-        setSessionBusy({ session_id: s.session_id, status: s.status });
-        setSession(null);
-        setRemainingSec(0);
-      }
-      // ✅ Caso 2: “QR desactivado porque ya atendieron” (waiter_only / no customer_assisted)
-      else if (status === 409 && code === "SESSION_UNAVAILABLE") {
-        const msg = e?.response?.data?.message || "Sesión no disponible, intente más tarde.";
-        setSessionUnavailable({ code, message: msg });
-        setSession(null);
-        setRemainingSec(0);
-      } else {
-        const msg =
-          e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.message ||
-          "No se pudo iniciar la sesión de mesa.";
-        setCallToast(`⚠️ ${msg}`);
-        setTimeout(() => setCallToast(""), 4500);
-      }
-    } finally {
-      setSessionLoading(false);
-    }
-  };
-
-  // auto scan cuando haya mesa y el QR sea físico (tu backend: solo physical con mesa aplica)
-  useEffect(() => {
-    if (!activeMenuPayload) return;
-    if (!hasTable) return;
-
-    // delivery/web no tienen mesa por reglas, pero por si acaso:
-    if (String(activeMenuPayload?.type) !== "physical") return;
-
-    startScanSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMenuPayload?.table?.id, activeMenuPayload?.type]);
-
-  // tick local (cada 1s) para no depender del poll
-  useEffect(() => {
-    if (tickRef.current) {
-      clearInterval(tickRef.current);
-      tickRef.current = null;
-    }
-
-    tickRef.current = setInterval(() => {
-      setRemainingSec((prev) => {
-        const n = Math.max(0, Number(prev || 0) - 1);
-        return n;
-      });
-    }, 1000);
-
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      tickRef.current = null;
-    };
-  }, []);
-
-  // poll sesión (cada 10s) para estado real (expired, mismatch, etc.)
-  useEffect(() => {
-    const stop = () => {
-      if (sessionPollRef.current) clearInterval(sessionPollRef.current);
-      sessionPollRef.current = null;
-    };
-
-    if (!session?.session_id) {
-      stop();
+    if (!qr.sessionActive) {
+      qr.setCallToast("⚠️ La sesión de la mesa no está activa. Escanea de nuevo el QR.");
+      setTimeout(() => qr.setCallToast(""), 4500);
       return;
     }
 
-    if (sessionPollRef.current) return;
-
-    sessionPollRef.current = setInterval(async () => {
-      try {
-        const res = await getTableSession(session.session_id);
-        const s = res?.data || null;
-        if (!s) return;
-
-        setSession(s);
-        setRemainingSec(Number(s.remaining_seconds || 0));
-      } catch (e) {
-        // Si device mismatch, básicamente es “otro navegador”
-        const status = e?.response?.status;
-        const code = e?.response?.data?.code;
-
-        if (status === 403 && code === "DEVICE_MISMATCH") {
-          setSessionBusy({ session_id: session.session_id, status: "active" });
-          setSession(null);
-          setRemainingSec(0);
-        }
-
-        // Si 410 expired, marcamos expired local
-        if (status === 410) {
-          setSession((prev) => (prev ? { ...prev, status: "expired", remaining_seconds: 0 } : prev));
-          setRemainingSec(0);
-        }
-      }
-    }, 10000);
-
-    return stop;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.session_id]);
-
-  // heartbeat ligero (cada 30s) para registrar actividad (no extiende TTL, solo “last_activity_at”)
-  useEffect(() => {
-    const stop = () => {
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    };
-
-    if (!session?.session_id) {
-      stop();
-      return;
-    }
-
-    if (heartbeatRef.current) return;
-
-    heartbeatRef.current = setInterval(async () => {
-      try {
-        await heartbeatTableSession(session.session_id);
-      } catch {
-        // no spamear UI por heartbeat fallido
-      }
-    }, 30000);
-
-    return stop;
-  }, [session?.session_id]);
-
-  const sessionStatus = String(session?.status || "");
-  const sessionExpired = hasTable && (sessionStatus === "expired" || remainingSec <= 0);
-  const sessionActive = hasTable && !!session?.session_id && !sessionExpired;
-
-  const onCallWaiter = async () => {
-    if (!tableId) return;
-
-    // Si está ocupada por otro o expirada, no dejamos llamar
-    if (!sessionActive) {
-      setCallToast("⚠️ La sesión de la mesa no está activa. Escanea de nuevo el QR.");
-      setTimeout(() => setCallToast(""), 4500);
-      return;
-    }
-
-    // ✅ Si está “bloqueado” por attended en customer_assisted, no spamees
     if (callLocked) {
-      setCallToast("⚠️ El mesero ya está atendiendo. Intente más tarde.");
-      setTimeout(() => setCallToast(""), 4500);
+      qr.setCallToast("⚠️ El mesero ya está atendiendo. Intente más tarde.");
+      setTimeout(() => qr.setCallToast(""), 4500);
       return;
     }
 
     setCalling(true);
-    setCallToast("");
+    qr.setCallToast("");
     try {
       const res = await callWaiterByTable(tableId);
-
-      // backend puede responder 200 "Llamada ya registrada." o 201 "Mesero llamado."
       const msg = res?.message || "Listo.";
       if (String(msg).toLowerCase().includes("ya registrada")) {
-        setCallToast("✅ Ya estaba registrada la llamada. No hace falta spamear al mesero.");
+        qr.setCallToast("✅ Ya estaba registrada la llamada. No hace falta spamear al mesero.");
       } else {
-        setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
+        qr.setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
       }
-
-      // si logró llamar, lo desbloqueamos por si estaba bloqueado antes
       setCallLocked(false);
-
-      setTimeout(() => setCallToast(""), 4500);
+      setTimeout(() => qr.setCallToast(""), 4500);
     } catch (e) {
       const status = e?.response?.status;
       const code = e?.response?.data?.code;
 
-      // ✅ NUEVO: customer_assisted + attended => desactivar botón
       if (status === 409 && code === "CALL_DISABLED_ATTENDED") {
-        const msg = e?.response?.data?.message || "El mesero ya está atendiendo. Intente más tarde.";
+        const msg =
+          e?.response?.data?.message ||
+          "El mesero ya está atendiendo. Intente más tarde.";
         setCallLocked(true);
-        setCallToast(`⚠️ ${msg}`);
-        setTimeout(() => setCallToast(""), 4500);
-
-        // Intento suave de “desbloqueo” con el auto-refresh
-        // (si luego mandas ui.call_waiter_enabled false/true desde backend, se desbloquea solo)
+        qr.setCallToast(`⚠️ ${msg}`);
+        setTimeout(() => qr.setCallToast(""), 4500);
         load({ silent: true }).catch(() => {});
         return;
       }
 
-      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "No se pudo llamar al mesero.";
-      setCallToast(`⚠️ ${msg}`);
-      setTimeout(() => setCallToast(""), 4500);
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "No se pudo llamar al mesero.";
+      qr.setCallToast(`⚠️ ${msg}`);
+      setTimeout(() => qr.setCallToast(""), 4500);
     } finally {
       setCalling(false);
     }
   };
 
+  const callButtonDisabled =
+    calling ||
+    !qr.sessionActive ||
+    qr.sessionLoading ||
+    !!qr.sessionBusy ||
+    !!qr.sessionUnavailable ||
+    callLocked;
+
+  // ====== UI states ======
   if (loading) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
@@ -874,14 +212,7 @@ export default function PublicMenuEntryPage() {
           <Badge tone="default">Solo lectura</Badge>
         </div>
 
-        <div
-          style={{
-            marginTop: 14,
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
@@ -936,28 +267,13 @@ export default function PublicMenuEntryPage() {
   if (!data || !activeMenuPayload) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
-        <div
-          style={{
-            border: "1px solid rgba(0,0,0,0.12)",
-            background: "#fff",
-            borderRadius: 16,
-            padding: 14,
-          }}
-        >
+        <div style={{ border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 16, padding: 14 }}>
           <div style={{ fontWeight: 950 }}>Sin data</div>
           <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>Esto no debería pasar… pero aquí estamos.</div>
         </div>
       </div>
     );
   }
-
-  const uiFlags = ui || {};
-
-  // ✅ Botón “Llamar mesero” debe bloquearse si:
-  // - QR está en “sessionUnavailable” (mesero ya atendió en waiter_only)
-  // - o callLocked (customer_assisted + attended)
-  const callButtonDisabled =
-    calling || !sessionActive || sessionLoading || !!sessionBusy || !!sessionUnavailable || callLocked;
 
   return (
     <div
@@ -968,9 +284,9 @@ export default function PublicMenuEntryPage() {
         background: "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
       }}
     >
-      {/* OVERLAY: Mesa ocupada por otro dispositivo */}
+      {/* OVERLAY: Mesa ocupada */}
       <FullOverlay
-        open={!!sessionBusy}
+        open={!!qr.sessionBusy}
         tone="warn"
         title="Esta mesa ya está en uso"
         message={
@@ -980,43 +296,33 @@ export default function PublicMenuEntryPage() {
         }
         actions={
           <>
-            <PillButton
-              tone="soft"
-              onClick={() => startScanSession()}
-              disabled={sessionLoading}
-              title="Reintentar scan"
-            >
-              {sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
+            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reintentar scan">
+              {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
             </PillButton>
-            <PillButton tone="default" onClick={() => setSessionBusy(null)} title="Cerrar aviso">
+            <PillButton tone="default" onClick={() => qr.setSessionBusy(null)} title="Cerrar aviso">
               Entendido
             </PillButton>
           </>
         }
       />
 
-      {/* ✅ NUEVO OVERLAY: Sesión no disponible (mesero ya atendió) */}
+      {/* OVERLAY: Sesión no disponible */}
       <FullOverlay
-        open={!!sessionUnavailable}
+        open={!!qr.sessionUnavailable}
         tone="warn"
         title="Sesión no disponible"
         message={
-          (sessionUnavailable?.message || "Sesión no disponible, intente más tarde.") +
+          (qr.sessionUnavailable?.message || "Sesión no disponible, intente más tarde.") +
           "\n\n" +
           "El mesero ya atendió esta mesa.\n" +
           "Cuando finalice la atención, este QR volverá a estar disponible."
         }
         actions={
           <>
-            <PillButton
-              tone="soft"
-              onClick={() => startScanSession()}
-              disabled={sessionLoading}
-              title="Reintentar"
-            >
-              {sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
+            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reintentar">
+              {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
             </PillButton>
-            <PillButton tone="default" onClick={() => setSessionUnavailable(null)} title="Cerrar aviso">
+            <PillButton tone="default" onClick={() => qr.setSessionUnavailable(null)} title="Cerrar aviso">
               Entendido
             </PillButton>
           </>
@@ -1025,27 +331,87 @@ export default function PublicMenuEntryPage() {
 
       {/* OVERLAY: Expirado */}
       <FullOverlay
-        open={hasTable && !sessionBusy && !sessionUnavailable && sessionExpired}
+        open={hasTable && !qr.sessionBusy && !qr.sessionUnavailable && qr.sessionExpired}
         tone="err"
         title="Tiempo agotado"
         message={
           "La sesión de esta mesa expiró (5 minutos).\n\n" +
-          "Vuelve a escanear para activar otra sesión y poder llamar al mesero."
+          "Vuelve a escanear para activar otra sesión y poder enviar pedidos."
         }
         actions={
           <>
-            <PillButton
-              tone="soft"
-              onClick={() => startScanSession()}
-              disabled={sessionLoading}
-              title="Reiniciar sesión"
-            >
-              {sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
+            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reiniciar sesión">
+              {qr.sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
             </PillButton>
           </>
         }
       />
 
+      {/* MODAL: Enviar comanda */}
+      <Modal
+        open={cartOrder.sendOpen}
+        title="Enviar comanda"
+        onClose={() => {
+          if (!cartOrder.sending) cartOrder.setSendOpen(false);
+        }}
+        actions={
+          <>
+            <PillButton tone="default" disabled={cartOrder.sending} onClick={() => cartOrder.setSendOpen(false)} title="Cancelar">
+              Cancelar
+            </PillButton>
+            <PillButton
+              tone="orange"
+              disabled={cartOrder.sending || !allowOrderSubmit}
+              onClick={cartOrder.submitOrder}
+              title={!allowOrderSubmit ? "No se puede enviar aún" : "Mandar comanda"}
+            >
+              {cartOrder.sending ? "⏳ Mandando..." : "📨 Mandar"}
+            </PillButton>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 13, opacity: 0.85 }}>Escribe tu nombre para identificar la comanda.</div>
+
+          <input
+            value={cartOrder.customerName}
+            onChange={(e) => cartOrder.setCustomerName(e.target.value)}
+            placeholder="Ej: Juan (Mesa 5)"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.12)",
+              outline: "none",
+              fontWeight: 850,
+            }}
+            maxLength={120}
+            disabled={cartOrder.sending}
+          />
+
+          <div style={{ fontSize: 12, opacity: 0.75 }}>
+            Items: <strong>{cartOrder.cart.length}</strong> · Total aprox:{" "}
+            <strong>{money(cartOrder.cartTotal)}</strong>
+          </div>
+
+          {cartOrder.sendToast ? (
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.10)",
+                borderRadius: 14,
+                padding: 10,
+                background: "#fff",
+                fontSize: 13,
+                fontWeight: 850,
+                whiteSpace: "pre-line",
+              }}
+            >
+              {cartOrder.sendToast}
+            </div>
+          ) : null}
+        </div>
+      </Modal>
+
+      {/* HEADER CARD */}
       <div
         style={{
           border: "1px solid rgba(0,0,0,0.12)",
@@ -1063,7 +429,6 @@ export default function PublicMenuEntryPage() {
               {header?.tableName ? ` · Mesa ${header.tableName}` : " · General"}
             </div>
 
-            {/* ✅ WEB selector */}
             {isWeb ? (
               <div style={{ marginTop: 10, display: "grid", gap: 6, maxWidth: 420 }}>
                 <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Canal a visualizar</div>
@@ -1103,17 +468,15 @@ export default function PublicMenuEntryPage() {
                 🔁 Auto
               </Badge>
 
-              {/* ⏳ contador de sesión (solo si hay mesa física) */}
               {hasTable && String(activeMenuPayload?.type) === "physical" ? (
                 <Badge
-                  tone={sessionActive ? "ok" : "warn"}
-                  title={sessionActive ? "Sesión activa (5 min)" : "Sesión no activa"}
+                  tone={qr.sessionActive ? "ok" : "warn"}
+                  title={qr.sessionActive ? "Sesión activa (5 min)" : "Sesión no activa"}
                 >
-                  ⏳ {fmtMMSS(remainingSec)}
+                  ⏳ {fmtMMSS(qr.remainingSec)}
                 </Badge>
               ) : null}
 
-              {/* ✅ Indicador callLocked (solo UI, no cambia layout) */}
               {callLocked ? (
                 <Badge tone="warn" title="El mesero ya atendió. Botón desactivado hasta finalizar.">
                   🔕 Llamada desactivada
@@ -1136,39 +499,20 @@ export default function PublicMenuEntryPage() {
                 ) : null}
               </div>
             )}
-
-            {canSelect && hasTable ? (
-              <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Nombre (solo UI por ahora)</div>
-                <input
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Ej: Juan, Mesa 5"
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    outline: "none",
-                    fontWeight: 800,
-                    maxWidth: 420,
-                  }}
-                />
-              </div>
-            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "start", flexWrap: "wrap" }}>
             {showCallBtn ? (
               <PillButton
                 tone="soft"
-                onClick={onCallWaiter}
+                onClick={onCallWaiterReal}
                 disabled={callButtonDisabled}
                 title={
-                  sessionUnavailable
+                  qr.sessionUnavailable
                     ? "Sesión no disponible (ya atendida)."
                     : callLocked
                     ? "El mesero ya está atendiendo. Intente más tarde."
-                    : !sessionActive
+                    : !qr.sessionActive
                     ? "Sesión no activa. Escanea de nuevo."
                     : "Enviar una solicitud al mesero"
                 }
@@ -1177,14 +521,9 @@ export default function PublicMenuEntryPage() {
               </PillButton>
             ) : null}
 
-            {/* Forzar scan manual por si el usuario quiere */}
             {hasTable && String(activeMenuPayload?.type) === "physical" ? (
-              <PillButton
-                onClick={() => startScanSession()}
-                disabled={sessionLoading || !!sessionBusy}
-                title="Revalidar sesión de mesa"
-              >
-                {sessionLoading ? "⏳ Validando..." : "📷 Validar QR"}
+              <PillButton onClick={() => qr.startScanSession()} disabled={qr.sessionLoading || !!qr.sessionBusy} title="Revalidar sesión de mesa">
+                {qr.sessionLoading ? "⏳ Validando..." : "📷 Validar QR"}
               </PillButton>
             ) : null}
 
@@ -1206,7 +545,7 @@ export default function PublicMenuEntryPage() {
           </div>
         </div>
 
-        {callToast ? (
+        {qr.callToast ? (
           <div
             style={{
               marginTop: 12,
@@ -1218,7 +557,7 @@ export default function PublicMenuEntryPage() {
               fontWeight: 850,
             }}
           >
-            {callToast}
+            {qr.callToast}
           </div>
         ) : null}
 
@@ -1244,8 +583,8 @@ export default function PublicMenuEntryPage() {
             </Badge>
 
             {canSelect ? (
-              <Badge tone="ok" title="Selección solo visual por ahora">
-                Seleccionados: <strong style={{ marginLeft: 6 }}>{selected.size}</strong>
+              <Badge tone="ok" title="Items en comanda">
+                En comanda: <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
               </Badge>
             ) : null}
 
@@ -1264,7 +603,7 @@ export default function PublicMenuEntryPage() {
         </div>
       </div>
 
-      {/* warnings por canal */}
+      {/* warning por canal */}
       {activeMenuPayload?.warning ? (
         <div
           style={{
@@ -1282,6 +621,7 @@ export default function PublicMenuEntryPage() {
         </div>
       ) : null}
 
+      {/* ✅ LAYOUT: Productos (izq) + Comanda (der) */}
       <div style={{ marginTop: 14 }}>
         <style>
           {`
@@ -1293,150 +633,501 @@ export default function PublicMenuEntryPage() {
             @media (min-width: 640px) { .menuGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
             @media (min-width: 900px) { .menuGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
             @media (min-width: 1200px) { .menuGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+            .menuLayout {
+              display: grid;
+              gap: 12px;
+              grid-template-columns: 1fr;
+              align-items: start;
+            }
+
+            /* En pantallas grandes: productos a la izquierda, comanda fija a la derecha */
+            @media (min-width: 1100px) {
+              .menuLayout {
+                grid-template-columns: minmax(0, 1fr) 380px;
+              }
+              .comandaAside {
+                position: sticky;
+                top: 14px;
+              }
+            }
           `}
         </style>
 
-        <div className="menuGrid">
-          {filteredProducts.length > 0 ? (
-            filteredProducts.map((p) => {
-              const title = p.display_name || p.name;
-              const variants = Array.isArray(p.variants) ? p.variants : [];
-              const hasVariants = variants.length > 0;
+        <div className="menuLayout">
+          {/* IZQUIERDA: GRID PRODUCTOS */}
+          <div>
+            <div className="menuGrid">
+              {filteredProducts.length > 0 ? (
+                filteredProducts.map((p) => {
+                  const pid = Number(p.id);
+                  const title = p.display_name || p.name;
+                  const variants = Array.isArray(p.variants) ? p.variants : [];
+                  const hasVariants = variants.length > 0;
 
-              const categoryName = p.__categoryName || categoryNameById.get(Number(p.category_id)) || "Sin categoría";
+                  const categoryName =
+                    p.__categoryName ||
+                    categoryNameById.get(Number(p.category_id)) ||
+                    "Sin categoría";
 
-              const isOpen = expanded.has(p.id);
-              const isSelected = selected.has(`p:${p.id}`);
+                  const isVariantsOpen = expanded.has(`v:${pid}`);
+                  const isCompositeOpen = expanded.has(`c:${pid}`);
 
-              return (
+                  const isComposite = String(p.product_type || "simple") === "composite";
+                  const compositeItems = Array.isArray(p?.composite?.items) ? p.composite.items : [];
+                  const hasComposite = isComposite && compositeItems.length > 0;
+
+                  // ✅ FIX: estado visual del botón base debe depender SOLO del item base (p:{pid})
+                  const baseKey = makeKey(pid, null);
+                  const baseInCart = cartOrder.cart.some((x) => x.key === baseKey);
+
+                  // draft init
+                  const draft = hasComposite ? composite.getOrInitCompositeDraft(p) : null;
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        border: "1px solid rgba(0,0,0,0.10)",
+                        borderRadius: 18,
+                        background: "#fff",
+                        overflow: "hidden",
+                        boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
+                        display: "grid",
+                      }}
+                    >
+                      <div style={{ padding: 10 }}>
+                        <ProductThumb imageUrl={p.image_url || null} title={title} />
+                      </div>
+
+                      <div style={{ padding: "0 12px 12px 12px", display: "grid", gap: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
+                          <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>{title}</div>
+                          <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>{money(p.price)}</div>
+                        </div>
+
+                        <div style={{ fontSize: 12, opacity: 0.72 }}>
+                          Categoría: <strong>{categoryName}</strong>
+                        </div>
+
+                        {isComposite ? (
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                            Tipo: <strong>Compuesto</strong>
+                          </div>
+                        ) : null}
+
+                        {/* ✅ Componentes (composite) */}
+                        {hasComposite ? (
+                          <div style={{ marginTop: 2 }}>
+                            <button
+                              onClick={() => togglePanel(`c:${pid}`)}
+                              style={{
+                                cursor: "pointer",
+                                width: "100%",
+                                borderRadius: 14,
+                                border: "1px solid rgba(0,0,0,0.12)",
+                                background: "#fafafa",
+                                padding: "10px 12px",
+                                fontWeight: 950,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 10,
+                              }}
+                              title="Ver componentes del producto"
+                            >
+                              <span>Componentes ({compositeItems.length})</span>
+                              <span style={{ opacity: 0.75 }}>{isCompositeOpen ? "▲" : "▼"}</span>
+                            </button>
+
+                            <Collapse open={isCompositeOpen}>
+                              <div style={{ display: "grid", gap: 8 }}>
+                                {(draft || []).map((c) => {
+                                  const cid = Number(c.component_product_id);
+                                  const allowVar = !!c.allow_variant;
+                                  const vars = Array.isArray(c.variants) ? c.variants : [];
+                                  const canPickVariant = allowVar && vars.length > 0;
+
+                                  return (
+                                    <div
+                                      key={cid}
+                                      style={{
+                                        display: "grid",
+                                        gap: 8,
+                                        padding: "10px 12px",
+                                        borderRadius: 14,
+                                        border: "1px solid rgba(0,0,0,0.10)",
+                                        background: "#fff",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
+                                        <div style={{ minWidth: 0 }}>
+                                          <div style={{ fontWeight: 900, fontSize: 13 }}>{c.name}</div>
+                                          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                                            Cantidad: <strong>{Number.isFinite(Number(c.quantity)) ? Number(c.quantity) : 1}</strong>
+                                            {c.is_optional ? (
+                                              <>
+                                                {" "}· <strong>Opcional</strong>
+                                              </>
+                                            ) : (
+                                              <>
+                                                {" "}· <strong>Requerido</strong>
+                                              </>
+                                            )}
+                                          </div>
+                                          {c.notes ? (
+                                            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2, whiteSpace: "pre-line" }}>
+                                              {String(c.notes)}
+                                            </div>
+                                          ) : null}
+                                        </div>
+
+                                        {c.is_optional ? (
+                                          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 900 }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={c.included !== false}
+                                              onChange={(e) => {
+                                                composite.setDraftIncluded(pid, cid, e.target.checked);
+                                                setTimeout(() => composite.syncDraftToCartFirstItemIfExists(pid), 0);
+                                              }}
+                                              disabled={!canSelect}
+                                              style={{ transform: "scale(1.1)" }}
+                                            />
+                                            Incluir
+                                          </label>
+                                        ) : null}
+                                      </div>
+
+                                      {canPickVariant ? (
+                                        <div style={{ display: "grid", gap: 6 }}>
+                                          <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
+                                            Variante del componente
+                                          </div>
+                                          <select
+                                            value={c.variant_id ? String(c.variant_id) : ""}
+                                            onChange={(e) => {
+                                              composite.setDraftVariant(pid, cid, e.target.value ? Number(e.target.value) : null);
+                                              setTimeout(() => composite.syncDraftToCartFirstItemIfExists(pid), 0);
+                                            }}
+                                            disabled={!canSelect || c.included === false}
+                                            style={{
+                                              width: "100%",
+                                              padding: "10px 12px",
+                                              borderRadius: 12,
+                                              border: "1px solid rgba(0,0,0,0.12)",
+                                              outline: "none",
+                                              fontWeight: 850,
+                                              background: "#fff",
+                                              opacity: !canSelect || c.included === false ? 0.65 : 1,
+                                            }}
+                                          >
+                                            <option value="">(Sin variante)</option>
+                                            {vars.map((v) => (
+                                              <option key={v.id} value={String(v.id)}>
+                                                {v.name}
+                                              </option>
+                                            ))}
+                                          </select>
+
+                                          <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                            {c.apply_variant_price
+                                              ? "Nota: esta variante puede afectar el precio."
+                                              : "Nota: la variante es solo elección (sin precio)."}
+                                          </div>
+                                        </div>
+                                      ) : allowVar ? (
+                                        <div style={{ fontSize: 12, opacity: 0.75 }}>
+                                          Este componente permite variante, pero no hay variantes disponibles para este canal.
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </Collapse>
+                          </div>
+                        ) : null}
+
+                        {showSelectBtn ? (
+                          <PillButton
+                            tone={baseInCart ? "dark" : "default"}
+                            onClick={() => {
+                              if (isComposite && hasComposite) {
+                                const draftNow = composite.getOrInitCompositeDraft(p);
+                                const synced = composite.syncDraftToCartFirstItemIfExists(pid);
+                                if (!synced) {
+                                  cartOrder.addToCartFromProduct(p, composite.draftToSubmitComponents(draftNow));
+                                }
+                                return;
+                              }
+                              cartOrder.addToCartFromProduct(p);
+                            }}
+                            title={!canSelect ? "Solo lectura" : isComposite ? "Agregar compuesto con componentes" : "Agregar a comanda"}
+                            disabled={!canSelect}
+                          >
+                            {baseInCart ? "✅ Agregado" : "➕ Seleccionar"}
+                          </PillButton>
+                        ) : null}
+
+                        {/* Variantes del producto (no confundir con variantes de componentes) */}
+                        {hasVariants ? (
+                          <div style={{ marginTop: 2 }}>
+                            <button
+                              onClick={() => togglePanel(`v:${pid}`)}
+                              style={{
+                                cursor: "pointer",
+                                width: "100%",
+                                borderRadius: 14,
+                                border: "1px solid rgba(0,0,0,0.12)",
+                                background: "#fafafa",
+                                padding: "10px 12px",
+                                fontWeight: 950,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 10,
+                              }}
+                              title="Ver variantes"
+                            >
+                              <span>Variantes ({variants.length})</span>
+                              <span style={{ opacity: 0.75 }}>{isVariantsOpen ? "▲" : "▼"}</span>
+                            </button>
+
+                            <Collapse open={isVariantsOpen}>
+                              <div style={{ display: "grid", gap: 8 }}>
+                                {variants.map((v, idx) => {
+                                  const vid = v.id || idx;
+                                  const key = makeKey(pid, Number(vid));
+                                  const inCart = cartOrder.cart.some((x) => x.key === key);
+
+                                  return (
+                                    <div
+                                      key={vid}
+                                      style={{
+                                        display: "grid",
+                                        gap: 8,
+                                        padding: "10px 12px",
+                                        borderRadius: 14,
+                                        border: "1px solid rgba(0,0,0,0.10)",
+                                        background: "#fff",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                        <div style={{ fontWeight: 850, fontSize: 13, minWidth: 0 }}>
+                                          {v.name || v.display_name || `Variante ${idx + 1}`}
+                                        </div>
+                                        <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>
+                                          {money(v.price)}
+                                        </div>
+                                      </div>
+
+                                      {showSelectBtn ? (
+                                        <PillButton
+                                          tone={inCart ? "dark" : "default"}
+                                          onClick={() => {
+                                            if (isComposite && hasComposite) {
+                                              const draftNow = composite.getOrInitCompositeDraft(p);
+                                              cartOrder.addToCartFromVariant(p, v, composite.draftToSubmitComponents(draftNow));
+                                              return;
+                                            }
+                                            cartOrder.addToCartFromVariant(p, v);
+                                          }}
+                                          title={!canSelect ? "Solo lectura" : "Agregar variante a comanda"}
+                                          disabled={!canSelect}
+                                        >
+                                          {inCart ? "✅ Agregada" : "➕ Seleccionar variante"}
+                                        </PillButton>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </Collapse>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
                 <div
-                  key={p.id}
                   style={{
-                    border: "1px solid rgba(0,0,0,0.10)",
-                    borderRadius: 18,
+                    border: "1px solid rgba(0,0,0,0.12)",
                     background: "#fff",
-                    overflow: "hidden",
-                    boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
-                    display: "grid",
+                    borderRadius: 16,
+                    padding: 14,
+                    gridColumn: "1 / -1",
                   }}
                 >
-                  <div style={{ padding: 10 }}>
-                    <ProductThumb imageUrl={p.image_url || null} title={title} />
+                  <div style={{ fontWeight: 950 }}>Sin resultados</div>
+                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>Prueba con otro texto o limpia filtros.</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DERECHA: COMANDA */}
+          <div className="comandaAside">
+            {cartOrder.cart.length > 0 ? (
+              <div
+                style={{
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  borderRadius: 18,
+                  background: "#fff",
+                  padding: 14,
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 950 }}>Comanda</div>
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                      Se llena cuando seleccionas productos. Luego presiona <strong>Enviar</strong>.
+                    </div>
                   </div>
 
-                  <div style={{ padding: "0 12px 12px 12px", display: "grid", gap: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "start" }}>
-                      <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>{title}</div>
-                      <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>{money(p.price)}</div>
-                    </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <Badge tone="default">
+                      Total: <strong style={{ marginLeft: 6 }}>{money(cartOrder.cartTotal)}</strong>
+                    </Badge>
 
-                    <div style={{ fontSize: 12, opacity: 0.72 }}>
-                      Categoría: <strong>{categoryName}</strong>
-                    </div>
+                    <PillButton tone="danger" onClick={() => cartOrder.setCart([])} title="Vaciar comanda">
+                      🗑️ Vaciar
+                    </PillButton>
 
-                    {showSelectBtn ? (
-                      <PillButton
-                        tone={isSelected ? "dark" : "default"}
-                        onClick={() => toggleSelectProduct(`p:${p.id}`)}
-                        title="Solo visual por ahora"
-                      >
-                        {isSelected ? "✅ Seleccionado" : "➕ Seleccionar"}
-                      </PillButton>
-                    ) : null}
-
-                    {hasVariants ? (
-                      <div style={{ marginTop: 2 }}>
-                        <button
-                          onClick={() => toggleVariants(p.id)}
-                          style={{
-                            cursor: "pointer",
-                            width: "100%",
-                            borderRadius: 14,
-                            border: "1px solid rgba(0,0,0,0.12)",
-                            background: "#fafafa",
-                            padding: "10px 12px",
-                            fontWeight: 950,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 10,
-                          }}
-                          title="Ver variantes"
-                        >
-                          <span>Variantes ({variants.length})</span>
-                          <span style={{ opacity: 0.75 }}>{isOpen ? "▲" : "▼"}</span>
-                        </button>
-
-                        <Collapse open={isOpen}>
-                          <div style={{ display: "grid", gap: 8 }}>
-                            {variants.map((v, idx) => {
-                              const vid = v.id || idx;
-                              const vSel = selected.has(`v:${p.id}:${vid}`);
-                              return (
-                                <div
-                                  key={vid}
-                                  style={{
-                                    display: "grid",
-                                    gap: 8,
-                                    padding: "10px 12px",
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(0,0,0,0.10)",
-                                    background: "#fff",
-                                  }}
-                                >
-                                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                                    <div style={{ fontWeight: 850, fontSize: 13, minWidth: 0 }}>
-                                      {v.name || v.display_name || `Variante ${idx + 1}`}
-                                    </div>
-                                    <div style={{ fontWeight: 950, fontSize: 13, whiteSpace: "nowrap" }}>
-                                      {money(v.price)}
-                                    </div>
-                                  </div>
-
-                                  {showSelectBtn ? (
-                                    <PillButton
-                                      tone={vSel ? "dark" : "default"}
-                                      onClick={() => toggleSelectProduct(`v:${p.id}:${vid}`)}
-                                      title="Solo visual por ahora"
-                                    >
-                                      {vSel ? "✅ Seleccionado" : "➕ Seleccionar"}
-                                    </PillButton>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </Collapse>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Badge tone="default">Sin variantes</Badge>
-                      </div>
-                    )}
+                    <PillButton
+                      tone="orange"
+                      onClick={() => cartOrder.setSendOpen(true)}
+                      disabled={!allowOrderSubmit}
+                      title={
+                        orderingMode !== "customer_assisted"
+                          ? "Esta sucursal no permite pedidos del cliente."
+                          : !qr.sessionActive
+                          ? "Sesión no activa."
+                          : !canSelect
+                          ? "Menú no seleccionable."
+                          : "Enviar comanda"
+                      }
+                    >
+                      📤 Enviar
+                    </PillButton>
                   </div>
                 </div>
-              );
-            })
-          ) : (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                border: "1px solid rgba(0,0,0,0.12)",
-                borderRadius: 18,
-                background: "#fff",
-                padding: 14,
-                boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
-              }}
-            >
-              <div style={{ fontWeight: 950 }}>Sin resultados</div>
-              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>Con esos filtros no hay nada que mostrar.</div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div style={{ marginTop: 14, fontSize: 11, opacity: 0.65 }}>
-        Token: <strong>{token}</strong>
+                <div style={{ marginTop: 12, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Producto</th>
+                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Precio</th>
+                        <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Cantidad</th>
+                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Subtotal</th>
+                        <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Notas</th>
+                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}> </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cartOrder.cart.map((it) => {
+                        const subtotal = safeNum(it.unit_price, 0) * safeNum(it.quantity, 1);
+                        const label = it.variant_name ? `${it.name} · ${it.variant_name}` : it.name;
+
+                        const comps = Array.isArray(it.components) ? it.components : null;
+
+                        return (
+                          <tr key={it.key}>
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                              <div style={{ fontWeight: 900, fontSize: 13 }}>{label}</div>
+                              {String(it.product_type || "") === "composite" ? (
+                                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                                  Tipo: <strong>Compuesto</strong>
+                                  {comps && comps.length ? (
+                                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+                                      Componentes:{" "}
+                                      <strong>
+                                        {comps
+                                          .slice(0, 4)
+                                          .map((c) =>
+                                            c.variant_id
+                                              ? `${c.component_product_id} (v:${c.variant_id})`
+                                              : `${c.component_product_id}`
+                                          )
+                                          .join(", ")}
+                                        {comps.length > 4 ? "…" : ""}
+                                      </strong>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </td>
+
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 900 }}>
+                              {money(it.unit_price)}
+                            </td>
+
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "center" }}>
+                              <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                                <button
+                                  onClick={() => cartOrder.setCartQty(it.key, Math.max(1, safeNum(it.quantity, 1) - 1))}
+                                  style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
+                                  title="Menos"
+                                >
+                                  −
+                                </button>
+                                <input
+                                  value={it.quantity}
+                                  onChange={(e) => cartOrder.setCartQty(it.key, e.target.value)}
+                                  style={{ width: 54, padding: "6px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)", outline: "none", textAlign: "center", fontWeight: 900 }}
+                                />
+                                <button
+                                  onClick={() => cartOrder.setCartQty(it.key, Math.min(99, safeNum(it.quantity, 1) + 1))}
+                                  style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
+                                  title="Más"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 950 }}>
+                              {money(subtotal)}
+                            </td>
+
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                              <input
+                                value={it.notes || ""}
+                                onChange={(e) => cartOrder.setCartNotes(it.key, e.target.value)}
+                                placeholder="Ej: sin cebolla"
+                                maxLength={500}
+                                style={{ width: "min(420px, 70vw)", padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.12)", outline: "none", fontWeight: 750 }}
+                              />
+                            </td>
+
+                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right" }}>
+                              <button
+                                onClick={() => cartOrder.removeCartItem(it.key)}
+                                style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 12, padding: "8px 10px", fontWeight: 950 }}
+                                title="Quitar"
+                              >
+                                🗑️
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {cartOrder.sendToast ? (
+                  <div style={{ marginTop: 10, border: "1px solid rgba(0,0,0,0.10)", borderRadius: 14, padding: 10, background: "#fff", fontSize: 13, fontWeight: 850, whiteSpace: "pre-line" }}>
+                    {cartOrder.sendToast}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -9,26 +9,10 @@ const publicApi = axios.create({
 });
 
 /**
- * Resolver token -> contexto
- * GET /api/public/menu/{token}/resolve
- */
-export async function resolveMenuToken(token) {
-  const { data } = await publicApi.get(`/public/menu/${token}/resolve`);
-  return data?.data;
-}
-
-/**
- * Menú final listo para UI
- * GET /api/public/menu/{token}
- */
-export async function fetchResolvedMenu(token) {
-  const { data } = await publicApi.get(`/public/menu/${token}`);
-  return data?.data;
-}
-
-/**
- * Device identifier (persistente por navegador)
- * OJO: esto es lo que activa "solo un usuario a la vez"
+ * =========================================================
+ * 1) Device Identifier (persistente por navegador)
+ *    - Esto activa “solo un usuario a la vez”
+ * =========================================================
  */
 export function getOrCreatePublicDeviceId() {
   const KEY = "public_device_identifier_v1";
@@ -39,7 +23,6 @@ export function getOrCreatePublicDeviceId() {
 
   if (v) return v;
 
-  // uuid simple sin dependencia
   const rnd = () => Math.random().toString(16).slice(2);
   v = `dev_${Date.now().toString(16)}_${rnd()}_${rnd()}`;
 
@@ -51,9 +34,24 @@ export function getOrCreatePublicDeviceId() {
 }
 
 /**
- * Sesión QR: scan
- * POST /api/public/tables/{table}/scan
- * body: { device_identifier }
+ * =========================================================
+ * 2) Menu Resolve / Menu Payload
+ * =========================================================
+ */
+export async function resolveMenuToken(token) {
+  const { data } = await publicApi.get(`/public/menu/${token}/resolve`);
+  return data?.data;
+}
+
+export async function fetchResolvedMenu(token) {
+  const { data } = await publicApi.get(`/public/menu/${token}`);
+  return data?.data;
+}
+
+/**
+ * =========================================================
+ * 3) Table Session (scan / poll / heartbeat)
+ * =========================================================
  */
 export async function scanTable(tableId) {
   const device_identifier = getOrCreatePublicDeviceId();
@@ -61,10 +59,6 @@ export async function scanTable(tableId) {
   return data;
 }
 
-/**
- * Sesión QR: show/poll
- * GET /api/public/table-sessions/{session}?device_identifier=...
- */
 export async function getTableSession(sessionId) {
   const device_identifier = getOrCreatePublicDeviceId();
   const { data } = await publicApi.get(`/public/table-sessions/${sessionId}`, {
@@ -73,10 +67,6 @@ export async function getTableSession(sessionId) {
   return data;
 }
 
-/**
- * Sesión QR: heartbeat (opcional)
- * POST /api/public/table-sessions/{session}/heartbeat
- */
 export async function heartbeatTableSession(sessionId) {
   const device_identifier = getOrCreatePublicDeviceId();
   const { data } = await publicApi.post(`/public/table-sessions/${sessionId}/heartbeat`, { device_identifier });
@@ -84,12 +74,46 @@ export async function heartbeatTableSession(sessionId) {
 }
 
 /**
- * Llamar al mesero (ENDPOINT REAL)
- * POST /api/public/tables/{table}/call-waiter
- * body: { device_identifier }
+ * =========================================================
+ * 4) Call Waiter
+ * =========================================================
  */
 export async function callWaiterByTable(tableId) {
   const device_identifier = getOrCreatePublicDeviceId();
   const { data } = await publicApi.post(`/public/tables/${tableId}/call-waiter`, { device_identifier });
   return data;
+}
+
+/**
+ * =========================================================
+ * 5) Orders (create)
+ *    OJO: por tu routes.php hay riesgo de que quede /public/public/orders,
+ *    así que aquí hago fallback automático si da 404.
+ * =========================================================
+ */
+async function postCreateOrder(url, payload) {
+  const { data } = await publicApi.post(url, payload);
+  return data;
+}
+
+export async function createPublicOrder({ token, customer_name, items }) {
+  const device_identifier = getOrCreatePublicDeviceId();
+
+  const payload = {
+    token,
+    device_identifier,
+    customer_name,
+    items: Array.isArray(items) ? items : [],
+  };
+
+  try {
+    // Ruta esperada
+    return await postCreateOrder(`/public/orders`, payload);
+  } catch (e) {
+    // Fallback por tu definición: Route::post('/public/orders') dentro de prefix('public')
+    if (e?.response?.status === 404) {
+      return await postCreateOrder(`/public/public/orders`, payload);
+    }
+    throw e;
+  }
 }
