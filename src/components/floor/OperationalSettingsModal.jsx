@@ -77,10 +77,10 @@ const helperStyle = {
   fontSize: 12,
   color: "rgba(0,0,0,0.70)",
   lineHeight: 1.35,
-  fontWeight: 700, // negrito suave
+  fontWeight: 700,
 };
 
-// opciones fuera del componente (sin hooks, sin dramas)
+// opciones fuera del componente
 const SEAT_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1);
 
 function FieldError({ message }) {
@@ -102,42 +102,36 @@ export default function OperationalSettingsModal({
   mode = "create", // create | edit
   restaurantId,
   branchId,
-  initialData = null, // cuando edit (puede ser {data, ui, notices} o solo data)
+  initialData = null, // puede ser payload {data, ui, notices} o data directo
   onClose,
   onSaved,
-  showToast, // opcional
+  showToast,
 }) {
   const [saving, setSaving] = useState(false);
   const [serverNotices, setServerNotices] = useState([]);
 
-  // initialData puede venir como:
-  // - data directo (viejo)
-  // - { data, ui, notices } (nuevo)
   const initial = useMemo(() => {
     if (!initialData) return null;
-    if (initialData?.data) return initialData.data;
+    if (initialData?.data && typeof initialData.data === "object") return initialData.data;
     return initialData;
   }, [initialData]);
 
   const initialNotices = useMemo(() => {
     if (!initialData) return [];
-    return Array.isArray(initialData?.notices) ? initialData.notices : [];
+    if (Array.isArray(initialData?.notices)) return initialData.notices;
+    return [];
   }, [initialData]);
 
-  // Si NO hay registro, abre el modal en create.
   const showMissingConfigNotice = mode === "create" && !initial;
 
   const defaultValues = useMemo(
     () => ({
-      // valores en inglés para sistema
       ordering_mode: initial?.ordering_mode ?? "waiter_only",
       table_service_mode: initial?.table_service_mode ?? "free_for_all",
       is_qr_enabled: !!initial?.is_qr_enabled,
 
-      // NUEVO: estrategia (solo aplica si assigned_waiter)
       assignment_strategy: initial?.assignment_strategy ?? "table_only",
 
-      // campos asientos
       min_seats: Number.isInteger(initial?.min_seats) ? initial.min_seats : 1,
       max_seats: Number.isInteger(initial?.max_seats) ? initial.max_seats : 6,
     }),
@@ -161,11 +155,9 @@ export default function OperationalSettingsModal({
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
 
-  // Si cambia a modo libre => limpiamos assignment_strategy localmente para no “enseñar” opciones que no aplican
   useEffect(() => {
     if (!open) return;
     if (String(tableServiceMode) !== "assigned_waiter") {
-      // dejamos un valor por UI, pero NO lo enviaremos (mandaremos null)
       setValue("assignment_strategy", "table_only");
     }
   }, [open, tableServiceMode, setValue]);
@@ -211,13 +203,11 @@ export default function OperationalSettingsModal({
         table_service_mode: effectiveTableServiceMode,
         is_qr_enabled: !!form.is_qr_enabled,
 
-        // NUEVO: SOLO SI assigned_waiter, si no => null
         assignment_strategy:
           String(effectiveTableServiceMode) === "assigned_waiter"
             ? (form.assignment_strategy || "table_only")
             : null,
 
-        // asientos
         min_seats: Number(form.min_seats),
         max_seats: Number(form.max_seats),
       };
@@ -227,11 +217,10 @@ export default function OperationalSettingsModal({
           ? await createOperationalSettings(restaurantId, branchId, payload)
           : await updateOperationalSettings(restaurantId, branchId, payload);
 
-      // saved => { data, ui, notices, message }
       setServerNotices(Array.isArray(saved?.notices) ? saved.notices : []);
 
       if (showToast) showToast(saved?.message || "Guardado correctamente.", "success");
-      if (onSaved) onSaved(saved);
+      if (onSaved) await onSaved(saved);
 
       onClose();
     } catch (e) {
@@ -277,7 +266,6 @@ export default function OperationalSettingsModal({
                 </div>
               )}
 
-              {/* ordering_mode */}
               <div>
                 <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
                   Modo de toma de pedidos
@@ -300,10 +288,9 @@ export default function OperationalSettingsModal({
                 <FieldError message={errors?.ordering_mode?.message} />
               </div>
 
-              {/* table_service_mode */}
               <div>
                 <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
-                  Modo de asignación de mesas
+                  Modo de asignación de personal
                 </div>
 
                 <select
@@ -323,11 +310,10 @@ export default function OperationalSettingsModal({
                 <FieldError message={errors?.table_service_mode?.message} />
               </div>
 
-              {/* NUEVO: assignment_strategy (solo si assigned_waiter) */}
               {showStrategy && (
                 <div>
                   <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
-                    assignment_strategy
+                    Estrategia de asignación
                   </div>
 
                   <select
@@ -345,15 +331,9 @@ export default function OperationalSettingsModal({
 
                   <HelperNote>{strategyHelper}</HelperNote>
                   <FieldError message={errors?.assignment_strategy?.message} />
-
-                  <div style={subtleNoteStyle}>
-                    Si eliges <strong>Zona</strong>, asignarás mesero desde cada zona. Si eliges{" "}
-                    <strong>Mesa</strong>, lo harás desde cada mesa.
-                  </div>
                 </div>
               )}
 
-              {/* is_qr_enabled */}
               <div
                 style={{
                   padding: 12,
@@ -381,7 +361,6 @@ export default function OperationalSettingsModal({
                 </label>
               </div>
 
-              {/* ASIENTOS */}
               <div
                 style={{
                   padding: 12,
@@ -392,18 +371,9 @@ export default function OperationalSettingsModal({
               >
                 <div style={{ fontWeight: 900, marginBottom: 8 }}>Asientos</div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                  }}
-                >
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div>
-                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
-                      Mínimo
-                    </div>
-
+                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Mínimo</div>
                     <select
                       {...register("min_seats")}
                       style={{
@@ -419,15 +389,11 @@ export default function OperationalSettingsModal({
                         </option>
                       ))}
                     </select>
-
                     <FieldError message={errors?.min_seats?.message} />
                   </div>
 
                   <div>
-                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
-                      Máximo
-                    </div>
-
+                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Máximo</div>
                     <select
                       {...register("max_seats")}
                       style={{
@@ -443,7 +409,6 @@ export default function OperationalSettingsModal({
                         </option>
                       ))}
                     </select>
-
                     <FieldError message={errors?.max_seats?.message} />
                   </div>
                 </div>
@@ -454,19 +419,7 @@ export default function OperationalSettingsModal({
                 </div>
               </div>
 
-              {/* NOTICES DEL BACKEND */}
-              {Array.isArray(serverNotices) && serverNotices.length > 0 ? (
-                <div style={noticesListStyle}>
-                  <div style={{ fontWeight: 950, marginBottom: 8 }}>Avisos del sistema</div>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {serverNotices.map((n, idx) => (
-                      <li key={idx} style={{ marginBottom: 6, fontWeight: 750 }}>
-                        {n}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+             
             </div>
           </div>
 

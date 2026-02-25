@@ -6,8 +6,16 @@ import ZoneModal from "../../components/floor/ZoneModal";
 import TableModal from "../../components/floor/TableModal";
 
 import { getOperationalSettings } from "../../services/floor/operationalSettings.service";
-import { getZones, deleteZone, assignZoneWaiter } from "../../services/floor/zones.service";
-import { getTables, deleteTable, getAvailableWaiters } from "../../services/floor/tables.service";
+import {
+  getZones,
+  deleteZone,
+  assignZoneWaiter,
+} from "../../services/floor/zones.service";
+import {
+  getTables,
+  deleteTable,
+  getAvailableWaiters,
+} from "../../services/floor/tables.service";
 
 // Toast simple
 function Toast({ open, message, type = "info", onClose }) {
@@ -70,7 +78,9 @@ function Toast({ open, message, type = "info", onClose }) {
           : "Aviso"}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.35 }}>{message}</div>
-      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>(clic para cerrar)</div>
+      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+        (clic para cerrar)
+      </div>
     </div>
   );
 }
@@ -119,25 +129,45 @@ function boolES(v) {
 }
 
 function formatWaiterFromTable(t) {
-  const w = t?.assigned_waiter || t?.assignedWaiter || t?.assignedWaiterUser || null;
+  const w =
+    t?.assigned_waiter ||
+    t?.assignedWaiter ||
+    t?.assignedWaiterUser ||
+    null;
   if (w && typeof w === "object") {
-    const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
+    const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(
+      Boolean
+    );
     return parts.join(" ").trim();
   }
   if (t?.assigned_waiter_id) return `#${t.assigned_waiter_id}`;
   return "";
 }
 
-// Extrae la config real aunque te manden {data:{...}} o directamente {...}
-function unwrapSettings(maybe) {
+// ✅ Extrae payload completo: {data, ui, notices} o fallback a data
+function unwrapSettingsPayload(maybe) {
   if (!maybe) return null;
-  if (typeof maybe === "object" && maybe.data && typeof maybe.data === "object") return maybe.data;
-  return maybe;
+  if (typeof maybe !== "object") return null;
+
+  // esperado: { data: {...}, ui: {...}, notices: [...] }
+  if (maybe.data && typeof maybe.data === "object") {
+    return {
+      data: maybe.data,
+      ui: maybe.ui || null,
+      notices: Array.isArray(maybe.notices) ? maybe.notices : [],
+      message: maybe.message || null,
+    };
+  }
+
+  // fallback viejo: {...settings}
+  return { data: maybe, ui: null, notices: [], message: null };
 }
 
 function waiterLabel(w) {
   if (!w) return "";
-  const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
+  const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(
+    Boolean
+  );
   const full = parts.join(" ").trim();
   const phone = w.phone ? ` · ${w.phone}` : "";
   return `${full}${phone}`.trim();
@@ -189,8 +219,12 @@ export default function BranchFloorPlanPage() {
 
   const [loading, setLoading] = useState(true);
 
-  // guardamos SOLO el objeto settings real
-  const [settings, setSettings] = useState(null);
+  // ✅ Guardamos el payload completo: {data, ui, notices}
+  const [settingsPayload, setSettingsPayload] = useState(null);
+
+  // conveniencia
+  const settings = settingsPayload?.data || null;
+
   const [zones, setZones] = useState([]);
   const [tables, setTables] = useState([]);
 
@@ -231,18 +265,21 @@ export default function BranchFloorPlanPage() {
   const loadSettings = async () => {
     try {
       const res = await getOperationalSettings(restaurantId, branchId);
-      const s = unwrapSettings(res);
-      setSettings(s);
+      const payload = unwrapSettingsPayload(res);
+      setSettingsPayload(payload);
       setSettingsModalOpen(false);
     } catch (e) {
       const st = e?.response?.status;
 
       if (st === 404) {
-        setSettings(null);
+        setSettingsPayload(null);
         setSettingsModalMode("create");
         setSettingsModalOpen(true);
       } else {
-        const msg = e?.response?.data?.message || e?.message || "No se pudo cargar la configuración";
+        const msg =
+          e?.response?.data?.message ||
+          e?.message ||
+          "No se pudo cargar la configuración";
         showToast(msg, "error");
       }
     }
@@ -254,7 +291,10 @@ export default function BranchFloorPlanPage() {
       const z = await getZones(restaurantId, branchId);
       setZones(z);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar las zonas";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudieron cargar las zonas";
       showToast(msg, "error");
     } finally {
       setZonesLoading(false);
@@ -267,7 +307,10 @@ export default function BranchFloorPlanPage() {
       const t = await getTables(restaurantId, branchId);
       setTables(t);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar las mesas";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudieron cargar las mesas";
       showToast(msg, "error");
     } finally {
       setTablesLoading(false);
@@ -290,19 +333,28 @@ export default function BranchFloorPlanPage() {
     setSettingsModalOpen(true);
   };
 
-  const onSettingsSaved = (saved) => {
-    const s = unwrapSettings(saved);
-    setSettings(s);
-    showToast("Configuración guardada.", "success");
+  // ✅ IMPORTANTÍSIMO: después de guardar settings, recarga zonas/mesas
+  const onSettingsSaved = async (saved) => {
+    const payload = unwrapSettingsPayload(saved);
+    setSettingsPayload(payload);
+
+    showToast(payload?.message || "Configuración guardada.", "success");
+
+    // backend pudo limpiar assigned_waiter_id en mesas y/o zonas
+    await loadZones();
+    await loadTables();
   };
 
   const settingsSummary = useMemo(() => {
     if (!settings) return null;
 
-    const orderingLabel = ORDERING_MODE_ES[settings.ordering_mode] || "Sin definir";
-    const tableServiceLabel = TABLE_SERVICE_MODE_ES[settings.table_service_mode] || "Sin definir";
+    const orderingLabel =
+      ORDERING_MODE_ES[settings.ordering_mode] || "Sin definir";
+    const tableServiceLabel =
+      TABLE_SERVICE_MODE_ES[settings.table_service_mode] || "Sin definir";
     const strategyLabel = settings.assignment_strategy
-      ? (ASSIGNMENT_STRATEGY_ES[settings.assignment_strategy] || settings.assignment_strategy)
+      ? ASSIGNMENT_STRATEGY_ES[settings.assignment_strategy] ||
+        settings.assignment_strategy
       : null;
 
     return {
@@ -343,7 +395,8 @@ export default function BranchFloorPlanPage() {
       await loadZones();
       await loadTables();
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo eliminar la zona";
+      const msg =
+        e?.response?.data?.message || e?.message || "No se pudo eliminar la zona";
       showToast(msg, "error");
     }
   };
@@ -378,7 +431,8 @@ export default function BranchFloorPlanPage() {
       showToast("Mesa eliminada.", "success");
       await loadTables();
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo eliminar la mesa";
+      const msg =
+        e?.response?.data?.message || e?.message || "No se pudo eliminar la mesa";
       showToast(msg, "error");
     }
   };
@@ -402,22 +456,34 @@ export default function BranchFloorPlanPage() {
     return zones.filter((z) => String(z.id) === String(zoneFilter));
   }, [zones, zoneFilter]);
 
+  // ✅ Usa ui.can_manage_qr si viene, fallback a is_qr_enabled
   const canManageQr = useMemo(() => {
+    if (settingsPayload?.ui && typeof settingsPayload.ui.can_manage_qr !== "undefined") {
+      return !!settingsPayload.ui.can_manage_qr;
+    }
     if (!settings) return false;
     return toBool(settings.is_qr_enabled);
-  }, [settings]);
+  }, [settingsPayload, settings]);
+
+  const manageQrBlockReason = useMemo(() => {
+    return settingsPayload?.ui?.manage_qr_block_reason || null;
+  }, [settingsPayload]);
 
   const onManageQrClick = () => {
     if (!settings) {
-      showToast("Primero crea la Configuración Operativa en esta sucursal.", "warning");
+      showToast(
+        "Primero crea la Configuración Operativa en esta sucursal.",
+        "warning"
+      );
       setSettingsModalMode("create");
       setSettingsModalOpen(true);
       return;
     }
 
-    if (!toBool(settings.is_qr_enabled)) {
+    if (!canManageQr) {
       showToast(
-        "No tienes la opción de QR habilitada. Actívala en Configuración Operativa para crear y administrar QRs.",
+        manageQrBlockReason ||
+          "QR desactivado: actívalo en Configuración Operativa para crear y administrar QRs.",
         "warning"
       );
       return;
@@ -426,7 +492,7 @@ export default function BranchFloorPlanPage() {
     nav(`/owner/restaurants/${restaurantId}/branches/${branchId}/qr-codes`);
   };
 
-  // ---- NUEVO: asignación de mesero por zona (solo si assigned_waiter + zone)
+  // ---- Asignación por zona solo si assigned_waiter + zone
   const isZoneAssignmentEnabled = useMemo(() => {
     return (
       String(settings?.table_service_mode || "") === "assigned_waiter" &&
@@ -446,7 +512,10 @@ export default function BranchFloorPlanPage() {
       const list = await getAvailableWaiters(restaurantId, branchId, "");
       setAssignWaiters(Array.isArray(list) ? list : []);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar los meseros";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudieron cargar los meseros";
       showToast(msg, "error");
     } finally {
       setAssignWaitersLoading(false);
@@ -494,14 +563,20 @@ export default function BranchFloorPlanPage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "22px auto", padding: 16 }}>
-      <Toast open={toast.open} message={toast.message} type={toast.type} onClose={closeToast} />
+      <Toast
+        open={toast.open}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
 
       <OperationalSettingsModal
         open={settingsModalOpen}
         mode={settingsModalMode}
         restaurantId={restaurantId}
         branchId={branchId}
-        initialData={settingsModalMode === "edit" ? settings : null}
+        // ✅ ahora sí le pasas payload completo (con notices)
+        initialData={settingsModalMode === "edit" ? settingsPayload : null}
         onClose={() => {
           if (settingsModalMode === "create" && !settings) {
             nav("/owner/restaurants");
@@ -539,7 +614,12 @@ export default function BranchFloorPlanPage() {
 
       {/* Modal inline: Asignar mesero */}
       {assignModalOpen && (
-        <div style={overlayStyle} onMouseDown={closeAssignModal} role="dialog" aria-modal="true">
+        <div
+          style={overlayStyle}
+          onMouseDown={closeAssignModal}
+          role="dialog"
+          aria-modal="true"
+        >
           <div style={modalStyle} onMouseDown={(e) => e.stopPropagation()}>
             <div style={headerStyle}>
               <div>
@@ -580,13 +660,25 @@ export default function BranchFloorPlanPage() {
                 ))}
               </select>
 
-              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>
-                Esto también asigna automáticamente el mesero a todas las mesas de esta zona.
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  opacity: 0.75,
+                  lineHeight: 1.35,
+                }}
+              >
+                Esto también asigna automáticamente el mesero a todas las mesas de
+                esta zona.
               </div>
             </div>
 
             <div style={footerStyle}>
-              <button type="button" onClick={closeAssignModal} style={{ cursor: "pointer" }}>
+              <button
+                type="button"
+                onClick={closeAssignModal}
+                style={{ cursor: "pointer" }}
+              >
                 Cancelar
               </button>
 
@@ -608,32 +700,49 @@ export default function BranchFloorPlanPage() {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <h2 style={{ margin: 0 }}>Diseño del salón</h2>
           </div>
 
           <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
             {settingsSummary ? (
               <>
-                Modo de toma de pedidos: <strong>{settingsSummary.orderingLabel}</strong>{" "}
-                · Modo de asignación de mesas: <strong>{settingsSummary.tableServiceLabel}</strong>
+                Modo de toma de pedidos:{" "}
+                <strong>{settingsSummary.orderingLabel}</strong> · Modo de
+                asignación de mesas:{" "}
+                <strong>{settingsSummary.tableServiceLabel}</strong>
                 {settingsSummary.strategyLabel ? (
                   <>
                     {" "}
-                    · Estrategia: <strong>{settingsSummary.strategyLabel}</strong>
+                    · Estrategia:{" "}
+                    <strong>{settingsSummary.strategyLabel}</strong>
                   </>
-                ) : null}
-                {" "}
+                ) : null}{" "}
                 · QR: <strong>{settingsSummary.qrLabel}</strong>
-                {typeof settings?.min_seats !== "undefined" && typeof settings?.max_seats !== "undefined" && (
-                  <>
-                    {" "}
-                    · Asientos por mesa: <strong>{settings.min_seats}</strong> a{" "}
-                    <strong>{settings.max_seats}</strong>
-                  </>
-                )}
+                {typeof settings?.min_seats !== "undefined" &&
+                  typeof settings?.max_seats !== "undefined" && (
+                    <>
+                      {" "}
+                      · Asientos por mesa: <strong>{settings.min_seats}</strong>{" "}
+                      a <strong>{settings.max_seats}</strong>
+                    </>
+                  )}
               </>
             ) : (
               "Sin configuración operativa (debería abrirse el modal)"
@@ -697,7 +806,7 @@ export default function BranchFloorPlanPage() {
             title={
               canManageQr
                 ? "Administración de QRs para esta sucursal"
-                : "QR desactivado: actívalo en Configuración Operativa"
+                : manageQrBlockReason || "QR desactivado: actívalo en Configuración Operativa"
             }
           >
             📱 Administrar QRs
@@ -770,7 +879,9 @@ export default function BranchFloorPlanPage() {
           ))}
 
           {(zonesLoading || tablesLoading) && (
-            <div style={{ fontSize: 12, opacity: 0.7, padding: "8px 10px" }}>Cargando...</div>
+            <div style={{ fontSize: 12, opacity: 0.7, padding: "8px 10px" }}>
+              Cargando...
+            </div>
           )}
         </div>
       </div>
@@ -797,7 +908,9 @@ export default function BranchFloorPlanPage() {
             const count = zoneTables.length;
 
             const missingZoneWaiter =
-              isZoneAssignmentEnabled && (zone?.assigned_waiter_id === null || typeof zone?.assigned_waiter_id === "undefined");
+              isZoneAssignmentEnabled &&
+              (zone?.assigned_waiter_id === null ||
+                typeof zone?.assigned_waiter_id === "undefined");
 
             return (
               <div
@@ -810,13 +923,21 @@ export default function BranchFloorPlanPage() {
                 }}
               >
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <div style={{ fontWeight: 900, fontSize: 14 }}>
                       {zone.name}{" "}
-                      <span style={{ fontWeight: 700, opacity: 0.7 }}>· {count} mesas</span>
+                      <span style={{ fontWeight: 700, opacity: 0.7 }}>
+                        · {count} mesas
+                      </span>
                     </div>
 
-                    {/* Aviso falta asignar mesero */}
                     {missingZoneWaiter ? (
                       <div
                         style={{
@@ -836,7 +957,6 @@ export default function BranchFloorPlanPage() {
                   </div>
 
                   <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-                    {/* NUEVO: Asignar mesero (solo cuando aplica) */}
                     {isZoneAssignmentEnabled && (
                       <button
                         onClick={() => openAssignWaiter(zone)}
@@ -909,7 +1029,9 @@ export default function BranchFloorPlanPage() {
                       }}
                     >
                       {zoneTables.map((t) => {
-                        const meta = STATUS_META.find((x) => x.key === t.status) || STATUS_META[0];
+                        const meta =
+                          STATUS_META.find((x) => x.key === t.status) ||
+                          STATUS_META[0];
                         const waiterText = formatWaiterFromTable(t);
 
                         return (
@@ -927,9 +1049,21 @@ export default function BranchFloorPlanPage() {
                               position: "relative",
                             }}
                           >
-                            <div style={{ display: "flex", justifyContent: "space-between", paddingRight: 46 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                paddingRight: 46,
+                              }}
+                            >
                               <div style={{ fontWeight: 900 }}>{t.name}</div>
-                              <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.8 }}>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  opacity: 0.8,
+                                }}
+                              >
                                 {STATUS_LABELS_ES[t.status] || "Disponible"}
                               </div>
                             </div>
@@ -944,7 +1078,14 @@ export default function BranchFloorPlanPage() {
                               </div>
                             ) : null}
 
-                            <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                            <div
+                              style={{
+                                marginTop: "auto",
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: 8,
+                              }}
+                            >
                               <button
                                 onClick={() => openEditTable(t)}
                                 style={{
@@ -1043,8 +1184,15 @@ export default function BranchFloorPlanPage() {
                 lineHeight: 1.3,
               }}
             >
-              QR está desactivado: no podrás entrar a <strong>Administrar QRs</strong> hasta activarlo en{" "}
-              <strong>Configuración operativa</strong>.
+              {manageQrBlockReason ? (
+                manageQrBlockReason
+              ) : (
+                <>
+                  QR está desactivado: no podrás entrar a{" "}
+                  <strong>Administrar QRs</strong> hasta activarlo en{" "}
+                  <strong>Configuración operativa</strong>.
+                </>
+              )}
             </div>
           ) : null}
         </div>
