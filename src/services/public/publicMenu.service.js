@@ -1,7 +1,8 @@
 // src/services/public/publicMenu.service.js
 import axios from "axios";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || "https://api.clicmenu.com.mx/api";
+const apiBase =
+  import.meta.env.VITE_API_BASE_URL || "https://api.clicmenu.com.mx/api";
 
 const publicApi = axios.create({
   baseURL: apiBase,
@@ -10,8 +11,7 @@ const publicApi = axios.create({
 
 /**
  * =========================================================
- * 1) Device Identifier (persistente por navegador)
- *    - Esto activa “solo un usuario a la vez”
+ * 1) Device Identifier (persistente)
  * =========================================================
  */
 export function getOrCreatePublicDeviceId() {
@@ -55,7 +55,9 @@ export async function fetchResolvedMenu(token) {
  */
 export async function scanTable(tableId) {
   const device_identifier = getOrCreatePublicDeviceId();
-  const { data } = await publicApi.post(`/public/tables/${tableId}/scan`, { device_identifier });
+  const { data } = await publicApi.post(`/public/tables/${tableId}/scan`, {
+    device_identifier,
+  });
   return data;
 }
 
@@ -69,7 +71,10 @@ export async function getTableSession(sessionId) {
 
 export async function heartbeatTableSession(sessionId) {
   const device_identifier = getOrCreatePublicDeviceId();
-  const { data } = await publicApi.post(`/public/table-sessions/${sessionId}/heartbeat`, { device_identifier });
+  const { data } = await publicApi.post(
+    `/public/table-sessions/${sessionId}/heartbeat`,
+    { device_identifier },
+  );
   return data;
 }
 
@@ -80,40 +85,56 @@ export async function heartbeatTableSession(sessionId) {
  */
 export async function callWaiterByTable(tableId) {
   const device_identifier = getOrCreatePublicDeviceId();
-  const { data } = await publicApi.post(`/public/tables/${tableId}/call-waiter`, { device_identifier });
+  const { data } = await publicApi.post(`/public/tables/${tableId}/call-waiter`, {
+    device_identifier,
+  });
   return data;
 }
 
 /**
  * =========================================================
- * 5) Orders (create)
- *    OJO: por tu routes.php hay riesgo de que quede /public/public/orders,
- *    así que aquí hago fallback automático si da 404.
+ * 5) Orders
+ *   - create (pending_approval)
+ *   - show (order + items)  GET /public/orders/{order}?token&device_identifier
+ *   - append-items (open)   POST /public/orders/{order}/append-items
  * =========================================================
  */
-async function postCreateOrder(url, payload) {
-  const { data } = await publicApi.post(url, payload);
-  return data;
-}
 
 export async function createPublicOrder({ token, customer_name, items }) {
   const device_identifier = getOrCreatePublicDeviceId();
 
   const payload = {
-    token,
+    token: String(token || ""),
     device_identifier,
-    customer_name,
+    customer_name: String(customer_name || "").slice(0, 120),
     items: Array.isArray(items) ? items : [],
   };
 
-  try {
-    // Ruta esperada
-    return await postCreateOrder(`/public/orders`, payload);
-  } catch (e) {
-    // Fallback por tu definición: Route::post('/public/orders') dentro de prefix('public')
-    if (e?.response?.status === 404) {
-      return await postCreateOrder(`/public/public/orders`, payload);
-    }
-    throw e;
-  }
+  const { data } = await publicApi.post(`/public/orders`, payload);
+  return data;
+}
+
+export async function getPublicOrder({ orderId, token }) {
+  const device_identifier = getOrCreatePublicDeviceId();
+  const { data } = await publicApi.get(`/public/orders/${orderId}`, {
+    params: {
+      token: String(token || ""),
+      device_identifier,
+    },
+  });
+  return data;
+}
+
+export async function appendPublicOrderItems({ orderId, token, items }) {
+  const device_identifier = getOrCreatePublicDeviceId();
+  const payload = {
+    token: String(token || ""),
+    device_identifier,
+    items: Array.isArray(items) ? items : [],
+  };
+  const { data } = await publicApi.post(
+    `/public/orders/${orderId}/append-items`,
+    payload,
+  );
+  return data;
 }

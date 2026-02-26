@@ -7,6 +7,8 @@ import {
   fetchStaffTablesGrid,
   attendTable,
   finishAttention,
+  acceptCustomerOrder,
+  rejectCustomerOrder,
 } from "../../../services/staff/waiter/waiterTables.service";
 
 // -------------------------
@@ -133,6 +135,7 @@ function stateVisual(uiState) {
     mine: { bg: "#e8f1ff", bd: "#95b9ff", fg: "#0b4db3", label: "Atendiendo" },
     locked: { bg: "#f3f4f6", bd: "#d1d5db", fg: "#374151", label: "Ocupada" },
     blocked: { bg: "#efeff3", bd: "#c7c7d0", fg: "#4b5563", label: "Bloqueada" },
+    pending: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b", label: "Comanda pendiente" },
   };
 
   return map[uiState] || map.free;
@@ -216,7 +219,7 @@ export default function WaiterTablesGrid() {
   const tables = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
 
   const summary = useMemo(() => {
-    const counts = { free: 0, call: 0, mine: 0, locked: 0, blocked: 0 };
+    const counts = { free: 0, call: 0, mine: 0, locked: 0, blocked: 0, pending: 0 };
     for (const t of tables) {
       const s = String(t?.ui_state || "free");
       if (counts[s] !== undefined) counts[s]++;
@@ -279,7 +282,7 @@ export default function WaiterTablesGrid() {
       }
 
       if (st === 409 && code === "HAS_ACTIVE_ORDER") {
-        showToast("No puedes finalizar: ya existe una comanda activa en esta mesa.", "warning");
+        showToast("No puedes liberar: aún existe una comanda activa o pendiente en esta mesa.", "warning");
         await load({ silent: true });
         return;
       }
@@ -288,6 +291,8 @@ export default function WaiterTablesGrid() {
     }
   };
 
+  // 👁️ “Ver pedido” ya NO es el CTA principal cuando hay comanda open.
+  // Lo dejamos como utilidad por si lo ocupas en otros estados.
   const doViewOrder = async (table) => {
     const orderId = table?.active_order?.id;
     if (!orderId) {
@@ -295,9 +300,72 @@ export default function WaiterTablesGrid() {
       return;
     }
     showToast(
-      `Comanda #${orderId} (ajusta la ruta real de “Ver Pedido” a tu pantalla).`,
+      `Comanda #${orderId}: ajusta aquí la navegación a tu pantalla real de detalle.`,
       "info"
     );
+  };
+
+  // ✅ “Pagado” = aquí va tu flujo real de pago/cierre de orden.
+  // Como no me diste la ruta real, lo dejamos como acción segura:
+  // 1) Te manda a una ruta típica si existe (ajústala)
+  // 2) Si no existe, al menos no rompe UI.
+  const doPaid = async (table) => {
+    const orderId = table?.active_order?.id;
+    if (!orderId) {
+      showToast("No hay comanda activa para marcar como pagada.", "warning");
+      return;
+    }
+
+    // Ajusta esta ruta a TU pantalla real de pago/cierre.
+    // La dejo “razonable” para que sea evidente dónde tocar.
+    nav(`/staff/waiter/orders/${orderId}`, { replace: false });
+  };
+
+  const doAccept = async (table) => {
+    const pending = table?.pending_order || null;
+    const orderId = pending?.id || null;
+
+    if (!orderId) {
+      showToast("No hay comanda pendiente para aceptar.", "warning");
+      return;
+    }
+
+    try {
+      await acceptCustomerOrder(orderId);
+      showToast(`Comanda #${orderId}: aceptada.`, "success");
+      await load({ silent: true });
+    } catch (e) {
+      const st = e?.response?.status;
+      const code = e?.response?.data?.code;
+      const msg = e?.response?.data?.message || e?.message || "No se pudo aceptar la comanda.";
+
+      if (st === 409 && (code === "TAKEN" || code === "TABLE_TAKEN" || code === "NOT_PENDING")) {
+        showToast("Otro mesero aceptó primero esta comanda (o ya no estaba pendiente).", "warning");
+        await load({ silent: true });
+        return;
+      }
+
+      showToast(msg, "error");
+    }
+  };
+
+  const doReject = async (table) => {
+    const pending = table?.pending_order || null;
+    const orderId = pending?.id || null;
+
+    if (!orderId) {
+      showToast("No hay comanda pendiente para rechazar.", "warning");
+      return;
+    }
+
+    try {
+      await rejectCustomerOrder(orderId);
+      showToast(`Comanda #${orderId}: rechazada y eliminada.`, "success");
+      await load({ silent: true });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo rechazar la comanda.";
+      showToast(msg, "error");
+    }
   };
 
   return (
@@ -329,6 +397,7 @@ export default function WaiterTablesGrid() {
               <span style={{ ...pillMini("#e8f1ff", "#95b9ff") }}>Atendiendo: {summary.mine}</span>
               <span style={{ ...pillMini("#f3f4f6", "#d1d5db") }}>Ocupada: {summary.locked}</span>
               <span style={{ ...pillMini("#efeff3", "#c7c7d0") }}>Bloqueada: {summary.blocked}</span>
+              <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>Pendiente: {summary.pending}</span>
             </div>
           </div>
 
@@ -345,27 +414,11 @@ export default function WaiterTablesGrid() {
       </div>
 
       {busy ? (
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            border: "1px solid rgba(0,0,0,0.12)",
-            borderRadius: 14,
-            background: "#fff",
-          }}
-        >
+        <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 14, background: "#fff" }}>
           Cargando mesas…
         </div>
       ) : tables.length === 0 ? (
-        <div
-          style={{
-            marginTop: 14,
-            padding: 12,
-            border: "1px solid rgba(0,0,0,0.12)",
-            borderRadius: 14,
-            background: "#fff",
-          }}
-        >
+        <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 14, background: "#fff" }}>
           No hay mesas para mostrar.
         </div>
       ) : (
@@ -388,11 +441,28 @@ export default function WaiterTablesGrid() {
               const v = stateVisual(uiState);
 
               const hasCall = !!t?.call?.id;
-              const hasOrder = !!t?.active_order?.id;
+              const callStatus = String(t?.call?.status || "");
 
+              const pending = t?.pending_order || null;
+              const hasPending = !!(pending && pending?.id);
+
+              const openOrder = t?.active_order || null;
+              const hasOpenOrder = !!openOrder?.id;
+
+              // backend flags
               const canAttend = !!t?.actions?.can_attend;
               const canFinish = !!t?.actions?.can_finish_attention;
               const canViewOrder = !!t?.actions?.can_view_order;
+
+              const canAccept = !!t?.actions?.can_accept_order && hasPending;
+              const canReject = !!t?.actions?.can_reject_order && hasPending;
+
+              // ✅ Nueva regla UI (según tu request):
+              // - Si hay comanda open: mostrar Pagado | Liberar Sesión (si es mi mesa / atendiendo)
+              // - Si además hay llamada abierta y can_attend: mostrar Atender arriba.
+              const showPaidAndRelease = hasOpenOrder && uiState === "mine";
+              const showAttendButton = canAttend; // ya lo calcula Laravel (call abierta y permiso)
+              const showViewOrder = !showPaidAndRelease && canViewOrder; // “Ver pedido” deja de ser CTA principal cuando hay open
 
               return (
                 <div
@@ -431,41 +501,93 @@ export default function WaiterTablesGrid() {
                   {hasCall ? (
                     <div style={{ fontSize: 12, opacity: 0.85 }}>
                       🔔 Llamada #{t.call.id} ·{" "}
-                      {t.call.called_at ? (
-                        <span style={{ fontWeight: 900 }}>{t.call.called_at}</span>
-                      ) : null}
+                      {callStatus ? <strong style={{ marginLeft: 4 }}>{callStatus}</strong> : null}
                     </div>
                   ) : null}
 
-                  {hasOrder ? (
+                  {hasPending ? (
+                    <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 900 }}>
+                      ⏳ Comanda pendiente #{pending.id}
+                      {pending?.customer_name ? ` · ${pending.customer_name}` : ""}
+                      {pending?.total != null ? ` · ${money(pending.total)}` : ""}
+                    </div>
+                  ) : hasOpenOrder ? (
                     <div style={{ fontSize: 12, opacity: 0.85 }}>
-                      🍽️ Comanda #{t.active_order.id} ·{" "}
-                      {t.active_order.total != null ? <strong>{money(t.active_order.total)}</strong> : null}
+                      🍽️ Comanda #{openOrder.id} ·{" "}
+                      {openOrder.total != null ? <strong>{money(openOrder.total)}</strong> : null}
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, opacity: 0.75 }}>Sin comanda activa</div>
                   )}
 
                   <div style={{ marginTop: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {canAttend ? (
-                      <PillButton tone="warn" onClick={() => doAttend(t)} title="Atender llamada">
-                        ✅ Atender
+                    {/* Pendiente approval: botones como antes */}
+                    {canAccept ? (
+                      <PillButton tone="ok" onClick={() => doAccept(t)} title="Aceptar comanda del cliente">
+                        ✅ Aceptar
                       </PillButton>
                     ) : null}
 
-                    {canViewOrder ? (
-                      <PillButton tone="soft" onClick={() => doViewOrder(t)} title="Ver pedido">
-                        👁️ Ver Pedido
+                    {canReject ? (
+                      <PillButton tone="danger" onClick={() => doReject(t)} title="Rechazar comanda del cliente">
+                        ⛔ Rechazar
                       </PillButton>
                     ) : null}
 
-                    {canFinish ? (
-                      <PillButton tone="dark" onClick={() => doFinish(t)} title="Finalizar atención">
-                        🧾 Finalizar
-                      </PillButton>
-                    ) : null}
+                    {/* ✅ Comanda OPEN: nueva regla UI */}
+                    {showPaidAndRelease ? (
+                      <>
+                        {showAttendButton ? (
+                          <PillButton tone="warn" onClick={() => doAttend(t)} title="Atender llamada">
+                            ✅ Atender
+                          </PillButton>
+                        ) : null}
 
-                    {!canAttend && !canViewOrder && !canFinish ? (
+                        <PillButton
+                          tone="ok"
+                          onClick={() => doPaid(t)}
+                          title="Marcar como pagado / ir al flujo de cobro"
+                        >
+                          💳 Pagado
+                        </PillButton>
+
+                        <PillButton
+                          tone="dark"
+                          onClick={() => doFinish(t)}
+                          title="Liberar sesión (si ya no hay comanda activa, Laravel lo permitirá)"
+                        >
+                          🔓 Liberar Sesión
+                        </PillButton>
+                      </>
+                    ) : (
+                      <>
+                        {/* Si NO hay comanda open: acciones tradicionales */}
+                        {showAttendButton ? (
+                          <PillButton tone="warn" onClick={() => doAttend(t)} title="Atender llamada">
+                            ✅ Atender
+                          </PillButton>
+                        ) : null}
+
+                        {showViewOrder ? (
+                          <PillButton tone="soft" onClick={() => doViewOrder(t)} title="Ver pedido">
+                            👁️ Ver Pedido
+                          </PillButton>
+                        ) : null}
+
+                        {canFinish ? (
+                          <PillButton tone="dark" onClick={() => doFinish(t)} title="Finalizar atención">
+                            🧾 Finalizar
+                          </PillButton>
+                        ) : null}
+                      </>
+                    )}
+
+                    {!canAttend &&
+                    !showViewOrder &&
+                    !canFinish &&
+                    !canAccept &&
+                    !canReject &&
+                    !showPaidAndRelease ? (
                       <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>Sin acciones</span>
                     ) : null}
                   </div>
@@ -487,8 +609,8 @@ export default function WaiterTablesGrid() {
               <div style={{ fontWeight: 950, marginBottom: 10 }}>Leyenda</div>
               <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
                 <LegendRow colorBg="#e6ffed" colorBd="#8ae99c" label="Verde: Libre" />
-                <LegendRow colorBg="#fff3cd" colorBd="#ffe08a" label='Amarillo: Llamada (botón "Atender")' />
-                <LegendRow colorBg="#e8f1ff" colorBd="#95b9ff" label='Azul: Atendiendo (Ver Pedido / Finalizar)' />
+                <LegendRow colorBg="#fff3cd" colorBd="#ffe08a" label="Amarillo: Llamada / Comanda pendiente" />
+                <LegendRow colorBg="#e8f1ff" colorBd="#95b9ff" label="Azul: Atendiendo (Pagado / Liberar sesión)" />
                 <LegendRow colorBg="#f3f4f6" colorBd="#d1d5db" label="Gris: Ocupada por otro" />
                 <LegendRow colorBg="#efeff3" colorBd="#c7c7d0" label="Gris suave: Bloqueada" />
               </div>

@@ -1,6 +1,5 @@
-// src/pages/public/hooks/useTableQrSession.js
+/// src/hooks/public/useTableQrSession.js
 // sesión de mesa por QR (scan, tick 1s, poll 10s, heartbeat 30s, busy/unavailable/expired)
-// Objetivo: sacar TODA la lógica de sesión del Page sin cambiar comportamiento.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -15,7 +14,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [remainingSec, setRemainingSec] = useState(0);
 
-  // ✅ desactivado temporalmente por atención atendida (solo NO customer_assisted)
+  // desactivado temporalmente por atención atendida (según backend)
   const [sessionUnavailable, setSessionUnavailable] = useState(null); // { message, code }
 
   const sessionPollRef = useRef(null);
@@ -73,7 +72,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
     }
   }, [tableId]);
 
-  // scan inicial solo cuando: payload existe, hay mesa y es physical
+  // scan inicial
   useEffect(() => {
     if (!activeMenuPayload) return;
     if (!hasTable) return;
@@ -133,7 +132,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
 
         if (status === 410) {
           setSession((prev) =>
-            prev ? { ...prev, status: "expired", remaining_seconds: 0 } : prev,
+            prev ? { ...prev, status: "expired", remaining_seconds: 0 } : prev
           );
           setRemainingSec(0);
         }
@@ -171,6 +170,11 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
   const sessionExpired = hasTable && (sessionStatus === "expired" || remainingSec <= 0);
   const sessionActive = hasTable && !!session?.session_id && !sessionExpired;
 
+  // ✅ NUEVO: derivar estatus de orden desde session (depende de tu backend)
+  // soporta: session.order_status, session.active_order.status, session.order.status
+  const sessionOrderStatus =
+    String(session?.order_status || session?.active_order?.status || session?.order?.status || "");
+
   return {
     session,
     setSession,
@@ -182,6 +186,8 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
     setSessionUnavailable,
     sessionExpired,
     sessionActive,
+    sessionStatus,
+    sessionOrderStatus,
     callToast,
     setCallToast,
     startScanSession,

@@ -1,7 +1,7 @@
 // src/pages/public/PublicMenuEntryPage.jsx
 // Page principal: SOLO orquesta hooks + render
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { callWaiterByTable } from "../../services/public/publicMenu.service";
@@ -57,20 +57,6 @@ export default function PublicMenuEntryPage() {
     setCallLocked,
   } = usePublicMenuLoader({ token });
 
-  // carrito + submit comanda
-  const cartOrder = useCartAndOrder({
-    token,
-    canSelect: false,
-    hasTable: false,
-    sessionActive: false,
-    orderingMode: "",
-    sessionBusy: null,
-    sessionUnavailable: null,
-  });
-
-  // ✅ Hook de componentes (composite drafts) para no inflar el page
-  const composite = useCompositeDrafts({ cartOrder });
-
   // payload activo + derivados
   const {
     isWeb,
@@ -97,6 +83,31 @@ export default function PublicMenuEntryPage() {
     setCallLocked,
   });
 
+  // sesión QR
+  const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
+
+  const uiFlags = ui || {};
+  const canSelect = !!ui?.can_select_products && ui?.ui_mode === "selectable";
+  const showSelectBtn = !!ui?.show_select_button && canSelect;
+  const showCallBtn =
+    !!ui?.show_call_waiter_button && !!ui?.call_waiter_enabled && hasTable;
+
+  const orderingMode = String(header?.orderingMode || "");
+
+  // ✅ carrito + orden (Laravel: create / show / append-items)
+  const cartOrder = useCartAndOrder({
+    token,
+    canSelect,
+    hasTable,
+    sessionActive: qr.sessionActive,
+    orderingMode,
+    sessionBusy: qr.sessionBusy,
+    sessionUnavailable: qr.sessionUnavailable,
+  });
+
+  // ✅ Hook de componentes (composite drafts)
+  const composite = useCompositeDrafts({ cartOrder });
+
   // productos + filtrado
   const { categoryNameById, categoryOptions, filteredProducts } = useMenuProducts({
     sections,
@@ -105,16 +116,53 @@ export default function PublicMenuEntryPage() {
     expanded,
   });
 
-  // sesión QR
-  const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
+  // =========================================================
+  // ✅ FIX REAL: tu TableSession público NO trae order_status,
+  // solo trae order_id. Entonces: si hay order_id, cargamos
+  // SIEMPRE el GET /public/orders/{order} para traer items viejos.
+  // =========================================================
+  const lastLoadedOrderIdRef = useRef(null);
 
-  const uiFlags = ui || {};
-  const canSelect = !!ui?.can_select_products && ui?.ui_mode === "selectable";
-  const showSelectBtn = !!ui?.show_select_button && canSelect;
-  const showCallBtn = !!ui?.show_call_waiter_button && !!ui?.call_waiter_enabled && hasTable;
+  useEffect(() => {
+    const sessionOrderId = Number(qr?.session?.order_id || 0);
+    const sessionStatus = String(qr?.session?.status || "");
 
-  const orderingMode = String(header?.orderingMode || "");
-  const allowOrderSubmit =
+    // Solo intentamos si hay sesión válida y tiene order_id
+    if (!sessionOrderId) return;
+
+    // Tu endpoint show() exige session status pending/active y device match (lo valida backend)
+    // Si expiró, no tiene caso spamear.
+    if (sessionStatus === "expired") return;
+
+    // Evitar refetch infinito
+    if (lastLoadedOrderIdRef.current === sessionOrderId) {
+      // Si ya cargamos ese order_id pero no hay oldItems (por cualquier razón),
+      // permitimos un reintento cuando cambie la sesión.
+      if (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0) return;
+    }
+
+    lastLoadedOrderIdRef.current = sessionOrderId;
+
+    cartOrder
+      .refreshOrder?.(sessionOrderId)
+      .catch(() => {
+        // si falla, dejamos que vuelva a intentar cuando cambie sesión/status
+        lastLoadedOrderIdRef.current = null;
+      });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qr?.session?.order_id, qr?.session?.status]);
+
+  // Mantener sincronización por status si tu hook lo usa (no estorba)
+  useEffect(() => {
+    cartOrder.syncOrderStatusFromSession?.(qr.sessionOrderStatus)?.catch?.(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qr.sessionOrderStatus]);
+
+  // =========================================
+  // Permisos de envío (flujo correcto)
+  // =========================================
+  const allowBaseSend =
     canSelect &&
     hasTable &&
     qr.sessionActive &&
@@ -123,7 +171,20 @@ export default function PublicMenuEntryPage() {
     !qr.sessionBusy &&
     !qr.sessionUnavailable;
 
-  // ✅ Expand keys para no chocar variantes vs componentes
+  const hasPending =
+    !!cartOrder.pendingOrder?.id &&
+    String(cartOrder.pendingOrder?.status || "pending").toLowerCase() === "pending";
+
+  const canAppend =
+    !!cartOrder.activeOrder?.id &&
+    String(cartOrder.activeOrder?.status || "").toLowerCase() === "open";
+
+  // - Si ya está open: enviar = append directo (sin modal)
+  // - Si está pending: NO se permite enviar otra
+  // - Si no hay orden: se permite enviar (abre modal con nombre)
+  const allowSendButton = allowBaseSend && (canAppend || !hasPending);
+
+  // Expand keys
   const togglePanel = (key) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -133,7 +194,6 @@ export default function PublicMenuEntryPage() {
     });
   };
 
-  // ✅ calling state mantiene UX sin tocar lógica
   const [calling, setCalling] = useState(false);
 
   const onCallWaiterReal = async () => {
@@ -198,7 +258,7 @@ export default function PublicMenuEntryPage() {
     !!qr.sessionUnavailable ||
     callLocked;
 
-  // ====== UI states ======
+  // UI states
   if (loading) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
@@ -275,6 +335,9 @@ export default function PublicMenuEntryPage() {
     );
   }
 
+  const pending = hasPending;
+  const pendingStatus = String(cartOrder.pendingOrder?.status || "");
+
   return (
     <div
       style={{
@@ -284,7 +347,7 @@ export default function PublicMenuEntryPage() {
         background: "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
       }}
     >
-      {/* OVERLAY: Mesa ocupada */}
+      {/* OVERLAYS */}
       <FullOverlay
         open={!!qr.sessionBusy}
         tone="warn"
@@ -306,7 +369,6 @@ export default function PublicMenuEntryPage() {
         }
       />
 
-      {/* OVERLAY: Sesión no disponible */}
       <FullOverlay
         open={!!qr.sessionUnavailable}
         tone="warn"
@@ -329,7 +391,6 @@ export default function PublicMenuEntryPage() {
         }
       />
 
-      {/* OVERLAY: Expirado */}
       <FullOverlay
         open={hasTable && !qr.sessionBusy && !qr.sessionUnavailable && qr.sessionExpired}
         tone="err"
@@ -347,7 +408,7 @@ export default function PublicMenuEntryPage() {
         }
       />
 
-      {/* MODAL: Enviar comanda */}
+      {/* MODAL: Enviar comanda (solo PRIMER ENVÍO, nunca para append) */}
       <Modal
         open={cartOrder.sendOpen}
         title="Enviar comanda"
@@ -361,9 +422,17 @@ export default function PublicMenuEntryPage() {
             </PillButton>
             <PillButton
               tone="orange"
-              disabled={cartOrder.sending || !allowOrderSubmit}
-              onClick={cartOrder.submitOrder}
-              title={!allowOrderSubmit ? "No se puede enviar aún" : "Mandar comanda"}
+              disabled={cartOrder.sending || !allowBaseSend || pending || canAppend}
+              onClick={cartOrder.submitOrderOrAppend}
+              title={
+                canAppend
+                  ? "Esta orden ya está abierta, se agrega directo desde el botón Enviar."
+                  : pending
+                  ? "Ya hay comanda en espera."
+                  : !allowBaseSend
+                  ? "No se puede enviar aún"
+                  : "Mandar comanda"
+              }
             >
               {cartOrder.sending ? "⏳ Mandando..." : "📨 Mandar"}
             </PillButton>
@@ -392,6 +461,12 @@ export default function PublicMenuEntryPage() {
             Items: <strong>{cartOrder.cart.length}</strong> · Total aprox:{" "}
             <strong>{money(cartOrder.cartTotal)}</strong>
           </div>
+
+          {pending ? (
+            <div style={{ fontSize: 12, opacity: 0.85 }}>
+              ⏳ Ya hay una comanda en espera. Espera a que el mesero la apruebe.
+            </div>
+          ) : null}
 
           {cartOrder.sendToast ? (
             <div
@@ -475,6 +550,19 @@ export default function PublicMenuEntryPage() {
                 >
                   ⏳ {fmtMMSS(qr.remainingSec)}
                 </Badge>
+              ) : null}
+
+              {/* Estado orden */}
+              {orderingMode === "customer_assisted" && hasTable ? (
+                canAppend ? (
+                  <Badge tone="ok" title="Orden abierta: puedes agregar productos">
+                    ✅ Orden abierta
+                  </Badge>
+                ) : pending ? (
+                  <Badge tone="warn" title="Esperando aprobación del mesero">
+                    ⏳ Comanda en espera
+                  </Badge>
+                ) : null
               ) : null}
 
               {callLocked ? (
@@ -583,7 +671,7 @@ export default function PublicMenuEntryPage() {
             </Badge>
 
             {canSelect ? (
-              <Badge tone="ok" title="Items en comanda">
+              <Badge tone="ok" title="Items nuevos por enviar/agregar">
                 En comanda: <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
               </Badge>
             ) : null}
@@ -641,7 +729,6 @@ export default function PublicMenuEntryPage() {
               align-items: start;
             }
 
-            /* En pantallas grandes: productos a la izquierda, comanda fija a la derecha */
             @media (min-width: 1100px) {
               .menuLayout {
                 grid-template-columns: minmax(0, 1fr) 380px;
@@ -677,11 +764,9 @@ export default function PublicMenuEntryPage() {
                   const compositeItems = Array.isArray(p?.composite?.items) ? p.composite.items : [];
                   const hasComposite = isComposite && compositeItems.length > 0;
 
-                  // ✅ FIX: estado visual del botón base debe depender SOLO del item base (p:{pid})
                   const baseKey = makeKey(pid, null);
                   const baseInCart = cartOrder.cart.some((x) => x.key === baseKey);
 
-                  // draft init
                   const draft = hasComposite ? composite.getOrInitCompositeDraft(p) : null;
 
                   return (
@@ -716,7 +801,6 @@ export default function PublicMenuEntryPage() {
                           </div>
                         ) : null}
 
-                        {/* ✅ Componentes (composite) */}
                         {hasComposite ? (
                           <div style={{ marginTop: 2 }}>
                             <button
@@ -870,7 +954,6 @@ export default function PublicMenuEntryPage() {
                           </PillButton>
                         ) : null}
 
-                        {/* Variantes del producto (no confundir con variantes de componentes) */}
                         {hasVariants ? (
                           <div style={{ marginTop: 2 }}>
                             <button
@@ -967,9 +1050,9 @@ export default function PublicMenuEntryPage() {
             </div>
           </div>
 
-          {/* DERECHA: COMANDA */}
+          {/* DERECHA: COMANDA (con historial + controles -/+ como antes) */}
           <div className="comandaAside">
-            {cartOrder.cart.length > 0 ? (
+            {(cartOrder.cart.length > 0 || (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0)) ? (
               <div
                 style={{
                   border: "1px solid rgba(0,0,0,0.12)",
@@ -977,147 +1060,229 @@ export default function PublicMenuEntryPage() {
                   background: "#fff",
                   padding: 14,
                   boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+                  width: 380,
+                  maxWidth: "92vw",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 950 }}>Comanda</div>
                     <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                      Se llena cuando seleccionas productos. Luego presiona <strong>Enviar</strong>.
+                      {canAppend
+                        ? "Orden abierta: puedes agregar productos."
+                        : "Se llena cuando seleccionas productos. Luego presiona Enviar."}
                     </div>
+                    {canAppend && cartOrder.activeOrder?.customer_name ? (
+                      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                        A nombre de: <strong>{cartOrder.activeOrder.customer_name}</strong>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                     <Badge tone="default">
-                      Total: <strong style={{ marginLeft: 6 }}>{money(cartOrder.cartTotal)}</strong>
+                      Total: <strong style={{ marginLeft: 6 }}>{money(safeNum(cartOrder.totalGlobal, cartOrder.cartTotal))}</strong>
                     </Badge>
 
-                    <PillButton tone="danger" onClick={() => cartOrder.setCart([])} title="Vaciar comanda">
+                    <PillButton
+                      tone="danger"
+                      onClick={() => cartOrder.setCart([])}
+                      title="Vaciar items nuevos"
+                      disabled={cartOrder.sending || cartOrder.cart.length === 0}
+                    >
                       🗑️ Vaciar
                     </PillButton>
 
                     <PillButton
                       tone="orange"
-                      onClick={() => cartOrder.setSendOpen(true)}
-                      disabled={!allowOrderSubmit}
+                      onClick={() => {
+                        if (canAppend) {
+                          cartOrder.submitOrderOrAppend();
+                          return;
+                        }
+                        cartOrder.setSendOpen(true);
+                      }}
+                      disabled={!allowSendButton || cartOrder.sending}
                       title={
-                        orderingMode !== "customer_assisted"
+                        pending
+                          ? "Ya hay una comanda en espera de aprobación."
+                          : orderingMode !== "customer_assisted"
                           ? "Esta sucursal no permite pedidos del cliente."
                           : !qr.sessionActive
                           ? "Sesión no activa."
                           : !canSelect
                           ? "Menú no seleccionable."
+                          : canAppend
+                          ? "Agregar productos a la orden abierta"
                           : "Enviar comanda"
                       }
                     >
-                      📤 Enviar
+                      {cartOrder.sending ? "⏳ Enviando..." : canAppend ? "➕ Agregar" : "📤 Enviar"}
                     </PillButton>
                   </div>
                 </div>
 
-                <div style={{ marginTop: 12, overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Producto</th>
-                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Precio</th>
-                        <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Cantidad</th>
-                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Subtotal</th>
-                        <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Notas</th>
-                        <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}> </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cartOrder.cart.map((it) => {
-                        const subtotal = safeNum(it.unit_price, 0) * safeNum(it.quantity, 1);
-                        const label = it.variant_name ? `${it.name} · ${it.variant_name}` : it.name;
+                {/* Badges de estado */}
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {canAppend ? (
+                    <Badge tone="ok">✅ Orden abierta</Badge>
+                  ) : pending ? (
+                    <Badge tone="warn">⏳ En espera de aprobación</Badge>
+                  ) : null}
 
-                        const comps = Array.isArray(it.components) ? it.components : null;
+                  {Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0 ? (
+                    <Badge tone="dark" title="Historial (solo lectura)">
+                      Historial: <strong style={{ marginLeft: 6 }}>{cartOrder.oldItems.length}</strong>
+                    </Badge>
+                  ) : null}
 
-                        return (
-                          <tr key={it.key}>
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
-                              <div style={{ fontWeight: 900, fontSize: 13 }}>{label}</div>
-                              {String(it.product_type || "") === "composite" ? (
-                                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                                  Tipo: <strong>Compuesto</strong>
-                                  {comps && comps.length ? (
-                                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-                                      Componentes:{" "}
-                                      <strong>
-                                        {comps
-                                          .slice(0, 4)
-                                          .map((c) =>
-                                            c.variant_id
-                                              ? `${c.component_product_id} (v:${c.variant_id})`
-                                              : `${c.component_product_id}`
-                                          )
-                                          .join(", ")}
-                                        {comps.length > 4 ? "…" : ""}
-                                      </strong>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </td>
-
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 900 }}>
-                              {money(it.unit_price)}
-                            </td>
-
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "center" }}>
-                              <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                                <button
-                                  onClick={() => cartOrder.setCartQty(it.key, Math.max(1, safeNum(it.quantity, 1) - 1))}
-                                  style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
-                                  title="Menos"
-                                >
-                                  −
-                                </button>
-                                <input
-                                  value={it.quantity}
-                                  onChange={(e) => cartOrder.setCartQty(it.key, e.target.value)}
-                                  style={{ width: 54, padding: "6px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)", outline: "none", textAlign: "center", fontWeight: 900 }}
-                                />
-                                <button
-                                  onClick={() => cartOrder.setCartQty(it.key, Math.min(99, safeNum(it.quantity, 1) + 1))}
-                                  style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
-                                  title="Más"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </td>
-
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 950 }}>
-                              {money(subtotal)}
-                            </td>
-
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
-                              <input
-                                value={it.notes || ""}
-                                onChange={(e) => cartOrder.setCartNotes(it.key, e.target.value)}
-                                placeholder="Ej: sin cebolla"
-                                maxLength={500}
-                                style={{ width: "min(420px, 70vw)", padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.12)", outline: "none", fontWeight: 750 }}
-                              />
-                            </td>
-
-                            <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right" }}>
-                              <button
-                                onClick={() => cartOrder.removeCartItem(it.key)}
-                                style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 12, padding: "8px 10px", fontWeight: 950 }}
-                                title="Quitar"
-                              >
-                                🗑️
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <Badge tone={cartOrder.cart.length > 0 ? "ok" : "warn"} title="Items nuevos por enviar/agregar">
+                    Nuevos: <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
+                  </Badge>
                 </div>
+
+                {/* HISTORIAL (solo lectura) */}
+                {Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0 ? (
+                  <div style={{ marginTop: 12, overflowX: "auto" }}>
+                    <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.85, marginBottom: 8 }}>
+                      Items ya enviados
+                    </div>
+
+                    <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Producto</th>
+                          <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Precio</th>
+                          <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Cant</th>
+                          <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cartOrder.oldItems.map((it) => {
+                          const label = it.variant_name
+                            ? `${it.product_name} · ${it.variant_name}`
+                            : (it.product_name || `Producto #${it.product_id}`);
+                          const subtotal = safeNum(it.line_total, safeNum(it.unit_price, 0) * safeNum(it.quantity, 1));
+                          return (
+                            <tr key={`old-${it.id}`}>
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                                <div style={{ fontWeight: 900, fontSize: 13 }}>{label}</div>
+                                {it.notes ? (
+                                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2, whiteSpace: "pre-line" }}>
+                                    • {typeof it.notes === "string" ? it.notes : JSON.stringify(it.notes)}
+                                  </div>
+                                ) : null}
+                              </td>
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 900 }}>
+                                {money(it.unit_price)}
+                              </td>
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "center", fontWeight: 900 }}>
+                                {it.quantity}
+                              </td>
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 950 }}>
+                                {money(subtotal)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 12, fontSize: 13, opacity: 0.75 }}>
+                    No hay historial cargado.
+                  </div>
+                )}
+
+                {/* NUEVOS (editable, con -/+ y notas como antes) */}
+                {cartOrder.cart.length > 0 ? (
+                  <div style={{ marginTop: 12, overflowX: "auto" }}>
+                    <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.85, marginBottom: 8 }}>
+                      Items nuevos por {canAppend ? "agregar" : "enviar"}
+                    </div>
+
+                    <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Producto</th>
+                          <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Precio</th>
+                          <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Cantidad</th>
+                          <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Subtotal</th>
+                          <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}>Notas</th>
+                          <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, opacity: 0.8 }}> </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cartOrder.cart.map((it) => {
+                          const subtotal = safeNum(it.unit_price, 0) * safeNum(it.quantity, 1);
+                          const label = it.variant_name ? `${it.name} · ${it.variant_name}` : it.name;
+
+                          return (
+                            <tr key={it.key}>
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                                <div style={{ fontWeight: 900, fontSize: 13 }}>{label}</div>
+                              </td>
+
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 900 }}>
+                                {money(it.unit_price)}
+                              </td>
+
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "center" }}>
+                                <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                                  <button
+                                    onClick={() => cartOrder.setCartQty(it.key, Math.max(1, safeNum(it.quantity, 1) - 1))}
+                                    style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
+                                    title="Menos"
+                                  >
+                                    −
+                                  </button>
+
+                                  <input
+                                    value={it.quantity}
+                                    onChange={(e) => cartOrder.setCartQty(it.key, e.target.value)}
+                                    style={{ width: 54, padding: "6px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)", outline: "none", textAlign: "center", fontWeight: 900 }}
+                                  />
+
+                                  <button
+                                    onClick={() => cartOrder.setCartQty(it.key, Math.min(99, safeNum(it.quantity, 1) + 1))}
+                                    style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 10, padding: "6px 10px", fontWeight: 950 }}
+                                    title="Más"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </td>
+
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right", fontWeight: 950 }}>
+                                {money(subtotal)}
+                              </td>
+
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                                <input
+                                  value={it.notes || ""}
+                                  onChange={(e) => cartOrder.setCartNotes(it.key, e.target.value)}
+                                  placeholder="Ej: sin cebolla"
+                                  maxLength={500}
+                                  style={{ width: "min(420px, 70vw)", padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.12)", outline: "none", fontWeight: 750 }}
+                                />
+                              </td>
+
+                              <td style={{ padding: "10px 8px", borderTop: "1px solid rgba(0,0,0,0.08)", textAlign: "right" }}>
+                                <button
+                                  onClick={() => cartOrder.removeCartItem(it.key)}
+                                  style={{ cursor: "pointer", border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 12, padding: "8px 10px", fontWeight: 950 }}
+                                  title="Quitar"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
 
                 {cartOrder.sendToast ? (
                   <div style={{ marginTop: 10, border: "1px solid rgba(0,0,0,0.10)", borderRadius: 14, padding: 10, background: "#fff", fontSize: 13, fontWeight: 850, whiteSpace: "pre-line" }}>

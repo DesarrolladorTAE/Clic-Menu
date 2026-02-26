@@ -1,4 +1,4 @@
-// src/pages/public/hooks/usePublicMenuLoader.js
+// src/hooks/public/usePublicMenuLoader.js
 // carga del menú + polling cada 15s + manejo de errores públicos (QR desactivado / modo incorrecto)
 // Objetivo: sacar del Page toda la lógica de fetch y refresco silencioso.
 

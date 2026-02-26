@@ -1,4 +1,4 @@
-// src/pages/public/hooks/useMenuProducts.js
+/// src/hooks/public/useMenuProducts.js
 // indexación y filtrado de productos (categorías, búsqueda, expanded variants)
 // Objetivo: sacar del Page la lógica de “armar arrays” sin tocar el resultado.
 
