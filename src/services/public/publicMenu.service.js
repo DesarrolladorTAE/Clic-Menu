@@ -80,6 +80,27 @@ export async function heartbeatTableSession(sessionId) {
 
 /**
  * =========================================================
+ * 3.5) Join Request (retomar cuenta)
+ * =========================================================
+ */
+export async function createJoinRequest(tableId) {
+  const device_identifier = getOrCreatePublicDeviceId();
+  const { data } = await publicApi.post(`/public/tables/${tableId}/join-request`, {
+    device_identifier,
+  });
+  return data;
+}
+
+export async function getJoinRequestStatus(tableId) {
+  const device_identifier = getOrCreatePublicDeviceId();
+  const { data } = await publicApi.get(`/public/tables/${tableId}/join-request/status`, {
+    params: { device_identifier },
+  });
+  return data;
+}
+
+/**
+ * =========================================================
  * 4) Call Waiter
  * =========================================================
  */
@@ -94,12 +115,8 @@ export async function callWaiterByTable(tableId) {
 /**
  * =========================================================
  * 5) Orders
- *   - create (pending_approval)
- *   - show (order + items)  GET /public/orders/{order}?token&device_identifier
- *   - append-items (open)   POST /public/orders/{order}/append-items
  * =========================================================
  */
-
 export async function createPublicOrder({ token, customer_name, items }) {
   const device_identifier = getOrCreatePublicDeviceId();
 
@@ -132,9 +149,6 @@ export async function appendPublicOrderItems({ orderId, token, items }) {
     device_identifier,
     items: Array.isArray(items) ? items : [],
   };
-  const { data } = await publicApi.post(
-    `/public/orders/${orderId}/append-items`,
-    payload,
-  );
+  const { data } = await publicApi.post(`/public/orders/${orderId}/append-items`, payload);
   return data;
 }

@@ -130,14 +130,11 @@ export default function PublicMenuEntryPage() {
     // Solo intentamos si hay sesión válida y tiene order_id
     if (!sessionOrderId) return;
 
-    // Tu endpoint show() exige session status pending/active y device match (lo valida backend)
     // Si expiró, no tiene caso spamear.
     if (sessionStatus === "expired") return;
 
     // Evitar refetch infinito
     if (lastLoadedOrderIdRef.current === sessionOrderId) {
-      // Si ya cargamos ese order_id pero no hay oldItems (por cualquier razón),
-      // permitimos un reintento cuando cambie la sesión.
       if (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0) return;
     }
 
@@ -146,7 +143,6 @@ export default function PublicMenuEntryPage() {
     cartOrder
       .refreshOrder?.(sessionOrderId)
       .catch(() => {
-        // si falla, dejamos que vuelva a intentar cuando cambie sesión/status
         lastLoadedOrderIdRef.current = null;
       });
 
@@ -179,9 +175,6 @@ export default function PublicMenuEntryPage() {
     !!cartOrder.activeOrder?.id &&
     String(cartOrder.activeOrder?.status || "").toLowerCase() === "open";
 
-  // - Si ya está open: enviar = append directo (sin modal)
-  // - Si está pending: NO se permite enviar otra
-  // - Si no hay orden: se permite enviar (abre modal con nombre)
   const allowSendButton = allowBaseSend && (canAppend || !hasPending);
 
   // Expand keys
@@ -336,7 +329,6 @@ export default function PublicMenuEntryPage() {
   }
 
   const pending = hasPending;
-  const pendingStatus = String(cartOrder.pendingOrder?.status || "");
 
   return (
     <div
@@ -405,6 +397,64 @@ export default function PublicMenuEntryPage() {
               {qr.sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
             </PillButton>
           </>
+        }
+      />
+
+      {/* ✅ NUEVO: takeover / retomar cuenta */}
+      <FullOverlay
+        open={!!qr.takeover?.available}
+        tone="warn"
+        title="¿Retomar cuenta?"
+        message={
+          qr.takeover?.message ||
+          "Esta mesa tiene una comanda abierta pero no hay dispositivo vinculado.\n¿Deseas retomar la cuenta?"
+        }
+        actions={
+          <>
+            <PillButton
+              tone="orange"
+              onClick={() => qr.requestJoin()}
+              disabled={qr.sessionLoading || qr.joinReq?.status === "pending"}
+              title="Enviar solicitud al mesero"
+            >
+              {qr.joinReq?.status === "pending" ? "⏳ Solicitando..." : "✅ Sí, retomar"}
+            </PillButton>
+
+            <PillButton
+              tone="default"
+              onClick={() => qr.clearTakeover()}
+              disabled={qr.joinReq?.status === "pending"}
+              title="Cancelar"
+            >
+              No
+            </PillButton>
+          </>
+        }
+      />
+
+      {/* ✅ NUEVO: esperando aprobación */}
+      <FullOverlay
+        open={!!qr.joinReq && qr.joinReq.status === "pending"}
+        tone="default"
+        title="Esperando aprobación"
+        message={qr.joinReq?.message || "Solicitud enviada. Espera aprobación del mesero."}
+        actions={
+          <PillButton tone="default" onClick={() => qr.clearTakeover()} title="Cerrar">
+            Entendido
+          </PillButton>
+        }
+      />
+
+      {/* ✅ NUEVO: rechazado */}
+      <FullOverlay
+        open={!!qr.joinReq && qr.joinReq.status === "rejected"}
+        tone="err"
+        title="No aprobado"
+        message={qr.joinReq?.message || "No fuiste aprobado para retomar la cuenta."}
+        actions={
+          <PillButton tone="default" onClick={() => qr.clearTakeover()} title="Cerrar">
+            Ok
+          </PillButton>
         }
       />
 
@@ -1050,7 +1100,7 @@ export default function PublicMenuEntryPage() {
             </div>
           </div>
 
-          {/* DERECHA: COMANDA (con historial + controles -/+ como antes) */}
+          {/* DERECHA: COMANDA */}
           <div className="comandaAside">
             {(cartOrder.cart.length > 0 || (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0)) ? (
               <div
@@ -1141,7 +1191,7 @@ export default function PublicMenuEntryPage() {
                   </Badge>
                 </div>
 
-                {/* HISTORIAL (solo lectura) */}
+                {/* HISTORIAL */}
                 {Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0 ? (
                   <div style={{ marginTop: 12, overflowX: "auto" }}>
                     <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.85, marginBottom: 8 }}>
@@ -1194,7 +1244,7 @@ export default function PublicMenuEntryPage() {
                   </div>
                 )}
 
-                {/* NUEVOS (editable, con -/+ y notas como antes) */}
+                {/* NUEVOS */}
                 {cartOrder.cart.length > 0 ? (
                   <div style={{ marginTop: 12, overflowX: "auto" }}>
                     <div style={{ fontSize: 12, fontWeight: 950, opacity: 0.85, marginBottom: 8 }}>

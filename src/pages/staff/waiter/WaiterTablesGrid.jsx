@@ -9,6 +9,11 @@ import {
   finishAttention,
   acceptCustomerOrder,
   rejectCustomerOrder,
+  releaseTableSession,
+  markTablePaid,
+  listTableSessionRequests,
+  approveTableSessionRequest,
+  rejectTableSessionRequest,
 } from "../../../services/staff/waiter/waiterTables.service";
 
 // -------------------------
@@ -83,9 +88,7 @@ function Toast({ open, message, type = "info", onClose }) {
           : "Aviso"}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.35 }}>{message}</div>
-      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
-        (clic para cerrar)
-      </div>
+      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>(clic para cerrar)</div>
     </div>
   );
 }
@@ -98,6 +101,7 @@ function PillButton({ children, onClick, disabled, tone = "default", title }) {
     ok: { bg: "#e6ffed", bd: "#8ae99c", fg: "#0a7a2f" },
     warn: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b" },
     danger: { bg: "#ffe5e5", bd: "#ffb3b3", fg: "#a10000" },
+    orange: { bg: "#ff7a00", bd: "#ff7a00", fg: "#fff" },
   };
 
   const c = map[tone] || map.default;
@@ -137,7 +141,6 @@ function stateVisual(uiState) {
     blocked: { bg: "#efeff3", bd: "#c7c7d0", fg: "#4b5563", label: "Bloqueada" },
     pending: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b", label: "Comanda pendiente" },
   };
-
   return map[uiState] || map.free;
 }
 
@@ -148,6 +151,9 @@ export default function WaiterTablesGrid() {
   const [busy, setBusy] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState(null);
+
+  const [requests, setRequests] = useState([]);
+  const [reqBusyId, setReqBusyId] = useState(null);
 
   const [toast, setToast] = useState({ open: false, message: "", type: "info" });
   const showToast = (message, type = "info") => {
@@ -163,8 +169,13 @@ export default function WaiterTablesGrid() {
     else setRefreshing(true);
 
     try {
-      const res = await fetchStaffTablesGrid();
-      setData(res || null);
+      const [resGrid, resReq] = await Promise.all([
+        fetchStaffTablesGrid(),
+        listTableSessionRequests().catch(() => null),
+      ]);
+
+      setData(resGrid || null);
+      setRequests(Array.isArray(resReq?.data) ? resReq.data : []);
     } catch (e) {
       const st = e?.response?.status;
 
@@ -262,7 +273,6 @@ export default function WaiterTablesGrid() {
 
     try {
       const res = await finishAttention(id);
-      // backend ahora puede decir: “Atención finalizada. (La comanda sigue activa).”
       const msg = res?.message ? String(res.message) : `Mesa ${table?.name || id}: atención finalizada.`;
       showToast(msg, "success");
       await load({ silent: true });
@@ -275,10 +285,7 @@ export default function WaiterTablesGrid() {
         "No se pudo finalizar la atención.";
 
       if (st === 403 && code === "NOT_YOURS") {
-        showToast(
-          "No puedes finalizar: esa mesa/llamada no es tuya (otro mesero la tiene).",
-          "warning"
-        );
+        showToast("No puedes finalizar: esa mesa/llamada no es tuya.", "warning");
         await load({ silent: true });
         return;
       }
@@ -287,33 +294,32 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  // “Pagado” placeholder: ajusta a tu flujo real de cobro/cierre
-  const doPaid = (table) => {
-    const orderId = table?.active_order?.id;
-    if (!orderId) {
-      showToast("No hay comanda activa para marcar como pagada.", "warning");
-      return;
-    }
-    // Ajusta aquí a tu pantalla real (si ya existe)
-    nav(`/staff/waiter/orders/${orderId}`, { replace: false });
-  };
-
-  // “Liberar sesión” placeholder (por ahora reutiliza finishAttention; tu lógica real vendrá después)
   const doReleaseSession = async (table) => {
-    // OJO: esto todavía es “solo llamadas” en backend.
-    // El liberar sesión real lo hacemos cuando trabajemos Pagado|Liberar sesión.
-    await doFinish(table);
-  };
-
-  // “Capturar pedido” placeholder: se habilita solo waiter_only + llamada atendida por mí + no comanda
-  const doCaptureOrder = (table) => {
     const tableId = table?.id;
     if (!tableId) return;
 
-    // Ajusta a tu pantalla real de capturar (ejemplo típico)
-    // Si no existe aún, al menos no rompe: te avisa.
-    showToast("Ruta de capturar pedido pendiente: ajusta navegación en doCaptureOrder().", "info");
-    // nav(`/staff/waiter/tables/${tableId}/capture`, { replace: false });
+    try {
+      const res = await releaseTableSession(tableId);
+      showToast(res?.message || "Sesión liberada.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo liberar la sesión.";
+      showToast(msg, "error");
+    }
+  };
+
+  const doMarkPaid = async (table) => {
+    const tableId = table?.id;
+    if (!tableId) return;
+
+    try {
+      const res = await markTablePaid(tableId);
+      showToast(res?.message || "Cuenta marcada como pagada. Mesa liberada.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo marcar como pagada.";
+      showToast(msg, "error");
+    }
   };
 
   const doAccept = async (table) => {
@@ -355,11 +361,41 @@ export default function WaiterTablesGrid() {
 
     try {
       await rejectCustomerOrder(orderId);
-      showToast(`Comanda #${orderId}: rechazada y eliminada.`, "success");
+      showToast(`Comanda #${orderId}: rechazada.`, "success");
       await load({ silent: true });
     } catch (e) {
       const msg = e?.response?.data?.message || e?.message || "No se pudo rechazar la comanda.";
       showToast(msg, "error");
+    }
+  };
+
+  const doApproveReq = async (reqId) => {
+    if (!reqId) return;
+    setReqBusyId(reqId);
+    try {
+      const res = await approveTableSessionRequest(reqId);
+      showToast(res?.message || "Dispositivo aprobado.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo aprobar la solicitud.";
+      showToast(msg, "error");
+    } finally {
+      setReqBusyId(null);
+    }
+  };
+
+  const doRejectReq = async (reqId) => {
+    if (!reqId) return;
+    setReqBusyId(reqId);
+    try {
+      const res = await rejectTableSessionRequest(reqId);
+      showToast(res?.message || "Solicitud rechazada.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "No se pudo rechazar la solicitud.";
+      showToast(msg, "error");
+    } finally {
+      setReqBusyId(null);
     }
   };
 
@@ -409,6 +445,69 @@ export default function WaiterTablesGrid() {
         </div>
       </div>
 
+      {/* JOIN REQUESTS */}
+      {Array.isArray(requests) && requests.length > 0 ? (
+        <div
+          style={{
+            marginTop: 12,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 18,
+            background: "#fff",
+            padding: 14,
+            boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div style={{ fontWeight: 950, marginBottom: 10 }}>Solicitudes para retomar cuenta</div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {requests.map((r) => (
+              <div
+                key={r.id}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.10)",
+                  borderRadius: 16,
+                  padding: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "grid", gap: 4 }}>
+                  <div style={{ fontWeight: 950 }}>
+                    Mesa: {r.table_name || `#${r.table_id}`} · Orden #{r.order_id}
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    Dispositivo: <strong>{r.device_identifier}</strong>
+                    {r.expires_at ? <> · Expira: <strong>{r.expires_at}</strong></> : null}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <PillButton
+                    tone="ok"
+                    disabled={reqBusyId === r.id}
+                    onClick={() => doApproveReq(r.id)}
+                    title="Aprobar dispositivo"
+                  >
+                    ✅ Aprobar
+                  </PillButton>
+                  <PillButton
+                    tone="danger"
+                    disabled={reqBusyId === r.id}
+                    onClick={() => doRejectReq(r.id)}
+                    title="Rechazar solicitud"
+                  >
+                    ⛔ Rechazar
+                  </PillButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {busy ? (
         <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 14, background: "#fff" }}>
           Cargando mesas…
@@ -442,29 +541,20 @@ export default function WaiterTablesGrid() {
               const openOrder = t?.active_order || null;
               const hasOpenOrder = !!openOrder?.id;
 
-              const call = t?.call || null;
-              const hasCall = !!call?.id;
-              const callStatus = String(call?.status || "");
+              const session = t?.session || null;
+              const hasDevice = !!session?.has_device;
 
-              // Backend flags (source of truth)
-              const canAttend = !!t?.actions?.can_attend; // call open + permiso
-              const canFinish = !!t?.actions?.can_finish_attention; // call attended by me
-              const canCaptureOrder = !!t?.actions?.can_capture_order; // waiter_only + attended by me + no comanda
+              // Backend flags
+              const canAttend = !!t?.actions?.can_attend;
+              const canFinish = !!t?.actions?.can_finish_attention;
               const canAccept = !!t?.actions?.can_accept_order && hasPending;
               const canReject = !!t?.actions?.can_reject_order && hasPending;
 
-              // ✅ Regla: “Pagado | Liberar Sesión” solo cuando hay comanda OPEN y la mesa está en estado azul/mine
-              // (en tu backend, mine cubre: mesa con comanda activa y/o atendiendo call)
-              const showPaidRelease = hasOpenOrder && uiState === "mine";
-
-              // ✅ “Atender” aparece cuando hay call open (Laravel ya lo autoriza con canAttend)
-              const showAttend = canAttend;
-
-              // ✅ “Finalizar atención” aparece cuando la call está attended por mí (Laravel lo autoriza con canFinish)
-              const showFinish = canFinish;
-
-              // ✅ En waiter_only: al atender llamada SIN comanda -> puede capturar pedido sin finalizar (o junto)
-              const showCapture = canCaptureOrder;
+              // ✅ Pagado/Liberar: backend los manda en actions, pero tú además quieres:
+              // - Pagado siempre visible si hay open
+              // - Liberar sesión solo si hay device (si ya está liberada, ya no tiene caso)
+              const canMarkPaid = !!t?.actions?.can_mark_paid && hasOpenOrder;
+              const canReleaseSession = !!t?.actions?.can_release_session && hasOpenOrder && hasDevice;
 
               return (
                 <div
@@ -474,7 +564,7 @@ export default function WaiterTablesGrid() {
                     border: `1px solid ${v.bd}`,
                     background: v.bg,
                     padding: 12,
-                    minHeight: 140,
+                    minHeight: 150,
                     display: "flex",
                     flexDirection: "column",
                     gap: 10,
@@ -500,34 +590,29 @@ export default function WaiterTablesGrid() {
                     </div>
                   ) : null}
 
-                  {hasCall ? (
+                  {hasOpenOrder ? (
                     <div style={{ fontSize: 12, opacity: 0.85 }}>
-                      🔔 Llamada #{call.id}
-                      {callStatus ? (
-                        <>
-                          {" "}· <strong>{callStatus}</strong>
-                        </>
-                      ) : null}
+                      🍽️ Comanda #{openOrder.id} ·{" "}
+                      {openOrder.total != null ? <strong>{money(openOrder.total)}</strong> : null}
+                      {" · "}
+                      {hasDevice ? (
+                        <strong style={{ color: "#0b4db3" }}>Con dispositivo</strong>
+                      ) : (
+                        <strong style={{ color: "#8a6d3b" }}>Sin dispositivo</strong>
+                      )}
                     </div>
-                  ) : null}
-
-                  {hasPending ? (
+                  ) : hasPending ? (
                     <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 900 }}>
                       ⏳ Comanda pendiente #{pending.id}
                       {pending?.customer_name ? ` · ${pending.customer_name}` : ""}
                       {pending?.total != null ? ` · ${money(pending.total)}` : ""}
-                    </div>
-                  ) : hasOpenOrder ? (
-                    <div style={{ fontSize: 12, opacity: 0.85 }}>
-                      🍽️ Comanda #{openOrder.id} ·{" "}
-                      {openOrder.total != null ? <strong>{money(openOrder.total)}</strong> : null}
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, opacity: 0.75 }}>Sin comanda activa</div>
                   )}
 
                   <div style={{ marginTop: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {/* Pending approval */}
+                    {/* 1) Pendiente: Aceptar/Rechazar */}
                     {canAccept ? (
                       <PillButton tone="ok" onClick={() => doAccept(t)} title="Aceptar comanda del cliente">
                         ✅ Aceptar
@@ -540,50 +625,41 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {/* ✅ Lógica principal de llamada */}
-                    {showAttend ? (
+                    {/* 2) Atender/Finalizar llamada */}
+                    {canAttend ? (
                       <PillButton tone="warn" onClick={() => doAttend(t)} title="Atender llamada">
                         ✅ Atender
                       </PillButton>
                     ) : null}
 
-                    {showFinish ? (
-                      <PillButton tone="dark" onClick={() => doFinish(t)} title="Finalizar atención (solo cierra table_calls)">
+                    {canFinish ? (
+                      <PillButton
+                        tone="dark"
+                        onClick={() => doFinish(t)}
+                        title="Finalizar atención (cierra table_calls)"
+                      >
                         🧾 Finalizar atención
                       </PillButton>
                     ) : null}
 
-                    {/* ✅ waiter_only: capturar pedido mientras sigo atendiendo */}
-                    {showCapture ? (
-                      <PillButton tone="soft" onClick={() => doCaptureOrder(t)} title="Capturar pedido (solo waiter_only)">
-                        📝 Capturar pedido
+                    {/* 3) Open: Pagado | Liberar Sesión */}
+                    {canMarkPaid ? (
+                      <PillButton tone="ok" onClick={() => doMarkPaid(t)} title="Cierra orden y libera mesa (por ahora)">
+                        💳 Pagado
                       </PillButton>
                     ) : null}
 
-                    {/* ✅ Si hay comanda OPEN: Pagado | Liberar Sesión */}
-                    {showPaidRelease ? (
-                      <>
-                        <PillButton tone="ok" onClick={() => doPaid(t)} title="Ir al flujo de cobro / marcar pagado">
-                          💳 Pagado
-                        </PillButton>
-
-                        <PillButton
-                          tone="dark"
-                          onClick={() => doReleaseSession(t)}
-                          title="Liberar sesión (por ahora cierra llamada; liberar sesión real viene después)"
-                        >
-                          🔓 Liberar Sesión
-                        </PillButton>
-                      </>
+                    {canReleaseSession ? (
+                      <PillButton
+                        tone="dark"
+                        onClick={() => doReleaseSession(t)}
+                        title="Borra device_identifier de table_sessions (no toca la comanda)"
+                      >
+                        🔓 Liberar Sesión
+                      </PillButton>
                     ) : null}
 
-                    {/* Sin acciones */}
-                    {!canAccept &&
-                    !canReject &&
-                    !showAttend &&
-                    !showFinish &&
-                    !showCapture &&
-                    !showPaidRelease ? (
+                    {!canAccept && !canReject && !canAttend && !canFinish && !canMarkPaid && !canReleaseSession ? (
                       <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
                         Sin acciones
                       </span>
@@ -593,47 +669,8 @@ export default function WaiterTablesGrid() {
               );
             })}
           </div>
-
-          <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
-            <div
-              style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                borderRadius: 14,
-                background: "#fff",
-                padding: 12,
-                minWidth: 340,
-              }}
-            >
-              <div style={{ fontWeight: 950, marginBottom: 10 }}>Leyenda</div>
-              <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
-                <LegendRow colorBg="#e6ffed" colorBd="#8ae99c" label="Verde: Libre" />
-                <LegendRow colorBg="#fff3cd" colorBd="#ffe08a" label="Amarillo: Llamada / Comanda pendiente" />
-                <LegendRow colorBg="#e8f1ff" colorBd="#95b9ff" label="Azul: Atendiendo / Comanda activa" />
-                <LegendRow colorBg="#f3f4f6" colorBd="#d1d5db" label="Gris: Ocupada por otro" />
-                <LegendRow colorBg="#efeff3" colorBd="#c7c7d0" label="Gris suave: Bloqueada" />
-              </div>
-            </div>
-          </div>
         </>
       )}
-    </div>
-  );
-}
-
-function LegendRow({ colorBg, colorBd, label }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span
-        style={{
-          width: 14,
-          height: 14,
-          borderRadius: 6,
-          display: "inline-block",
-          background: colorBg,
-          border: `1px solid ${colorBd}`,
-        }}
-      />
-      <span style={{ fontWeight: 850, opacity: 0.9 }}>{label}</span>
     </div>
   );
 }
