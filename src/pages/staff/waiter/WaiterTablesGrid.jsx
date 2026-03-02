@@ -88,7 +88,9 @@ function Toast({ open, message, type = "info", onClose }) {
           : "Aviso"}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.35 }}>{message}</div>
-      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>(clic para cerrar)</div>
+      <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+        (clic para cerrar)
+      </div>
     </div>
   );
 }
@@ -136,10 +138,25 @@ function stateVisual(uiState) {
   const map = {
     free: { bg: "#e6ffed", bd: "#8ae99c", fg: "#0a7a2f", label: "Libre" },
     call: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b", label: "Llamando" },
-    mine: { bg: "#e8f1ff", bd: "#95b9ff", fg: "#0b4db3", label: "Atendiendo" },
+    mine: {
+      bg: "#e8f1ff",
+      bd: "#95b9ff",
+      fg: "#0b4db3",
+      label: "Atendiendo",
+    },
     locked: { bg: "#f3f4f6", bd: "#d1d5db", fg: "#374151", label: "Ocupada" },
-    blocked: { bg: "#efeff3", bd: "#c7c7d0", fg: "#4b5563", label: "Bloqueada" },
-    pending: { bg: "#fff3cd", bd: "#ffe08a", fg: "#8a6d3b", label: "Comanda pendiente" },
+    blocked: {
+      bg: "#efeff3",
+      bd: "#c7c7d0",
+      fg: "#4b5563",
+      label: "Bloqueada",
+    },
+    pending: {
+      bg: "#fff3cd",
+      bd: "#ffe08a",
+      fg: "#8a6d3b",
+      label: "Comanda pendiente",
+    },
   };
   return map[uiState] || map.free;
 }
@@ -155,7 +172,11 @@ export default function WaiterTablesGrid() {
   const [requests, setRequests] = useState([]);
   const [reqBusyId, setReqBusyId] = useState(null);
 
-  const [toast, setToast] = useState({ open: false, message: "", type: "info" });
+  const [toast, setToast] = useState({
+    open: false,
+    message: "",
+    type: "info",
+  });
   const showToast = (message, type = "info") => {
     setToast({ open: true, message, type });
     setTimeout(() => setToast((t) => ({ ...t, open: false })), 4500);
@@ -227,10 +248,20 @@ export default function WaiterTablesGrid() {
   }, []);
 
   const meta = data?.meta || {};
-  const tables = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
+  const tables = useMemo(
+    () => (Array.isArray(data?.data) ? data.data : []),
+    [data],
+  );
 
   const summary = useMemo(() => {
-    const counts = { free: 0, call: 0, mine: 0, locked: 0, blocked: 0, pending: 0 };
+    const counts = {
+      free: 0,
+      call: 0,
+      mine: 0,
+      locked: 0,
+      blocked: 0,
+      pending: 0,
+    };
     for (const t of tables) {
       const s = String(t?.ui_state || "free");
       if (counts[s] !== undefined) counts[s]++;
@@ -254,10 +285,14 @@ export default function WaiterTablesGrid() {
         e?.message ||
         "No se pudo atender la mesa.";
 
-      if (st === 409 && (code === "TAKEN" || String(msg).toLowerCase().includes("ya tomó"))) {
+      if (
+        st === 409 &&
+        (code === "TAKEN" ||
+          String(msg).toLowerCase().includes("ya tomó"))
+      ) {
         showToast(
           `Te ganaron la mesa ${table?.name || id}. Otro mesero la atendió primero.`,
-          "warning"
+          "warning",
         );
         await load({ silent: true });
         return;
@@ -273,7 +308,9 @@ export default function WaiterTablesGrid() {
 
     try {
       const res = await finishAttention(id);
-      const msg = res?.message ? String(res.message) : `Mesa ${table?.name || id}: atención finalizada.`;
+      const msg = res?.message
+        ? String(res.message)
+        : `Mesa ${table?.name || id}: atención finalizada.`;
       showToast(msg, "success");
       await load({ silent: true });
     } catch (e) {
@@ -303,7 +340,10 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Sesión liberada.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo liberar la sesión.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo liberar la sesión.";
       showToast(msg, "error");
     }
   };
@@ -314,10 +354,16 @@ export default function WaiterTablesGrid() {
 
     try {
       const res = await markTablePaid(tableId);
-      showToast(res?.message || "Cuenta marcada como pagada. Mesa liberada.", "success");
+      showToast(
+        res?.message || "Cuenta marcada como pagada. Mesa liberada.",
+        "success",
+      );
       await load({ silent: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo marcar como pagada.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo marcar como pagada.";
       showToast(msg, "error");
     }
   };
@@ -338,10 +384,19 @@ export default function WaiterTablesGrid() {
     } catch (e) {
       const st = e?.response?.status;
       const code = e?.response?.data?.code;
-      const msg = e?.response?.data?.message || e?.message || "No se pudo aceptar la comanda.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo aceptar la comanda.";
 
-      if (st === 409 && (code === "TAKEN" || code === "TABLE_TAKEN" || code === "NOT_PENDING")) {
-        showToast("Otro mesero aceptó primero esta comanda (o ya no estaba pendiente).", "warning");
+      if (
+        st === 409 &&
+        (code === "TAKEN" || code === "TABLE_TAKEN" || code === "NOT_PENDING")
+      ) {
+        showToast(
+          "Otro mesero aceptó primero esta comanda (o ya no estaba pendiente).",
+          "warning",
+        );
         await load({ silent: true });
         return;
       }
@@ -364,7 +419,10 @@ export default function WaiterTablesGrid() {
       showToast(`Comanda #${orderId}: rechazada.`, "success");
       await load({ silent: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo rechazar la comanda.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo rechazar la comanda.";
       showToast(msg, "error");
     }
   };
@@ -377,7 +435,10 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Dispositivo aprobado.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo aprobar la solicitud.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo aprobar la solicitud.";
       showToast(msg, "error");
     } finally {
       setReqBusyId(null);
@@ -392,7 +453,10 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Solicitud rechazada.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "No se pudo rechazar la solicitud.";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo rechazar la solicitud.";
       showToast(msg, "error");
     } finally {
       setReqBusyId(null);
@@ -401,7 +465,12 @@ export default function WaiterTablesGrid() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "22px auto", padding: 16 }}>
-      <Toast open={toast.open} message={toast.message} type={toast.type} onClose={closeToast} />
+      <Toast
+        open={toast.open}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
 
       <div
         style={{
@@ -412,7 +481,14 @@ export default function WaiterTablesGrid() {
           boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ display: "grid", gap: 6 }}>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Mesas (Mesero)</div>
             <div style={{ fontSize: 12, opacity: 0.8 }}>
@@ -420,25 +496,50 @@ export default function WaiterTablesGrid() {
               <strong>{meta?.staff_id ?? "—"}</strong> · Servicio:{" "}
               <strong>{meta?.table_service_mode ?? "—"}</strong> · Modo pedido:{" "}
               <strong>{meta?.ordering_mode ?? "—"}</strong>
-              {refreshing ? <span style={{ marginLeft: 10, opacity: 0.75 }}>🔄 actualizando…</span> : null}
+              {refreshing ? (
+                <span style={{ marginLeft: 10, opacity: 0.75 }}>
+                  🔄 actualizando…
+                </span>
+              ) : null}
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-              <span style={{ ...pillMini("#e6ffed", "#8ae99c") }}>Libre: {summary.free}</span>
-              <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>Llamando: {summary.call}</span>
-              <span style={{ ...pillMini("#e8f1ff", "#95b9ff") }}>Atendiendo: {summary.mine}</span>
-              <span style={{ ...pillMini("#f3f4f6", "#d1d5db") }}>Ocupada: {summary.locked}</span>
-              <span style={{ ...pillMini("#efeff3", "#c7c7d0") }}>Bloqueada: {summary.blocked}</span>
-              <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>Pendiente: {summary.pending}</span>
+              <span style={{ ...pillMini("#e6ffed", "#8ae99c") }}>
+                Libre: {summary.free}
+              </span>
+              <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>
+                Llamando: {summary.call}
+              </span>
+              <span style={{ ...pillMini("#e8f1ff", "#95b9ff") }}>
+                Atendiendo: {summary.mine}
+              </span>
+              <span style={{ ...pillMini("#f3f4f6", "#d1d5db") }}>
+                Ocupada: {summary.locked}
+              </span>
+              <span style={{ ...pillMini("#efeff3", "#c7c7d0") }}>
+                Bloqueada: {summary.blocked}
+              </span>
+              <span style={{ ...pillMini("#fff3cd", "#ffe08a") }}>
+                Pendiente: {summary.pending}
+              </span>
             </div>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "start" }}>
-            <PillButton tone="soft" onClick={() => load()} disabled={busy} title="Recargar">
+            <PillButton
+              tone="soft"
+              onClick={() => load()}
+              disabled={busy}
+              title="Recargar"
+            >
               🔄 Recargar
             </PillButton>
 
-            <PillButton tone="default" onClick={() => nav("/staff/app")} title="Regresar al dashboard">
+            <PillButton
+              tone="default"
+              onClick={() => nav("/staff/app")}
+              title="Regresar al dashboard"
+            >
               ← Dashboard
             </PillButton>
           </div>
@@ -457,7 +558,10 @@ export default function WaiterTablesGrid() {
             boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
           }}
         >
-          <div style={{ fontWeight: 950, marginBottom: 10 }}>Solicitudes para retomar cuenta</div>
+          <div style={{ fontWeight: 950, marginBottom: 10 }}>
+            Solicitudes para retomar cuenta
+          </div>
+
           <div style={{ display: "grid", gap: 10 }}>
             {requests.map((r) => (
               <div
@@ -480,7 +584,12 @@ export default function WaiterTablesGrid() {
                   </div>
                   <div style={{ fontSize: 12, opacity: 0.8 }}>
                     Dispositivo: <strong>{r.device_identifier}</strong>
-                    {r.expires_at ? <> · Expira: <strong>{r.expires_at}</strong></> : null}
+                    {r.expires_at ? (
+                      <>
+                        {" "}
+                        · Expira: <strong>{r.expires_at}</strong>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
@@ -493,6 +602,7 @@ export default function WaiterTablesGrid() {
                   >
                     ✅ Aprobar
                   </PillButton>
+
                   <PillButton
                     tone="danger"
                     disabled={reqBusyId === r.id}
@@ -509,11 +619,27 @@ export default function WaiterTablesGrid() {
       ) : null}
 
       {busy ? (
-        <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 14, background: "#fff" }}>
+        <div
+          style={{
+            marginTop: 14,
+            padding: 12,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 14,
+            background: "#fff",
+          }}
+        >
           Cargando mesas…
         </div>
       ) : tables.length === 0 ? (
-        <div style={{ marginTop: 14, padding: 12, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 14, background: "#fff" }}>
+        <div
+          style={{
+            marginTop: 14,
+            padding: 12,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 14,
+            background: "#fff",
+          }}
+        >
           No hay mesas para mostrar.
         </div>
       ) : (
@@ -550,11 +676,14 @@ export default function WaiterTablesGrid() {
               const canAccept = !!t?.actions?.can_accept_order && hasPending;
               const canReject = !!t?.actions?.can_reject_order && hasPending;
 
-              // ✅ Pagado/Liberar: backend los manda en actions, pero tú además quieres:
-              // - Pagado siempre visible si hay open
-              // - Liberar sesión solo si hay device (si ya está liberada, ya no tiene caso)
+              // ✅ Pagado visible si hay OPEN y backend permite (seguridad / ownership)
               const canMarkPaid = !!t?.actions?.can_mark_paid && hasOpenOrder;
-              const canReleaseSession = !!t?.actions?.can_release_session && hasOpenOrder && hasDevice;
+
+              // ✅ CAMBIO: "Liberar sesión" SIEMPRE visible si hay orden abierta.
+              // No dependemos de hasDevice ni de actions.can_release_session para mostrarlo.
+              // El backend decide si aplica o regresa ALREADY_RELEASED / 403 / etc.
+              const showReleaseSession =
+                !!t?.actions?.can_release_session && hasOpenOrder;
 
               return (
                 <div
@@ -571,9 +700,18 @@ export default function WaiterTablesGrid() {
                     boxShadow: "0 10px 22px rgba(0,0,0,0.05)",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "start",
+                      gap: 10,
+                    }}
+                  >
                     <div style={{ display: "grid", gap: 4 }}>
-                      <div style={{ fontWeight: 950, fontSize: 15 }}>{t?.name || `Mesa #${t.id}`}</div>
+                      <div style={{ fontWeight: 950, fontSize: 15 }}>
+                        {t?.name || `Mesa #${t.id}`}
+                      </div>
                       <div style={{ fontSize: 12, opacity: 0.85 }}>
                         Estado: <strong style={{ color: v.fg }}>{v.label}</strong>
                       </div>
@@ -633,33 +771,35 @@ export default function WaiterTablesGrid() {
                     ) : null}
 
                     {canFinish ? (
-                      <PillButton
-                        tone="dark"
-                        onClick={() => doFinish(t)}
-                        title="Finalizar atención (cierra table_calls)"
-                      >
+                      <PillButton tone="dark" onClick={() => doFinish(t)} title="Finalizar atención (cierra table_calls)">
                         🧾 Finalizar atención
                       </PillButton>
                     ) : null}
 
-                    {/* 3) Open: Pagado | Liberar Sesión */}
+                    {/* 3) Open: Pagado */}
                     {canMarkPaid ? (
                       <PillButton tone="ok" onClick={() => doMarkPaid(t)} title="Cierra orden y libera mesa (por ahora)">
                         💳 Pagado
                       </PillButton>
                     ) : null}
 
-                    {canReleaseSession ? (
+                    {/* ✅ CAMBIO: Liberar sesión visible siempre que haya open order */}
+                    {showReleaseSession ? (
                       <PillButton
                         tone="dark"
-                        onClick={() => doReleaseSession(t)}
-                        title="Borra device_identifier de table_sessions (no toca la comanda)"
+                        onClick={() => hasDevice && doReleaseSession(t)}
+                        disabled={!hasDevice}
+                        title={
+                          hasDevice
+                            ? "Borra device_identifier de table_sessions (no toca la comanda)"
+                            : "No hay dispositivo vinculado para liberar."
+                        }
                       >
                         🔓 Liberar Sesión
                       </PillButton>
                     ) : null}
 
-                    {!canAccept && !canReject && !canAttend && !canFinish && !canMarkPaid && !canReleaseSession ? (
+                    {!canAccept && !canReject && !canAttend && !canFinish && !canMarkPaid && !showReleaseSession ? (
                       <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
                         Sin acciones
                       </span>
