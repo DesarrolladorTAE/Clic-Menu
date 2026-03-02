@@ -13,6 +13,7 @@ import StaffLogin from "../pages/staff/StaffLogin";
 import StaffSelectBranch from "../pages/staff/StaffSelectBranch";
 import StaffDashboard from "../pages/staff/StaffDashboard"; 
 import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
+import WaiterCreateOrderPage from "../pages/staff/waiter/WaiterCreateOrderPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -69,6 +70,7 @@ export default function AppRoutes() {
         <Route path="/staff/select-branch" element={<StaffSelectBranch />} />
         <Route path="/staff/app" element={<StaffDashboard />} />
         <Route path="/staff/waiter/tables/grid" element={<WaiterTablesGrid />} />
+        <Route path="/staff/waiter/tables/:tableId/order" element={<WaiterCreateOrderPage />} />
       </Route>
 
       {/* OWNER PROTECTED */}

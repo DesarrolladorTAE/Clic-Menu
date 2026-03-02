@@ -14,6 +14,14 @@ import {
   listTableSessionRequests,
   approveTableSessionRequest,
   rejectTableSessionRequest,
+
+  // ✅ waiter_only
+  occupyTable,
+  freeTable,
+  rejectTableCall,
+
+  // ✅ NUEVO: waiter menu/order
+  fetchWaiterTableMenu,
 } from "../../../services/staff/waiter/waiterTables.service";
 
 // -------------------------
@@ -269,6 +277,14 @@ export default function WaiterTablesGrid() {
     return counts;
   }, [tables]);
 
+  // ==========================
+  // Helpers privados para evitar repetición
+  // ==========================
+  const pickErr = (e, fallback) =>
+    e?.response?.data?.message || e?.message || fallback;
+
+  const pickCode = (e) => e?.response?.data?.code;
+
   const doAttend = async (table) => {
     const id = table?.id;
     if (!id) return;
@@ -279,16 +295,12 @@ export default function WaiterTablesGrid() {
       await load({ silent: true });
     } catch (e) {
       const st = e?.response?.status;
-      const code = e?.response?.data?.code;
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo atender la mesa.";
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo atender la mesa.");
 
       if (
         st === 409 &&
-        (code === "TAKEN" ||
-          String(msg).toLowerCase().includes("ya tomó"))
+        (code === "TAKEN" || String(msg).toLowerCase().includes("ya tomó"))
       ) {
         showToast(
           `Te ganaron la mesa ${table?.name || id}. Otro mesero la atendió primero.`,
@@ -315,11 +327,8 @@ export default function WaiterTablesGrid() {
       await load({ silent: true });
     } catch (e) {
       const st = e?.response?.status;
-      const code = e?.response?.data?.code;
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo finalizar la atención.";
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo finalizar la atención.");
 
       if (st === 403 && code === "NOT_YOURS") {
         showToast("No puedes finalizar: esa mesa/llamada no es tuya.", "warning");
@@ -340,11 +349,7 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Sesión liberada.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo liberar la sesión.";
-      showToast(msg, "error");
+      showToast(pickErr(e, "No se pudo liberar la sesión."), "error");
     }
   };
 
@@ -360,11 +365,7 @@ export default function WaiterTablesGrid() {
       );
       await load({ silent: true });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo marcar como pagada.";
-      showToast(msg, "error");
+      showToast(pickErr(e, "No se pudo marcar como pagada."), "error");
     }
   };
 
@@ -383,11 +384,8 @@ export default function WaiterTablesGrid() {
       await load({ silent: true });
     } catch (e) {
       const st = e?.response?.status;
-      const code = e?.response?.data?.code;
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo aceptar la comanda.";
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo aceptar la comanda.");
 
       if (
         st === 409 &&
@@ -419,11 +417,7 @@ export default function WaiterTablesGrid() {
       showToast(`Comanda #${orderId}: rechazada.`, "success");
       await load({ silent: true });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo rechazar la comanda.";
-      showToast(msg, "error");
+      showToast(pickErr(e, "No se pudo rechazar la comanda."), "error");
     }
   };
 
@@ -435,11 +429,7 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Dispositivo aprobado.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo aprobar la solicitud.";
-      showToast(msg, "error");
+      showToast(pickErr(e, "No se pudo aprobar la solicitud."), "error");
     } finally {
       setReqBusyId(null);
     }
@@ -453,13 +443,127 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Solicitud rechazada.", "success");
       await load({ silent: true });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "No se pudo rechazar la solicitud.";
-      showToast(msg, "error");
+      showToast(pickErr(e, "No se pudo rechazar la solicitud."), "error");
     } finally {
       setReqBusyId(null);
+    }
+  };
+
+  // ==========================
+  // waiter_only handlers
+  // ==========================
+  const doOccupy = async (table) => {
+    const tableId = table?.id;
+    if (!tableId) return;
+
+    try {
+      const res = await occupyTable(tableId);
+      showToast(res?.message || "Mesa marcada como ocupada.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const st = e?.response?.status;
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo marcar como ocupada.");
+
+      if (st === 403 && code === "NOT_YOURS") {
+        showToast("No puedes ocupar: esa mesa no es tuya.", "warning");
+        await load({ silent: true });
+        return;
+      }
+      if (st === 409 && code === "TAKEN") {
+        showToast("Otro mesero ya tomó esta mesa.", "warning");
+        await load({ silent: true });
+        return;
+      }
+
+      showToast(msg, "error");
+    }
+  };
+
+  const doFree = async (table) => {
+    const tableId = table?.id;
+    if (!tableId) return;
+
+    try {
+      const res = await freeTable(tableId);
+      showToast(res?.message || "Mesa puesta como libre.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const st = e?.response?.status;
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo liberar la mesa.");
+
+      if (st === 403 && code === "NOT_YOURS") {
+        showToast("No puedes liberar: esa mesa no es tuya.", "warning");
+        await load({ silent: true });
+        return;
+      }
+      if (st === 409 && code === "HAS_ACTIVE_ORDER") {
+        showToast("No se puede poner libre: hay comanda activa o pendiente.", "warning");
+        await load({ silent: true });
+        return;
+      }
+
+      showToast(msg, "error");
+    }
+  };
+
+  const doRejectCall = async (table) => {
+    const tableId = table?.id;
+    if (!tableId) return;
+
+    try {
+      const res = await rejectTableCall(tableId);
+      showToast(res?.message || "Llamada rechazada.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      const st = e?.response?.status;
+      const code = pickCode(e);
+      const msg = pickErr(e, "No se pudo rechazar la llamada.");
+
+      if (st === 403 && code === "NOT_YOURS") {
+        showToast("No puedes rechazar: esa mesa no es tuya.", "warning");
+        await load({ silent: true });
+        return;
+      }
+
+      showToast(msg, "error");
+    }
+  };
+
+  // ✅ NUEVO: abrir menú seleccionable del mesero para crear comanda
+  const doCreateOrder = async (table) => {
+    const tableId = table?.id;
+    if (!tableId) return;
+
+    try {
+      // Validación rápida: si backend expone "can_create_order", aquí ya viene.
+      // Mas verificamos que exista menú (para no mandar al vacío).
+      const res = await fetchWaiterTableMenu(tableId);
+      const ok = res?.ok !== false; // tolerante
+      const payload = res?.data || res?.payload || res || null;
+
+      // Si payload viene vacío pero endpoint responde 200, igual navegamos.
+      if (!ok) {
+        showToast(res?.message || "No se pudo cargar el menú de la mesa.", "error");
+        return;
+      }
+
+      nav(`/staff/waiter/tables/${tableId}/order`, {
+        state: {
+          table: {
+            id: tableId,
+            name: table?.name || null,
+            seats: table?.seats || null,
+            ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
+            table_service_mode: table?.table_service_mode || meta?.table_service_mode || null,
+          },
+          // opcional: precargar menú si quieres (aquí lo pasamos para ahorro)
+          preloadedMenu: payload,
+        },
+      });
+    } catch (e) {
+      showToast(pickErr(e, "No se pudo abrir el menú para crear comanda."), "error");
     }
   };
 
@@ -670,20 +774,24 @@ export default function WaiterTablesGrid() {
               const session = t?.session || null;
               const hasDevice = !!session?.has_device;
 
-              // Backend flags
+              const orderingMode = String(t?.ordering_mode || meta?.ordering_mode || "");
+
+              // Backend flags (existentes)
               const canAttend = !!t?.actions?.can_attend;
               const canFinish = !!t?.actions?.can_finish_attention;
               const canAccept = !!t?.actions?.can_accept_order && hasPending;
               const canReject = !!t?.actions?.can_reject_order && hasPending;
 
-              // ✅ Pagado visible si hay OPEN y backend permite (seguridad / ownership)
               const canMarkPaid = !!t?.actions?.can_mark_paid && hasOpenOrder;
+              const showReleaseSession = !!t?.actions?.can_release_session && hasOpenOrder;
 
-              // ✅ CAMBIO: "Liberar sesión" SIEMPRE visible si hay orden abierta.
-              // No dependemos de hasDevice ni de actions.can_release_session para mostrarlo.
-              // El backend decide si aplica o regresa ALREADY_RELEASED / 403 / etc.
-              const showReleaseSession =
-                !!t?.actions?.can_release_session && hasOpenOrder;
+              // waiter_only flags
+              const canMarkOccupied = !!t?.actions?.can_mark_occupied;
+              const canMarkFree = !!t?.actions?.can_mark_free;
+              const canCreateOrder = !!t?.actions?.can_create_order;
+              const canRejectCall = !!t?.actions?.can_reject_call;
+
+              const showWaiterOnlyActions = orderingMode === "waiter_only";
 
               return (
                 <div
@@ -750,40 +858,82 @@ export default function WaiterTablesGrid() {
                   )}
 
                   <div style={{ marginTop: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {/* 1) Pendiente: Aceptar/Rechazar */}
+                    {/* 1) Pendiente: Aceptar/Rechazar (customer_assisted) */}
                     {canAccept ? (
                       <PillButton tone="ok" onClick={() => doAccept(t)} title="Aceptar comanda del cliente">
-                        ✅ Aceptar
+                        Aceptar
                       </PillButton>
                     ) : null}
 
                     {canReject ? (
                       <PillButton tone="danger" onClick={() => doReject(t)} title="Rechazar comanda del cliente">
-                        ⛔ Rechazar
+                        Rechazar
                       </PillButton>
                     ) : null}
 
                     {/* 2) Atender/Finalizar llamada */}
                     {canAttend ? (
                       <PillButton tone="warn" onClick={() => doAttend(t)} title="Atender llamada">
-                        ✅ Atender
+                        Atender
                       </PillButton>
                     ) : null}
 
                     {canFinish ? (
                       <PillButton tone="dark" onClick={() => doFinish(t)} title="Finalizar atención (cierra table_calls)">
-                        🧾 Finalizar atención
+                        Finalizar atención
+                      </PillButton>
+                    ) : null}
+
+                    {/* Rechazar llamada */}
+                    {canRejectCall ? (
+                      <PillButton
+                        tone="danger"
+                        onClick={() => doRejectCall(t)}
+                        title="Cierra la llamada open sin atenderla"
+                      >
+                        Rechazar llamada
+                      </PillButton>
+                    ) : null}
+
+                    {/* waiter_only Ocupado/Libre/Crear pedido */}
+                    {showWaiterOnlyActions && canMarkOccupied ? (
+                      <PillButton
+                        tone="orange"
+                        onClick={() => doOccupy(t)}
+                        title="Marca mesa como occupied (waiter_only)"
+                      >
+                        Ocupar
+                      </PillButton>
+                    ) : null}
+
+                    {showWaiterOnlyActions && canMarkFree ? (
+                      <PillButton
+                        tone="soft"
+                        onClick={() => doFree(t)}
+                        title="Pasa de occupied → available (solo si NO hay comanda)"
+                      >
+                        Libre
+                      </PillButton>
+                    ) : null}
+
+                    {showWaiterOnlyActions && canCreateOrder ? (
+                      <PillButton
+                        tone="dark"
+                        onClick={() => doCreateOrder(t)}
+                        title="Abrir menú del mesero para crear comanda"
+                      >
+                        ➕ Crear pedido
                       </PillButton>
                     ) : null}
 
                     {/* 3) Open: Pagado */}
                     {canMarkPaid ? (
-                      <PillButton tone="ok" onClick={() => doMarkPaid(t)} title="Cierra orden y libera mesa (por ahora)">
+                      <PillButton tone="ok" onClick={() => doMarkPaid(t)} title="Cierra orden y libera mesa">
                         💳 Pagado
                       </PillButton>
                     ) : null}
 
-                    {/* ✅ CAMBIO: Liberar sesión visible siempre que haya open order */}
+                    {/* Liberar sesión */}
                     {showReleaseSession ? (
                       <PillButton
                         tone="dark"
@@ -799,7 +949,14 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {!canAccept && !canReject && !canAttend && !canFinish && !canMarkPaid && !showReleaseSession ? (
+                    {!canAccept &&
+                    !canReject &&
+                    !canAttend &&
+                    !canFinish &&
+                    !canRejectCall &&
+                    !(showWaiterOnlyActions && (canMarkOccupied || canMarkFree || canCreateOrder)) &&
+                    !canMarkPaid &&
+                    !showReleaseSession ? (
                       <span style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
                         Sin acciones
                       </span>

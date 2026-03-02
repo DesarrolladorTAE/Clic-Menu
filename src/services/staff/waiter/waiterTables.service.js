@@ -12,12 +12,16 @@ export async function attendTable(tableId) {
 }
 
 export async function finishAttention(tableId) {
-  const res = await staffApi.post(`/staff/waiter/tables/${tableId}/finish-attention`);
+  const res = await staffApi.post(
+    `/staff/waiter/tables/${tableId}/finish-attention`,
+  );
   return res?.data;
 }
 
 export async function releaseTableSession(tableId) {
-  const res = await staffApi.post(`/staff/waiter/tables/${tableId}/release-session`);
+  const res = await staffApi.post(
+    `/staff/waiter/tables/${tableId}/release-session`,
+  );
   return res?.data;
 }
 
@@ -26,6 +30,64 @@ export async function markTablePaid(tableId) {
   return res?.data;
 }
 
+/**
+ * ============================
+ * waiter_only (Solo mesero)
+ * ============================
+ */
+export async function occupyTable(tableId) {
+  const res = await staffApi.post(`/staff/waiter/tables/${tableId}/occupy`);
+  return res?.data;
+}
+
+export async function freeTable(tableId) {
+  const res = await staffApi.post(`/staff/waiter/tables/${tableId}/free`);
+  return res?.data;
+}
+
+export async function rejectTableCall(tableId) {
+  const res = await staffApi.post(`/staff/waiter/tables/${tableId}/reject-call`);
+  return res?.data;
+}
+
+/**
+ * ============================
+ * ✅ NUEVO: Menú y comanda del mesero (waiter_only)
+ * ============================
+ *
+ * Nota: estos endpoints deben existir en Laravel.
+ * Si tus rutas difieren, aquí se ajusta 1 vez y listo.
+ */
+
+// Trae el menú para esa mesa (categorías, productos, variantes, compuestos)
+export async function fetchWaiterTableMenu(tableId) {
+  const res = await staffApi.get(`/staff/tables/${tableId}/menu`);
+  return res?.data;
+}
+
+// Crea una comanda NUEVA para la mesa (waiter_only)
+export async function createWaiterOrder(tableId, payload) {
+  const res = await staffApi.post(`/staff/tables/${tableId}/orders`, payload);
+  return res?.data;
+}
+
+// Agrega items a una orden abierta (si permites append en waiter_only)
+export async function appendWaiterOrderItems(orderId, payload) {
+  const res = await staffApi.post(`/staff/orders/${orderId}/append-items`, payload);
+  return res?.data;
+}
+
+// Obtiene detalle de una orden del mesero (para historial)
+export async function getWaiterOrder(orderId) {
+  const res = await staffApi.get(`/staff/orders/${orderId}`);
+  return res?.data;
+}
+
+/**
+ * ============================
+ * customer_assisted (aceptar/rechazar)
+ * ============================
+ */
 async function postWaiterOrderAction(url, payload = {}) {
   const res = await staffApi.post(url, payload);
   return res?.data;
