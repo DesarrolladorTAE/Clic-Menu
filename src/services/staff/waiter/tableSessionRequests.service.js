@@ -11,6 +11,7 @@ export async function approveTableSessionRequest(reqId) {
   return res?.data;
 }
 
+
 export async function rejectTableSessionRequest(reqId) {
   const res = await staffApi.delete(`/staff/waiter/table-session-requests/${reqId}`);
   return res?.data;
