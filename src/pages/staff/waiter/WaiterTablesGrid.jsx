@@ -1021,11 +1021,16 @@ export default function WaiterTablesGrid() {
                     ) : null}
 
                     {/* Pagado / Liberar sesión (solo si hay comanda abierta) */}
-                    {showReleaseSession ? (
+                    {t?.actions?.can_release_session ? (
                       <PillButton
                         tone="warn"
                         onClick={() => doReleaseSession(t)}
-                        title="Liberar sesión (desvincular dispositivo)"
+                        disabled={!t?.actions?.can_release_session_enabled}
+                        title={
+                          t?.actions?.can_release_session_enabled
+                            ? "Liberar sesión (desvincular dispositivo)"
+                            : "No hay dispositivo vinculado"
+                        }
                       >
                         🔓 Liberar sesión
                       </PillButton>
