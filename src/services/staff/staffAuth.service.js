@@ -1,73 +1,78 @@
 import staffApi from "../staffApi";
 
 /**
+ * Storage keys (sesión)
+ */
+const SS_USER = "staff_user";
+const SS_ACTIVE_CONTEXT = "staff_active_context";
+const SS_CONTEXTS = "staff_contexts";
+
+/**
  * POST /api/staff/login
- * body: { email, password }
+ * body: { email, password, device_name? }
  */
 export async function staffLogin(payload) {
   const { data } = await staffApi.post("/staff/login", payload);
 
-  // Guarda token staff si viene
+  // Guarda token staff
   if (data?.token) localStorage.setItem("staff_token", data.token);
 
-  // Persistimos un snapshot por si refrescan
-  if (data?.user) sessionStorage.setItem("staff_user", JSON.stringify(data.user));
-  else sessionStorage.removeItem("staff_user");
+  // user
+  if (data?.user) sessionStorage.setItem(SS_USER, JSON.stringify(data.user));
+  else sessionStorage.removeItem(SS_USER);
 
-  if (data?.active_context) sessionStorage.setItem("staff_active_context", JSON.stringify(data.active_context));
-  else sessionStorage.removeItem("staff_active_context");
+  // contexts (lista para selección)
+  if (Array.isArray(data?.contexts)) sessionStorage.setItem(SS_CONTEXTS, JSON.stringify(data.contexts));
+  else sessionStorage.removeItem(SS_CONTEXTS);
+
+  // active_context (si auto-seleccionó)
+  if (data?.active_context) sessionStorage.setItem(SS_ACTIVE_CONTEXT, JSON.stringify(data.active_context));
+  else sessionStorage.removeItem(SS_ACTIVE_CONTEXT);
 
   return data;
 }
 
 /**
- * POST /api/staff/logout
+ * POST /api/staff/select-context
+ * body: { restaurant_id, branch_id, role_id }
  */
-export async function staffLogout() {
-  const { data } = await staffApi.post("/staff/logout");
-  localStorage.removeItem("staff_token");
-  sessionStorage.removeItem("staff_user");
-  sessionStorage.removeItem("staff_active_context");
-  return data;
-}
-
-/**
- * GET /api/staff/waiter/branches
- */
-export async function staffBranches() {
-  const { data } = await staffApi.get("/staff/waiter/branches");
-  return data; // { ok, data: contexts[] }
-}
-
-/**
- * POST /api/staff/waiter/select-branch
- * body: { restaurant_id, branch_id }
- */
-export async function staffSelectBranch(payload) {
-  const { data } = await staffApi.post("/staff/waiter/select-branch", payload);
+export async function staffSelectContext(payload) {
+  const { data } = await staffApi.post("/staff/select-context", payload);
 
   if (data?.active_context) {
-    sessionStorage.setItem("staff_active_context", JSON.stringify(data.active_context));
+    sessionStorage.setItem(SS_ACTIVE_CONTEXT, JSON.stringify(data.active_context));
   }
 
   return data;
 }
 
 /**
- * POST /api/staff/waiter/exit-branch
+ * GET /api/staff/context
+ * Requiere contexto activo
  */
-export async function staffExitBranch() {
-  const { data } = await staffApi.post("/staff/waiter/exit-branch");
-  sessionStorage.removeItem("staff_active_context");
+export async function staffContext() {
+  const { data } = await staffApi.get("/staff/context");
+  return data; // { ok, data: { work_session_id, restaurant, branch, role } }
+}
+
+/**
+ * POST /api/staff/exit-context
+ * Cierra turno pero NO token
+ */
+export async function staffExitContext() {
+  const { data } = await staffApi.post("/staff/exit-context");
+  sessionStorage.removeItem(SS_ACTIVE_CONTEXT);
   return data;
 }
 
 /**
- * GET /api/staff/waiter/context
+ * POST /api/staff/logout
+ * Cierra turno + revoca token actual
  */
-export async function staffContext() {
-  const { data } = await staffApi.get("/staff/waiter/context");
-  return data; // { ok, data: { work_session_id, restaurant, branch, role } }
+export async function staffLogout() {
+  const { data } = await staffApi.post("/staff/logout");
+  clearStaffLocal();
+  return data;
 }
 
 /**
@@ -77,8 +82,41 @@ export function getStaffToken() {
   return localStorage.getItem("staff_token") || "";
 }
 
+export function getStaffUser() {
+  try {
+    const raw = sessionStorage.getItem(SS_USER);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getStaffContexts() {
+  try {
+    const raw = sessionStorage.getItem(SS_CONTEXTS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getStaffActiveContext() {
+  try {
+    const raw = sessionStorage.getItem(SS_ACTIVE_CONTEXT);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStaffActiveContext(next) {
+  if (next) sessionStorage.setItem(SS_ACTIVE_CONTEXT, JSON.stringify(next));
+  else sessionStorage.removeItem(SS_ACTIVE_CONTEXT);
+}
+
 export function clearStaffLocal() {
   localStorage.removeItem("staff_token");
-  sessionStorage.removeItem("staff_user");
-  sessionStorage.removeItem("staff_active_context");
+  sessionStorage.removeItem(SS_USER);
+  sessionStorage.removeItem(SS_ACTIVE_CONTEXT);
+  sessionStorage.removeItem(SS_CONTEXTS);
 }

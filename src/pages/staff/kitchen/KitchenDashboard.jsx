@@ -1,13 +1,12 @@
-// src/pages/staff/StaffDashboard.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { staffContext } from "../../services/staff/staffAuth.service";
-import { useStaffAuth } from "../../context/StaffAuthContext";
+import { staffContext } from "../../../services/staff/staffAuth.service";
+import { useStaffAuth } from "../../../context/StaffAuthContext";
 
-export default function StaffDashboard() {
+export default function KitchenDashboard() {
   const nav = useNavigate();
-  const { exitBranch, clearStaff } = useStaffAuth();
+  const { exitSmart, clearStaff } = useStaffAuth();
 
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
@@ -20,13 +19,21 @@ export default function StaffDashboard() {
 
       try {
         const res = await staffContext();
-        setCtx(res?.data || null);
+        const data = res?.data || null;
+        setCtx(data);
+
+        const roleName = data?.role?.name;
+        if (roleName && roleName !== "kitchen") {
+          if (roleName === "waiter") nav("/staff/app", { replace: true });
+          else if (roleName === "cashier") nav("/staff/cashier", { replace: true });
+          else nav("/staff/select-context", { replace: true });
+          return;
+        }
       } catch (e) {
         const status = e?.response?.status;
 
-        // 409 = no active context (no branch selected)
         if (status === 409) {
-          nav("/staff/select-branch", { replace: true });
+          nav("/staff/select-context", { replace: true });
           return;
         }
 
@@ -44,22 +51,27 @@ export default function StaffDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onExitBranch = async () => {
+  const onExit = async () => {
     setErr("");
     try {
-      await exitBranch();
-      nav("/staff/select-branch", { replace: true });
+      const res = await exitSmart();
+
+      if (res?.mode === "logout") {
+        nav("/staff/login", { replace: true });
+      } else {
+        nav("/staff/select-context", { replace: true });
+      }
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo salir de la sucursal.");
+      setErr(e?.response?.data?.message || "No se pudo salir.");
     }
   };
 
   return (
-    <div style={{ maxWidth: 720, margin: "40px auto", padding: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Panel Staff</h2>
+    <div style={{ maxWidth: 760, margin: "40px auto", padding: 16 }}>
+      <h2 style={{ marginTop: 0 }}>Panel Cocina</h2>
 
       {busy ? (
-        <div style={note}>Cargando contexto…</div>
+        <div style={note}>Cargando…</div>
       ) : (
         <>
           {err && <div style={msgBoxErr}>{err}</div>}
@@ -68,19 +80,16 @@ export default function StaffDashboard() {
             <div style={card}>
               <div style={row}>
                 <div style={k}>Restaurante</div>
-                <div style={v}>{ctx?.restaurant?.name || ctx?.restaurant?.trade_name || "—"}</div>
+                <div style={v}>{ctx?.restaurant?.trade_name || ctx?.restaurant?.name || "—"}</div>
               </div>
-
               <div style={row}>
                 <div style={k}>Sucursal</div>
                 <div style={v}>{ctx?.branch?.name || "—"}</div>
               </div>
-
               <div style={row}>
                 <div style={k}>Rol</div>
                 <div style={v}>{ctx?.role?.name || "—"}</div>
               </div>
-
               <div style={row}>
                 <div style={k}>Work session</div>
                 <div style={v}>{ctx?.work_session_id || "—"}</div>
@@ -91,19 +100,19 @@ export default function StaffDashboard() {
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
             <button
               style={btnPrimary}
-              onClick={() => nav("/staff/waiter/tables/grid")}
-              title="Ir al panel de mesas (mesero)"
+              onClick={() => nav("/staff/kitchen")}
+              title="Dashboard cocina"
             >
-              🍽️ Ir a Mesas
+              🍳 Dashboard
             </button>
 
-            <button style={btnSecondary} onClick={onExitBranch}>
-              Salir de sucursal
+            <button style={btnDanger} onClick={onExit}>
+              Salir
             </button>
           </div>
 
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-            Para cerrar sesión, sal de la sucursal y usa “Cerrar sesión” en la pantalla de selección.
+            Si este usuario solo tiene un contexto, “Salir” cerrará sesión.
           </div>
         </>
       )}
@@ -120,26 +129,33 @@ const card = {
   background: "#fff",
 };
 
-const row = { display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, padding: "8px 0" };
+const row = {
+  display: "grid",
+  gridTemplateColumns: "140px 1fr",
+  gap: 10,
+  padding: "8px 0",
+};
+
 const k = { fontWeight: 900, fontSize: 12, opacity: 0.7 };
 const v = { fontWeight: 800 };
 
 const btnPrimary = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #cfcfff",
-  background: "#eef2ff",
+  border: "1px solid #d1fae5",
+  background: "#ecfdf5",
   cursor: "pointer",
   fontWeight: 950,
 };
 
-const btnSecondary = {
+const btnDanger = {
   padding: "10px 12px",
   borderRadius: 10,
-  border: "1px solid #ccc",
-  background: "#fff",
+  border: "1px solid #ffb4b4",
+  background: "#ffe5e5",
   cursor: "pointer",
   fontWeight: 900,
+  color: "#7a0010",
 };
 
 const msgBoxErr = {

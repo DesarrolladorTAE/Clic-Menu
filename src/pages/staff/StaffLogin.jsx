@@ -5,6 +5,13 @@ import { useForm } from "react-hook-form";
 import { useStaffAuth } from "../../context/StaffAuthContext";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 
+function routeByRole(roleName) {
+  if (roleName === "waiter") return "/staff/app";
+  if (roleName === "cashier") return "/staff/cashier";
+  if (roleName === "kitchen") return "/staff/kitchen";
+  return "/staff/select-context";
+}
+
 export default function StaffLogin() {
   const { login } = useStaffAuth();
   const nav = useNavigate();
@@ -38,13 +45,20 @@ export default function StaffLogin() {
     try {
       const res = await login(values.email, values.password);
 
-      // Si hay que elegir sucursal
-      if (res?.requires_branch_selection) {
-        nav("/staff/select-branch", { replace: true });
+      // Si hay que elegir contexto (más de uno)
+      if (res?.requires_context_selection) {
+        nav("/staff/select-context", { replace: true, state: { from } });
         return;
       }
 
-      // Si el backend ya auto-seleccionó (solo 1 contexto), directo al app
+      // ✅ Si ya quedó activo (sea desde login backend o autoselect del front)
+      const roleName = res?.active_context?.role?.name;
+      if (roleName) {
+        nav(routeByRole(roleName), { replace: true });
+        return;
+      }
+
+      // Fallback
       nav(from, { replace: true });
     } catch (e) {
       const handled = handleFormApiError(e, setError, {
@@ -52,9 +66,7 @@ export default function StaffLogin() {
       });
 
       if (!handled) {
-        const msg =
-          e?.response?.data?.message ||
-          "No se pudo iniciar sesión staff.";
+        const msg = e?.response?.data?.message || "No se pudo iniciar sesión staff.";
         setErr(msg);
       }
     } finally {
@@ -65,7 +77,6 @@ export default function StaffLogin() {
   return (
     <div style={{ maxWidth: 420, margin: "60px auto", padding: 16 }}>
       <h2 style={{ marginTop: 0 }}>Acceso Staff</h2>
-      
 
       {err && <div style={msgBoxErr}>{err}</div>}
 

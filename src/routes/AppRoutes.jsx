@@ -10,10 +10,12 @@ import Login from "../pages/auth/Login";
 
 //STAFF
 import StaffLogin from "../pages/staff/StaffLogin";
-import StaffSelectBranch from "../pages/staff/StaffSelectBranch";
-import StaffDashboard from "../pages/staff/StaffDashboard"; 
+import StaffSelectContext from "../pages/staff/StaffSelectContext";
+import StaffDashboard from "../pages/staff/waiter/StaffDashboard"; 
 import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
 import StaffMenuEntryPage from "../pages/staff/waiter/StaffMenuEntryPage";
+
+import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -67,15 +69,22 @@ export default function AppRoutes() {
 
       {/* STAFF PROTECTED */}
       <Route element={<StaffProtectedRoute />}>
-        <Route path="/staff/select-branch" element={<StaffSelectBranch />} />
+        <Route path="/staff/select-context" element={<StaffSelectContext />} />
+
+        {/* Mesero*/}
         <Route path="/staff/app" element={<StaffDashboard />} />
         <Route path="/staff/waiter/tables/grid" element={<WaiterTablesGrid />} />
         <Route path="/staff/waiter/tables/:tableId/order" element={<StaffMenuEntryPage />} />
+
+        {/* Cocina */}
+        <Route path="/staff/kitchen" element={<KitchenDashboard />} />
+
+
+        {/* STAFF PROTECTED */}
+
+
        
       </Route>
-
-
-
 
       {/* OWNER PROTECTED */}
       <Route element={<ProtectedRoute />}>
