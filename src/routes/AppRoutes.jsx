@@ -79,7 +79,6 @@ export default function AppRoutes() {
         {/* Cocina */}
         <Route path="/staff/kitchen" element={<KitchenDashboard />} />
 
-
         {/* STAFF PROTECTED */}
 
 
