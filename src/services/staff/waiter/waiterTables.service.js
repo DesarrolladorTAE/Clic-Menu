@@ -64,3 +64,15 @@ export async function rejectCustomerOrder(orderId) {
   }
 }
 
+
+//Avisos de pedido listo para mesero
+
+export async function fetchWaiterReadyNotifications() {
+  const res = await staffApi.get(`/staff/waiter/ready-notifications`);
+  return res?.data;
+}
+
+export async function markWaiterReadyNotificationRead(notificationId) {
+  const res = await staffApi.post(`/staff/waiter/ready-notifications/${notificationId}/read`);
+  return res?.data;
+}

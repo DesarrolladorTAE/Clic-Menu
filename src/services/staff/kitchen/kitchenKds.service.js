@@ -6,6 +6,7 @@ import staffApi from "../../staffApi";
  * - orders (open/ready)
  * - startItem (queued -> in_progress)
  * - readyItem (in_progress -> ready)
+ * - notifyReady (aviso a mesero)
  */
 
 export async function fetchKitchenKdsOrders(params = {}) {
@@ -21,5 +22,10 @@ export async function startKitchenItem(itemId) {
 
 export async function readyKitchenItem(itemId) {
   const res = await staffApi.post(`/staff/kitchen/kds/order-items/${itemId}/ready`);
+  return res?.data;
+}
+
+export async function notifyKitchenOrderReady(orderId) {
+  const res = await staffApi.post(`/staff/kitchen/kds/orders/${orderId}/notify-ready`);
   return res?.data;
 }

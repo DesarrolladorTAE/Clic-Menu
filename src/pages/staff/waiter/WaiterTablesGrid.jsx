@@ -1,4 +1,3 @@
-// src/pages/staff/waiter/WaiterTablesGrid.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,9 +10,10 @@ import {
   releaseTableSession,
   markTablePaid,
   rejectTableCall,
-  // Si los tienes en tu waiterTables.service.js, los dejo listos sin tocar tu UI:
   acceptCustomerOrder,
   rejectCustomerOrder,
+  fetchWaiterReadyNotifications,
+  markWaiterReadyNotificationRead,
 } from "../../../services/staff/waiter/waiterTables.service";
 
 import {
@@ -199,6 +199,9 @@ export default function WaiterTablesGrid() {
   const [requests, setRequests] = useState([]);
   const [reqBusyId, setReqBusyId] = useState(null);
 
+  const [readyNotifications, setReadyNotifications] = useState([]);
+  const [readyBusyId, setReadyBusyId] = useState(null);
+
   const [toast, setToast] = useState({
     open: false,
     message: "",
@@ -224,13 +227,15 @@ export default function WaiterTablesGrid() {
     else setRefreshing(true);
 
     try {
-      const [resGrid, resReq] = await Promise.all([
+      const [resGrid, resReq, resReady] = await Promise.all([
         fetchStaffTablesGrid(),
         fetchTableSessionRequests().catch(() => null),
+        fetchWaiterReadyNotifications().catch(() => null),
       ]);
 
       setData(resGrid || null);
       setRequests(Array.isArray(resReq?.data) ? resReq.data : []);
+      setReadyNotifications(Array.isArray(resReady?.data) ? resReady.data : []);
     } catch (e) {
       const st = e?.response?.status;
 
@@ -299,9 +304,6 @@ export default function WaiterTablesGrid() {
     return counts;
   }, [tables]);
 
-  // ==========================
-  // Actions handlers
-  // ==========================
   const doAttend = async (table) => {
     const id = table?.id;
     if (!id) return;
@@ -409,7 +411,6 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  // (si tus services existen, aquí siguen vivos)
   const doAccept = async (table) => {
     const pending = table?.pending_order || null;
     const orderId = pending?.id || null;
@@ -490,9 +491,20 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  // ==========================
-  // waiter_only handlers
-  // ==========================
+  const doReadReadyNotification = async (notificationId) => {
+    if (!notificationId) return;
+    setReadyBusyId(notificationId);
+    try {
+      const res = await markWaiterReadyNotificationRead(notificationId);
+      showToast(res?.message || "Aviso marcado como leído.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      showToast(pickErr(e, "No se pudo marcar el aviso como leído."), "error");
+    } finally {
+      setReadyBusyId(null);
+    }
+  };
+
   const doOccupy = async (table) => {
     const tableId = table?.id;
     if (!tableId) return;
@@ -552,8 +564,6 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  // Abrir menú de mesero (SALON) para crear comanda.
-  // Nota: tu controller staffOrders.menu NO requiere tableId, por eso aquí NO lo mando.
   const doCreateOrder = async (table) => {
     const tableId = table?.id;
     if (!tableId) return;
@@ -573,7 +583,6 @@ export default function WaiterTablesGrid() {
               table?.table_service_mode || meta?.table_service_mode || null,
           },
           preloadedMenu: payload,
-          // NUEVO: modo "crear" explícito (por si tu página lo quiere diferenciar)
           intent: "create",
           existingOrderId: null,
         },
@@ -586,8 +595,6 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  // NUEVO: “Ver comanda” → abre el mismo menú, pero con existingOrderId
-  // para que la página del menú cargue lo ya pedido (showCurrent) y permita appendItems.
   const doViewOrder = async (table) => {
     const tableId = table?.id;
     const openOrderId = table?.active_order?.id || null;
@@ -608,7 +615,6 @@ export default function WaiterTablesGrid() {
               table?.table_service_mode || meta?.table_service_mode || null,
           },
           preloadedMenu: payload,
-          // NUEVO: bandera e ID para que el menú cargue items existentes
           intent: "view",
           existingOrderId: openOrderId,
         },
@@ -718,6 +724,72 @@ export default function WaiterTablesGrid() {
         </div>
       </div>
 
+      {/* AVISOS DE PEDIDO LISTO */}
+      {Array.isArray(readyNotifications) && readyNotifications.length > 0 ? (
+        <div
+          style={{
+            marginTop: 12,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 18,
+            background: "#fff",
+            padding: 14,
+            boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div style={{ fontWeight: 950, marginBottom: 10 }}>
+            Avisos de cocina
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {readyNotifications.map((n) => (
+              <div
+                key={n.id}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.10)",
+                  borderRadius: 16,
+                  padding: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "grid", gap: 4 }}>
+                  <div style={{ fontWeight: 950 }}>
+                    {n.title || "Pedido listo"}
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.9 }}>
+                    {n.message || `Pedido #${n.order_id} listo`}
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    Mesa: <strong>{n.table_id ?? "—"}</strong> · Orden:{" "}
+                    <strong>#{n.order_id ?? "—"}</strong>
+                    {n.notified_at ? (
+                      <>
+                        {" "}· Avisado: <strong>{n.notified_at}</strong>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <PillButton
+                    tone="ok"
+                    disabled={readyBusyId === n.id}
+                    onClick={() => doReadReadyNotification(n.id)}
+                    title="Marcar aviso como leído"
+                  >
+                    {readyBusyId === n.id ? "Marcando…" : "Leído"}
+                  </PillButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* JOIN REQUESTS */}
       {Array.isArray(requests) && requests.length > 0 ? (
         <div
@@ -758,8 +830,7 @@ export default function WaiterTablesGrid() {
                     Dispositivo: <strong>{r.device_identifier}</strong>
                     {r.expires_at ? (
                       <>
-                        {" "}
-                        · Expira: <strong>{r.expires_at}</strong>
+                        {" "}· Expira: <strong>{r.expires_at}</strong>
                       </>
                     ) : null}
                   </div>
@@ -781,7 +852,7 @@ export default function WaiterTablesGrid() {
                     onClick={() => doRejectReq(r.id)}
                     title="Rechazar solicitud"
                   >
-                     Rechazar
+                    Rechazar
                   </PillButton>
                 </div>
               </div>
@@ -858,15 +929,9 @@ export default function WaiterTablesGrid() {
 
               const canMarkOccupied = !!t?.actions?.can_mark_occupied;
               const canMarkFree = !!t?.actions?.can_mark_free;
-
-              // OJO: en waiter_only, ahora “Crear comanda” solo si NO hay openOrder
               const canCreateOrder = !!t?.actions?.can_create_order && !hasOpenOrder;
-
-              // “Ver comanda” solo si hay openOrder (y básicamente can_view_order)
               const canViewOrder =
                 !!t?.actions?.can_view_order && hasOpenOrder;
-
-              // Este era el punto: tú ya lo mandas desde backend
               const canRejectCall = !!t?.actions?.can_reject_call;
 
               const showWaiterOnlyActions =
@@ -924,7 +989,6 @@ export default function WaiterTablesGrid() {
                     </div>
                   </div>
 
-                  {/* Resumen de comanda activa (solo info) */}
                   {hasOpenOrder ? (
                     <div
                       style={{
@@ -945,16 +1009,14 @@ export default function WaiterTablesGrid() {
                     </div>
                   ) : null}
 
-                  {/* Botones */}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {/* Llamadas */}
                     {isCalling && canAttend ? (
                       <PillButton
                         tone="ok"
                         onClick={() => doAttend(t)}
                         title="Atender llamada"
                       >
-                         Atender
+                        Atender
                       </PillButton>
                     ) : null}
 
@@ -974,18 +1036,17 @@ export default function WaiterTablesGrid() {
                         onClick={() => doFinish(t)}
                         title="Finalizar atención"
                       >
-                         Finalizar
+                        Finalizar
                       </PillButton>
                     ) : null}
 
-                    {/* waiter_only: ocupar / libre */}
                     {showWaiterOnlyActions && canMarkOccupied ? (
                       <PillButton
                         tone="blue"
                         onClick={() => doOccupy(t)}
                         title="Marcar mesa como ocupada"
                       >
-                         Ocupar
+                        Ocupar
                       </PillButton>
                     ) : null}
 
@@ -995,11 +1056,10 @@ export default function WaiterTablesGrid() {
                         onClick={() => doFree(t)}
                         title="Poner mesa como libre"
                       >
-                         Liberar
+                        Liberar
                       </PillButton>
                     ) : null}
 
-                    {/*  Crear comanda vs Ver comanda */}
                     {showWaiterOnlyActions && canCreateOrder ? (
                       <PillButton
                         tone="orange"
@@ -1020,8 +1080,7 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {/* Pagado / Liberar sesión (solo si hay comanda abierta) */}
-                    {t?.actions?.can_release_session ? (
+                    {showReleaseSession ? (
                       <PillButton
                         tone="warn"
                         onClick={() => doReleaseSession(t)}
@@ -1032,7 +1091,7 @@ export default function WaiterTablesGrid() {
                             : "No hay dispositivo vinculado"
                         }
                       >
-                        🔓 Liberar sesión
+                        Liberar sesión
                       </PillButton>
                     ) : null}
 
@@ -1042,18 +1101,17 @@ export default function WaiterTablesGrid() {
                         onClick={() => doMarkPaid(t)}
                         title="Marcar cuenta como pagada y liberar mesa"
                       >
-                        💳 Pagado
+                        Pagado
                       </PillButton>
                     ) : null}
 
-                    {/* (Cliente asistido) aceptar/rechazar pending, se queda por si existiera */}
                     {canAccept ? (
                       <PillButton
                         tone="ok"
                         onClick={() => doAccept(t)}
                         title="Aceptar comanda"
                       >
-                        ✅ Aceptar
+                        Aceptar
                       </PillButton>
                     ) : null}
 
@@ -1063,7 +1121,7 @@ export default function WaiterTablesGrid() {
                         onClick={() => doReject(t)}
                         title="Rechazar comanda"
                       >
-                        ⛔ Rechazar
+                        Rechazar
                       </PillButton>
                     ) : null}
                   </div>

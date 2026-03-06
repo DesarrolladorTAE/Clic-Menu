@@ -1,4 +1,3 @@
-// src/pages/staff/kitchen/KitchenKdsPage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -9,12 +8,11 @@ import {
   fetchKitchenKdsOrders,
   startKitchenItem,
   readyKitchenItem,
+  notifyKitchenOrderReady,
 } from "../../../services/staff/kitchen/kitchenKds.service";
 
 /**
- * Traducciones visibles (ES) sin tocar valores internos (EN)
- * - Interno: lo que venga de BD / API (queued, in_progress, ready, open, etc.)
- * - Visual: lo que se muestra al usuario.
+ * Traducciones visibles
  */
 const ESTADO_ITEM_ES = {
   queued: "Pendiente",
@@ -50,10 +48,12 @@ export default function KitchenDashboard() {
   const [busy, setBusy] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
+  const [okMsg, setOkMsg] = useState("");
   const [ctx, setCtx] = useState(null);
 
   const [includeReady, setIncludeReady] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [notifyingOrderId, setNotifyingOrderId] = useState(null);
 
   const pollRef = useRef(null);
   const abortRef = useRef(false);
@@ -174,6 +174,7 @@ export default function KitchenDashboard() {
 
   const onExit = async () => {
     setErr("");
+    setOkMsg("");
     try {
       const res = await exitSmart();
       if (res?.mode === "logout") nav("/staff/login", { replace: true });
@@ -185,17 +186,24 @@ export default function KitchenDashboard() {
 
   const visibleOrders = useMemo(() => {
     if (includeReady) return orders;
-    return (orders || []).filter((o) => Array.isArray(o?.items) && o.items.length > 0);
+
+    return (orders || []).filter((o) => {
+      const hasVisibleItems = Array.isArray(o?.items) && o.items.length > 0;
+      const keepByUnreadNotice = !!o?.ready_notice_sent;
+      return hasVisibleItems || keepByUnreadNotice;
+    });
   }, [orders, includeReady]);
 
   const doStart = async (item) => {
     setErr("");
+    setOkMsg("");
     const id = item?.id;
     if (!id) return;
 
     setRefreshing(true);
     try {
       await startKitchenItem(id);
+      setOkMsg("Ítem enviado a preparación.");
       await loadOrders({ silent: true });
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo iniciar el ítem.");
@@ -206,17 +214,43 @@ export default function KitchenDashboard() {
 
   const doReady = async (item) => {
     setErr("");
+    setOkMsg("");
     const id = item?.id;
     if (!id) return;
 
     setRefreshing(true);
     try {
       await readyKitchenItem(id);
+      setOkMsg("Ítem marcado como listo.");
       await loadOrders({ silent: true });
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo marcar como listo el ítem.");
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const doNotifyReady = async (order) => {
+    const orderId = order?.id;
+    if (!orderId) return;
+
+    setErr("");
+    setOkMsg("");
+    setNotifyingOrderId(orderId);
+
+    try {
+      const res = await notifyKitchenOrderReady(orderId);
+      setOkMsg(
+        res?.message ||
+          (res?.data?.already
+            ? "El aviso de pedido listo ya estaba enviado."
+            : "Aviso enviado al mesero.")
+      );
+      await loadOrders({ silent: true });
+    } catch (e) {
+      setErr(e?.response?.data?.message || "No se pudo enviar el aviso de pedido listo.");
+    } finally {
+      setNotifyingOrderId(null);
     }
   };
 
@@ -257,6 +291,7 @@ export default function KitchenDashboard() {
       </div>
 
       {err ? <div style={msgErr}>{err}</div> : null}
+      {okMsg ? <div style={msgOk}>{okMsg}</div> : null}
 
       {busy ? (
         <div style={note}>Cargando…</div>
@@ -277,7 +312,9 @@ export default function KitchenDashboard() {
                   order={o}
                   onStart={doStart}
                   onReady={doReady}
+                  onNotifyReady={doNotifyReady}
                   busy={refreshing}
+                  notifying={notifyingOrderId === o.id}
                 />
               ))}
             </div>
@@ -288,14 +325,16 @@ export default function KitchenDashboard() {
   );
 }
 
-function OrderCard({ order, onStart, onReady, busy }) {
+function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying }) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const createdAt = formatWhen(order?.created_at);
 
   const allReady = !!order?.all_ready || Number(order?.non_ready_count || 0) === 0;
   const orderStatusEs = tOrderStatus(order?.status);
+  const canNotifyReady = !!order?.actions?.can_notify_ready;
+  const readyNoticeSent = !!order?.ready_notice_sent;
+  const hasVisibleItems = items.length > 0;
 
-  // Tiempo corto tipo "01:10" (como en tu captura), basado en created_at
   const elapsed = formatElapsed(order?.created_at);
 
   return (
@@ -328,9 +367,59 @@ function OrderCard({ order, onStart, onReady, busy }) {
       </div>
 
       <div style={ticketBody}>
-        {items.map((it) => (
-          <ItemRow key={it.id} item={it} onStart={onStart} onReady={onReady} busy={busy} />
-        ))}
+        {hasVisibleItems ? (
+          items.map((it) => (
+            <ItemRow key={it.id} item={it} onStart={onStart} onReady={onReady} busy={busy} />
+          ))
+        ) : readyNoticeSent ? (
+          <div style={emptyItemsBox}>
+            <div style={emptyItemsTitle}>Esperando confirmación del mesero</div>
+            <div style={emptyItemsText}>
+              Ya no hay ítems visibles en esta comanda, mas el aviso de <b>Pedido listo</b> sigue activo.
+              La tarjeta permanecerá aquí hasta que el mesero lo marque como <b>Leído</b>.
+            </div>
+          </div>
+        ) : (
+          <div style={emptyItemsBox}>
+            <div style={emptyItemsTitle}>Sin ítems visibles</div>
+            <div style={emptyItemsText}>
+              Esta comanda no tiene ítems visibles en este modo.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={ticketFooter}>
+        <div style={ticketFooterLeft}>
+          {readyNoticeSent ? (
+            <span style={noticeSentPill}>Aviso enviado al mesero</span>
+          ) : (
+            <span style={noticePendingPill}>
+              {allReady ? "Listo para avisar" : "Aún hay ítems pendientes"}
+            </span>
+          )}
+        </div>
+
+        <div style={ticketFooterRight}>
+          <button
+            style={btnNotifyReady(canNotifyReady && !busy && !notifying)}
+            onClick={() => onNotifyReady(order)}
+            disabled={busy || notifying || !canNotifyReady}
+            title={
+              canNotifyReady
+                ? readyNoticeSent
+                  ? "El aviso ya fue enviado. Si lo oprimes de nuevo, el sistema te lo confirmará."
+                  : "Avisar al mesero que el pedido está listo"
+                : "Aún hay pedidos pendientes"
+            }
+          >
+            {notifying
+              ? "Enviando aviso…"
+              : readyNoticeSent
+              ? "Pedido listo enviado"
+              : "Pedido listo"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -466,7 +555,7 @@ function pill(status) {
   return { ...pillBase, background: "#f3f4f6", borderColor: "#e5e7eb", color: "#374151" };
 }
 
-/* ================== estilos inline (KDS simple, contenedor tipo “tarjeta” como tu captura) ================== */
+/* ================== estilos inline ================== */
 
 const wrap = { maxWidth: 1180, margin: "18px auto", padding: 14 };
 
@@ -491,7 +580,6 @@ const empty = {
   background: "#fff",
 };
 
-
 const grid = {
   display: "grid",
   gap: 14,
@@ -500,13 +588,8 @@ const grid = {
   maxWidth: "100%",
   marginLeft: 0,
   marginRight: "auto",
-
-  // 1 columna si no cabe, 2 si cabe, pero manteniendo el tamaño fijo
-   gridTemplateColumns: "repeat(2, minmax(460px, 1fr))",
+  gridTemplateColumns: "repeat(2, minmax(460px, 1fr))",
 };
-
-
-/* ====== Tarjeta de comanda tipo captura: cabecera amarilla + cuerpo blanco ====== */
 
 const ticketCard = {
   border: "1px solid #eaeaea",
@@ -514,8 +597,6 @@ const ticketCard = {
   overflow: "hidden",
   background: "#fff",
   boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
-
-  // mantiene todas las tarjetas parejas
   display: "flex",
   flexDirection: "column",
 };
@@ -626,17 +707,79 @@ const ticketMeta = {
 
 const ticketBody = {
   padding: 10,
-
-  // límite visual aprox. a 3 filas (ajustable)
   maxHeight: 230,
   overflowY: "auto",
   overflowX: "hidden",
-
-  // para que el scroll no empuje el layout
   scrollbarGutter: "stable",
+  minHeight: 72,
 };
 
-/* ====== Fila de ítem (como la captura: cantidad circular, nombre, nota, botón a la derecha) ====== */
+const emptyItemsBox = {
+  border: "1px dashed #d1d5db",
+  background: "#f9fafb",
+  borderRadius: 12,
+  padding: 12,
+};
+
+const emptyItemsTitle = {
+  fontSize: 13,
+  fontWeight: 950,
+  color: "#111827",
+};
+
+const emptyItemsText = {
+  marginTop: 6,
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: "#4b5563",
+};
+
+const ticketFooter = {
+  borderTop: "1px solid #f1f5f9",
+  padding: "10px 12px 12px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const ticketFooterLeft = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const ticketFooterRight = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+};
+
+const noticeSentPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontWeight: 950,
+  fontSize: 12,
+};
+
+const noticePendingPill = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  color: "#374151",
+  fontWeight: 900,
+  fontSize: 12,
+};
 
 const ticketItemRow = {
   display: "grid",
@@ -725,8 +868,6 @@ const ticketRight = {
   justifyContent: "center",
 };
 
-/* ====== Botones ====== */
-
 const btnPrimary = {
   padding: "10px 12px",
   borderRadius: 10,
@@ -779,7 +920,17 @@ const btnActionOk = (enabled) => ({
   opacity: enabled ? 1 : 0.55,
 });
 
-/* ====== Píldoras ====== */
+const btnNotifyReady = (enabled) => ({
+  minWidth: 158,
+  padding: "10px 14px",
+  borderRadius: 999,
+  border: `1px solid ${enabled ? "#f59e0b" : "#e5e7eb"}`,
+  background: enabled ? "#fbbf24" : "#f9fafb",
+  color: enabled ? "#111827" : "#6b7280",
+  cursor: enabled ? "pointer" : "not-allowed",
+  fontWeight: 1000,
+  opacity: enabled ? 1 : 0.65,
+});
 
 const pillBase = {
   display: "inline-flex",
@@ -792,8 +943,6 @@ const pillBase = {
   fontSize: 11,
 };
 
-/* ====== Errores ====== */
-
 const msgErr = {
   background: "#ffe5e5",
   border: "1px solid #ffb4b4",
@@ -801,5 +950,15 @@ const msgErr = {
   borderRadius: 10,
   marginBottom: 10,
   color: "#7a0010",
+  fontWeight: 900,
+};
+
+const msgOk = {
+  background: "#ecfdf5",
+  border: "1px solid #bbf7d0",
+  padding: 10,
+  borderRadius: 10,
+  marginBottom: 10,
+  color: "#166534",
   fontWeight: 900,
 };
