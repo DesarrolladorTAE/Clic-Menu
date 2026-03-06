@@ -17,16 +17,12 @@ export async function rejectTableCall(tableId) {
 }
 
 export async function finishAttention(tableId) {
-  const res = await staffApi.post(
-    `/staff/waiter/tables/${tableId}/finish-attention`,
-  );
+  const res = await staffApi.post( `/staff/waiter/tables/${tableId}/finish-attention`);
   return res?.data;
 }
 
 export async function releaseTableSession(tableId) {
-  const res = await staffApi.post(
-    `/staff/waiter/tables/${tableId}/release-session`,
-  );
+  const res = await staffApi.post( `/staff/waiter/tables/${tableId}/release-session`);
   return res?.data;
 }
 
@@ -36,37 +32,17 @@ export async function markTablePaid(tableId) {
 }
 
 
-
-async function postWaiterOrderAction(url, payload = {}) {
-  const res = await staffApi.post(url, payload);
+export async function acceptCustomerOrder(orderId) {
+  const res = await staffApi.post(`/staff/waiter/orders/${orderId}/accept`);
   return res?.data;
 }
 
-export async function acceptCustomerOrder(orderId) {
-  try {
-    return await postWaiterOrderAction(`/staff/waiter/orders/${orderId}/accept`);
-  } catch (e) {
-    if (e?.response?.status === 404) {
-      return await postWaiterOrderAction(`/staff/staff/waiter/orders/${orderId}/accept`);
-    }
-    throw e;
-  }
-}
-
 export async function rejectCustomerOrder(orderId) {
-  try {
-    return await postWaiterOrderAction(`/staff/waiter/orders/${orderId}/reject`);
-  } catch (e) {
-    if (e?.response?.status === 404) {
-      return await postWaiterOrderAction(`/staff/staff/waiter/orders/${orderId}/reject`);
-    }
-    throw e;
-  }
+  const res = await staffApi.post(`/staff/waiter/orders/${orderId}/reject`);
+  return res?.data;
 }
-
 
 //Avisos de pedido listo para mesero
-
 export async function fetchWaiterReadyNotifications() {
   const res = await staffApi.get(`/staff/waiter/ready-notifications`);
   return res?.data;
@@ -76,3 +52,23 @@ export async function markWaiterReadyNotificationRead(notificationId) {
   const res = await staffApi.post(`/staff/waiter/ready-notifications/${notificationId}/read`);
   return res?.data;
 }
+
+// =========================
+// Avisos de solicitud de cuenta
+// =========================
+export async function fetchWaiterBillRequests() {
+  const res = await staffApi.get(`/staff/waiter/bill-requests`);
+  return res?.data;
+}
+
+export async function markWaiterBillRequestRead(billRequestId) {
+  const res = await staffApi.post(`/staff/waiter/bill-requests/${billRequestId}/read`);
+  return res?.data;
+}
+
+export async function startWaiterOrderPayment(orderId) {
+    const res = await staffApi.post(`/staff/waiter/orders/${orderId}/start-payment`);
+    return res?.data;
+}
+
+

@@ -14,6 +14,9 @@ import {
   rejectCustomerOrder,
   fetchWaiterReadyNotifications,
   markWaiterReadyNotificationRead,
+  fetchWaiterBillRequests,
+  markWaiterBillRequestRead,
+  startWaiterOrderPayment,
 } from "../../../services/staff/waiter/waiterTables.service";
 
 import {
@@ -202,6 +205,13 @@ export default function WaiterTablesGrid() {
   const [readyNotifications, setReadyNotifications] = useState([]);
   const [readyBusyId, setReadyBusyId] = useState(null);
 
+  const [billRequests, setBillRequests] = useState([]);
+  const [billBusyId, setBillBusyId] = useState(null);
+  const [payingBusyOrderId, setPayingBusyOrderId] = useState(null);
+
+  // Mantiene viva en UI la capacidad de cobrar aunque el aviso se marque como leído
+  const [billOrderIds, setBillOrderIds] = useState([]);
+
   const [toast, setToast] = useState({
     open: false,
     message: "",
@@ -227,15 +237,17 @@ export default function WaiterTablesGrid() {
     else setRefreshing(true);
 
     try {
-      const [resGrid, resReq, resReady] = await Promise.all([
+      const [resGrid, resReq, resReady, resBill] = await Promise.all([
         fetchStaffTablesGrid(),
         fetchTableSessionRequests().catch(() => null),
         fetchWaiterReadyNotifications().catch(() => null),
+        fetchWaiterBillRequests().catch(() => null),
       ]);
 
       setData(resGrid || null);
       setRequests(Array.isArray(resReq?.data) ? resReq.data : []);
       setReadyNotifications(Array.isArray(resReady?.data) ? resReady.data : []);
+      setBillRequests(Array.isArray(resBill?.data) ? resBill.data : []);
     } catch (e) {
       const st = e?.response?.status;
 
@@ -287,6 +299,24 @@ export default function WaiterTablesGrid() {
     () => (Array.isArray(data?.data) ? data.data : []),
     [data],
   );
+
+  // Conserva órdenes "cobrables" aunque el aviso se lea,
+  // pero limpia las que ya no existen como activas en el grid
+  useEffect(() => {
+    const activeOrderIds = (tables || [])
+      .map((t) => Number(t?.active_order?.id || 0))
+      .filter(Boolean);
+
+    const unreadBillOrderIds = (billRequests || [])
+      .map((n) => Number(n?.order_id || 0))
+      .filter(Boolean);
+
+    setBillOrderIds((prev) => {
+      const keepPrev = (prev || []).filter((id) => activeOrderIds.includes(id));
+      const merged = [...keepPrev, ...unreadBillOrderIds];
+      return Array.from(new Set(merged));
+    });
+  }, [tables, billRequests]);
 
   const summary = useMemo(() => {
     const counts = {
@@ -502,6 +532,42 @@ export default function WaiterTablesGrid() {
       showToast(pickErr(e, "No se pudo marcar el aviso como leído."), "error");
     } finally {
       setReadyBusyId(null);
+    }
+  };
+
+  const doReadBillRequest = async (billRequestId) => {
+    if (!billRequestId) return;
+    setBillBusyId(billRequestId);
+    try {
+      const res = await markWaiterBillRequestRead(billRequestId);
+      showToast(res?.message || "Aviso de cuenta marcado como leído.", "success");
+      await load({ silent: true });
+    } catch (e) {
+      showToast(pickErr(e, "No se pudo marcar el aviso de cuenta como leído."), "error");
+    } finally {
+      setBillBusyId(null);
+    }
+  };
+
+  const doStartPayment = async (orderId) => {
+    if (!orderId) return;
+    setPayingBusyOrderId(orderId);
+    try {
+      const res = await startWaiterOrderPayment(orderId);
+      showToast(
+        res?.message || `Orden #${orderId}: se inició el proceso de cobro.`,
+        "success",
+      );
+
+      setBillOrderIds((prev) =>
+        (prev || []).filter((id) => Number(id) !== Number(orderId)),
+      );
+
+      await load({ silent: true });
+    } catch (e) {
+      showToast(pickErr(e, "No se pudo iniciar el cobro."), "error");
+    } finally {
+      setPayingBusyOrderId(null);
     }
   };
 
@@ -724,6 +790,73 @@ export default function WaiterTablesGrid() {
         </div>
       </div>
 
+      {/* AVISOS DE CUENTA */}
+      {Array.isArray(billRequests) && billRequests.length > 0 ? (
+        <div
+          style={{
+            marginTop: 12,
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 18,
+            background: "#fff",
+            padding: 14,
+            boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div style={{ fontWeight: 950, marginBottom: 10 }}>
+            Avisos de cuenta
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {billRequests.map((n) => (
+              <div
+                key={n.id}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.10)",
+                  borderRadius: 16,
+                  padding: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  background: "#f8fafc",
+                }}
+              >
+                <div style={{ display: "grid", gap: 4 }}>
+                  <div style={{ fontWeight: 950 }}>
+                    {n.title || "Pidió cuenta"}
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.9 }}>
+                    {n.message || `Orden #${n.order_id} pidió cuenta`}
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    Mesa: <strong>{n.table_id ?? "—"}</strong> · Orden:{" "}
+                    <strong>#{n.order_id ?? "—"}</strong> · Solicitado por:{" "}
+                    <strong>{n.requested_by || "customer"}</strong>
+                    {n.notified_at ? (
+                      <>
+                        {" "}· Avisado: <strong>{n.notified_at}</strong>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <PillButton
+                    tone="ok"
+                    disabled={billBusyId === n.id || payingBusyOrderId === n.order_id}
+                    onClick={() => doReadBillRequest(n.id)}
+                    title="Marcar aviso de cuenta como leído"
+                  >
+                    {billBusyId === n.id ? "Marcando…" : "Leído"}
+                  </PillButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* AVISOS DE PEDIDO LISTO */}
       {Array.isArray(readyNotifications) && readyNotifications.length > 0 ? (
         <div
@@ -909,6 +1042,7 @@ export default function WaiterTablesGrid() {
 
               const openOrder = t?.active_order || null;
               const hasOpenOrder = !!openOrder?.id;
+              const openOrderId = Number(openOrder?.id || 0);
 
               const session = t?.session || null;
               const hasDevice = !!session?.has_device;
@@ -939,6 +1073,10 @@ export default function WaiterTablesGrid() {
 
               const isCalling = uiState === "call";
               const isMine = uiState === "mine";
+
+              const canChargeFromTable =
+                hasOpenOrder &&
+                billOrderIds.includes(openOrderId);
 
               return (
                 <div
@@ -1092,6 +1230,17 @@ export default function WaiterTablesGrid() {
                         }
                       >
                         Liberar sesión
+                      </PillButton>
+                    ) : null}
+
+                    {canChargeFromTable ? (
+                      <PillButton
+                        tone="orange"
+                        onClick={() => doStartPayment(openOrderId)}
+                        disabled={payingBusyOrderId === openOrderId}
+                        title="Iniciar proceso de cobro"
+                      >
+                        {payingBusyOrderId === openOrderId ? "Abriendo…" : "Cobrar"}
                       </PillButton>
                     ) : null}
 

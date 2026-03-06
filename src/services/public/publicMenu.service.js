@@ -152,3 +152,20 @@ export async function appendPublicOrderItems({ orderId, token, items }) {
   const { data } = await publicApi.post(`/public/orders/${orderId}/append-items`, payload);
   return data;
 }
+
+/**
+ * =========================================================
+ * 6) Request Bill
+ * =========================================================
+ */
+export async function requestPublicOrderBill({ orderId, token }) {
+  const device_identifier = getOrCreatePublicDeviceId();
+
+  const payload = {
+    token: String(token || ""),
+    device_identifier,
+  };
+
+  const { data } = await publicApi.post(`/public/orders/${orderId}/request-bill`, payload);
+  return data;
+}

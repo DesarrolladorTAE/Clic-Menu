@@ -4,7 +4,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { callWaiterByTable } from "../../services/public/publicMenu.service";
+import {
+  callWaiterByTable,
+  requestPublicOrderBill,
+} from "../../services/public/publicMenu.service";
 
 import {
   PUBLIC_QR_DISABLED_MSG,
@@ -116,6 +119,9 @@ export default function PublicMenuEntryPage() {
     expanded,
   });
 
+  const [billRequesting, setBillRequesting] = useState(false);
+  const [billToast, setBillToast] = useState("");
+
   // =========================================================
   // ✅ FIX REAL: tu TableSession público NO trae order_status,
   // solo trae order_id. Entonces: si hay order_id, cargamos
@@ -176,6 +182,55 @@ export default function PublicMenuEntryPage() {
     String(cartOrder.activeOrder?.status || "").toLowerCase() === "open";
 
   const allowSendButton = allowBaseSend && (canAppend || !hasPending);
+
+  const billFlow = cartOrder.activeOrder?.bill_flow || null;
+  const canRequestBill =
+    !!cartOrder.activeOrder?.id &&
+    orderingMode === "customer_assisted" &&
+    !!billFlow?.can_request_bill;
+
+  const requestBillReason = String(billFlow?.reason || "");
+  const billAlreadySent = !!billFlow?.already_sent;
+  const billRequestStatus = String(billFlow?.request_status || "");
+  const showBillButton =
+    orderingMode === "customer_assisted" && !!cartOrder.activeOrder?.id;
+
+  const handleRequestBill = async () => {
+    const orderId = Number(cartOrder?.activeOrder?.id || 0);
+    if (!orderId || billRequesting) return;
+
+    setBillToast("");
+
+    try {
+      setBillRequesting(true);
+
+      const res = await requestPublicOrderBill({
+        orderId,
+        token,
+      });
+
+      setBillToast(
+        res?.message ||
+          (res?.data?.already ? "Aviso ya mandado." : "Solicitud de cuenta enviada al mesero."),
+      );
+
+      await cartOrder.refreshOrder?.(orderId);
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "No se pudo solicitar la cuenta.";
+
+      setBillToast(`⚠️ ${msg}`);
+
+      try {
+        await cartOrder.refreshOrder?.(orderId);
+      } catch {}
+    } finally {
+      setBillRequesting(false);
+    }
+  };
 
   // Expand keys
   const togglePanel = (key) => {
@@ -1189,7 +1244,81 @@ export default function PublicMenuEntryPage() {
                   <Badge tone={cartOrder.cart.length > 0 ? "ok" : "warn"} title="Items nuevos por enviar/agregar">
                     Nuevos: <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
                   </Badge>
+
+                  {showBillButton ? (
+                    <Badge
+                      tone={
+                        String(cartOrder.activeOrder?.status || "") === "paying"
+                          ? "warn"
+                          : billAlreadySent
+                          ? "dark"
+                          : canRequestBill
+                          ? "ok"
+                          : "warn"
+                      }
+                      title={requestBillReason || "Estado del flujo para pedir cuenta"}
+                    >
+                      {String(cartOrder.activeOrder?.status || "") === "paying"
+                        ? "💳 En proceso de pago"
+                        : billAlreadySent
+                        ? `🧾 Aviso enviado${billRequestStatus ? ` (${billRequestStatus})` : ""}`
+                        : canRequestBill
+                        ? "🧾 Puedes pedir cuenta"
+                        : "🧾 Aún no disponible"}
+                    </Badge>
+                  ) : null}
                 </div>
+
+                {/* BOTÓN PEDIR CUENTA */}
+                {showBillButton ? (
+                  <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                    <PillButton
+                      tone="soft"
+                      onClick={handleRequestBill}
+                      disabled={billRequesting || !canRequestBill}
+                      title={
+                        canRequestBill
+                          ? "Enviar solicitud de cuenta al mesero"
+                          : requestBillReason || "La orden aún no puede solicitar cuenta"
+                      }
+                    >
+                      {billRequesting ? "⏳ Solicitando..." : "🧾 Pedir cuenta"}
+                    </PillButton>
+
+                    {requestBillReason && !canRequestBill ? (
+                      <div
+                        style={{
+                          border: "1px solid rgba(0,0,0,0.10)",
+                          borderRadius: 14,
+                          padding: 10,
+                          background: "#fff",
+                          fontSize: 12,
+                          fontWeight: 850,
+                          whiteSpace: "pre-line",
+                          opacity: 0.85,
+                        }}
+                      >
+                        {requestBillReason}
+                      </div>
+                    ) : null}
+
+                    {billToast ? (
+                      <div
+                        style={{
+                          border: "1px solid rgba(0,0,0,0.10)",
+                          borderRadius: 14,
+                          padding: 10,
+                          background: "#fff",
+                          fontSize: 13,
+                          fontWeight: 850,
+                          whiteSpace: "pre-line",
+                        }}
+                      >
+                        {billToast}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* HISTORIAL */}
                 {Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0 ? (
