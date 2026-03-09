@@ -1,0 +1,207 @@
+import { createTheme } from "@mui/material/styles";
+
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: "#FF9800",
+      light: "#FFB547",
+      dark: "#E68900",
+      contrastText: "#FFFFFF",
+    },
+    secondary: {
+      main: "#D67A3A",
+      light: "#E59A63",
+      dark: "#B96328",
+      contrastText: "#FFFFFF",
+    },
+    success: {
+      main: "#2EAF2E",
+      contrastText: "#FFFFFF",
+    },
+    warning: {
+      main: "#F57C00",
+      contrastText: "#FFFFFF",
+    },
+    error: {
+      main: "#F2642A",
+      contrastText: "#FFFFFF",
+    },
+    info: {
+      main: "#1976D2",
+      contrastText: "#FFFFFF",
+    },
+    background: {
+      default: "#F3F1F1",
+      paper: "#FBF8F8",
+    },
+    text: {
+      primary: "#3F3A52",
+      secondary: "#6E6A6A",
+    },
+    divider: "#D9D3D3",
+  },
+
+  shape: {
+    borderRadius: 14,
+  },
+
+  typography: {
+    fontFamily: `"Roboto", "Arial", sans-serif`,
+    h1: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    h2: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    h3: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    h4: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    h5: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    h6: {
+      fontWeight: 700,
+      color: "#3F3A52",
+    },
+    button: {
+      fontWeight: 700,
+      textTransform: "none",
+      letterSpacing: 0.3,
+    },
+  },
+
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: "#F3F1F1",
+          color: "#3F3A52",
+        },
+      },
+    },
+
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          padding: "8px 18px",
+          minHeight: 42,
+          boxShadow: "none",
+          fontWeight: 700,
+        },
+        containedPrimary: {
+          backgroundColor: "#FF9800",
+          "&:hover": {
+            backgroundColor: "#E68900",
+            boxShadow: "none",
+          },
+        },
+        containedSecondary: {
+          backgroundColor: "#D67A3A",
+          "&:hover": {
+            backgroundColor: "#B96328",
+            boxShadow: "none",
+          },
+        },
+        outlined: {
+          borderWidth: "1.5px",
+          "&:hover": {
+            borderWidth: "1.5px",
+          },
+        },
+      },
+    },
+
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+          borderRadius: 18,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+        },
+      },
+    },
+
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 18,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+          backgroundColor: "#FBF8F8",
+        },
+      },
+    },
+
+    MuiTextField: {
+      defaultProps: {
+        variant: "outlined",
+        size: "medium",
+      },
+    },
+
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 2, // casi cuadrado
+          backgroundColor: "#FFFFFF",
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#D9D3D3",
+          },
+          "&:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#BEB8B8",
+          },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#FF9800",
+            borderWidth: 2,
+          },
+        },
+      },
+    },
+
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          boxShadow: "none",
+        },
+      },
+    },
+
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: "#FF9800",
+          color: "#FFFFFF",
+          borderRight: "none",
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          fontWeight: 700,
+        },
+      },
+    },
+
+    MuiTableCell: {
+      styleOverrides: {
+        head: {
+          fontWeight: 700,
+          color: "#3F3A52",
+        },
+      },
+    },
+  },
+});
+
+export default theme;

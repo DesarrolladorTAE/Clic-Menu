@@ -4,6 +4,8 @@ import ProtectedRoute from "./ProtectedRoute";
 import OwnerRoute from "./OwnerRoute";
 import StaffProtectedRoute from "./StaffProtectedRoute";
 
+import TestMui from "../pages/TestMui";
+
 //Registro o Login OWNER
 import Register from "../pages/auth/Register";
 import Login from "../pages/auth/Login";
@@ -59,6 +61,8 @@ export default function AppRoutes() {
     <Routes>
       {/* PUBLIC */}
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
+
+      <Route path="/test-mui" element={<TestMui />} />
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />

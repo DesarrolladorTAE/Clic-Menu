@@ -1,9 +1,21 @@
-// src/pages/auth/Register.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  Container,
+  FormControlLabel,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+
 import TermsModal from "../../components/auth/TermsModal";
+import AuthBrandPanel from "../../components/auth/AuthBrandPanel";
 import { normalizePhone } from "../../utils/phone";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import {
@@ -53,10 +65,9 @@ export default function Register() {
   const termsAccepted = watch("terms_accepted");
 
   const title = useMemo(() => {
-    return step === 1 ? "Registro" : "Verifica tu teléfono";
+    return step === 1 ? "Crea tu cuenta" : "Verifica tu teléfono";
   }, [step]);
 
-  // countdown
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
@@ -108,7 +119,6 @@ export default function Register() {
       setGlobalMsg(res?.message || "Código enviado.");
       goToCodeStep(res?.expires_in_seconds);
 
-      // conservamos datos para verify/resend, limpiamos code
       reset({ ...values, phone: normalized, code: "" });
     } catch (err) {
       const status = err?.response?.status;
@@ -215,250 +225,501 @@ export default function Register() {
   };
 
   const handleAcceptedTermsFromModal = () => {
-    // ✅ Marca en RHF (la fuente de verdad) y limpia error
     clearErrors("terms_accepted");
     setValue("terms_accepted", true, { shouldValidate: true, shouldDirty: true });
     setTermsOpen(false);
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 520, margin: "40px auto" }}>
-      <h2 style={{ marginTop: 0 }}>{title}</h2>
-
-      {globalMsg && <div style={msgBox}>{globalMsg}</div>}
-
-      {step === 1 && (
-        <form
-          onSubmit={handleSubmit(onRequestCode)}
-          style={{ display: "grid", gap: 10, marginTop: 12 }}
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#FFFFFF",
+      }}
+    >
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          minHeight: "100vh",
+        }}
+      >
+        {/* Formulario izquierda */}
+        <Box
+          sx={{
+            order: { xs: 2, md: 1 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            px: { xs: 3, sm: 4, md: 6 },
+            py: { xs: 5, md: 6 },
+            bgcolor: "#FFFFFF",
+          }}
         >
-          <Field label="Nombre" error={errors.name?.message}>
-            <input
-              style={input}
-              {...register("name", { required: "El nombre es obligatorio." })}
-              placeholder="David"
-            />
-          </Field>
+          <Container maxWidth="md">
+            <Stack
+              spacing={2.5}
+              sx={{
+                width: "100%",
+                maxWidth: 720,
+                mx: "auto",
+              }}
+            >
+              <Typography
+                sx={{
+                  color: "text.primary",
+                  fontWeight: 800,
+                  textAlign: "center",
+                  fontSize: { xs: "2rem", md: "2.3rem" },
+                  mb: 1,
+                }}
+              >
+                {title}
+              </Typography>
 
-          <Field label="Apellido paterno" error={errors.last_name_paternal?.message}>
-            <input
-              style={input}
-              {...register("last_name_paternal", {
-                required: "El apellido paterno es obligatorio.",
-              })}
-              placeholder="Vargas"
-            />
-          </Field>
+              {globalMsg && (
+                <Alert
+                  severity={step === 2 ? "info" : "success"}
+                  sx={{ width: "100%", borderRadius: 2 }}
+                >
+                  {globalMsg}
+                </Alert>
+              )}
 
-          <Field label="Apellido materno (opcional)" error={errors.last_name_maternal?.message}>
-            <input style={input} {...register("last_name_maternal")} placeholder="Lopez" />
-          </Field>
+              {step === 1 && (
+                <form onSubmit={handleSubmit(onRequestCode)}>
+                  <Stack spacing={1.4}>
+                    <Box>
+                      <FieldTitle label="Nombre" />
+                      <TextField
+                        fullWidth
+                        placeholder="Ej. Juan"
+                        {...register("name", {
+                          required: "El nombre es obligatorio.",
+                        })}
+                        error={!!errors.name}
+                        helperText={errors.name?.message || " "}
+                        slotProps={{
+                          formHelperText: {
+                            sx: { ml: 0, mt: 0.5 },
+                          },
+                        }}
+                        sx={fieldSx}
+                      />
+                    </Box>
 
-          <Field label="Teléfono" error={errors.phone?.message}>
-            <input
-              style={input}
-              {...register("phone", { required: "El número de teléfono es obligatorio." })}
-              placeholder="7441359257"
-              inputMode="numeric"
-              autoComplete="tel"
-            />
-          </Field>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box>
+                        <FieldTitle label="Apellido paterno" />
+                        <TextField
+                          fullWidth
+                          placeholder="Ej. Pérez"
+                          {...register("last_name_paternal", {
+                            required: "El apellido paterno es obligatorio.",
+                          })}
+                          error={!!errors.last_name_paternal}
+                          helperText={errors.last_name_paternal?.message || " "}
+                          slotProps={{
+                            formHelperText: {
+                              sx: { ml: 0, mt: 0.5 },
+                            },
+                          }}
+                          sx={fieldSx}
+                        />
+                      </Box>
 
-          <Field label="Email" error={errors.email?.message}>
-            <input
-              style={input}
-              {...register("email", {
-                required: "El correo electrónico es obligatorio.",
-              })}
-              placeholder="owner_test_01@clicmenu.com.mx"
-              type="email"
-              autoComplete="username"
-            />
-          </Field>
+                      <Box>
+                        <FieldTitle label="Apellido materno" />
+                        <TextField
+                          fullWidth
+                          placeholder="Ej. López"
+                          {...register("last_name_maternal")}
+                          error={!!errors.last_name_maternal}
+                          helperText={errors.last_name_maternal?.message || " "}
+                          slotProps={{
+                            formHelperText: {
+                              sx: { ml: 0, mt: 0.5 },
+                            },
+                          }}
+                          sx={fieldSx}
+                        />
+                      </Box>
+                    </Box>
 
-          <Field label="Contraseña" error={errors.password?.message}>
-            <input
-              style={input}
-              {...register("password", { required: "La contraseña es obligatoria." })}
-              type="password"
-              autoComplete="new-password"
-              placeholder="********"
-            />
-          </Field>
+                    <Box>
+                      <FieldTitle label="Teléfono" />
+                      <TextField
+                        fullWidth
+                        placeholder="Ej. 5512345678"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        {...register("phone", {
+                          required: "El número de teléfono es obligatorio.",
+                        })}
+                        error={!!errors.phone}
+                        helperText={errors.phone?.message || " "}
+                        slotProps={{
+                          formHelperText: {
+                            sx: { ml: 0, mt: 0.5 },
+                          },
+                        }}
+                        sx={fieldSx}
+                      />
+                    </Box>
 
-          <Field label="Confirmar contraseña" error={errors.password_confirmation?.message}>
-            <input
-              style={input}
-              {...register("password_confirmation", {
-                required: "La confirmación es obligatoria.",
-              })}
-              type="password"
-              autoComplete="new-password"
-              placeholder="********"
-            />
-          </Field>
+                    <Box>
+                      <FieldTitle label="Correo electrónico" />
+                      <TextField
+                        fullWidth
+                        type="email"
+                        autoComplete="username"
+                        placeholder="Ej. correo@ejemplo.com"
+                        {...register("email", {
+                          required: "El correo electrónico es obligatorio.",
+                        })}
+                        error={!!errors.email}
+                        helperText={errors.email?.message || " "}
+                        slotProps={{
+                          formHelperText: {
+                            sx: { ml: 0, mt: 0.5 },
+                          },
+                        }}
+                        sx={fieldSx}
+                      />
+                    </Box>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" {...register("terms_accepted")} />
-              <span>
-                Acepto los{" "}
-                <button type="button" onClick={() => setTermsOpen(true)} style={linkBtn}>
-                  términos y condiciones
-                </button>
-              </span>
-            </label>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box>
+                        <FieldTitle label="Contraseña" />
+                        <TextField
+                          fullWidth
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="Mínimo 8 caracteres"
+                          {...register("password", {
+                            required: "La contraseña es obligatoria.",
+                          })}
+                          error={!!errors.password}
+                          helperText={errors.password?.message || " "}
+                          slotProps={{
+                            formHelperText: {
+                              sx: { ml: 0, mt: 0.5 },
+                            },
+                          }}
+                          sx={fieldSx}
+                        />
+                      </Box>
 
-            {errors.terms_accepted?.message && (
-              <div style={errText}>{errors.terms_accepted.message}</div>
-            )}
+                      <Box>
+                        <FieldTitle label="Confirmar contraseña" />
+                        <TextField
+                          fullWidth
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="Repite tu contraseña"
+                          {...register("password_confirmation", {
+                            required: "La confirmación es obligatoria.",
+                          })}
+                          error={!!errors.password_confirmation}
+                          helperText={errors.password_confirmation?.message || " "}
+                          slotProps={{
+                            formHelperText: {
+                              sx: { ml: 0, mt: 0.5 },
+                            },
+                          }}
+                          sx={fieldSx}
+                        />
+                      </Box>
+                    </Box>
 
-            {/* 👇 pequeño indicador, por si el usuario abre modal y acepta */}
-            {termsAccepted && (
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#14532d" }}>
-                ✅ Términos aceptados
-              </div>
-            )}
-          </div>
+                    <Box sx={{ textAlign: "center", pt: 0.5 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={!!termsAccepted}
+                            {...register("terms_accepted")}
+                            sx={{
+                              color: "primary.main",
+                              "&.Mui-checked": {
+                                color: "primary.main",
+                              },
+                            }}
+                          />
+                        }
+                        label={
+                          <Typography sx={{ fontSize: 13, color: "text.primary" }}>
+                            Acepto los{" "}
+                            <Button
+                              type="button"
+                              onClick={() => setTermsOpen(true)}
+                              variant="text"
+                              sx={{
+                                p: 0,
+                                minWidth: "auto",
+                                minHeight: "auto",
+                                verticalAlign: "baseline",
+                                color: "primary.main",
+                                fontWeight: 700,
+                                fontSize: 13,
+                                "&:hover": {
+                                  backgroundColor: "transparent",
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
+                              términos y condiciones
+                            </Button>
+                          </Typography>
+                        }
+                        sx={{
+                          m: 0,
+                          justifyContent: "center",
+                          width: "100%",
+                          "& .MuiFormControlLabel-label": {
+                            textAlign: "center",
+                          },
+                        }}
+                      />
 
-          <button disabled={busy} style={btnPrimary} type="submit">
-            {busy ? "Enviando..." : "Enviar código por WhatsApp"}
-          </button>
+                      {errors.terms_accepted?.message && (
+                        <Typography
+                          sx={{
+                            mt: 0.5,
+                            color: "error.main",
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {errors.terms_accepted.message}
+                        </Typography>
+                      )}
 
-          <button type="button" onClick={() => nav("/auth/login")} style={btnSecondary}>
-            Ya tengo cuenta · Iniciar sesión
-          </button>
-        </form>
-      )}
+                    </Box>
 
-      {step === 2 && (
-        <form
-          onSubmit={handleSubmit(onVerifyCode)}
-          style={{ display: "grid", gap: 10, marginTop: 12 }}
-        >
-          <div style={{ fontSize: 13, opacity: 0.85 }}>
-            Te enviamos un código a WhatsApp. Si no te llegó, revisa que el número sea correcto.
-          </div>
+                    <Button
+                      disabled={busy}
+                      variant="contained"
+                      type="submit"
+                      fullWidth
+                      sx={{
+                        mt: 0.5,
+                        height: 44,
+                        borderRadius: 2,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        boxShadow: "none",
+                        textTransform: "none",
+                      }}
+                    >
+                      {busy ? "Enviando..." : "Enviar código por WhatsApp"}
+                    </Button>
 
-          <Field label="Teléfono" error={errors.phone?.message}>
-            <input style={input} {...register("phone")} readOnly />
-          </Field>
+                    <Box sx={{ textAlign: "center", pt: 0.5 }}>
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: 14,
+                          color: "text.secondary",
+                        }}
+                      >
+                        ¿Ya tienes cuenta?{" "}
+                      </Typography>
 
-          <Field label="Código" error={errors.code?.message}>
-            <input
-              style={input}
-              {...register("code")}
-              placeholder="123456"
-              inputMode="numeric"
-            />
-          </Field>
+                      <Button
+                        type="button"
+                        onClick={() => nav("/auth/login")}
+                        variant="text"
+                        sx={{
+                          p: 0,
+                          minWidth: "auto",
+                          minHeight: "auto",
+                          color: "primary.main",
+                          fontSize: 14,
+                          fontWeight: 800,
+                          verticalAlign: "baseline",
+                          "&:hover": {
+                            backgroundColor: "transparent",
+                            textDecoration: "underline",
+                          },
+                        }}
+                      >
+                        Iniciar sesión
+                      </Button>
+                    </Box>
+                  </Stack>
+                </form>
+              )}
 
-          <button disabled={busy} style={btnPrimary} type="submit">
-            {busy ? "Verificando..." : "Verificar y completar registro"}
-          </button>
+              {step === 2 && (
+                <form onSubmit={handleSubmit(onVerifyCode)}>
+                  <Stack spacing={2}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        color: "text.secondary",
+                        textAlign: "center",
+                        mb: 1,
+                      }}
+                    >
+                      Te enviamos un código a WhatsApp. Si no te llegó, revisa que el número sea correcto.
+                    </Typography>
 
-          <button
-            type="button"
-            disabled={busy || cooldown > 0}
-            onClick={onResend}
-            style={{
-              ...btnSecondary,
-              opacity: busy || cooldown > 0 ? 0.6 : 1,
-              cursor: busy || cooldown > 0 ? "not-allowed" : "pointer",
-            }}
-          >
-            {cooldown > 0 ? `Reenviar disponible en ${cooldown}s` : "Reenviar código"}
-          </button>
+                    <FieldTitle label="Teléfono" />
+                    <TextField
+                      fullWidth
+                      {...register("phone")}
+                      readOnly
+                      helperText={errors.phone?.message || " "}
+                      error={!!errors.phone}
+                      slotProps={{
+                        formHelperText: {
+                          sx: { ml: 0, mt: 0.75 },
+                        },
+                      }}
+                      sx={fieldSx}
+                    />
 
-          <button
-            type="button"
-            onClick={() => {
-              setStep(1);
-              setGlobalMsg("");
-              reset({ ...getValues(), code: "" });
-            }}
-            style={btnGhost}
-          >
-            Volver y corregir datos
-          </button>
-        </form>
-      )}
+                    <FieldTitle label="Código" />
+                    <TextField
+                      fullWidth
+                      placeholder="123456"
+                      inputMode="numeric"
+                      {...register("code")}
+                      error={!!errors.code}
+                      helperText={errors.code?.message || " "}
+                      slotProps={{
+                        formHelperText: {
+                          sx: { ml: 0, mt: 0.75 },
+                        },
+                      }}
+                      sx={fieldSx}
+                    />
 
-      {/* ✅ Modal en modo registro: NO pide user_id/email, NO pega al API */}
+                    <Button
+                      disabled={busy}
+                      variant="contained"
+                      type="submit"
+                      fullWidth
+                      sx={{
+                        mt: 1,
+                        height: 46,
+                        borderRadius: 2,
+                        fontSize: 15,
+                        fontWeight: 700,
+                        boxShadow: "none",
+                        textTransform: "none",
+                      }}
+                    >
+                      {busy ? "Verificando..." : "Verificar y completar registro"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      disabled={busy || cooldown > 0}
+                      onClick={onResend}
+                      variant="outlined"
+                      fullWidth
+                      sx={{
+                        height: 44,
+                        borderRadius: 2,
+                        opacity: busy || cooldown > 0 ? 0.6 : 1,
+                        cursor: busy || cooldown > 0 ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {cooldown > 0 ? `Reenviar disponible en ${cooldown}s` : "Reenviar código"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setStep(1);
+                        setGlobalMsg("");
+                        reset({ ...getValues(), code: "" });
+                      }}
+                      variant="text"
+                      sx={{
+                        color: "text.secondary",
+                        fontWeight: 700,
+                        "&:hover": {
+                          backgroundColor: "transparent",
+                          textDecoration: "underline",
+                        },
+                      }}
+                    >
+                      Volver y corregir datos
+                    </Button>
+                  </Stack>
+                </form>
+              )}
+            </Stack>
+          </Container>
+        </Box>
+
+        {/* Panel naranja derecha */}
+        <AuthBrandPanel
+          side="right"
+          logoSrc="/images/clicmenu-blanco.png"
+          title={step === 1 ? "Crea tu cuenta" : "Verifica tu registro"}
+          subtitle={
+            step === 1
+              ? "Registra tu restaurante y comienza a gestionar tu operación con ClicMenu."
+              : "Confirma tu código y completa tu registro en unos segundos."
+          }
+        />
+      </Box>
+
       <TermsModal
         mode="register"
         open={termsOpen}
         onClose={() => setTermsOpen(false)}
         onAccepted={handleAcceptedTermsFromModal}
       />
-    </div>
+    </Box>
   );
 }
 
-function Field({ label, error, children }) {
+function FieldTitle({ label }) {
   return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      {children}
-      {error && <div style={errText}>{error}</div>}
-    </div>
+    <Typography
+      sx={{
+        fontSize: 13,
+        fontWeight: 700,
+        color: "text.primary",
+        mb: 1,
+        lineHeight: 1,
+      }}
+    >
+      {label}
+    </Typography>
   );
 }
 
-const labelStyle = {
-  fontSize: 12,
-  fontWeight: 800,
-  display: "block",
-  marginBottom: 6,
-};
-
-const input = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 10,
-  border: "1px solid #ddd",
-};
-
-const errText = { marginTop: 6, color: "#b00020", fontSize: 12, fontWeight: 800 };
-
-const msgBox = {
-  marginTop: 12,
-  padding: 10,
-  borderRadius: 10,
-  background: "#eef2ff",
-  border: "1px solid #c7d2fe",
-};
-
-const btnPrimary = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #111",
-  background: "#111",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const btnSecondary = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #ccc",
-  background: "#fff",
-  cursor: "pointer",
-};
-
-const btnGhost = {
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #eee",
-  background: "transparent",
-  cursor: "pointer",
-};
-
-const linkBtn = {
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  color: "#2563eb",
-  textDecoration: "underline",
-  cursor: "pointer",
+const fieldSx = {
+  "& .MuiOutlinedInput-root": {
+    bgcolor: "#F4F4F4",
+    borderRadius: 0,
+  },
+  "& .MuiOutlinedInput-notchedOutline": {
+    border: "none",
+  },
+  "& .MuiInputBase-input": {
+    py: 1.25,
+    px: 1.4,
+    fontSize: 14,
+  },
+  "& .MuiFormHelperText-root": {
+    fontSize: 11,
+  },
 };

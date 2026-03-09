@@ -1,12 +1,22 @@
-// src/pages/auth/Login.jsx
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
+
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 import { useAuth } from "../../context/AuthContext";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import ForgotPasswordModal from "../../components/auth/ForgotPasswordModal";
 import TermsModal from "../../components/auth/TermsModal";
+import AuthBrandPanel from "../../components/auth/AuthBrandPanel";
 
 export default function Login() {
   const { login } = useAuth();
@@ -24,10 +34,10 @@ export default function Login() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [pendingCreds, setPendingCreds] = useState(null);
 
-  // ✅ Guarda quién debe aceptar términos (viene del 403)
+  // Guarda quién debe aceptar términos (viene del 403)
   const [pendingTermsUser, setPendingTermsUser] = useState(null);
 
-  // ✅ Banner rojo específico para términos
+  // Banner rojo específico para términos
   const [termsRequiredMsg, setTermsRequiredMsg] = useState("");
 
   const form = useForm({
@@ -72,7 +82,7 @@ export default function Login() {
       const data = e?.response?.data;
       const apiMsg = data?.message || "No se pudo iniciar sesión.";
 
-      // ✅ Si faltan términos: banner rojo + abre modal + guarda creds + guarda user_id/email
+      // Si faltan términos: banner rojo + abre modal + guarda creds + guarda user_id/email
       if (status === 403 && data?.code === "TERMS_REQUIRED") {
         setPendingCreds(values);
         setPendingTermsUser({
@@ -100,69 +110,274 @@ export default function Login() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: "60px auto", padding: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Login</h2>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#FFFFFF",
+      }}
+    >
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          minHeight: "100vh",
+        }}
+      >
+        {/* Panel naranja izquierda */}
+        <AuthBrandPanel
+          side="left"
+          logoSrc="/images/clicmenu-blanco.png"
+          title="Bienvenido de nuevo"
+          subtitle="Accede a tu cuenta y administra tus restaurantes y sucursales."
+        />
 
-      {termsRequiredMsg && (
-        <div style={termsBanner}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>
-            Falta aceptar términos
-          </div>
-
-          <div style={{ fontSize: 13, lineHeight: 1.35 }}>
-            {termsRequiredMsg}
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <button
-              type="button"
-              style={btnTermsInline}
-              onClick={() => setTermsOpen(true)}
-              disabled={busy}
+        {/* Formulario derecha */}
+        <Box
+          sx={{
+            order: { xs: 2, md: 2 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            px: { xs: 3, sm: 4, md: 6 },
+            py: { xs: 5, md: 6 },
+            bgcolor: "#FFFFFF",
+          }}
+        >
+          <Container maxWidth="sm">
+            <Stack
+              spacing={2.5}
+              sx={{
+                width: "100%",
+                maxWidth: 480,
+                mx: "auto",
+              }}
             >
-              Ver términos y aceptar
-            </button>
-          </div>
-        </div>
-      )}
+              <Typography
+                sx={{
+                  color: "text.primary",
+                  fontWeight: 800,
+                  textAlign: "center",
+                  fontSize: { xs: "2rem", md: "2.3rem" },
+                  mb: 1,
+                }}
+              >
+                Iniciar sesión
+              </Typography>
 
-      {err && <div style={msgBoxErr}>{err}</div>}
+              {termsRequiredMsg && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    width: "100%",
+                    borderRadius: 3,
+                    alignItems: "flex-start",
+                  }}
+                  action={
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => setTermsOpen(true)}
+                      disabled={busy}
+                      sx={{
+                        fontWeight: 800,
+                        minWidth: "auto",
+                        minHeight: "auto",
+                        px: 0.5,
+                      }}
+                    >
+                      Ver términos
+                    </Button>
+                  }
+                >
+                  <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 0.5 }}>
+                      Falta aceptar términos
+                    </Typography>
+                    <Typography variant="body2">{termsRequiredMsg}</Typography>
+                  </Box>
+                </Alert>
+              )}
 
-      <form onSubmit={handleSubmit(onSubmit)} style={{ display: "grid", gap: 10 }}>
-        <div>
-          <label style={label}>Email</label>
-          <input
-            style={input}
-            {...register("email", { required: "El correo es obligatorio." })}
-            type="email"
-            autoComplete="username"
-          />
-          {errors.email?.message && <div style={errText}>{errors.email.message}</div>}
-        </div>
+              {err && (
+                <Alert severity="error" sx={{ width: "100%", borderRadius: 3 }}>
+                  {err}
+                </Alert>
+              )}
 
-        <div>
-          <label style={label}>Password</label>
-          <input
-            style={input}
-            {...register("password", { required: "La contraseña es obligatoria." })}
-            type="password"
-            autoComplete="current-password"
-          />
-          {errors.password?.message && <div style={errText}>{errors.password.message}</div>}
-        </div>
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "text.primary",
+                        mb: 1,
+                      }}
+                    >
+                      Correo electrónico
+                    </Typography>
 
-        <button disabled={busy} style={btnPrimary} type="submit">
-          {busy ? "Entrando..." : "Entrar"}
-        </button>
+                    <TextField
+                      type="email"
+                      autoComplete="username"
+                      fullWidth
+                      placeholder="correo@ejemplo.com"
+                      {...register("email", {
+                        required: "El correo es obligatorio.",
+                      })}
+                      error={!!errors.email}
+                      helperText={errors.email?.message || " "}
+                      slotProps={{
+                        formHelperText: {
+                          sx: { ml: 0, mt: 0.75 },
+                        },
+                      }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          bgcolor: "#ECEAEC",
+                          borderRadius: 0,
+                        },
+                        "& .MuiOutlinedInput-notchedOutline": {
+                          border: "none",
+                        },
+                        "& .MuiInputBase-input": {
+                          py: 1.6,
+                          px: 1.6,
+                        },
+                      }}
+                    />
+                  </Box>
 
-        <button type="button" onClick={() => setForgotOpen(true)} style={btnSecondary}>
-          Olvidé mi contraseña
-        </button>
+                  <Box>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mb: 1,
+                        gap: 2,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: "text.primary",
+                        }}
+                      >
+                        Contraseña
+                      </Typography>
 
-        <button type="button" onClick={() => nav("/auth/register")} style={btnGhost}>
-          Crear cuenta
-        </button>
-      </form>
+                      <Button
+                        type="button"
+                        onClick={() => setForgotOpen(true)}
+                        variant="text"
+                        sx={{
+                          p: 0,
+                          minWidth: "auto",
+                          minHeight: "auto",
+                          color: "primary.main",
+                          fontSize: 14,
+                          fontWeight: 700,
+                          lineHeight: 1.2,
+                          "&:hover": {
+                            backgroundColor: "transparent",
+                            textDecoration: "underline",
+                          },
+                        }}
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </Button>
+                    </Box>
+
+                    <TextField
+                      type="password"
+                      autoComplete="current-password"
+                      fullWidth
+                      placeholder="Tu contraseña"
+                      {...register("password", {
+                        required: "La contraseña es obligatoria.",
+                      })}
+                      error={!!errors.password}
+                      helperText={errors.password?.message || " "}
+                      slotProps={{
+                        formHelperText: {
+                          sx: { ml: 0, mt: 0.75 },
+                        },
+                      }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          bgcolor: "#ECEAEC",
+                          borderRadius: 0,
+                        },
+                        "& .MuiOutlinedInput-notchedOutline": {
+                          border: "none",
+                        },
+                        "& .MuiInputBase-input": {
+                          py: 1.6,
+                          px: 1.6,
+                        },
+                      }}
+                    />
+                  </Box>
+
+                  <Button
+                    disabled={busy}
+                    variant="contained"
+                    type="submit"
+                    fullWidth
+                    sx={{
+                      mt: 0.5,
+                      height: 44,
+                      borderRadius: 2,
+                      fontSize: 15,
+                      fontWeight: 700,
+                      boxShadow: "none",
+                      textTransform: "none",
+                    }}
+                  >
+                    {busy ? "Entrando..." : "Iniciar sesión"}
+                  </Button>
+
+                  <Box sx={{ textAlign: "center", pt: 1 }}>
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontSize: 15,
+                        color: "text.secondary",
+                      }}
+                    >
+                      ¿Aún no tienes cuenta?{" "}
+                    </Typography>
+
+                    <Button
+                      type="button"
+                      onClick={() => nav("/auth/register")}
+                      variant="text"
+                      sx={{
+                        p: 0,
+                        minWidth: "auto",
+                        minHeight: "auto",
+                        color: "primary.main",
+                        fontSize: 15,
+                        fontWeight: 800,
+                        verticalAlign: "baseline",
+                        "&:hover": {
+                          backgroundColor: "transparent",
+                          textDecoration: "underline",
+                        },
+                      }}
+                    >
+                      Crear cuenta
+                    </Button>
+                  </Box>
+                </Stack>
+              </form>
+            </Stack>
+          </Container>
+        </Box>
+      </Box>
 
       <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
 
@@ -179,65 +394,6 @@ export default function Login() {
           await onSubmit(pendingCreds);
         }}
       />
-    </div>
+    </Box>
   );
 }
-
-const label = { fontSize: 12, fontWeight: 900, display: "block", marginBottom: 6 };
-const input = { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ddd" };
-const errText = { marginTop: 6, color: "#b00020", fontSize: 12, fontWeight: 800 };
-
-const btnPrimary = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 10,
-  border: "1px solid #111",
-  background: "#111",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const btnSecondary = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 10,
-  border: "1px solid #ccc",
-  background: "#fff",
-  cursor: "pointer",
-};
-
-const btnGhost = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 10,
-  border: "1px solid #eee",
-  background: "transparent",
-  cursor: "pointer",
-};
-
-const msgBoxErr = {
-  background: "#ffe5e5",
-  border: "1px solid #ffb4b4",
-  padding: 10,
-  borderRadius: 10,
-  marginBottom: 10,
-};
-
-const termsBanner = {
-  background: "#ffe5e5",
-  border: "1px solid #ffb4b4",
-  padding: 12,
-  borderRadius: 12,
-  marginBottom: 10,
-  color: "#7a0010",
-};
-
-const btnTermsInline = {
-  padding: "8px 12px",
-  borderRadius: 10,
-  border: "1px solid #7a0010",
-  background: "#fff",
-  color: "#7a0010",
-  fontWeight: 900,
-  cursor: "pointer",
-};
