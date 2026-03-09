@@ -56,6 +56,10 @@ import RestaurantPlans from "../pages/owner/RestaurantPlans";
 import BranchQrCodesPage from "../pages/floor/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 
+
+//PRUEBAAAS
+import MyRestaurantsHome from "../pages/restaurant/MyRestaurantsHome";
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -96,6 +100,10 @@ export default function AppRoutes() {
 
       {/* OWNER ROUTES */}
       <Route element={<OwnerRoute />}>
+        <Route path="/owner/restaurants-home" element={<MyRestaurantsHome />} /> 
+
+
+
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
         <Route path="/owner/restaurants/:restaurantId/settings" element={<RestaurantSettings />} />
         <Route path="/owner/restaurants/:restaurantId/staff" element={<StaffPage />} />
