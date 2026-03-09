@@ -1043,6 +1043,7 @@ export default function WaiterTablesGrid() {
               const openOrder = t?.active_order || null;
               const hasOpenOrder = !!openOrder?.id;
               const openOrderId = Number(openOrder?.id || 0);
+              const orderStatus = String(openOrder?.status || "");
 
               const session = t?.session || null;
               const hasDevice = !!session?.has_device;
@@ -1074,9 +1075,13 @@ export default function WaiterTablesGrid() {
               const isCalling = uiState === "call";
               const isMine = uiState === "mine";
 
-              const canChargeFromTable =
+              const showChargeButton =
                 hasOpenOrder &&
-                billOrderIds.includes(openOrderId);
+                (orderStatus === "open" || orderStatus === "ready");
+
+              const canChargeFromTable =
+                !!t?.actions?.can_start_payment &&
+                (orderStatus === "open" || orderStatus === "ready");
 
               return (
                 <div
@@ -1233,11 +1238,11 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {canChargeFromTable ? (
+                    {showChargeButton ? (
                       <PillButton
                         tone="orange"
                         onClick={() => doStartPayment(openOrderId)}
-                        disabled={payingBusyOrderId === openOrderId}
+                        disabled={!canChargeFromTable || payingBusyOrderId === openOrderId}
                         title="Iniciar proceso de cobro"
                       >
                         {payingBusyOrderId === openOrderId ? "Abriendo…" : "Cobrar"}

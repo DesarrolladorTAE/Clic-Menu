@@ -179,7 +179,9 @@ export default function PublicMenuEntryPage() {
 
   const canAppend =
     !!cartOrder.activeOrder?.id &&
-    String(cartOrder.activeOrder?.status || "").toLowerCase() === "open";
+    ["open", "ready"].includes(
+      String(cartOrder.activeOrder?.status || "").toLowerCase()
+    );
 
   const allowSendButton = allowBaseSend && (canAppend || !hasPending);
 
@@ -1226,6 +1228,12 @@ export default function PublicMenuEntryPage() {
                     </PillButton>
                   </div>
                 </div>
+
+                {cartOrder?.activeOrder?.customer_ui?.show_payment_message && (
+                  <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 p-3 rounded-md mb-3 text-sm">
+                    💳 Cuenta en proceso de pago. Un mesero está procesando tu cuenta.
+                  </div>
+                )}
 
                 {/* Badges de estado */}
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>

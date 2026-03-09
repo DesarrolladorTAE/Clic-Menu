@@ -172,7 +172,8 @@ export function useStaffCartAndOrder({ tableId }) {
   }, [oldTotal, cartTotal]);
 
   const canAppend =
-    !!activeOrder?.id && String(activeOrder?.status || "").toLowerCase() === "open";
+  !!activeOrder?.id &&
+  ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
   const loadExisting = useCallback(
     async ({ orderId } = {}) => {

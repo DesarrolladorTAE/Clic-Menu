@@ -54,6 +54,7 @@ export function useCartAndOrder({
   const lastOrderIdRef = useRef(null);
 
   function addToCartFromProduct(p, componentsOverride) {
+    if (String(activeOrder?.status || "") === "paying") return;
     const pid = Number(p?.id);
     if (!pid) return;
 
@@ -95,6 +96,7 @@ export function useCartAndOrder({
   }
 
   function addToCartFromVariant(p, v, componentsOverride) {
+    if (String(activeOrder?.status || "") === "paying") return;
     const pid = Number(p?.id);
     const vid = Number(v?.id);
     if (!pid || !vid) return;
@@ -176,6 +178,8 @@ export function useCartAndOrder({
     return Math.round((safeNum(oldTotal, 0) + safeNum(cartTotal, 0)) * 100) / 100;
   }, [oldTotal, cartTotal]);
 
+  const orderUi = activeOrder?.customer_ui || null;
+
   const allowBase =
     canSelect &&
     hasTable &&
@@ -183,15 +187,21 @@ export function useCartAndOrder({
     orderingMode === "customer_assisted" &&
     cart.length > 0 &&
     !sessionBusy &&
-    !sessionUnavailable;
+    !sessionUnavailable &&
+    (orderUi?.can_add_items ?? true) &&
+    String(activeOrder?.status || "") !== "paying";
 
   const hasPending = !!pendingOrder?.id && String(pendingOrder?.status || "pending") === "pending";
-  const canAppend = !!activeOrder?.id && String(activeOrder?.status || "").toLowerCase() === "open";
+  const canAppend =
+    !!activeOrder?.id &&
+    ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase()) &&
+    (orderUi?.can_send_items ?? true) &&
+    String(activeOrder?.status || "") !== "paying";
 
   // ✅ reglas:
   // - Si hay pending: NO puedes mandar otra (Laravel lo bloquea por sesión/orden).
   // - Si hay open: puedes append.
-  const allowSendNow = allowBase && (!hasPending);
+  const allowSendNow = allowBase && (!hasPending) && (orderUi?.can_send_items ?? true);
 
   const refreshOrder = useCallback(
     async (orderId) => {
@@ -342,9 +352,17 @@ export function useCartAndOrder({
       if (!oid) return;
 
       // accepted/open
-      if (st.includes("open")) {
-        if (pendingOrder?.id) setPendingOrder((p) => (p ? { ...p, status: "accepted" } : p));
-        setActiveOrder((prev) => ({ ...(prev || {}), id: Number(oid), status: "open" }));
+      if (st.includes("open") || st.includes("ready")) {
+        if (pendingOrder?.id) {
+          setPendingOrder((p) => (p ? { ...p, status: "accepted" } : p));
+        }
+
+        setActiveOrder((prev) => ({
+          ...(prev || {}),
+          id: Number(oid),
+          status: st.includes("ready") ? "ready" : "open",
+        }));
+
         await refreshOrder(oid);
         return;
       }
