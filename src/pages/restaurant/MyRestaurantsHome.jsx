@@ -1,19 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Container,
-  IconButton,
-  Stack,
-  Typography,
-} from "@mui/material";
+
+import { Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
+  IconButton, Stack, Typography, } from "@mui/material";
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
 import LogoutIcon from "@mui/icons-material/Logout";
 import StorefrontIcon from "@mui/icons-material/Storefront";
@@ -138,7 +127,7 @@ export default function MyRestaurantsHome() {
     nav(`/owner/restaurants/${restaurantId}/plans`);
   };
 
-  const onGoAdmin = async (restaurantId) => {
+  const onGoAdmin = async (restaurantId, restaurantName) => {
     const st = statusMap[restaurantId];
 
     if (st?.is_operational !== true) {
@@ -151,7 +140,11 @@ export default function MyRestaurantsHome() {
       return;
     }
 
-    nav(`/owner/restaurants/${restaurantId}/settings`);
+    nav(`/owner/restaurants/${restaurantId}/edit-info`, {
+      state: {
+        restaurantName: restaurantName || "RESTAURANTE",
+      },
+    });
   };
 
   const onDelete = async (restaurantId) => {
@@ -424,7 +417,7 @@ export default function MyRestaurantsHome() {
                         <Button
                           variant="contained"
                           color="secondary"
-                          onClick={() => onGoAdmin(r.id)}
+                          onClick={() => onGoAdmin(r.id, r.trade_name)}
                           fullWidth
                           sx={{
                             height: 40,

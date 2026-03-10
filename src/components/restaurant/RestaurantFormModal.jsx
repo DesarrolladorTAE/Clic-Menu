@@ -1,29 +1,53 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { createRestaurant, updateRestaurant } from "../../services/restaurant/restaurant.service";
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import CloseIcon from "@mui/icons-material/Close";
+import SaveIcon from "@mui/icons-material/Save";
+import AddBusinessIcon from "@mui/icons-material/AddBusiness";
+
+import {
+  createRestaurant,
+  updateRestaurant,
+} from "../../services/restaurant/restaurant.service";
 
 export default function RestaurantFormModal({
   open,
-  mode = "create", // "create" | "edit"
-  restaurant = null, // objeto restaurante (para edit)
+  mode = "create",
+  restaurant = null,
   onClose,
-  onSaved, // (payload) => void
+  onSaved,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const isEdit = mode === "edit";
   const title = isEdit ? "Editar restaurante" : "Registrar restaurante";
 
-  // ✅ Solo para errores NO 422 (red, 500, etc). En 422 NO mostramos banner global.
   const [serverMsg, setServerMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const defaults = useMemo(() => {
-    return {
+  const defaults = useMemo(
+    () => ({
       trade_name: restaurant?.trade_name ?? "",
       description: restaurant?.description ?? "",
       contact_phone: restaurant?.contact_phone ?? "",
       contact_email: restaurant?.contact_email ?? "",
-    };
-  }, [restaurant]);
+    }),
+    [restaurant]
+  );
 
   const {
     register,
@@ -34,7 +58,7 @@ export default function RestaurantFormModal({
     formState: { errors, isDirty },
   } = useForm({
     defaultValues: defaults,
-    mode: "onSubmit", // mensajes vienen del backend
+    mode: "onSubmit",
   });
 
   useEffect(() => {
@@ -45,25 +69,19 @@ export default function RestaurantFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaults]);
 
-  if (!open) return null;
-
   const mapBackendErrors = (e) => {
     const data = e?.response?.data;
     const bag = data?.errors;
 
-    // Laravel typical: { message, errors: { field: [msg] } }
     if (bag && typeof bag === "object") {
       Object.entries(bag).forEach(([field, arr]) => {
         const first = Array.isArray(arr) ? arr[0] : String(arr);
         setError(field, { type: "server", message: first });
       });
-
-      // ✅ Importante: NO ponemos banner global para 422
       setServerMsg("");
       return;
     }
 
-    // si no hay bag, ya es algo raro: sí mostramos un mensaje general
     setServerMsg(data?.message || "No se pudo guardar. Intenta de nuevo.");
   };
 
@@ -81,7 +99,6 @@ export default function RestaurantFormModal({
         payload = await createRestaurant(values);
       }
 
-      // ✅ warnings NO se muestran aquí (no banner, no alert). Se pasan al parent.
       onSaved?.(payload);
       onClose?.();
     } catch (e) {
@@ -95,156 +112,225 @@ export default function RestaurantFormModal({
     }
   };
 
-  const overlayStyle = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.35)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    zIndex: 9999,
-  };
-
-  const modalStyle = {
-    width: "100%",
-    maxWidth: 560,
-    background: "#fff",
-    borderRadius: 12,
-    border: "1px solid #e5e5e5",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-    overflow: "hidden",
-  };
-
-  const headerStyle = {
-    padding: 14,
-    borderBottom: "1px solid #eee",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-  };
-
-  const bodyStyle = { padding: 14 };
-
-  const labelStyle = { display: "block", fontWeight: 700, marginBottom: 6 };
-  const inputStyle = {
-    width: "100%",
-    padding: 10,
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    outline: "none",
-  };
-  const errorTextStyle = { marginTop: 6, color: "#a10000", fontSize: 12, fontWeight: 700 };
-
-  const btnStyle = {
-    padding: "10px 12px",
-    cursor: "pointer",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    background: "#fff",
-  };
-
-  const primaryBtnStyle = {
-    ...btnStyle,
-    border: "1px solid #cfcfff",
-    background: "#f0f0ff",
-    fontWeight: 800,
-  };
-
   return (
-    <div style={overlayStyle} onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div style={modalStyle}>
-        <div style={headerStyle}>
-          <div style={{ fontWeight: 900 }}>{title}</div>
+    <Dialog
+      open={open}
+      onClose={busy ? undefined : onClose}
+      fullWidth
+      maxWidth="sm"
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: 0, sm: 3 },
+          overflow: "hidden",
+          backgroundColor: "background.paper",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          bgcolor: "#111111",
+          color: "#fff",
+        }}
+      >
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: { xs: 20, sm: 24 },
+                lineHeight: 1.2,
+                color: "#fff",
+              }}
+            >
+              {title}
+            </Typography>
 
-          <button
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              {isEdit
+                ? "Actualiza la información general del restaurante."
+                : "Registra un nuevo restaurante para comenzar su configuración."}
+            </Typography>
+          </Box>
+
+          <IconButton
             onClick={onClose}
-            style={{ ...btnStyle, borderRadius: 999, padding: "8px 12px" }}
             disabled={busy}
-            title="Cerrar"
+            sx={{
+              color: "#fff",
+              bgcolor: "rgba(255,255,255,0.08)",
+              borderRadius: 2,
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.16)",
+              },
+            }}
           >
-            ✕
-          </button>
-        </div>
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+      </DialogTitle>
 
-        <div style={bodyStyle}>
-          {/* ✅ Solo para errores NO 422 */}
+      <DialogContent
+        sx={{
+          p: { xs: 2, sm: 3 },
+          bgcolor: "background.default",
+        }}
+      >
+        <Stack spacing={2.5}>
           {serverMsg && (
-            <div style={{ background: "#ffe5e5", padding: 10, borderRadius: 10, marginBottom: 12 }}>
-              {serverMsg}
-            </div>
+            <Alert
+              severity="error"
+              sx={{
+                borderRadius: 2,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Error
+                </Typography>
+                <Typography variant="body2">{serverMsg}</Typography>
+              </Box>
+            </Alert>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Nombre comercial</label>
-              <input
-                {...register("trade_name")}
-                style={inputStyle}
-                required
-                autoComplete="off"
-                inputMode="text"
-              />
-              {/* ✅ Error solo debajo del input */}
-              {errors.trade_name?.message && <div style={errorTextStyle}>{errors.trade_name.message}</div>}
-            </div>
+          <Box
+            sx={{
+              p: { xs: 2, sm: 3 },
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 0,
+              bgcolor: "background.paper",
+            }}
+          >
+            <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+              <Stack spacing={2}>
+                <FieldBlock
+                  label="Nombre comercial"
+                  input={
+                    <TextField
+                      {...register("trade_name")}
+                      placeholder="Ej. Restaurante Ensigna"
+                      error={!!errors.trade_name}
+                      helperText={errors.trade_name?.message || " "}
+                    />
+                  }
+                />
 
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Descripción</label>
-              <input
-                {...register("description")}
-                style={inputStyle}
-                autoComplete="off"
-                inputMode="text"
-              />
-              {errors.description?.message && <div style={errorTextStyle}>{errors.description.message}</div>}
-            </div>
+                <FieldBlock
+                  label="Descripción"
+                  input={
+                    <TextField
+                      {...register("description")}
+                      placeholder="Describe brevemente tu restaurante"
+                      error={!!errors.description}
+                      helperText={errors.description?.message || " "}
+                      multiline
+                      minRows={3}
+                    />
+                  }
+                />
 
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Teléfono</label>
-              <input
-                {...register("contact_phone")}
-                style={inputStyle}
-                autoComplete="off"
-                inputMode="tel"
-              />
-              {errors.contact_phone?.message && (
-                <div style={errorTextStyle}>{errors.contact_phone.message}</div>
-              )}
-            </div>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <FieldBlock
+                    label="Teléfono"
+                    input={
+                      <TextField
+                        {...register("contact_phone")}
+                        placeholder="Ej. 5512345678"
+                        inputMode="tel"
+                        error={!!errors.contact_phone}
+                        helperText={errors.contact_phone?.message || " "}
+                      />
+                    }
+                  />
 
-            <div style={{ marginBottom: 12 }}>
-              <label style={labelStyle}>Email</label>
-              <input
-                {...register("contact_email")}
-                style={inputStyle}
-                type="email"
-                autoComplete="off"
-                inputMode="email"
-              />
-              {errors.contact_email?.message && (
-                <div style={errorTextStyle}>{errors.contact_email.message}</div>
-              )}
-            </div>
+                  <FieldBlock
+                    label="Correo electrónico"
+                    input={
+                      <TextField
+                        {...register("contact_email")}
+                        type="email"
+                        placeholder="correo@ejemplo.com"
+                        inputMode="email"
+                        error={!!errors.contact_email}
+                        helperText={errors.contact_email?.message || " "}
+                      />
+                    }
+                  />
+                </Stack>
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
-              <button type="button" onClick={onClose} style={btnStyle} disabled={busy}>
-                Cancelar
-              </button>
+                <Stack
+                  direction={{ xs: "column-reverse", sm: "row" }}
+                  justifyContent="space-between"
+                  spacing={1.5}
+                  pt={1}
+                >
+                  <Button
+                    type="button"
+                    onClick={onClose}
+                    variant="outlined"
+                    disabled={busy}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 140 },
+                      height: 44,
+                      borderRadius: 2,
+                    }}
+                  >
+                    Cancelar
+                  </Button>
 
-              <button
-                type="submit"
-                style={primaryBtnStyle}
-                disabled={busy || (isEdit && !isDirty)}
-                title={isEdit && !isDirty ? "No hay cambios" : "Guardar"}
-              >
-                {busy ? "Guardando..." : isEdit ? "Guardar cambios" : "Guardar"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={busy || (isEdit && !isDirty)}
+                    startIcon={isEdit ? <SaveIcon /> : <AddBusinessIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {busy ? "Guardando..." : isEdit ? "Guardar cambios" : "Guardar"}
+                  </Button>
+                </Stack>
+              </Stack>
+            </form>
+          </Box>
+        </Stack>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FieldBlock({ label, input }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+      {input}
+    </Box>
   );
 }

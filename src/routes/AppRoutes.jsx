@@ -25,6 +25,10 @@ import StaffPage from "../pages/staff/RestaurantStaffPage";
 
 //Restaurantes
 import MyRestaurants from "../pages/restaurant/MyRestaurants";
+import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
+
+//Menu 1
+import RestaurantAdminLayout from "../layouts/RestaurantAdminLayout";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
 //Sucursales
@@ -87,10 +91,6 @@ export default function AppRoutes() {
         {/* Cocina */}
         <Route path="/staff/kitchen" element={<KitchenDashboard />} />
 
-        {/* STAFF PROTECTED */}
-
-
-       
       </Route>
 
       {/* OWNER PROTECTED */}
@@ -102,11 +102,22 @@ export default function AppRoutes() {
       <Route element={<OwnerRoute />}>
         <Route path="/owner/restaurants-home" element={<MyRestaurantsHome />} /> 
 
+        {/* OWNER ROUTES */}
+        <Route path="/owner/restaurants/:restaurantId" element={<RestaurantAdminLayout />}>
+
+          <Route path="edit-info" element={<RestaurantEdit />} />
+          
+          <Route path="settings" element={<RestaurantSettings />} />
+
+          
+
+          <Route path="staff" element={<StaffPage />} />
+
+          <Route path="sales-channels" element={<SalesChannelsPage />} />
+        </Route>
 
 
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
-        <Route path="/owner/restaurants/:restaurantId/settings" element={<RestaurantSettings />} />
-        <Route path="/owner/restaurants/:restaurantId/staff" element={<StaffPage />} />
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
@@ -124,7 +135,7 @@ export default function AppRoutes() {
           element={<ProductVariantsPage />}
         />
 
-        <Route path="/owner/restaurants/:restaurantId/sales-channels" element={<SalesChannelsPage />} />
+        
         <Route
           path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels"
           element={<BranchSalesChannelsPage />}

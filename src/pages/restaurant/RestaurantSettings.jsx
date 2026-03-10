@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+import { Alert,Box, Button, Card, CardContent, CircularProgress, Divider, FormControl,
+  MenuItem, Select, Stack, Typography, } from "@mui/material";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import RuleIcon from "@mui/icons-material/Rule";
+import GroupsIcon from "@mui/icons-material/Groups";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+
 import {
   getRestaurantSettings,
   upsertRestaurantSettings,
@@ -10,9 +18,6 @@ const MODES = [
   { value: "branch", label: "Por sucursal" },
 ];
 
-const WARN_BG = "#fff3cd";
-const WARN_BORDER = "#ffeeba";
-
 export default function RestaurantSettings() {
   const nav = useNavigate();
   const { restaurantId } = useParams();
@@ -21,7 +26,8 @@ export default function RestaurantSettings() {
   const [saving, setSaving] = useState(false);
 
   const [err, setErr] = useState("");
-  const [warn, setWarn] = useState(""); // aviso UX (no error)
+  const [warn, setWarn] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [form, setForm] = useState({
     inventory_mode: "branch",
@@ -36,6 +42,7 @@ export default function RestaurantSettings() {
   const load = async () => {
     setErr("");
     setWarn("");
+    setSuccessMsg("");
     setLoading(true);
     try {
       const st = await getRestaurantSettings(restaurantId);
@@ -46,7 +53,6 @@ export default function RestaurantSettings() {
           recipe_mode: st.recipe_mode ?? "global",
         };
 
-        // UI safety: si backend trae branch, recipe no puede quedar global
         if (next.products_mode === "branch" && next.recipe_mode !== "branch") {
           next.recipe_mode = "branch";
         }
@@ -64,15 +70,26 @@ export default function RestaurantSettings() {
     load();
     // eslint-disable-next-line
   }, [restaurantId]);
+  
+  useEffect(() => {
+    if (!successMsg) return;
+
+    const t = setTimeout(() => {
+      setSuccessMsg("");
+    }, 3000);
+
+    return () => clearTimeout(t);
+  }, [successMsg]);
+  
 
   const onChange = (key, value) => {
     setErr("");
     setWarn("");
+    setSuccessMsg("");
 
     setForm((prev) => {
       const next = { ...prev, [key]: value };
 
-      // Regla UX: si products_mode=branch => recipe_mode forzado a branch
       if (key === "products_mode") {
         if (value === "branch") {
           if (next.recipe_mode !== "branch") {
@@ -84,7 +101,6 @@ export default function RestaurantSettings() {
         }
       }
 
-      // Si intentan cambiar recipe_mode mientras products=branch, lo bloqueamos
       if (key === "recipe_mode" && next.products_mode === "branch" && value !== "branch") {
         next.recipe_mode = "branch";
         setWarn("Los productos por sucursal no pueden tener recetas globales.");
@@ -97,9 +113,9 @@ export default function RestaurantSettings() {
   const onSave = async () => {
     setErr("");
     setWarn("");
+    setSuccessMsg("");
     setSaving(true);
 
-    // payload coherente (por si acaso)
     const payload = {
       ...form,
       recipe_mode: form.products_mode === "branch" ? "branch" : form.recipe_mode,
@@ -108,7 +124,6 @@ export default function RestaurantSettings() {
     try {
       const res = await upsertRestaurantSettings(restaurantId, payload);
 
-      // Si backend forzó, avisamos (por si el usuario mandó algo raro o había estado viejo)
       if (res?.recipe_mode_forced) {
         setWarn(
           res?.message ||
@@ -116,8 +131,8 @@ export default function RestaurantSettings() {
         );
       }
 
-      // regreso a mis restaurantes
-      nav("/owner/restaurants", { replace: true });
+      setSuccessMsg("La configuración se guardó correctamente.");
+
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo guardar la configuración");
     } finally {
@@ -125,186 +140,248 @@ export default function RestaurantSettings() {
     }
   };
 
-  if (loading) return <div style={{ padding: 16 }}>Cargando configuración…</div>;
-
-  return (
-    <div style={{ maxWidth: 720, margin: "30px auto", padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>{title}</h2>
-          <div style={{ marginTop: 6, opacity: 0.85 }}>
-            Define cómo se comportará tu restaurante.
-          </div>
-        </div>
-
-        <button
-          onClick={() => nav("/owner/restaurants")}
-          style={{ padding: "10px 14px", cursor: "pointer" }}
-        >
-          ← Volver
-        </button>
-      </div>
-
-      {err && (
-        <div style={{ marginTop: 12, background: "#ffe5e5", padding: 10, borderRadius: 10 }}>
-          <strong>Error:</strong> {err}
-        </div>
-      )}
-
-      {warn && (
-        <div
-          style={{
-            marginTop: 12,
-            background: WARN_BG,
-            border: `1px solid ${WARN_BORDER}`,
-            padding: 10,
-            borderRadius: 10,
-          }}
-        >
-          <strong>Nota:</strong> {warn}
-        </div>
-      )}
-
-      <div
-        style={{
-          marginTop: 14,
-          border: "1px solid #ddd",
-          borderRadius: 10,
-          padding: 14,
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "60vh",
           display: "grid",
-          gap: 14,
+          placeItems: "center",
+          px: { xs: 2, sm: 3, md: 4 },
         }}
       >
-        <FieldSelect
-          label="Modo de inventario"
-          value={form.inventory_mode}
-          onChange={(v) => onChange("inventory_mode", v)}
-          options={MODES}
-          help="Global: un solo almacén. Por sucursal: cada sucursal tiene su almacén."
-        />
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress color="primary" />
+          <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+            Cargando configuración…
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
 
-        <FieldSelect
-          label="Modo de productos"
-          value={form.products_mode}
-          onChange={(v) => onChange("products_mode", v)}
-          options={MODES}
-          help="Global: catálogo base compartido. Por sucursal: cada sucursal administra su catálogo."
-        />
+  return (
+    <Box
+      sx={{
+        px: { xs: 2, sm: 3, md: 4 },
+        py: { xs: 8, md: 4 },
+      }}
+    >
+      <Box sx={{ maxWidth: 980, mx: "auto" }}>
+        <Stack spacing={3}>
+          <Box>
+            <Typography
+              sx={{
+                fontSize: { xs: 30, md: 42 },
+                fontWeight: 800,
+                color: "text.primary",
+                lineHeight: 1.1,
+              }}
+            >
+              {title}
+            </Typography>
 
-        <FieldSelect
-          label="Modo de recetas"
-          value={form.recipe_mode}
-          onChange={(v) => onChange("recipe_mode", v)}
-          options={MODES}
-          help="Global: receta base compartida. Por sucursal: receta puede variar por sucursal."
-          disabledValues={productsIsBranch ? ["global"] : []}
-          tooltipByValue={
-            productsIsBranch
-              ? {
-                  global: "Los productos por sucursal no pueden tener recetas globales",
-                }
-              : {}
-          }
-          lockMessage={
-            productsIsBranch
-              ? "Bloqueado: con productos por sucursal, las recetas deben ser por sucursal."
-              : ""
-          }
-        />
+            <Typography
+              sx={{
+                mt: 1,
+                color: "text.secondary",
+                fontSize: { xs: 15, md: 18 },
+              }}
+            >
+              Define cómo se comportará tu restaurante
+            </Typography>
+          </Box>
 
-        {productsIsBranch && (
-          <div
-            style={{
-              background: "#f6f7ff",
-              border: "1px solid #dfe3ff",
-              borderRadius: 10,
-              padding: 12,
-              fontSize: 13,
-              opacity: 0.95,
+          {err && (
+            <Alert
+              severity="error"
+              sx={{
+                borderRadius: 2,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Error
+                </Typography>
+                <Typography variant="body2">{err}</Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {warn && (
+            <Alert
+              severity="warning"
+              sx={{
+                borderRadius: 2,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Nota
+                </Typography>
+                <Typography variant="body2">{warn}</Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {successMsg && (
+            <Alert
+              severity="success"
+              sx={{
+                borderRadius: 2,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Listo
+                </Typography>
+                <Typography variant="body2">{successMsg}</Typography>
+              </Box>
+            </Alert>
+          )}
+
+          <Card
+            sx={{
+              borderRadius: 4,
+              backgroundColor: "background.paper",
             }}
           >
-            <div style={{ fontWeight: 900, marginBottom: 6 }}>Regla aplicada</div>
-            “Modo de recetas” queda en <strong>Por sucursal</strong> porque elegiste{" "}
-            <strong>Productos por sucursal</strong>.
-            <div style={{ marginTop: 6, opacity: 0.85 }}>
-              Los productos por sucursal no pueden tener recetas globales.
-            </div>
-          </div>
-        )}
+            <CardContent sx={{ p: { xs: 2.5, sm: 3.5, md: 4 } }}>
+              <Stack spacing={3}>
+                <FieldSelect
+                  label="Modo de inventario"
+                  value={form.inventory_mode}
+                  onChange={(v) => onChange("inventory_mode", v)}
+                  options={MODES}
+                  help="Global: un solo almacén. Por sucursal: cada sucursal tiene su almacén."
+                />
 
-        <div
-          style={{
-            borderTop: "1px solid #eee",
-            paddingTop: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 800 }}>Canales de venta</div>
-            <div style={{ marginTop: 4, fontSize: 13, opacity: 0.85 }}>
-              Define los canales a nivel restaurante (sin sucursales, sin productos).
-            </div>
-          </div>
+                <FieldSelect
+                  label="Modo de productos"
+                  value={form.products_mode}
+                  onChange={(v) => onChange("products_mode", v)}
+                  options={MODES}
+                  help="Global: catálogo base compartido. Por sucursal: cada sucursal administra su catálogo."
+                />
 
-          <button
-            onClick={() => nav(`/owner/restaurants/${restaurantId}/sales-channels`)}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
+                <FieldSelect
+                  label="Modo de recetas"
+                  value={form.recipe_mode}
+                  onChange={(v) => onChange("recipe_mode", v)}
+                  options={MODES}
+                  help="Global: receta base compartida. Por sucursal: receta puede variar por sucursal."
+                  disabledValues={productsIsBranch ? ["global"] : []}
+                  tooltipByValue={
+                    productsIsBranch
+                      ? {
+                          global: "Los productos por sucursal no pueden tener recetas globales",
+                        }
+                      : {}
+                  }
+                  lockMessage={
+                    productsIsBranch
+                      ? "Bloqueado: con productos por sucursal, las recetas deben ser por sucursal."
+                      : ""
+                  }
+                />
+
+                {productsIsBranch && (
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 3,
+                      bgcolor: "#F6F7FF",
+                      border: "1px solid #DFE3FF",
+                    }}
+                  >
+                    <Stack direction="row" spacing={1.2} alignItems="flex-start">
+                      <RuleIcon sx={{ color: "#5C5F7A", mt: "2px" }} />
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontWeight: 800,
+                            color: "text.primary",
+                            fontSize: 14,
+                            mb: 0.5,
+                          }}
+                        >
+                          Regla aplicada
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            color: "text.secondary",
+                            fontSize: 13,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          “Modo de recetas” queda en <strong>Por sucursal</strong> porque elegiste{" "}
+                          <strong>Productos por sucursal</strong>.
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            mt: 0.75,
+                            color: "text.secondary",
+                            fontSize: 13,
+                          }}
+                        >
+                          Los productos por sucursal no pueden tener recetas globales.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                )}
+
+                <Divider />
+
+                <ActionRow
+                  icon={<StorefrontIcon sx={{ color: "primary.main" }} />}
+                  title="Canales de venta"
+                  description="Define los canales a nivel restaurante (sin sucursales, sin productos)."
+                  buttonText="Canales de venta"
+                  onClick={() => nav(`/owner/restaurants/${restaurantId}/sales-channels`)}
+                />
+
+                <Divider />
+
+                <ActionRow
+                  icon={<GroupsIcon sx={{ color: "primary.main" }} />}
+                  title="Empleados"
+                  description="Crea cuentas de staff y asigna sus sucursales y roles operativos."
+                  buttonText="Empleados"
+                  onClick={() => nav(`/owner/restaurants/${restaurantId}/staff`)}
+                />
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Stack
+            direction={{ xs: "column-reverse", sm: "row" }}
+            justifyContent="flex-end"
+            spacing={1.5}
           >
-            Canales de venta →
-          </button>
-        </div>
-
-        {/* ---- NUEVO BLOQUE: EMPLEADOS ---- */}
-        <div
-          style={{
-            borderTop: "1px solid #eee",
-            paddingTop: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 800 }}>Empleados</div>
-            <div style={{ marginTop: 4, fontSize: 13, opacity: 0.85 }}>
-              Crea cuentas de staff y asigna sus sucursales y roles operativos.
-            </div>
-          </div>
-
-          <button
-            onClick={() => nav(`/owner/restaurants/${restaurantId}/staff`)}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
-          >
-            Empleados →
-          </button>
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button
-            onClick={() => nav("/owner/restaurants")}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
-          >
-            Cancelar
-          </button>
-
-          <button
-            onClick={onSave}
-            disabled={saving}
-            style={{
-              padding: "10px 14px",
-              cursor: saving ? "not-allowed" : "pointer",
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            {saving ? "Guardando…" : "Guardar configuración"}
-          </button>
-        </div>
-      </div>
-    </div>
+        
+            <Button
+              onClick={onSave}
+              disabled={saving}
+              variant="contained"
+              sx={{
+                minWidth: { xs: "100%", sm: 220 },
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
+            >
+              {saving ? "Guardando…" : "Guardar configuración"}
+            </Button>
+          </Stack>
+        </Stack>
+      </Box>
+    </Box>
   );
 }
 
@@ -318,55 +395,161 @@ function FieldSelect({
   tooltipByValue = {},
   lockMessage = "",
 }) {
-  // Si el valor actual quedó “inválido” por deshabilitado, lo mostramos igual pero bloqueado.
   const isLocked = disabledValues.length > 0 && disabledValues.includes(value);
 
   return (
-    <div>
-      <div style={{ fontWeight: 700 }}>{label}</div>
-      {help && <div style={{ marginTop: 4, opacity: 0.85, fontSize: 13 }}>{help}</div>}
-      {lockMessage && (
-        <div style={{ marginTop: 6, fontSize: 12, color: "#5c5f7a" }}>
-          {lockMessage}
-        </div>
-      )}
-
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          marginTop: 8,
-          width: "100%",
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: "1px solid #ccc",
-          cursor: "pointer",
-          background: "#fff",
+    <Box>
+      <Typography
+        sx={{
+          fontSize: 15,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 0.75,
         }}
       >
-        {options.map((op) => {
-          const disabled = disabledValues.includes(op.value);
-          const tooltip = tooltipByValue?.[op.value];
+        {label}
+      </Typography>
 
-          return (
-            <option
-              key={op.value}
-              value={op.value}
-              disabled={disabled}
-              title={tooltip || ""}
-            >
-              {op.label}
-              {disabled ? " (no disponible)" : ""}
-            </option>
-          );
-        })}
-      </select>
+      {help && (
+        <Typography
+          sx={{
+            mb: 1.25,
+            color: "text.secondary",
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          {help}
+        </Typography>
+      )}
+
+      {lockMessage && (
+        <Typography
+          sx={{
+            mb: 1.25,
+            fontSize: 12,
+            color: "#5C5F7A",
+            fontWeight: 600,
+          }}
+        >
+          {lockMessage}
+        </Typography>
+      )}
+
+      <FormControl fullWidth>
+        <Select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          IconComponent={KeyboardArrowDownIcon}
+          displayEmpty
+          sx={{
+            bgcolor: "#F4F4F4",
+            borderRadius: 0,
+            minHeight: 44,
+            "& .MuiOutlinedInput-notchedOutline": {
+              border: "none",
+            },
+            "&:hover .MuiOutlinedInput-notchedOutline": {
+              border: "none",
+            },
+            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+              border: "1.5px solid #FF9800",
+            },
+            "& .MuiSelect-select": {
+              py: 1.25,
+              px: 1.5,
+              fontSize: 14,
+              color: "text.primary",
+            },
+          }}
+        >
+          {options.map((op) => {
+            const disabled = disabledValues.includes(op.value);
+            const tooltip = tooltipByValue?.[op.value];
+
+            return (
+              <MenuItem
+                key={op.value}
+                value={op.value}
+                disabled={disabled}
+                title={tooltip || ""}
+                sx={{
+                  fontSize: 14,
+                }}
+              >
+                {op.label}
+                {disabled ? " (no disponible)" : ""}
+              </MenuItem>
+            );
+          })}
+        </Select>
+      </FormControl>
 
       {isLocked && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#a33" }}>
+        <Typography
+          sx={{
+            mt: 1,
+            fontSize: 12,
+            color: "error.main",
+            fontWeight: 700,
+          }}
+        >
           Este valor ya no es permitido con la configuración actual.
-        </div>
+        </Typography>
       )}
-    </div>
+    </Box>
+  );
+}
+
+function ActionRow({ icon, title, description, buttonText, onClick }) {
+  return (
+    <Stack
+      direction={{ xs: "column", md: "row" }}
+      justifyContent="space-between"
+      alignItems={{ xs: "flex-start", md: "center" }}
+      spacing={2}
+    >
+      <Stack direction="row" spacing={1.25} alignItems="flex-start">
+        <Box sx={{ mt: "2px" }}>{icon}</Box>
+
+        <Box>
+          <Typography
+            sx={{
+              fontWeight: 800,
+              color: "text.primary",
+              fontSize: 15,
+            }}
+          >
+            {title}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              color: "text.secondary",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            {description}
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Button
+        onClick={onClick}
+        variant="contained"
+        color="secondary"
+        sx={{
+          minWidth: { xs: "100%", sm: 190 },
+          height: 42,
+          borderRadius: 2,
+          fontWeight: 800,
+          alignSelf: { xs: "stretch", md: "center" },
+        }}
+      >
+        {buttonText}
+      </Button>
+    </Stack>
   );
 }
