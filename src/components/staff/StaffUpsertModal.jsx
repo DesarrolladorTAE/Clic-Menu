@@ -241,11 +241,13 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
       fullWidth
       maxWidth="md"
       fullScreen={isMobile}
-      PaperProps={{
-        sx: {
-          borderRadius: { xs: 0, sm: 3 },
-          overflow: "hidden",
-          backgroundColor: "background.paper",
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
         },
       }}
     >
@@ -288,7 +290,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
             sx={{
               color: "#fff",
               bgcolor: "rgba(255,255,255,0.08)",
-              borderRadius: 2,
+              borderRadius: 1,
               "&:hover": {
                 bgcolor: "rgba(255,255,255,0.16)",
               },
@@ -310,7 +312,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
             <Alert
               severity="warning"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -508,7 +510,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
                         <Alert
                           severity="warning"
                           sx={{
-                            borderRadius: 2,
+                            borderRadius: 1,
                             alignItems: "flex-start",
                           }}
                         >
@@ -526,7 +528,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
                         <Box
                           sx={{
                             p: 2,
-                            borderRadius: 2,
+                            borderRadius: 1,
                             bgcolor: "#F6F7FF",
                             border: "1px solid #DFE3FF",
                           }}
@@ -558,7 +560,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
                         <Alert
                           severity="info"
                           sx={{
-                            borderRadius: 2,
+                            borderRadius: 1,
                             alignItems: "flex-start",
                           }}
                         >
@@ -582,6 +584,13 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
                                       IconComponent={KeyboardArrowDownIcon}
                                       displayEmpty
                                       sx={selectSx}
+                                      MenuProps={{
+                                        PaperProps: {
+                                          sx: {
+                                            borderRadius: 1,
+                                          },
+                                        },
+                                      }}
                                     >
                                       <MenuItem value="">Todas (sin sucursal)</MenuItem>
                                       {branches.map((b) => (

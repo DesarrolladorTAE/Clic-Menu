@@ -184,7 +184,7 @@ export default function StaffPage() {
             <Alert
               severity="error"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -278,7 +278,7 @@ export default function StaffPage() {
                           elevation={0}
                           sx={{
                             p: 2,
-                            borderRadius: 2,
+                            borderRadius: 1,
                             border: "1px solid",
                             borderColor: "divider",
                             backgroundColor: "#fff",

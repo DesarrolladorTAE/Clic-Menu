@@ -329,7 +329,7 @@ export default function SalesChannelsPage() {
             <Alert
               severity="error"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -405,7 +405,7 @@ export default function SalesChannelsPage() {
                         <Card
                           key={it.id}
                           sx={{
-                            borderRadius: 2,
+                            borderRadius: 1,
                             boxShadow: "none",
                             border: "1px solid",
                             borderColor: "divider",
@@ -547,7 +547,7 @@ export default function SalesChannelsPage() {
                     })}
                   </Stack>
                 ) : (
-                  <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                  <TableContainer sx={{ width: "100%", overflowX: "auto", borderRadius: 0 }}>
                     <Table sx={{ minWidth: 900 }}>
                       <TableHead>
                         <TableRow

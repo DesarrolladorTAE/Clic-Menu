@@ -42,7 +42,7 @@ const theme = createTheme({
   },
 
   shape: {
-    borderRadius: 14,
+    borderRadius: 6,
   },
 
   typography: {
@@ -124,7 +124,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          borderRadius: 18,
+          borderRadius: 6,
           boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
         },
       },
@@ -133,7 +133,7 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 18,
+          borderRadius: 6,
           boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
           backgroundColor: "#FBF8F8",
         },
@@ -222,6 +222,23 @@ const theme = createTheme({
         },
       },
     },
+
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 1
+        }
+      }
+    },
+
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 1
+        }
+      }
+    }
+
   },
 });
 

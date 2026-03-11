@@ -48,11 +48,13 @@ export default function SalesChannelUpsertModal({
       fullWidth
       maxWidth="sm"
       fullScreen={isMobile}
-      PaperProps={{
-        sx: {
-          borderRadius: { xs: 0, sm: 3 },
-          overflow: "hidden",
-          backgroundColor: "background.paper",
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
         },
       }}
     >
@@ -108,7 +110,7 @@ export default function SalesChannelUpsertModal({
             sx={{
               color: "#fff",
               bgcolor: "rgba(255,255,255,0.08)",
-              borderRadius: 2,
+              borderRadius: 1,
               "&:hover": {
                 bgcolor: "rgba(255,255,255,0.16)",
               },
@@ -130,7 +132,7 @@ export default function SalesChannelUpsertModal({
             <Alert
                 severity="error"
                 sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
                 }}
             >
@@ -188,6 +190,13 @@ export default function SalesChannelUpsertModal({
                       disabled={saving || editingIsSalon}
                       IconComponent={KeyboardArrowDownIcon}
                       sx={selectSx}
+                      MenuProps={{
+                        PaperProps: {
+                          sx: {
+                            borderRadius: 1,
+                          },
+                        },
+                      }}
                     >
                       {statusOptions.map((op) => (
                         <MenuItem key={op.value} value={op.value}>

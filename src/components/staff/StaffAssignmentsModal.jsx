@@ -238,11 +238,13 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
       fullWidth
       maxWidth="lg"
       fullScreen={isMobile}
-      PaperProps={{
-        sx: {
-          borderRadius: { xs: 0, sm: 3 },
-          overflow: "hidden",
-          backgroundColor: "background.paper",
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
         },
       }}
     >
@@ -305,7 +307,7 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
             <Alert
               severity={conflictText ? "warning" : "error"}
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -562,7 +564,7 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
                         elevation={0}
                         sx={{
                           p: 2,
-                          borderRadius: 2,
+                          borderRadius: 1,
                           border: "1px solid",
                           borderColor: "divider",
                           backgroundColor: "#fff",

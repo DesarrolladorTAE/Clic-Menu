@@ -300,7 +300,7 @@ export default function MyRestaurantsHome() {
               sx={{
                 p: { xs: 3, md: 5 },
                 textAlign: "center",
-                borderRadius: 4,
+                borderRadius: 1,
               }}
             >
               <Stack spacing={2} alignItems="center">
@@ -358,7 +358,7 @@ export default function MyRestaurantsHome() {
                   <Card
                     key={r.id}
                     sx={{
-                      borderRadius: 4,
+                      borderRadius: 1,
                       minHeight: 300,
                     }}
                   >

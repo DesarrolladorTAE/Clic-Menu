@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-  Alert,
-  Box,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Alert, Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, TextField,
+  Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
@@ -119,11 +110,13 @@ export default function RestaurantFormModal({
       fullWidth
       maxWidth="sm"
       fullScreen={isMobile}
-      PaperProps={{
-        sx: {
-          borderRadius: { xs: 0, sm: 3 },
-          overflow: "hidden",
-          backgroundColor: "background.paper",
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
         },
       }}
     >
@@ -194,7 +187,7 @@ export default function RestaurantFormModal({
             <Alert
               severity="error"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >

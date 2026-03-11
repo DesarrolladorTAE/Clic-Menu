@@ -196,7 +196,7 @@ export default function RestaurantSettings() {
             <Alert
               severity="error"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -213,7 +213,7 @@ export default function RestaurantSettings() {
             <Alert
               severity="warning"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -230,7 +230,7 @@ export default function RestaurantSettings() {
             <Alert
               severity="success"
               sx={{
-                borderRadius: 2,
+                borderRadius: 1,
                 alignItems: "flex-start",
               }}
             >
@@ -245,7 +245,7 @@ export default function RestaurantSettings() {
 
           <Card
             sx={{
-              borderRadius: 4,
+              borderRadius: 1,
               backgroundColor: "background.paper",
             }}
           >
@@ -292,7 +292,7 @@ export default function RestaurantSettings() {
                   <Box
                     sx={{
                       p: 2,
-                      borderRadius: 3,
+                      borderRadius: 1,
                       bgcolor: "#F6F7FF",
                       border: "1px solid #DFE3FF",
                     }}
