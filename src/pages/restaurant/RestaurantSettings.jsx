@@ -346,15 +346,6 @@ export default function RestaurantSettings() {
                   onClick={() => nav(`/owner/restaurants/${restaurantId}/sales-channels`)}
                 />
 
-                <Divider />
-
-                <ActionRow
-                  icon={<GroupsIcon sx={{ color: "primary.main" }} />}
-                  title="Empleados"
-                  description="Crea cuentas de staff y asigna sus sucursales y roles operativos."
-                  buttonText="Empleados"
-                  onClick={() => nav(`/owner/restaurants/${restaurantId}/staff`)}
-                />
               </Stack>
             </CardContent>
           </Card>

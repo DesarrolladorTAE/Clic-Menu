@@ -13,9 +13,10 @@ export default function RestaurantAdminLayout() {
 
   const pathname = location.pathname;
 
-  let currentKey = "config";
+  let currentKey = "edit-info";
   if (pathname.includes("/edit-info")) currentKey = "edit-info";
   if (pathname.includes("/settings")) currentKey = "config";
+  if (pathname.includes("/branches")) currentKey = "branches";
   if (pathname.includes("/operation")) currentKey = "operation";
 
   const handleNavigate = (key) => {
@@ -33,11 +34,17 @@ export default function RestaurantAdminLayout() {
       return;
     }
 
+    if (key === "branches") {
+      nav(`/owner/restaurants/${restaurantId}/branches`, {
+        state: { restaurantName },
+      });
+      return;
+    }
+
     if (key === "operation") {
-      // después la conectamos al nuevo layout
-      // nav(`/owner/restaurants/${restaurantId}/operation`, {
-      //   state: { restaurantName },
-      // });
+      nav(`/owner/restaurants/${restaurantId}/operation/staff`, {
+         state: { restaurantName },
+      });
       return;
     }
   };

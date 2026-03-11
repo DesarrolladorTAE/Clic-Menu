@@ -31,7 +31,14 @@ import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 import RestaurantAdminLayout from "../layouts/RestaurantAdminLayout";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
+
+
+//Menu 2
+import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
+
+
 //Sucursales
+import BranchesPage from "../pages/restaurant/BranchesPage";
 import BranchCreate from "../pages/restaurant/BranchCreate";
 import BranchEdit from "../pages/restaurant/BranchEdit";
 
@@ -109,11 +116,17 @@ export default function AppRoutes() {
           
           <Route path="settings" element={<RestaurantSettings />} />
 
+          <Route path="branches" element={<BranchesPage />} />
           
+          <Route path="sales-channels" element={<SalesChannelsPage />} />
+        </Route>
 
+
+        <Route path="/owner/restaurants/:restaurantId/operation" element={<RestaurantOperationLayout />}>
+          <Route index element={<Navigate to="staff" replace />} />
           <Route path="staff" element={<StaffPage />} />
 
-          <Route path="sales-channels" element={<SalesChannelsPage />} />
+          <Route path="branches/:branchId/sales-channels" element={<BranchSalesChannelsPage />} />
         </Route>
 
 
@@ -121,8 +134,6 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
-        <Route path="/owner/restaurants/:restaurantId/branches/new" element={<BranchCreate />} />
-        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/edit" element={<BranchEdit />} />
 
         <Route path="/owner/restaurants/:restaurantId/menu" element={<MenuManager />} />
         <Route path="/owner/restaurants/:restaurantId/products" element={<ProductsPage />} />
@@ -135,11 +146,11 @@ export default function AppRoutes() {
           element={<ProductVariantsPage />}
         />
 
-        
         <Route
           path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels"
           element={<BranchSalesChannelsPage />}
         />
+        
         <Route
           path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
           element={<ChannelProductsConfigPage />}

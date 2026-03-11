@@ -1,25 +1,28 @@
 import React, { useMemo, useState } from "react";
 import {
-  Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon,
-  ListItemText, Tooltip, Typography, useMediaQuery,
+  Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip,
+  Typography, useMediaQuery,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
+import { useTheme } from "@mui/material/styles";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
-import EditIcon from "@mui/icons-material/Edit";
-import SettingsIcon from "@mui/icons-material/Settings";
-import StorefrontIcon from "@mui/icons-material/Storefront";
-import BusinessCenterIcon from "@mui/icons-material/BusinessCenter";
 import LogoutIcon from "@mui/icons-material/Logout";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+
+import GroupIcon from "@mui/icons-material/Group";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import CategoryIcon from "@mui/icons-material/Category";
+import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 
 const DRAWER_WIDTH = 240;
 const DRAWER_COLLAPSED = 78;
 
-export default function RestaurantAdminSidebar({
+export default function RestaurantOperationSidebar({
   restaurantName = "RESTAURANTE",
-  currentKey = "edit-info",
+  currentKey = "staff",
   onNavigate,
   onLogout,
   logoSrc,
@@ -30,27 +33,52 @@ export default function RestaurantAdminSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuItems = useMemo(
+  const menuSections = useMemo(
     () => [
       {
-        key: "edit-info",
-        label: "Editar información",
-        icon: <EditIcon />,
+        label: "Gestión",
+        items: [
+          {
+            key: "staff",
+            label: "Personal",
+            icon: <GroupIcon />,
+          },
+        ],
       },
       {
-        key: "config",
-        label: "Configuración",
-        icon: <SettingsIcon />,
+        label: "Menú",
+        items: [
+          {
+            key: "sales-channels",
+            label: "Canales de venta",
+            icon: <CampaignIcon />,
+          },
+          {
+            key: "ingredients",
+            label: "Ingredientes",
+            icon: <Inventory2Icon />,
+          },
+          {
+            key: "menu",
+            label: "Menú",
+            icon: <MenuBookIcon />,
+          },
+          {
+            key: "catalog",
+            label: "Catálogo",
+            icon: <CategoryIcon />,
+          },
+        ],
       },
       {
-        key: "branches",
-        label: "Sucursales",
-        icon: <StorefrontIcon />,
-      },
-      {
-        key: "operation",
         label: "Operación",
-        icon: <BusinessCenterIcon />,
+        items: [
+          {
+            key: "tables",
+            label: "Mesas",
+            icon: <TableRestaurantIcon />,
+          },
+        ],
       },
     ],
     []
@@ -160,65 +188,91 @@ export default function RestaurantAdminSidebar({
         )}
       </Box>
 
-      
-
       <Divider sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
       {/* Items */}
-      <List sx={{ px: 0, py: 1 }}>
-        {menuItems.map((item) => {
-          const active = currentKey === item.key;
-
-          const itemButton = (
-            <ListItemButton
-              onClick={() => handleItemClick(item.key)}
-              sx={{
-                minHeight: 54,
-                px: collapsed && !isMobile ? 2 : 2.2,
-                justifyContent: collapsed && !isMobile ? "center" : "flex-start",
-                bgcolor: active ? "rgba(0,0,0,0.12)" : "transparent",
-                borderLeft: active ? "4px solid #fff" : "4px solid transparent",
-                "&:hover": {
-                  bgcolor: "rgba(255,255,255,0.12)",
-                },
-              }}
-            >
-              <ListItemIcon
+      <Box sx={{ flex: 1, overflowY: "auto" }}>
+        {menuSections.map((section) => (
+          <Box key={section.label}>
+            {!collapsed || isMobile ? (
+              <Box
                 sx={{
-                  minWidth: collapsed && !isMobile ? 0 : 40,
-                  mr: collapsed && !isMobile ? 0 : 1,
-                  color: "#fff",
-                  justifyContent: "center",
+                  px: 2.2,
+                  pt: 1.6,
+                  pb: 0.6,
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-
-              {(!collapsed || isMobile) && (
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{
-                    fontSize: 15,
-                    fontWeight: active ? 800 : 700,
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: "rgba(255,255,255,0.85)",
+                    textTransform: "none",
                   }}
-                />
-              )}
-            </ListItemButton>
-          );
+                >
+                  {section.label}
+                </Typography>
+              </Box>
+            ) : null}
 
-          if (collapsed && !isMobile) {
-            return (
-              <Tooltip key={item.key} title={item.label} placement="right">
-                {itemButton}
-              </Tooltip>
-            );
-          }
+            <List sx={{ px: 0, py: 0 }}>
+              {section.items.map((item) => {
+                const active = currentKey === item.key;
 
-          return <Box key={item.key}>{itemButton}</Box>;
-        })}
-      </List>
+                const itemButton = (
+                  <ListItemButton
+                    onClick={() => handleItemClick(item.key)}
+                    sx={{
+                      minHeight: 54,
+                      px: collapsed && !isMobile ? 2 : 2.2,
+                      justifyContent:
+                        collapsed && !isMobile ? "center" : "flex-start",
+                      bgcolor: active ? "rgba(0,0,0,0.12)" : "transparent",
+                      borderLeft: active
+                        ? "4px solid #fff"
+                        : "4px solid transparent",
+                      "&:hover": {
+                        bgcolor: "rgba(255,255,255,0.12)",
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: collapsed && !isMobile ? 0 : 40,
+                        mr: collapsed && !isMobile ? 0 : 1,
+                        color: "#fff",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
 
-      <Box sx={{ flex: 1 }} />
+                    {(!collapsed || isMobile) && (
+                      <ListItemText
+                        primary={item.label}
+                        primaryTypographyProps={{
+                          fontSize: 15,
+                          fontWeight: active ? 800 : 700,
+                        }}
+                      />
+                    )}
+                  </ListItemButton>
+                );
+
+                if (collapsed && !isMobile) {
+                  return (
+                    <Tooltip key={item.key} title={item.label} placement="right">
+                      {itemButton}
+                    </Tooltip>
+                  );
+                }
+
+                return <Box key={item.key}>{itemButton}</Box>;
+              })}
+            </List>
+          </Box>
+        ))}
+      </Box>
 
       <Divider sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
@@ -231,7 +285,7 @@ export default function RestaurantAdminSidebar({
         }}
       >
         {collapsed && !isMobile ? (
-          <Tooltip title="Salir" placement="right">
+          <Tooltip title="Volver" placement="right">
             <IconButton
               onClick={onLogout}
               sx={{
@@ -266,7 +320,7 @@ export default function RestaurantAdminSidebar({
               <LogoutIcon />
             </ListItemIcon>
             <ListItemText
-              primary="Salir"
+              primary="Volver"
               primaryTypographyProps={{
                 fontSize: 15,
                 fontWeight: 800,
@@ -280,44 +334,44 @@ export default function RestaurantAdminSidebar({
 
   if (isMobile) {
     return (
-        <>
+      <>
         {!mobileOpen && (
-            <IconButton
+          <IconButton
             onClick={handleToggleMobile}
             sx={{
-                position: "fixed",
-                top: 14,
-                left: 14,
-                zIndex: 1400,
-                bgcolor: "#111",
-                color: "#fff",
-                boxShadow: 3,
-                "&:hover": {
+              position: "fixed",
+              top: 14,
+              left: 14,
+              zIndex: 1400,
+              bgcolor: "#111",
+              color: "#fff",
+              boxShadow: 3,
+              "&:hover": {
                 bgcolor: "#222",
-                },
+              },
             }}
-            >
+          >
             <MenuIcon />
-            </IconButton>
+          </IconButton>
         )}
 
         <Drawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={handleToggleMobile}
-            ModalProps={{ keepMounted: true }}
-            sx={{
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleToggleMobile}
+          ModalProps={{ keepMounted: true }}
+          sx={{
             "& .MuiDrawer-paper": {
-                width: DRAWER_WIDTH,
-                borderRight: "none",
-                borderRadius: 0,
-                overflow: "hidden",
+              width: DRAWER_WIDTH,
+              borderRight: "none",
+              borderRadius: 0,
+              overflow: "hidden",
             },
-            }}
+          }}
         >
-            {sidebarContent}
+          {sidebarContent}
         </Drawer>
-        </>
+      </>
     );
   }
 

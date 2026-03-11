@@ -150,19 +150,7 @@ export default function StaffPage() {
               spacing={1.5}
               width={{ xs: "100%", md: "auto" }}
             >
-              <Button
-                onClick={() => nav(`/owner/restaurants/${restaurantId}/settings`)}
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 150 },
-                  height: 44,
-                  borderRadius: 2,
-                }}
-              >
-                Volver
-              </Button>
-
+              
               <Button
                 onClick={onCreate}
                 variant="contained"
