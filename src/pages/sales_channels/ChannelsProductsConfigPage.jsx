@@ -1,8 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { getBranch } from "../../services/restaurant/branch.service"; // si no tienes, comenta bloque
-import { getChannelProducts, upsertChannelProduct } from "../../services/products/sales_channels/productChannel.service";
+import {
+  Box,
+  Button,
+  Card,
+  Chip,
+  CircularProgress,
+  FormControlLabel,
+  IconButton,
+  Paper,
+  Stack,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EditIcon from "@mui/icons-material/Edit";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockIcon from "@mui/icons-material/Block";
+
+import { getBranch } from "../../services/restaurant/branch.service";
+import {
+  getChannelProducts,
+  upsertChannelProduct,
+} from "../../services/products/sales_channels/productChannel.service";
+
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../../components/common/PaginationFooter";
+import AppAlert from "../../components/common/AppAlert";
+import ChannelProductConfigModal from "../../components/sales_channels/ChannelProductConfigModal";
+
+const PAGE_SIZE = 5;
 
 function money(v) {
   if (v == null || v === "") return "—";
@@ -15,28 +54,53 @@ export default function ChannelProductsConfigPage() {
   const nav = useNavigate();
   const { restaurantId, branchId, salesChannelId } = useParams();
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const rid = Number(restaurantId);
   const bid = Number(branchId);
   const scid = Number(salesChannelId);
 
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const [savingMap, setSavingMap] = useState({});
 
-  const [savingMap, setSavingMap] = useState({}); // { [productId]: boolean }
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
 
   const [mode, setMode] = useState("global");
   const [branchName, setBranchName] = useState("");
   const [channelName, setChannelName] = useState("");
   const [channelCode, setChannelCode] = useState("");
 
-  const [rows, setRows] = useState([]); // { product, channel, config }
+  const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
   const [onlyActiveProductStatus, setOnlyActiveProductStatus] = useState(true);
 
-  // modal edit
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // row actual
-  const [form, setForm] = useState({ is_enabled: false, price: "" });
+  const [editing, setEditing] = useState(null);
+  const [modalForm, setModalForm] = useState({ is_enabled: false, price: "" });
+
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
 
   const setSaving = (productId, v) =>
     setSavingMap((prev) => ({ ...prev, [productId]: v }));
@@ -44,11 +108,9 @@ export default function ChannelProductsConfigPage() {
   const isSaving = (productId) => !!savingMap[productId];
 
   const load = async () => {
-    setErr("");
     setLoading(true);
 
     try {
-      // branch name (opcional)
       try {
         const b = await getBranch(rid, bid);
         setBranchName(b?.name || "");
@@ -63,10 +125,13 @@ export default function ChannelProductsConfigPage() {
       setChannelCode(res?.sales_channel?.code || "");
       setRows(Array.isArray(res?.data) ? res.data : []);
     } catch (e) {
-      setErr(
-        e?.response?.data?.message ||
-          "No se pudo cargar la configuración del canal"
-      );
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message:
+          e?.response?.data?.message ||
+          "No se pudo cargar la configuración del canal",
+      });
     } finally {
       setLoading(false);
     }
@@ -89,10 +154,10 @@ export default function ChannelProductsConfigPage() {
         const name = (p?.name || "").toLowerCase();
         const desc = (p?.description || "").toLowerCase();
         const cat = (p?.category?.name || "").toLowerCase();
+
         return name.includes(q) || desc.includes(q) || cat.includes(q);
       })
       .sort((a, b) => {
-        // primero los enabled en canal
         const ea = a?.channel?.is_enabled ? 1 : 0;
         const eb = b?.channel?.is_enabled ? 1 : 0;
         if (ea !== eb) return eb - ea;
@@ -100,20 +165,37 @@ export default function ChannelProductsConfigPage() {
       });
   }, [rows, search, onlyActiveProductStatus]);
 
-  const branchLabel = branchName?.trim()
-    ? branchName.trim()
-    : `Sucursal ${bid}`;
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: filtered,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const branchLabel = branchName?.trim() ? branchName.trim() : `Sucursal ${bid}`;
 
   const modeHelp =
     mode === "global"
-      ? "Modo GLOBAL: aquí configuras precio/visibilidad por canal para productos que la sucursal ya habilitó en su Catálogo."
-      : "Modo BRANCH: aquí configuras precio/visibilidad por canal para productos propios de la sucursal.";
+      ? "Modo GLOBAL: aquí configuras precio y visibilidad por canal para productos que la sucursal ya habilitó en su catálogo."
+      : "Modo BRANCH: aquí configuras precio y visibilidad por canal para productos propios de la sucursal.";
 
   const openEdit = (row) => {
     const enabled = !!row?.channel?.is_enabled;
     const price = row?.channel?.price ?? "";
+
     setEditing(row);
-    setForm({
+    setModalForm({
       is_enabled: enabled,
       price: enabled ? String(price ?? "") : "",
     });
@@ -127,29 +209,36 @@ export default function ChannelProductsConfigPage() {
     setEditing(null);
   };
 
-  const onSaveModal = async () => {
+  const onSaveModal = async (formValues) => {
     if (!editing?.product?.id) return;
-    const productId = editing.product.id;
 
-    setErr("");
+    const productId = editing.product.id;
     if (isSaving(productId)) return;
 
-    const enabled = !!form.is_enabled;
-    const priceRaw = (form.price ?? "").toString().trim();
+    const enabled = !!formValues.is_enabled;
+    const priceRaw = (formValues.price ?? "").toString().trim();
 
     if (enabled) {
       if (!priceRaw) {
-        setErr("Si el producto está ACTIVO en el canal, el precio es obligatorio.");
+        showAlert({
+          severity: "warning",
+          title: "Nota",
+          message: "Si el producto está ACTIVO en el canal, el precio es obligatorio.",
+        });
         return;
       }
+
       const priceNum = Number(priceRaw);
       if (Number.isNaN(priceNum) || priceNum < 0) {
-        setErr("Precio inválido. Usa un número mayor o igual a 0.");
+        showAlert({
+          severity: "error",
+          title: "Error",
+          message: "Precio inválido. Usa un número mayor o igual a 0.",
+        });
         return;
       }
     }
 
-    // UI optimista
     setRows((prev) =>
       prev.map((r) => {
         if (r.product?.id !== productId) return r;
@@ -165,6 +254,7 @@ export default function ChannelProductsConfigPage() {
     );
 
     setSaving(productId, true);
+
     try {
       await upsertChannelProduct(rid, bid, scid, productId, {
         is_enabled: enabled,
@@ -173,37 +263,36 @@ export default function ChannelProductsConfigPage() {
 
       setOpen(false);
       setEditing(null);
-
-      // recargar para quedar 100% consistentes con backend
-      await load();
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo guardar la configuración");
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: e?.response?.data?.message || "No se pudo guardar la configuración",
+      });
       await load();
     } finally {
       setSaving(productId, false);
     }
   };
 
-  // Toggle rápido: ON exige precio -> abre modal si está OFF y lo prenden
   const onToggleQuick = async (row) => {
     const productId = row?.product?.id;
     if (!productId) return;
 
     if (isSaving(productId)) return;
-    setErr("");
 
     const prev = !!row?.channel?.is_enabled;
     const next = !prev;
 
     if (next) {
-      // activar exige precio: manda a modal
       openEdit(row);
-      setForm({ is_enabled: true, price: String(row?.channel?.price ?? "") });
+      setModalForm({
+        is_enabled: true,
+        price: String(row?.channel?.price ?? ""),
+      });
       return;
     }
 
-    // apagar: se puede directo sin precio
-    // UI optimista
     setRows((prevRows) =>
       prevRows.map((r) => {
         if (r.product?.id !== productId) return r;
@@ -215,355 +304,607 @@ export default function ChannelProductsConfigPage() {
     );
 
     setSaving(productId, true);
+
     try {
       await upsertChannelProduct(rid, bid, scid, productId, {
         is_enabled: false,
       });
-      await load();
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo actualizar el estado");
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: e?.response?.data?.message || "No se pudo actualizar el estado",
+      });
       await load();
     } finally {
       setSaving(productId, false);
     }
   };
 
-  if (loading) return <div style={{ padding: 16 }}>Cargando configuración…</div>;
+  const handleBack = () => {
+    nav(`/owner/restaurants/${rid}/operation/branch-sales-channels`);
+  };
 
-  return (
-    <div style={{ maxWidth: 1050, margin: "30px auto", padding: 16 }}>
-      {/* header */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>
-            {channelName || "Canal"} — Configuración de productos
-          </h2>
-          <div style={{ marginTop: 6, opacity: 0.85 }}>
-            {branchLabel} · Canal:{" "}
-            <strong>{channelCode ? `${channelCode} · ` : ""}{channelName || scid}</strong>
-          </div>
-          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-            {modeHelp}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => nav(-1)}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
-          >
-            ← Volver
-          </button>
-
-          <button
-            onClick={load}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
-            title="Recargar"
-          >
-            Actualizar
-          </button>
-        </div>
-      </div>
-
-      {err && (
-        <div
-          style={{
-            marginTop: 12,
-            background: "#ffe5e5",
-            padding: 10,
-            whiteSpace: "pre-line",
-          }}
-        >
-          {err}
-        </div>
-      )}
-
-      {/* filtros */}
-      <div
-        style={{
-          marginTop: 14,
-          padding: 12,
-          border: "1px solid #ddd",
-          borderRadius: 10,
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "60vh",
+          display: "grid",
+          placeItems: "center",
+          px: { xs: 2, sm: 3, md: 4 },
         }}
       >
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
-            Buscar producto
-          </div>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, descripción o categoría..."
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 8,
-              border: "1px solid #ddd",
-            }}
-          />
-        </div>
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress color="primary" />
+          <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+            Cargando configuración…
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
 
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
-            Producto activo
-          </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={onlyActiveProductStatus}
-              onChange={(e) => setOnlyActiveProductStatus(e.target.checked)}
-            />
-            Solo activos
-          </label>
-        </div>
-
-        <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
-          Mostrando: <strong>{filtered.length}</strong> / {rows.length}
-        </div>
-      </div>
-
-      {/* tabla */}
-      <div style={{ marginTop: 14, border: "1px solid #ddd", borderRadius: 10 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 140px 160px 160px",
-            padding: "10px 12px",
-            borderBottom: "1px solid #eee",
-            fontWeight: 900,
-            background: "#fafafa",
-            borderTopLeftRadius: 10,
-            borderTopRightRadius: 10,
-          }}
-        >
-          <div>Producto</div>
-          <div style={{ textAlign: "center" }}>Estado</div>
-          <div style={{ textAlign: "center" }}>Precio</div>
-          <div style={{ textAlign: "right" }}>Acciones</div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div style={{ padding: 12, opacity: 0.8 }}>
-            No hay productos para mostrar con este filtro.
-          </div>
-        ) : (
-          filtered.map((r) => {
-            const p = r.product;
-            const enabled = !!r?.channel?.is_enabled;
-            const price = r?.channel?.price;
-
-            const busy = isSaving(p.id);
-            const disabledByProductStatus = p?.status !== "active";
-
-            return (
-              <div
-                key={p.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 140px 160px 160px",
-                  padding: "12px 12px",
-                  borderTop: "1px solid #f0f0f0",
-                  alignItems: "center",
-                  opacity: disabledByProductStatus ? 0.55 : 1,
+  return (
+    <Box
+      sx={{
+        px: { xs: 2, sm: 3, md: 4 },
+        py: { xs: 8, md: 4 },
+      }}
+    >
+      <Box sx={{ maxWidth: 1100, mx: "auto" }}>
+        <Stack spacing={3}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: { xs: 30, md: 42 },
+                  fontWeight: 800,
+                  color: "text.primary",
+                  lineHeight: 1.1,
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {p.name}
-                    </span>
+                Configuración de productos
+              </Typography>
 
-                    <span
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(0,0,0,0.08)",
-                        background: enabled ? "#e6ffed" : "#f3f3f3",
-                        color: enabled ? "#0a7a2f" : "#444",
-                        fontWeight: 800,
-                      }}
-                    >
-                      {enabled ? "✅ Activo" : "❌ No activo"}
-                    </span>
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "text.secondary",
+                  fontSize: { xs: 15, md: 18 },
+                }}
+              >
+                {branchLabel} · Canal:{" "}
+                <strong>{channelCode ? `${channelCode} · ` : ""}{channelName || scid}</strong>
+              </Typography>
 
-                    {busy && (
-                      <span style={{ fontSize: 12, opacity: 0.7 }}>guardando…</span>
-                    )}
-                  </div>
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "text.secondary",
+                  fontSize: 13,
+                }}
+              >
+                {modeHelp}
+              </Typography>
+            </Box>
 
-                  <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
-                    Categoría: <strong>{p.category?.name || "—"}</strong> · Estado producto:{" "}
-                    <strong>{p.status}</strong>
-                  </div>
+            <Stack
+              direction={{ xs: "column-reverse", sm: "row" }}
+              spacing={1.5}
+              width={{ xs: "100%", md: "auto" }}
+            >
+              <Button
+                onClick={handleBack}
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                sx={{
+                  minWidth: { xs: "100%", sm: 150 },
+                  height: 44,
+                  borderRadius: 2,
+                }}
+              >
+                Volver
+              </Button>
+            </Stack>
+          </Stack>
 
-                  {p.description && (
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>
-                      {p.description}
-                    </div>
-                  )}
-                </div>
-
-                {/* Estado (switch simple) */}
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    disabled={busy || disabledByProductStatus}
-                    onChange={() => onToggleQuick(r)}
-                    title={
-                      disabledByProductStatus
-                        ? "Producto inactivo: actívalo en Administrar productos"
-                        : enabled
-                          ? "Desactivar en este canal"
-                          : "Activar en este canal (pide precio)"
-                    }
-                  />
-                </div>
-
-                {/* precio */}
-                <div style={{ textAlign: "center", fontWeight: 800 }}>
-                  {enabled ? money(price) : "—"}
-                </div>
-
-                {/* acciones */}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button
-                    onClick={() => openEdit(r)}
-                    disabled={busy || disabledByProductStatus}
-                    style={{
-                      padding: "8px 10px",
-                      cursor: busy ? "not-allowed" : "pointer",
-                      opacity: busy ? 0.7 : 1,
-                    }}
-                    title="Editar configuración (estado/precio)"
-                  >
-                    ✏️ Editar
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div style={{ marginTop: 12, fontSize: 12, opacity: 0.75 }}>
-        Nota: si un producto está <strong>Inactivo</strong> a nivel catálogo, actívalo primero en “Administrar productos”.
-      </div>
-
-      {/* Modal edición */}
-      {open && (
-        <div
-          onClick={closeModal}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
-            zIndex: 40,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 560,
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.15)",
-              padding: 14,
+          <Paper
+            sx={{
+              p: { xs: 2, sm: 2.5 },
+              borderRadius: 1,
+              backgroundColor: "background.paper",
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 16 }}>
-                  {editing?.product?.name || "Producto"} — {channelName || "Canal"}
-                </div>
-                <div style={{ marginTop: 4, opacity: 0.85, fontSize: 13 }}>
-                  {branchLabel} · Configura visibilidad y precio para este canal
-                </div>
-              </div>
-
-              <button
-                onClick={closeModal}
-                disabled={isSaving(editing?.product?.id)}
-                style={{ padding: "8px 10px", cursor: "pointer" }}
+            <Stack spacing={2}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={2}
+                alignItems={{ xs: "stretch", md: "flex-end" }}
               >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-              <div>
-                <div style={{ fontWeight: 800 }}>Estado en el canal</div>
-                <label style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!form.is_enabled}
-                    onChange={(e) => setForm((p) => ({ ...p, is_enabled: e.target.checked }))}
+                <Box sx={{ flex: 1 }}>
+                  <Typography sx={fieldLabelSx}>Buscar producto</Typography>
+                  <TextField
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar por nombre, descripción o categoría..."
+                    fullWidth
                   />
-                  <span style={{ fontWeight: 800 }}>
-                    {form.is_enabled ? "✅ Activo (se vende)" : "❌ No activo (no se vende)"}
-                  </span>
-                </label>
-              </div>
+                </Box>
+              </Stack>
 
-              <div>
-                <div style={{ fontWeight: 800 }}>Precio (MXN)</div>
-                <input
-                  value={form.price}
-                  onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-                  placeholder="Ej. 30"
-                  disabled={!form.is_enabled}
-                  inputMode="decimal"
-                  style={{
-                    marginTop: 8,
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #ccc",
-                    opacity: form.is_enabled ? 1 : 0.6,
-                  }}
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1.5}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", md: "center" }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={onlyActiveProductStatus}
+                      onChange={(e) => setOnlyActiveProductStatus(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Typography sx={switchLabelSx}>
+                      Solo productos activos
+                    </Typography>
+                  }
+                  sx={{ m: 0 }}
                 />
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-                  {form.is_enabled
-                    ? "Obligatorio si está activo."
-                    : "Si está apagado, el precio no se usa."}
-                </div>
-              </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button
-                  onClick={closeModal}
-                  disabled={isSaving(editing?.product?.id)}
-                  style={{ padding: "10px 14px", cursor: "pointer" }}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  onClick={onSaveModal}
-                  disabled={isSaving(editing?.product?.id)}
-                  style={{
-                    padding: "10px 14px",
-                    cursor: isSaving(editing?.product?.id) ? "not-allowed" : "pointer",
-                    opacity: isSaving(editing?.product?.id) ? 0.7 : 1,
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    color: "text.secondary",
+                    fontWeight: 700,
                   }}
                 >
-                  {isSaving(editing?.product?.id) ? "Guardando…" : "Guardar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  Mostrando {filtered.length} de {rows.length} productos
+                </Typography>
+              </Stack>
+            </Stack>
+          </Paper>
+
+          <Paper
+            sx={{
+              p: 0,
+              overflow: "hidden",
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+            }}
+          >
+            {filtered.length === 0 ? (
+              <Box
+                sx={{
+                  px: 3,
+                  py: 5,
+                  textAlign: "center",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 20,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  No hay productos para mostrar
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 1,
+                    color: "text.secondary",
+                    fontSize: 14,
+                  }}
+                >
+                  Ajusta el filtro o revisa la configuración del canal seleccionado.
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                {isMobile ? (
+                  <Stack spacing={1.5} sx={{ p: 2 }}>
+                    {paginatedItems.map((r) => {
+                      const p = r.product;
+                      const enabled = !!r?.channel?.is_enabled;
+                      const price = r?.channel?.price;
+                      const busy = isSaving(p.id);
+                      const disabledByProductStatus = p?.status !== "active";
+
+                      return (
+                        <Card
+                          key={p.id}
+                          sx={{
+                            borderRadius: 1,
+                            boxShadow: "none",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            backgroundColor: "#fff",
+                            opacity: disabledByProductStatus ? 0.65 : 1,
+                          }}
+                        >
+                          <Box sx={{ p: 2 }}>
+                            <Stack spacing={1.5}>
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="flex-start"
+                                spacing={1}
+                              >
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography
+                                    sx={{
+                                      fontSize: 15,
+                                      fontWeight: 800,
+                                      color: "text.primary",
+                                      lineHeight: 1.3,
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
+                                    {p?.name || "Producto sin nombre"}
+                                  </Typography>
+
+                                  <Typography
+                                    sx={{
+                                      mt: 0.5,
+                                      fontSize: 13,
+                                      color: "text.secondary",
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
+                                    {p?.category?.name || "Sin categoría"}
+                                  </Typography>
+                                </Box>
+
+                                <Stack spacing={0.75} alignItems="flex-end">
+                                  <Chip
+                                    label={enabled ? "ACTIVO" : "NO ACTIVO"}
+                                    color={enabled ? "success" : "default"}
+                                    size="small"
+                                    sx={{ fontWeight: 800 }}
+                                  />
+                                </Stack>
+                              </Stack>
+
+                              {p?.description ? (
+                                <Typography
+                                  sx={{
+                                    fontSize: 13,
+                                    color: "text.secondary",
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  {p.description}
+                                </Typography>
+                              ) : null}
+
+                              <Box>
+                                <Typography sx={mobileLabelSx}>Estado del producto</Typography>
+                                <Typography sx={mobileValueSx}>
+                                  {p?.status || "—"}
+                                </Typography>
+                              </Box>
+
+                              <Box>
+                                <Typography sx={mobileLabelSx}>Precio en canal</Typography>
+                                <Typography sx={mobileValueSx}>
+                                  {enabled ? money(price) : "—"}
+                                </Typography>
+                              </Box>
+
+                              <Stack spacing={1.25}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "flex-start",
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  <FormControlLabel
+                                    sx={{
+                                      m: 0,
+                                      minWidth: 0,
+                                      "& .MuiFormControlLabel-label": {
+                                        minWidth: 0,
+                                      },
+                                    }}
+                                    control={
+                                      <Switch
+                                        checked={enabled}
+                                        disabled={busy || disabledByProductStatus}
+                                        onChange={() => onToggleQuick(r)}
+                                        color="primary"
+                                      />
+                                    }
+                                    label={
+                                      <Typography sx={switchLabelSx}>
+                                        {enabled ? "Activo" : "Inactivo"}
+                                      </Typography>
+                                    }
+                                  />
+                                </Box>
+
+                                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                  <Tooltip title="Editar configuración">
+                                    <span>
+                                      <IconButton
+                                        onClick={() => openEdit(r)}
+                                        disabled={busy || disabledByProductStatus}
+                                        sx={iconEditSx}
+                                      >
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                </Stack>
+                              </Stack>
+
+                              {busy ? (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <CircularProgress size={16} color="primary" />
+                                  <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                                    Guardando cambios…
+                                  </Typography>
+                                </Stack>
+                              ) : null}
+                            </Stack>
+                          </Box>
+                        </Card>
+                      );
+                    })}
+                  </Stack>
+                ) : (
+                  <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                    <Table sx={{ minWidth: 980 }}>
+                      <TableHead>
+                        <TableRow
+                          sx={{
+                            "& th": {
+                              backgroundColor: "primary.main",
+                              color: "#fff",
+                              fontWeight: 800,
+                              fontSize: 13,
+                              borderBottom: "none",
+                              whiteSpace: "nowrap",
+                            },
+                          }}
+                        >
+                          <TableCell>Producto</TableCell>
+                          <TableCell>Estado producto</TableCell>
+                          <TableCell>Estado canal</TableCell>
+                          <TableCell>Precio</TableCell>
+                          <TableCell align="center">Activo</TableCell>
+                          <TableCell align="right">Acciones</TableCell>
+                        </TableRow>
+                      </TableHead>
+
+                      <TableBody>
+                        {paginatedItems.map((r) => {
+                          const p = r.product;
+                          const enabled = !!r?.channel?.is_enabled;
+                          const price = r?.channel?.price;
+                          const busy = isSaving(p.id);
+                          const disabledByProductStatus = p?.status !== "active";
+
+                          return (
+                            <TableRow
+                              key={p.id}
+                              hover
+                              sx={{
+                                opacity: disabledByProductStatus ? 0.6 : 1,
+                                "& td": {
+                                  borderBottom: "1px solid",
+                                  borderColor: "divider",
+                                  fontSize: 14,
+                                  color: "text.primary",
+                                  whiteSpace: "nowrap",
+                                },
+                              }}
+                            >
+                              <TableCell>
+                                <Stack spacing={0.5}>
+                                  <Typography sx={{ fontWeight: 800 }}>
+                                    {p?.name || "Producto sin nombre"}
+                                  </Typography>
+
+                                  <Typography
+                                    sx={{
+                                      fontSize: 12,
+                                      color: "text.secondary",
+                                      whiteSpace: "normal",
+                                    }}
+                                  >
+                                    Categoría: <strong>{p?.category?.name || "—"}</strong>
+                                  </Typography>
+
+                                  {p?.description ? (
+                                    <Typography
+                                      sx={{
+                                        fontSize: 12,
+                                        color: "text.secondary",
+                                        whiteSpace: "normal",
+                                      }}
+                                    >
+                                      {p.description}
+                                    </Typography>
+                                  ) : null}
+                                </Stack>
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  label={p?.status === "active" ? "ACTIVO" : "INACTIVO"}
+                                  color={p?.status === "active" ? "success" : "default"}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 800,
+                                    minWidth: 92,
+                                  }}
+                                />
+                              </TableCell>
+
+                              <TableCell>
+                                <Chip
+                                  label={enabled ? "ACTIVO" : "NO ACTIVO"}
+                                  color={enabled ? "success" : "default"}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 800,
+                                    minWidth: 100,
+                                  }}
+                                />
+                              </TableCell>
+
+                              <TableCell sx={{ fontWeight: 800 }}>
+                                {enabled ? money(price) : "—"}
+                              </TableCell>
+
+                              <TableCell align="center">
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  justifyContent="center"
+                                  alignItems="center"
+                                >
+                                  <Switch
+                                    checked={enabled}
+                                    disabled={busy || disabledByProductStatus}
+                                    onChange={() => onToggleQuick(r)}
+                                    color="primary"
+                                  />
+
+                                  {busy && <CircularProgress size={16} color="primary" />}
+                                </Stack>
+                              </TableCell>
+
+                              <TableCell align="right">
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  justifyContent="flex-end"
+                                  alignItems="center"
+                                  flexWrap="nowrap"
+                                >
+                                  <Tooltip title="Editar configuración">
+                                    <span>
+                                      <IconButton
+                                        onClick={() => openEdit(r)}
+                                        disabled={busy || disabledByProductStatus}
+                                        sx={iconEditSx}
+                                      >
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                <PaginationFooter
+                  page={page}
+                  totalPages={totalPages}
+                  startItem={startItem}
+                  endItem={endItem}
+                  total={total}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={prevPage}
+                  onNext={nextPage}
+                  itemLabel="productos"
+                />
+              </>
+            )}
+          </Paper>
+
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: "text.secondary",
+              lineHeight: 1.5,
+            }}
+          >
+            Nota: si un producto está <strong>Inactivo</strong> a nivel catálogo, actívalo primero en “Administrar productos”.
+          </Typography>
+        </Stack>
+      </Box>
+
+      <ChannelProductConfigModal
+        open={open}
+        onClose={closeModal}
+        onSave={onSaveModal}
+        saving={isSaving(editing?.product?.id)}
+        channelName={channelName}
+        branchLabel={branchLabel}
+        editing={editing}
+        initialForm={modalForm}
+      />
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </Box>
   );
 }
+
+const fieldLabelSx = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "text.primary",
+  mb: 1,
+};
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  mt: 0.25,
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+};
+
+const iconEditSx = {
+  width: 36,
+  height: 36,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+};

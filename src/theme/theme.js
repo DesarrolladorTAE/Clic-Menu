@@ -223,12 +223,74 @@ const theme = createTheme({
       },
     },
 
-    MuiAlert: {
+
+
+    MuiSnackbar: {
+      defaultProps: {
+        anchorOrigin: {
+          vertical: "top",
+          horizontal: "right",
+        },
+      },
       styleOverrides: {
         root: {
-          borderRadius: 1
-        }
-      }
+          zIndex: 2000,
+        },
+      },
+    },
+
+    
+    MuiAlert: {
+      defaultProps: {
+        variant: "filled",
+      },
+      styleOverrides: {
+        root: {
+          borderRadius: 6,
+          alignItems: "flex-start",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+          padding: "10px 14px",
+          minWidth: 360,
+        },
+
+        message: {
+          padding: 0,
+          width: "100%",
+        },
+
+        icon: {
+          marginRight: 10,
+          padding: "2px 0",
+          fontSize: 22,
+          opacity: 0.95,
+        },
+
+        action: {
+          paddingTop: 0,
+          alignItems: "flex-start",
+          marginRight: -4,
+        },
+
+        filledSuccess: {
+          backgroundColor: "#2EAF2E",
+          color: "#FFFFFF",
+        },
+
+        filledError: {
+          backgroundColor: "#F2642A",
+          color: "#FFFFFF",
+        },
+
+        filledWarning: {
+          backgroundColor: "#F57C00",
+          color: "#FFFFFF",
+        },
+
+        filledInfo: {
+          backgroundColor: "#1976D2",
+          color: "#FFFFFF",
+        },
+      },
     },
 
     MuiMenu: {

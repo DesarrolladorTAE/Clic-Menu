@@ -13,12 +13,27 @@ export default function RestaurantOperationLayout() {
 
   let currentKey = "staff";
 
-  if (pathname.includes("/staff")) currentKey = "staff";
-  else if (pathname.includes("/sales-channels")) currentKey = "sales-channels";
-  else if (pathname.includes("/ingredients")) currentKey = "ingredients";
-  else if (pathname.includes("/menu")) currentKey = "menu";
-  else if (pathname.includes("/catalog")) currentKey = "catalog";
-  else if (pathname.includes("/tables")) currentKey = "tables";
+  const isBranchSalesChannelsSection =
+    pathname.includes("/branch-sales-channels") ||
+    (
+      pathname.includes("/operation/branches/") &&
+      pathname.includes("/sales-channels/") &&
+      pathname.includes("/products")
+    );
+
+  if (isBranchSalesChannelsSection) {
+    currentKey = "branch-sales-channels";
+  } else if (pathname.includes("/staff")) {
+    currentKey = "staff";
+  } else if (pathname.includes("/ingredients")) {
+    currentKey = "ingredients";
+  } else if (pathname.includes("/menu")) {
+    currentKey = "menu";
+  } else if (pathname.includes("/catalog")) {
+    currentKey = "catalog";
+  } else if (pathname.includes("/tables")) {
+    currentKey = "tables";
+  }
 
   const handleNavigate = (key) => {
     const base = `/owner/restaurants/${restaurantId}/operation`;
@@ -28,8 +43,8 @@ export default function RestaurantOperationLayout() {
         nav(`${base}/staff`, { state: { restaurantName } });
         break;
 
-      case "sales-channels":
-        nav(`${base}/sales-channels`, { state: { restaurantName } });
+      case "branch-sales-channels":
+        nav(`${base}/branch-sales-channels`, { state: { restaurantName } });
         break;
 
       case "ingredients":

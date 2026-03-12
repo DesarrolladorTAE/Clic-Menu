@@ -49,8 +49,8 @@ export default function RestaurantOperationSidebar({
         label: "Menú",
         items: [
           {
-            key: "sales-channels",
-            label: "Canales de venta",
+            key: "branch-sales-channels",
+            label: "Canales de venta por sucursal",
             icon: <CampaignIcon />,
           },
           {

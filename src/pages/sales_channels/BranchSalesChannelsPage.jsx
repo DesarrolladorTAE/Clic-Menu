@@ -1,43 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  FormControlLabel,
-  Paper,
-  Skeleton,
-  Stack,
-  Switch,
-  Tooltip,
-  Typography,
-  IconButton,
-  TextField,
+  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, MenuItem,
   useMediaQuery,
 } from "@mui/material";
-import { useTheme, alpha } from "@mui/material/styles";
 
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
-import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
-import ApartmentRoundedIcon from "@mui/icons-material/ApartmentRounded";
-import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
-import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
-import CallSplitRoundedIcon from "@mui/icons-material/CallSplitRounded";
+import { useTheme } from "@mui/material/styles";
+import SettingsIcon from "@mui/icons-material/Settings";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockIcon from "@mui/icons-material/Block";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import { getRestaurantSubscriptionStatus } from "../../services/restaurant/restaurant.service";
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
-import {
-  getBranch,
-  getBranchesByRestaurant,
-} from "../../services/restaurant/branch.service";
+import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
+
 import {
   getBranchSalesChannels,
   upsertBranchSalesChannel,
@@ -45,47 +24,88 @@ import {
 
 import usePagination from "../../hooks/usePagination";
 import PaginationFooter from "../../components/common/PaginationFooter";
+import AppAlert from "../../components/common/AppAlert";
+
+const PAGE_SIZE = 5;
 
 export default function BranchSalesChannelsPage() {
   const nav = useNavigate();
-  const { restaurantId, branchId } = useParams();
   const location = useLocation();
+  const { restaurantId, branchId } = useParams();
+
   const theme = useTheme();
-  const isTablet = useMediaQuery(theme.breakpoints.down("md"));
-
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
-  const [savingMap, setSavingMap] = useState({});
-  const [branchName, setBranchName] = useState("");
-  const [mode, setMode] = useState("global");
-  const [rows, setRows] = useState([]);
-  const [branches, setBranches] = useState([]);
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const effectiveRestaurantId = Number(restaurantId);
-  const effectiveBranchId = Number(branchId);
+  const initialBranchId = branchId ? Number(branchId) : null;
 
-  const setSaving = (salesChannelId, v) =>
-    setSavingMap((prev) => ({ ...prev, [salesChannelId]: v }));
+  const [loading, setLoading] = useState(true);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
+
+  const [branches, setBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(initialBranchId || "");
+  const [mode, setMode] = useState("global");
+
+  const [rows, setRows] = useState([]);
+  const [savingMap, setSavingMap] = useState({});
+
+  const [search, setSearch] = useState("");
+  const [onlyRestaurantActive, setOnlyRestaurantActive] = useState(false);
+  const [onlyBranchEnabled, setOnlyBranchEnabled] = useState(false);
+
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  const setSaving = (salesChannelId, value) => {
+    setSavingMap((prev) => ({ ...prev, [salesChannelId]: value }));
+  };
 
   const isSaving = (salesChannelId) => !!savingMap[salesChannelId];
+
+  const selectedBranch = useMemo(() => {
+    return branches.find((b) => Number(b.id) === Number(selectedBranchId)) || null;
+  }, [branches, selectedBranchId]);
 
   const title = useMemo(() => {
     return "Canales de venta por sucursal";
   }, []);
 
-  const selectedBranch = useMemo(() => {
-    return (
-      branches.find((b) => Number(b?.id) === effectiveBranchId) || null
-    );
-  }, [branches, effectiveBranchId]);
+  const subtitle = useMemo(() => {
+    if (!selectedBranchId) {
+      return "Selecciona una sucursal para activar o desactivar los canales que podrá utilizar.";
+    }
 
-  const load = async ({ silent = false } = {}) => {
-    setErr("");
-    if (!silent) setLoading(true);
+    return `Administra los canales habilitados para ${selectedBranch?.name || `Sucursal ${selectedBranchId}`}.`;
+  }, [selectedBranch, selectedBranchId]);
+
+  const loadBase = async () => {
+    setLoading(true);
 
     try {
       const st = await getRestaurantSubscriptionStatus(effectiveRestaurantId);
+
       if (st?.is_operational !== true) {
         nav(`/owner/restaurants/${effectiveRestaurantId}/plans`, {
           state: {
@@ -103,78 +123,124 @@ export default function BranchSalesChannelsPage() {
       }
       setMode(pm);
 
-      try {
-        const [branchList, branchData, channelsList] = await Promise.all([
-          getBranchesByRestaurant(effectiveRestaurantId),
-          getBranch(effectiveRestaurantId, effectiveBranchId),
-          getBranchSalesChannels(effectiveRestaurantId, effectiveBranchId),
-        ]);
+      const branchList = await getBranchesByRestaurant(effectiveRestaurantId);
+      const safeBranches = Array.isArray(branchList) ? branchList : [];
+      setBranches(safeBranches);
 
-        setBranches(Array.isArray(branchList) ? branchList : []);
-        setBranchName(branchData?.name || "");
-        setRows(Array.isArray(channelsList) ? channelsList : []);
-      } catch {
-        try {
-          const branchList = await getBranchesByRestaurant(effectiveRestaurantId);
-          setBranches(Array.isArray(branchList) ? branchList : []);
-        } catch {
-          setBranches([]);
-        }
-
-        try {
-          const b = await getBranch(effectiveRestaurantId, effectiveBranchId);
-          setBranchName(b?.name || "");
-        } catch {
-          setBranchName("");
-        }
-
-        const list = await getBranchSalesChannels(
-          effectiveRestaurantId,
-          effectiveBranchId
-        );
-        setRows(Array.isArray(list) ? list : []);
+      if (safeBranches.length === 0) {
+        setSelectedBranchId("");
+        setRows([]);
+        return;
       }
+
+      const requestedBranchId =
+        initialBranchId && safeBranches.some((b) => Number(b.id) === Number(initialBranchId))
+          ? Number(initialBranchId)
+          : null;
+
+      const firstBranchId = Number(safeBranches[0]?.id);
+
+      setSelectedBranchId((prev) => {
+        if (prev && safeBranches.some((b) => Number(b.id) === Number(prev))) {
+          return Number(prev);
+        }
+        return requestedBranchId || firstBranchId;
+      });
     } catch (e) {
-      setErr(
-        e?.response?.data?.message || "No se pudieron cargar los canales de venta"
-      );
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message:
+          e?.response?.data?.message || "No se pudieron cargar las sucursales del restaurante",
+      });
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const loadChannels = async (targetBranchId) => {
+    if (!targetBranchId) {
+      setRows([]);
+      return;
+    }
+
+    setLoadingChannels(true);
+
+    try {
+      const list = await getBranchSalesChannels(
+        effectiveRestaurantId,
+        Number(targetBranchId)
+      );
+      setRows(Array.isArray(list) ? list : []);
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message:
+          e?.response?.data?.message || "No se pudieron cargar los canales de venta",
+      });
+      setRows([]);
+    } finally {
+      setLoadingChannels(false);
     }
   };
 
   useEffect(() => {
-    load();
+    loadBase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId, branchId]);
+  }, [restaurantId]);
 
-  const orderedRows = useMemo(() => {
-    return [...rows].sort((a, b) => {
-      const ea = a?.branch?.effective_is_active ? 1 : 0;
-      const eb = b?.branch?.effective_is_active ? 1 : 0;
-      if (ea !== eb) return eb - ea;
+  useEffect(() => {
+    if (!selectedBranchId) return;
+    loadChannels(selectedBranchId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranchId]);
 
-      return (a?.sales_channel?.name || "").localeCompare(
-        b?.sales_channel?.name || ""
-      );
-    });
-  }, [rows]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return rows
+      .filter((r) => {
+        const ch = r?.sales_channel;
+        const br = r?.branch;
+
+        if (onlyRestaurantActive && ch?.status !== "active") return false;
+        if (onlyBranchEnabled && br?.effective_is_active !== true) return false;
+
+        if (!q) return true;
+
+        const name = (ch?.name || "").toLowerCase();
+        const code = (ch?.code || "").toLowerCase();
+
+        return name.includes(q) || code.includes(q);
+      })
+      .sort((a, b) => {
+        const ea = a?.branch?.effective_is_active ? 1 : 0;
+        const eb = b?.branch?.effective_is_active ? 1 : 0;
+
+        if (ea !== eb) return eb - ea;
+
+        return (a?.sales_channel?.name || "").localeCompare(
+          b?.sales_channel?.name || ""
+        );
+      });
+  }, [rows, search, onlyRestaurantActive, onlyBranchEnabled]);
 
   const {
     page,
+    nextPage,
+    prevPage,
+    total,
     totalPages,
     startItem,
     endItem,
-    total,
     hasPrev,
     hasNext,
-    prevPage,
-    nextPage,
     paginatedItems,
   } = usePagination({
-    items: orderedRows,
-    pageSize: 5,
+    items: filtered,
     initialPage: 1,
+    pageSize: PAGE_SIZE,
     mode: "frontend",
   });
 
@@ -183,22 +249,29 @@ export default function BranchSalesChannelsPage() {
     const br = row?.branch;
 
     const salesChannelId = ch?.id;
-    if (!salesChannelId) return;
+    if (!salesChannelId || !selectedBranchId) return;
 
-    setErr("");
     if (isSaving(salesChannelId)) return;
 
     if (ch?.status !== "active") {
-      setErr("Este canal está INACTIVO a nivel restaurante. Actívalo primero.");
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Este canal está INACTIVO a nivel restaurante. Actívalo primero.",
+      });
       return;
     }
 
-    const prev = !!br?.is_active;
-    const next = !prev;
+    const prevBranch = {
+      ...(br || {}),
+    };
+
+    const next = !prevBranch?.is_active;
 
     setRows((prevRows) =>
       prevRows.map((r) => {
         if (r?.sales_channel?.id !== salesChannelId) return r;
+
         return {
           ...r,
           branch: {
@@ -216,22 +289,32 @@ export default function BranchSalesChannelsPage() {
     try {
       await upsertBranchSalesChannel(
         effectiveRestaurantId,
-        effectiveBranchId,
+        Number(selectedBranchId),
         salesChannelId,
         next
       );
-
-      const list = await getBranchSalesChannels(
-        effectiveRestaurantId,
-        effectiveBranchId
-      );
-      setRows(Array.isArray(list) ? list : []);
     } catch (e) {
-      setErr(
-        e?.response?.data?.message ||
-          "No se pudo actualizar el canal en esta sucursal"
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message:
+          e?.response?.data?.message ||
+          "No se pudo actualizar el canal en esta sucursal",
+      });
+
+      setRows((prevRows) =>
+        prevRows.map((r) => {
+          if (r?.sales_channel?.id !== salesChannelId) return r;
+
+          return {
+            ...r,
+            branch: {
+              ...(r.branch || {}),
+              ...prevBranch,
+            },
+          };
+        })
       );
-      await load({ silent: true });
     } finally {
       setSaving(salesChannelId, false);
     }
@@ -242,135 +325,76 @@ export default function BranchSalesChannelsPage() {
     const br = row?.branch;
 
     const salesChannelId = ch?.id;
-    if (!salesChannelId) return;
+    if (!salesChannelId || !selectedBranchId) return;
 
     if (br?.effective_is_active !== true) {
-      setErr("Activa este canal en la sucursal antes de configurar productos.");
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "Activa este canal en la sucursal antes de configurar productos.",
+      });
       return;
     }
 
     nav(
-      `/owner/restaurants/${effectiveRestaurantId}/branches/${effectiveBranchId}/sales-channels/${salesChannelId}/products`,
+      `/owner/restaurants/${effectiveRestaurantId}/operation/branches/${selectedBranchId}/sales-channels/${salesChannelId}/products`,
       {
         state: {
           sales_channel: ch,
-          branch_name: branchName,
-          products_mode: mode,
-          restaurantName: location.state?.restaurantName,
-        },
-      }
-    );
-  };
-
-  const handleBack = () => {
-    nav(`/owner/restaurants/${effectiveRestaurantId}/branches`, {
-      state: { restaurantName: location.state?.restaurantName },
-    });
-  };
-
-  const handleBranchChange = (_, nextBranch) => {
-    if (!nextBranch?.id) return;
-    if (Number(nextBranch.id) === effectiveBranchId) return;
-
-    nav(
-      `/owner/restaurants/${effectiveRestaurantId}/branches/${nextBranch.id}/sales-channels`,
-      {
-        state: {
-          ...location.state,
-          branch_name: nextBranch.name,
+          branch_name: selectedBranch?.name || "",
           products_mode: mode,
         },
       }
     );
   };
 
-  const branchLabel = branchName?.trim()
-    ? branchName.trim()
-    : `Sucursal ${effectiveBranchId}`;
-
-  const renderStatusChip = (isRestaurantActive) => {
-    return isRestaurantActive ? (
-      <Chip
-        icon={<CheckCircleRoundedIcon />}
-        label="Activo"
-        size="small"
-        color="success"
-        variant="outlined"
-      />
-    ) : (
-      <Chip
-        icon={<CancelRoundedIcon />}
-        label="Inactivo"
-        size="small"
-        color="default"
-        variant="outlined"
-      />
-    );
+  const handleBranchChange = (nextBranchId) => {
+    setSelectedBranchId(nextBranchId ? Number(nextBranchId) : "");
   };
 
-  const renderLoading = () => (
-    <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 2, md: 3 } }}>
-      <Skeleton variant="rounded" height={120} />
-      <Skeleton variant="rounded" height={100} sx={{ mt: 2 }} />
-      <Skeleton variant="rounded" height={420} sx={{ mt: 2 }} />
-    </Box>
-  );
-
-  if (loading) return renderLoading();
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "60vh",
+          display: "grid",
+          placeItems: "center",
+          px: { xs: 2, sm: 3, md: 4 },
+        }}
+      >
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress color="primary" />
+          <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+            Cargando sucursales…
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
 
   return (
     <Box
       sx={{
-        maxWidth: 1100,
-        mx: "auto",
-        px: { xs: 2, sm: 2.5, md: 3 },
-        py: { xs: 2, md: 3 },
+        px: { xs: 2, sm: 3, md: 4 },
+        py: { xs: 8, md: 4 },
       }}
     >
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 2, sm: 2.5, md: 3 },
-          borderRadius: 1,
-          borderWidth: 1,
-          backgroundColor: "background.paper",
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          justifyContent="space-between"
-          alignItems={{ xs: "stretch", md: "flex-start" }}
-          spacing={2}
-        >
-          <Stack spacing={1.2} sx={{ minWidth: 0, flex: 1 }}>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              flexWrap="wrap"
-              useFlexGap
-            >
-              <Chip
-                icon={<StorefrontRoundedIcon />}
-                label={`Restaurante ${effectiveRestaurantId}`}
-                variant="outlined"
-                size="small"
-              />
-              <Chip
-                icon={<ApartmentRoundedIcon />}
-                label={branchLabel}
-                variant="outlined"
-                size="small"
-              />
-            </Stack>
-
+      <Box sx={{ maxWidth: 1100, mx: "auto" }}>
+        <Stack spacing={3}>
+          {/* Header */}
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={1}
+          >
             <Box>
               <Typography
-                variant="h5"
                 sx={{
+                  fontSize: { xs: 30, md: 42 },
                   fontWeight: 800,
+                  color: "text.primary",
                   lineHeight: 1.1,
-                  fontSize: { xs: 24, sm: 28 },
                 }}
               >
                 {title}
@@ -378,564 +402,612 @@ export default function BranchSalesChannelsPage() {
 
               <Typography
                 sx={{
-                  mt: 0.8,
+                  mt: 1,
                   color: "text.secondary",
-                  fontSize: 14,
-                  maxWidth: 760,
+                  fontSize: { xs: 15, md: 18 },
                 }}
               >
-                Selecciona la sucursal que deseas administrar y activa o desactiva
-                sus canales de venta. La configuración de productos se realiza en
-                la siguiente pantalla.
+                {subtitle}
               </Typography>
             </Box>
+
           </Stack>
 
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1.2}
-            sx={{ width: { xs: "100%", md: "auto" } }}
-          >
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackRoundedIcon />}
-              onClick={handleBack}
+          {/* Sin sucursales */}
+          {branches.length === 0 ? (
+            <Paper
               sx={{
-                borderRadius: 1,
-                borderWidth: 1,
+                p: 0,
+                overflow: "hidden",
+                borderRadius: 0,
+                backgroundColor: "background.paper",
               }}
             >
-              Volver
-            </Button>
-          </Stack>
-        </Stack>
-
-        <Paper
-          variant="outlined"
-          sx={{
-            mt: 2,
-            p: 2,
-            borderRadius: 1,
-            borderWidth: 1,
-            backgroundColor: alpha(theme.palette.primary.main, 0.03),
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={2}
-            alignItems={{ xs: "stretch", md: "center" }}
-            justifyContent="space-between"
-          >
-            <Stack spacing={0.6} sx={{ minWidth: 0 }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <CallSplitRoundedIcon color="primary" fontSize="small" />
-                <Typography sx={{ fontWeight: 800, fontSize: 15 }}>
-                  Seleccionar sucursal
-                </Typography>
-              </Stack>
-
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                Cambia rápidamente entre sucursales sin salir de esta pantalla.
-              </Typography>
-            </Stack>
-
-            <Box sx={{ width: { xs: "100%", md: 360 } }}>
-              <Autocomplete
-                options={branches}
-                value={selectedBranch}
-                onChange={handleBranchChange}
-                getOptionLabel={(option) => option?.name || `Sucursal ${option?.id || ""}`}
-                isOptionEqualToValue={(option, value) =>
-                  Number(option?.id) === Number(value?.id)
-                }
-                noOptionsText="No hay sucursales disponibles"
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Sucursal"
-                    placeholder="Selecciona una sucursal"
-                  />
-                )}
+              <Box
                 sx={{
-                  "& .MuiOutlinedInput-root": {
-                    backgroundColor: "#fff",
-                    borderRadius: 1,
-                  },
+                  px: 3,
+                  py: 5,
+                  textAlign: "center",
                 }}
-              />
-            </Box>
-          </Stack>
-        </Paper>
-      </Paper>
-
-      {err ? (
-        <Alert
-          severity="error"
-          sx={{
-            mt: 2,
-            borderRadius: 1,
-            border: "1px solid",
-            borderColor: alpha(theme.palette.error.main, 0.22),
-            alignItems: "flex-start",
-          }}
-        >
-          {err}
-        </Alert>
-      ) : null}
-
-      <Paper
-        variant="outlined"
-        sx={{
-          mt: 2,
-          overflow: "hidden",
-          borderRadius: 1,
-          borderWidth: 1,
-          backgroundColor: "background.paper",
-        }}
-      >
-        <Box
-          sx={{
-            px: { xs: 2, sm: 2.5 },
-            py: 1.75,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            backgroundColor: alpha(theme.palette.primary.main, 0.04),
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            spacing={1}
-          >
-            <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: 16 }}>
-                Canales disponibles
-              </Typography>
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                Mostrando {startItem} - {endItem} de {total} canales
-              </Typography>
-            </Box>
-
-            <Chip
-              label={branchLabel}
-              size="small"
-              variant="outlined"
-              sx={{ borderRadius: 1 }}
-            />
-          </Stack>
-        </Box>
-
-        {paginatedItems.length === 0 ? (
-          <Box sx={{ p: 3 }}>
-            <Alert
-              severity="info"
-              sx={{
-                borderRadius: 1,
-                border: "1px solid",
-                borderColor: alpha(theme.palette.info.main, 0.2),
-              }}
-            >
-              No hay canales para mostrar.
-            </Alert>
-          </Box>
-        ) : (
-          <>
-            {!isTablet ? (
-              <Box>
-                <Box
+              >
+                <Typography
                   sx={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0,1fr) 170px 180px",
-                    gap: 2,
-                    px: 2.5,
-                    py: 1.5,
-                    borderBottom: "1px solid",
-                    borderColor: "divider",
-                    backgroundColor: "#fafafa",
+                    fontSize: 20,
+                    fontWeight: 800,
+                    color: "text.primary",
                   }}
                 >
-                  <Typography sx={{ fontWeight: 800, fontSize: 14 }}>
-                    Canal
-                  </Typography>
-                  <Typography
-                    sx={{ fontWeight: 800, fontSize: 14, textAlign: "center" }}
-                  >
-                    Estado sucursal
-                  </Typography>
-                  <Typography
-                    sx={{ fontWeight: 800, fontSize: 14, textAlign: "right" }}
-                  >
-                    Acciones
-                  </Typography>
-                </Box>
+                  No hay sucursales registradas
+                </Typography>
 
-                {paginatedItems.map((r) => {
-                  const ch = r?.sales_channel;
-                  const br = r?.branch;
-                  const restaurantActive = ch?.status === "active";
-                  const enabled = !!br?.effective_is_active;
-                  const busy = isSaving(ch?.id);
-                  const disabledSwitch = busy || !restaurantActive;
-
-                  return (
-                    <Box
-                      key={ch?.id}
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: "minmax(0,1fr) 170px 180px",
-                        gap: 2,
-                        alignItems: "center",
-                        px: 2.5,
-                        py: 1.8,
-                        borderTop: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
-                          useFlexGap
-                        >
-                          <Typography
-                            sx={{
-                              fontWeight: 800,
-                              fontSize: 15,
-                              minWidth: 0,
-                            }}
-                          >
-                            {ch?.name || "Canal sin nombre"}
-                          </Typography>
-
-                          {renderStatusChip(restaurantActive)}
-
-                          {busy ? (
-                            <Chip
-                              icon={<SyncRoundedIcon />}
-                              label="Guardando..."
-                              size="small"
-                              variant="outlined"
-                              sx={{ borderRadius: 1 }}
-                            />
-                          ) : null}
-                        </Stack>
-
-                        <Typography
-                          sx={{
-                            mt: 0.7,
-                            color: "text.secondary",
-                            fontSize: 13,
-                          }}
-                        >
-                          Code:{" "}
-                          <Box
-                            component="span"
-                            sx={{
-                              fontFamily: "monospace",
-                              fontWeight: 700,
-                              color: "text.primary",
-                            }}
-                          >
-                            {ch?.code || "—"}
-                          </Box>
-                        </Typography>
-
-                        {!restaurantActive ? (
-                          <Typography
-                            sx={{
-                              mt: 0.8,
-                              color: "text.secondary",
-                              fontSize: 12.5,
-                            }}
-                          >
-                            Este canal está inactivo a nivel restaurante. No se
-                            puede habilitar en sucursales.
-                          </Typography>
-                        ) : null}
-                      </Box>
-
-                      <Stack
-                        direction="column"
-                        alignItems="center"
-                        justifyContent="center"
-                        spacing={0.5}
-                      >
-                        <FormControlLabel
-                          sx={{ m: 0 }}
-                          control={
-                            <Switch
-                              checked={enabled}
-                              disabled={disabledSwitch}
-                              onChange={() => onToggle(r)}
-                              color="success"
-                            />
-                          }
-                          label=""
-                        />
-
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: enabled ? "success.main" : "text.secondary",
-                          }}
-                        >
-                          {enabled ? "Activo" : "Inactivo"}
-                        </Typography>
-                      </Stack>
-
-                      <Stack
-                        direction="row"
-                        justifyContent="flex-end"
-                        alignItems="center"
-                        spacing={1}
-                      >
-                        <Tooltip
-                          title={
-                            br?.effective_is_active === true
-                              ? "Configurar productos"
-                              : "Activa el canal primero"
-                          }
-                        >
-                          <span>
-                            <IconButton
-                              onClick={() => onConfig(r)}
-                              disabled={br?.effective_is_active !== true}
-                              sx={{
-                                border: "1px solid",
-                                borderColor: "divider",
-                                borderRadius: 1,
-                                width: 42,
-                                height: 42,
-                                color:
-                                  br?.effective_is_active === true
-                                    ? "primary.main"
-                                    : "text.disabled",
-                                backgroundColor:
-                                  br?.effective_is_active === true
-                                    ? alpha(theme.palette.primary.main, 0.06)
-                                    : "transparent",
-                              }}
-                            >
-                              <SettingsRoundedIcon />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </Stack>
-                    </Box>
-                  );
-                })}
+                <Typography
+                  sx={{
+                    mt: 1,
+                    color: "text.secondary",
+                    fontSize: 14,
+                  }}
+                >
+                  Primero crea una sucursal para poder administrar sus canales de venta.
+                </Typography>
               </Box>
-            ) : (
-              <Box sx={{ p: 1.5 }}>
-                <Stack spacing={1.5}>
-                  {paginatedItems.map((r) => {
-                    const ch = r?.sales_channel;
-                    const br = r?.branch;
-                    const restaurantActive = ch?.status === "active";
-                    const enabled = !!br?.effective_is_active;
-                    const busy = isSaving(ch?.id);
-                    const disabledSwitch = busy || !restaurantActive;
+            </Paper>
+          ) : (
+            <>
+              {/* Filtros */}
+              <Paper
+                sx={{
+                  p: { xs: 2, sm: 2.5 },
+                  borderRadius: 1,
+                  backgroundColor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "none",
+                }}
+              >
+                <Stack spacing={2}>
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={2}
+                    alignItems={{ xs: "stretch", md: "flex-end" }}
+                  >
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={fieldLabelSx}>Sucursal</Typography>
 
-                    return (
-                      <Card
-                        key={ch?.id}
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 1,
-                          borderWidth: 1,
-                          boxShadow: "none",
+                      <TextField
+                        select
+                        value={selectedBranchId}
+                        onChange={(e) => handleBranchChange(e.target.value)}
+                        fullWidth
+                        SelectProps={{
+                          IconComponent: KeyboardArrowDownIcon,
                         }}
                       >
-                        <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                          <Stack spacing={1.4}>
-                            <Stack
-                              direction="row"
-                              justifyContent="space-between"
-                              alignItems="flex-start"
-                              spacing={1}
-                            >
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                  sx={{
-                                    fontWeight: 800,
-                                    fontSize: 15,
-                                    lineHeight: 1.2,
-                                  }}
-                                >
-                                  {ch?.name || "Canal sin nombre"}
-                                </Typography>
+                        {branches.map((b) => (
+                          <MenuItem key={b.id} value={Number(b.id)}>
+                            {b.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Box>
 
-                                <Typography
-                                  sx={{
-                                    mt: 0.6,
-                                    color: "text.secondary",
-                                    fontSize: 12.5,
-                                  }}
-                                >
-                                  Code:{" "}
-                                  <Box
-                                    component="span"
-                                    sx={{
-                                      fontFamily: "monospace",
-                                      fontWeight: 700,
-                                      color: "text.primary",
-                                    }}
-                                  >
-                                    {ch?.code || "—"}
-                                  </Box>
-                                </Typography>
-                              </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={fieldLabelSx}>Buscar canal</Typography>
 
-                              <Tooltip
-                                title={
-                                  br?.effective_is_active === true
-                                    ? "Configurar productos"
-                                    : "Activa el canal primero"
-                                }
-                              >
-                                <span>
-                                  <IconButton
-                                    onClick={() => onConfig(r)}
-                                    disabled={br?.effective_is_active !== true}
-                                    sx={{
-                                      border: "1px solid",
-                                      borderColor: "divider",
-                                      borderRadius: 1,
-                                      width: 40,
-                                      height: 40,
-                                      color:
-                                        br?.effective_is_active === true
-                                          ? "primary.main"
-                                          : "text.disabled",
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    <SettingsRoundedIcon />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            </Stack>
+                      <TextField
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar por nombre o code..."
+                        fullWidth
+                      />
+                    </Box>
+                  </Stack>
 
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              flexWrap="wrap"
-                              useFlexGap
-                              alignItems="center"
-                            >
-                              {renderStatusChip(restaurantActive)}
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.5}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", md: "center" }}
+                  >
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={{ xs: 0.5, sm: 2 }}
+                    >
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={onlyRestaurantActive}
+                            onChange={(e) => setOnlyRestaurantActive(e.target.checked)}
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Typography sx={switchLabelSx}>
+                            Solo canales activos del restaurante
+                          </Typography>
+                        }
+                        sx={{ m: 0 }}
+                      />
 
-                              <Chip
-                                label={enabled ? "Activo en sucursal" : "Inactivo en sucursal"}
-                                size="small"
-                                color={enabled ? "success" : "default"}
-                                variant="outlined"
-                              />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={onlyBranchEnabled}
+                            onChange={(e) => setOnlyBranchEnabled(e.target.checked)}
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Typography sx={switchLabelSx}>
+                            Solo activos en la sucursal
+                          </Typography>
+                        }
+                        sx={{ m: 0 }}
+                      />
+                    </Stack>
 
-                              {busy ? (
-                                <Chip
-                                  icon={<SyncRoundedIcon />}
-                                  label="Guardando..."
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ borderRadius: 1 }}
-                                />
-                              ) : null}
-                            </Stack>
-
-                            {!restaurantActive ? (
-                              <Alert
-                                severity="warning"
-                                sx={{
-                                  borderRadius: 1,
-                                  border: "1px solid",
-                                  borderColor: alpha(theme.palette.warning.main, 0.18),
-                                  py: 0.5,
-                                }}
-                              >
-                                Este canal está inactivo a nivel restaurante. No se
-                                puede usar en sucursales.
-                              </Alert>
-                            ) : null}
-
-                            <Divider />
-
-                            <Stack
-                              direction="row"
-                              justifyContent="space-between"
-                              alignItems="center"
-                              spacing={2}
-                            >
-                              <Box>
-                                <Typography
-                                  sx={{
-                                    fontSize: 13,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  Estado en esta sucursal
-                                </Typography>
-                                <Typography
-                                  sx={{
-                                    fontSize: 12,
-                                    color: enabled
-                                      ? "success.main"
-                                      : "text.secondary",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {enabled ? "Activo" : "Inactivo"}
-                                </Typography>
-                              </Box>
-
-                              <Switch
-                                checked={enabled}
-                                disabled={disabledSwitch}
-                                onChange={() => onToggle(r)}
-                                color="success"
-                              />
-                            </Stack>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "text.secondary",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Mostrando {filtered.length} de {rows.length} canales
+                    </Typography>
+                  </Stack>
                 </Stack>
-              </Box>
-            )}
+              </Paper>
 
-            <PaginationFooter
-              page={page}
-              totalPages={totalPages}
-              startItem={startItem}
-              endItem={endItem}
-              total={total}
-              hasPrev={hasPrev}
-              hasNext={hasNext}
-              onPrev={prevPage}
-              onNext={nextPage}
-              itemLabel="canales"
-            />
-          </>
-        )}
-      </Paper>
+              {/* Contenido */}
+              <Paper
+                sx={{
+                  p: 0,
+                  overflow: "hidden",
+                  borderRadius: 0,
+                  backgroundColor: "background.paper",
+                }}
+              >
+                {loadingChannels ? (
+                  <Box
+                    sx={{
+                      minHeight: 240,
+                      display: "grid",
+                      placeItems: "center",
+                      px: 2,
+                    }}
+                  >
+                    <Stack spacing={2} alignItems="center">
+                      <CircularProgress color="primary" />
+                      <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+                        Cargando canales…
+                      </Typography>
+                    </Stack>
+                  </Box>
+                ) : filtered.length === 0 ? (
+                  <Box
+                    sx={{
+                      px: 3,
+                      py: 5,
+                      textAlign: "center",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 20,
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      No hay canales para mostrar
+                    </Typography>
 
-      <Alert
-        severity="info"
-        sx={{
-          mt: 2,
-          borderRadius: 1,
-          border: "1px solid",
-          borderColor: alpha(theme.palette.info.main, 0.18),
-        }}
-      >
-        Nota: Un canal <strong>Inactivo</strong> a nivel restaurante no puede
-        activarse en sucursales.
-      </Alert>
+                    <Typography
+                      sx={{
+                        mt: 1,
+                        color: "text.secondary",
+                        fontSize: 14,
+                      }}
+                    >
+                      Ajusta los filtros o selecciona otra sucursal para continuar.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <>
+                    {isMobile ? (
+                      <Stack spacing={1.5} sx={{ p: 2 }}>
+                        {paginatedItems.map((r) => {
+                          const ch = r?.sales_channel;
+                          const br = r?.branch;
+
+                          const restaurantActive = ch?.status === "active";
+                          const enabled = !!br?.effective_is_active;
+                          const busy = isSaving(ch?.id);
+
+                          return (
+                            <Card
+                              key={ch?.id}
+                              sx={{
+                                borderRadius: 1,
+                                boxShadow: "none",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                backgroundColor: "#fff",
+                              }}
+                            >
+                              <Box sx={{ p: 2 }}>
+                                <Stack spacing={1.5}>
+                                  <Stack
+                                    direction="row"
+                                    justifyContent="space-between"
+                                    alignItems="flex-start"
+                                    spacing={1}
+                                  >
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Typography
+                                        sx={{
+                                          fontSize: 15,
+                                          fontWeight: 800,
+                                          color: "text.primary",
+                                          lineHeight: 1.3,
+                                          wordBreak: "break-word",
+                                        }}
+                                      >
+                                        {ch?.name || "Canal sin nombre"}
+                                      </Typography>
+
+                                      <Typography
+                                        sx={{
+                                          mt: 0.5,
+                                          fontSize: 13,
+                                          color: "text.secondary",
+                                          fontFamily: "monospace",
+                                          wordBreak: "break-word",
+                                        }}
+                                      >
+                                        {ch?.code || "—"}
+                                      </Typography>
+                                    </Box>
+
+                                    <Stack spacing={0.75} alignItems="flex-end">
+                                      <Chip
+                                        label={restaurantActive ? "ACTIVO" : "INACTIVO"}
+                                        color={restaurantActive ? "success" : "default"}
+                                        size="small"
+                                        sx={{ fontWeight: 800 }}
+                                      />
+
+                                      <Chip
+                                        label={enabled ? "HABILITADO" : "DESHABILITADO"}
+                                        color={enabled ? "success" : "default"}
+                                        size="small"
+                                        sx={{
+                                          fontWeight: 800,
+                                          minWidth: 110,
+                                        }}
+                                      />
+                                    </Stack>
+                                  </Stack>
+
+                                  {!restaurantActive && (
+                                    <Alert
+                                      severity="warning"
+                                      sx={{
+                                        borderRadius: 1,
+                                        py: 0.5,
+                                        alignItems: "center",
+                                      }}
+                                    >
+                                      <Typography variant="body2">
+                                        Este canal está inactivo a nivel restaurante.
+                                      </Typography>
+                                    </Alert>
+                                  )}
+
+                                  <Stack spacing={1}>
+                                    <Box>
+                                      <Typography sx={mobileLabelSx}>
+                                        Estado en sucursal
+                                      </Typography>
+
+                                      <Stack
+                                        direction="row"
+                                        alignItems="center"
+                                        spacing={1}
+                                        sx={{ mt: 0.5 }}
+                                      >
+                                        {enabled ? (
+                                          <CheckCircleIcon
+                                            sx={{ fontSize: 18, color: "success.main" }}
+                                          />
+                                        ) : (
+                                          <BlockIcon
+                                            sx={{ fontSize: 18, color: "text.secondary" }}
+                                          />
+                                        )}
+
+                                        <Typography sx={mobileValueSx}>
+                                          {enabled ? "Activo para esta sucursal" : "No disponible en esta sucursal"}
+                                        </Typography>
+
+                                        {busy && (
+                                          <CircularProgress size={16} color="primary" />
+                                        )}
+                                      </Stack>
+                                    </Box>
+
+                                    <Stack spacing={1.25}>
+                                      <Box
+                                        sx={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "flex-start",
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <FormControlLabel
+                                          sx={{
+                                            m: 0,
+                                            minWidth: 0,
+                                            "& .MuiFormControlLabel-label": {
+                                              minWidth: 0,
+                                            },
+                                          }}
+                                          control={
+                                            <Switch
+                                              checked={enabled}
+                                              disabled={busy || !restaurantActive}
+                                              onChange={() => onToggle(r)}
+                                              color="primary"
+                                            />
+                                          }
+                                          label={
+                                            <Typography sx={switchLabelSx}>
+                                              {enabled ? "Activo" : "Inactivo"}
+                                            </Typography>
+                                          }
+                                        />
+                                      </Box>
+
+                                      <Button
+                                        onClick={() => onConfig(r)}
+                                        variant="contained"
+                                        color="secondary"
+                                        startIcon={<SettingsIcon />}
+                                        disabled={br?.effective_is_active !== true}
+                                        fullWidth
+                                        sx={{
+                                          height: 42,
+                                          fontSize: 13,
+                                          fontWeight: 800,
+                                          whiteSpace: "normal",
+                                          textAlign: "center",
+                                          lineHeight: 1.2,
+                                          px: 1.75,
+                                        }}
+                                      >
+                                        Configurar productos
+                                      </Button>
+                                    </Stack>
+                                  </Stack>
+                                </Stack>
+                              </Box>
+                            </Card>
+                          );
+                        })}
+                      </Stack>
+                    ) : (
+                      <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                        <Table sx={{ minWidth: 980 }}>
+                          <TableHead>
+                            <TableRow
+                              sx={{
+                                "& th": {
+                                  backgroundColor: "primary.main",
+                                  color: "#fff",
+                                  fontWeight: 800,
+                                  fontSize: 13,
+                                  borderBottom: "none",
+                                  whiteSpace: "nowrap",
+                                },
+                              }}
+                            >
+                              <TableCell>Canal</TableCell>
+                              <TableCell>Code</TableCell>
+                              <TableCell>Estado restaurante</TableCell>
+                              <TableCell>Estado sucursal</TableCell>
+                              <TableCell align="center">Activo</TableCell>
+                              <TableCell align="right">Acciones</TableCell>
+                            </TableRow>
+                          </TableHead>
+
+                          <TableBody>
+                            {paginatedItems.map((r) => {
+                              const ch = r?.sales_channel;
+                              const br = r?.branch;
+
+                              const restaurantActive = ch?.status === "active";
+                              const enabled = !!br?.effective_is_active;
+                              const busy = isSaving(ch?.id);
+
+                              return (
+                                <TableRow
+                                  key={ch?.id}
+                                  hover
+                                  sx={{
+                                    "& td": {
+                                      borderBottom: "1px solid",
+                                      borderColor: "divider",
+                                      fontSize: 14,
+                                      color: "text.primary",
+                                      whiteSpace: "nowrap",
+                                    },
+                                  }}
+                                >
+                                  <TableCell>
+                                    <Stack spacing={0.5}>
+                                      <Typography sx={{ fontWeight: 800 }}>
+                                        {ch?.name || "Canal sin nombre"}
+                                      </Typography>
+
+                                      {!restaurantActive && (
+                                        <Typography
+                                          sx={{
+                                            fontSize: 12,
+                                            color: "text.secondary",
+                                            whiteSpace: "normal",
+                                          }}
+                                        >
+                                          Este canal está inactivo a nivel restaurante.
+                                        </Typography>
+                                      )}
+                                    </Stack>
+                                  </TableCell>
+
+                                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 700 }}>
+                                    {ch?.code || "—"}
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Chip
+                                      label={restaurantActive ? "ACTIVO" : "INACTIVO"}
+                                      color={restaurantActive ? "success" : "default"}
+                                      size="small"
+                                      sx={{
+                                        fontWeight: 800,
+                                        minWidth: 92,
+                                      }}
+                                    />
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <Chip
+                                      label={enabled ? "HABILITADO" : "DESHABILITADO"}
+                                      color={enabled ? "success" : "default"}
+                                      size="small"
+                                      sx={{
+                                        fontWeight: 800,
+                                        minWidth: 120,
+                                      }}
+                                    />
+                                  </TableCell>
+
+                                  <TableCell align="center">
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      justifyContent="center"
+                                      alignItems="center"
+                                    >
+                                      <Switch
+                                        checked={enabled}
+                                        disabled={busy || !restaurantActive}
+                                        onChange={() => onToggle(r)}
+                                        color="primary"
+                                      />
+
+                                      {busy && <CircularProgress size={16} color="primary" />}
+                                    </Stack>
+                                  </TableCell>
+
+                                  <TableCell align="right">
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      justifyContent="flex-end"
+                                      alignItems="center"
+                                      flexWrap="nowrap"
+                                    >
+                                      <Button
+                                        onClick={() => onConfig(r)}
+                                        variant="contained"
+                                        color="secondary"
+                                        startIcon={<SettingsIcon />}
+                                        disabled={br?.effective_is_active !== true}
+                                        sx={{
+                                          height: 36,
+                                          minWidth: 190,
+                                          borderRadius: 2,
+                                          fontSize: 12,
+                                          fontWeight: 800,
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        Configurar productos
+                                      </Button>
+                                    </Stack>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+
+                    <PaginationFooter
+                      page={page}
+                      totalPages={totalPages}
+                      startItem={startItem}
+                      endItem={endItem}
+                      total={total}
+                      hasPrev={hasPrev}
+                      hasNext={hasNext}
+                      onPrev={prevPage}
+                      onNext={nextPage}
+                      itemLabel="canales"
+                    />
+                  </>
+                )}
+              </Paper>
+
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: "text.secondary",
+                  lineHeight: 1.5,
+                }}
+              >
+                Nota: Un canal <strong>Inactivo</strong> a nivel restaurante no puede activarse en sucursales.
+              </Typography>
+            </>
+          )}
+        </Stack>
+      </Box>
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
     </Box>
   );
 }
+
+const fieldLabelSx = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "text.primary",
+  mb: 1,
+};
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+};

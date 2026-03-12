@@ -109,7 +109,7 @@ export default function AppRoutes() {
       <Route element={<OwnerRoute />}>
         <Route path="/owner/restaurants-home" element={<MyRestaurantsHome />} /> 
 
-        {/* OWNER ROUTES */}
+        {/* Menu 1: Principal */}
         <Route path="/owner/restaurants/:restaurantId" element={<RestaurantAdminLayout />}>
 
           <Route path="edit-info" element={<RestaurantEdit />} />
@@ -121,13 +121,25 @@ export default function AppRoutes() {
           <Route path="sales-channels" element={<SalesChannelsPage />} />
         </Route>
 
-
+        {/* Menu 2: Operación */}
         <Route path="/owner/restaurants/:restaurantId/operation" element={<RestaurantOperationLayout />}>
           <Route index element={<Navigate to="staff" replace />} />
           <Route path="staff" element={<StaffPage />} />
 
-          <Route path="branches/:branchId/sales-channels" element={<BranchSalesChannelsPage />} />
+          <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
+          <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
+
         </Route>
+
+
+        <Route
+          path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
+          element={<ChannelProductsConfigPage />}
+        />
+
+
+
+
 
 
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
@@ -146,15 +158,7 @@ export default function AppRoutes() {
           element={<ProductVariantsPage />}
         />
 
-        <Route
-          path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels"
-          element={<BranchSalesChannelsPage />}
-        />
         
-        <Route
-          path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
-          element={<ChannelProductsConfigPage />}
-        />
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
 
