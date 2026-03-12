@@ -1,5 +1,42 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  Paper,
+  Stack,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+
 import { normalizeErr } from "../../utils/err";
+import AppAlert from "../../components/common/AppAlert";
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../../components/common/PaginationFooter";
+
 import {
   getSuppliers,
   createSupplier,
@@ -7,54 +44,94 @@ import {
   deleteSupplier,
 } from "../../services/inventory/suppliers/suppliers.service";
 
-function pill(bg, border) {
-  return {
-    fontSize: 12,
-    padding: "2px 8px",
-    borderRadius: 999,
-    background: bg,
-    border: `1px solid ${border}`,
-    fontWeight: 900,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-  };
-}
+import SupplierUpsertModal from "./SupplierUpsertModal";
 
-export default function SupplierWizard({ open, restaurantId, onClose, onChanged, preselectId }) {
+const PAGE_SIZE = 5;
+
+export default function SupplierWizard({
+  open,
+  restaurantId,
+  onClose,
+  onChanged,
+  preselectId,
+}) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
   const [rows, setRows] = useState([]);
-  const [q, setQ] = useState("");
-  const [onlyActive, setOnlyActive] = useState(false);
 
-  const [editingId, setEditingId] = useState(null);
+  const [savingMap, setSavingMap] = useState({});
+  const [reqTick, setReqTick] = useState(0);
 
-  // form
-  const isEdit = !!editingId;
-  const [name, setName] = useState("");
-  const [contact_name, setContactName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("active");
-  const [saving, setSaving] = useState(false);
+  const [upsertOpen, setUpsertOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
 
   const reqRef = useRef(0);
 
-  const load = async ({ initial = false } = {}) => {
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  const setSaving = (supplierId, value) => {
+    setSavingMap((prev) => ({ ...prev, [supplierId]: value }));
+  };
+
+  const isSaving = (supplierId) => !!savingMap[supplierId];
+
+  const title = useMemo(() => "Administrar proveedores", []);
+
+  const load = async () => {
     const myReq = ++reqRef.current;
-    setErr("");
-    if (initial) setLoading(true);
+    setLoading(true);
 
     try {
-      const res = await getSuppliers(restaurantId, { only_active: onlyActive, q });
+      const res = await getSuppliers(restaurantId, {
+        only_active: false,
+        q: "",
+      });
+
       if (myReq !== reqRef.current) return;
-      setRows(res?.data || []);
+
+      const data = Array.isArray(res?.data) ? res.data : [];
+      setRows(data);
+
+      if (preselectId) {
+        const picked = data.find((item) => Number(item.id) === Number(preselectId));
+        if (picked) {
+          setEditing(picked);
+        }
+      }
     } catch (e) {
       if (myReq !== reqRef.current) return;
-      setErr(normalizeErr(e, "No se pudieron cargar proveedores"));
+
+      setRows([]);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudieron cargar los proveedores"),
+      });
     } finally {
       if (myReq !== reqRef.current) return;
       setLoading(false);
@@ -63,267 +140,598 @@ export default function SupplierWizard({ open, restaurantId, onClose, onChanged,
 
   useEffect(() => {
     if (!open) return;
-    load({ initial: true });
-    // eslint-disable-next-line
-  }, [open, restaurantId]);
+    setEditing(null);
+    setUpsertOpen(false);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, restaurantId, reqTick]);
 
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => load({ initial: false }), 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line
-  }, [q, onlyActive]);
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: rows,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
 
-  useEffect(() => {
-    if (!open) return;
-    setErr("");
-
-    // preselección opcional
-    if (preselectId && rows.length) {
-      const r = rows.find((x) => x.id === Number(preselectId));
-      if (r) startEdit(r);
-    }
-    // eslint-disable-next-line
-  }, [rows.length]);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setName("");
-    setContactName("");
-    setPhone("");
-    setEmail("");
-    setNotes("");
-    setStatus("active");
+  const openCreate = () => {
+    setEditing(null);
+    setUpsertOpen(true);
   };
 
-  const startEdit = (r) => {
-    setEditingId(r.id);
-    setName(r.name || "");
-    setContactName(r.contact_name || "");
-    setPhone(r.phone || "");
-    setEmail(r.email || "");
-    setNotes(r.notes || "");
-    setStatus(r.status || "active");
+  const openEdit = (row) => {
+    setEditing(row);
+    setUpsertOpen(true);
   };
 
-  const canSave = useMemo(() => !!name.trim(), [name]);
+  const handleToggleStatus = async (row) => {
+    const supplierId = row?.id;
+    if (!supplierId || isSaving(supplierId)) return;
 
-  const save = async () => {
-    setErr("");
-    if (!canSave) return;
+    const snapshot = rows;
+    const nextStatus = row.status === "active" ? "inactive" : "active";
 
-    const payload = {
-      name: name.trim(),
-      contact_name: contact_name.trim() || null,
-      phone: phone.trim() || null,
-      email: email.trim() || null,
-      notes: notes.trim() || null,
-      status,
-    };
+    setRows((prev) =>
+      prev.map((item) =>
+        item.id === supplierId ? { ...item, status: nextStatus } : item
+      )
+    );
+    setSaving(supplierId, true);
 
-    setSaving(true);
     try {
-      if (isEdit) {
-        await updateSupplier(restaurantId, editingId, payload);
-      } else {
-        await createSupplier(restaurantId, payload);
-      }
-      await load({ initial: false });
+      await updateSupplier(restaurantId, supplierId, {
+        name: row.name,
+        contact_name: row.contact_name || null,
+        phone: row.phone || null,
+        email: row.email || null,
+        notes: row.notes || null,
+        status: nextStatus,
+      });
+
       await onChanged?.();
-      resetForm();
     } catch (e) {
-      setErr(normalizeErr(e, "No se pudo guardar proveedor"));
+      setRows(snapshot);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudo actualizar el estado"),
+      });
     } finally {
-      setSaving(false);
+      setSaving(supplierId, false);
     }
   };
 
-  const remove = async (r) => {
-    setErr("");
-    const ok = confirm(`¿Eliminar proveedor?\n\n${r.name}\n\nOjo: si está ligado a presentaciones, se quedarán con “Falta elegir proveedor”.`);
+  const remove = async (row) => {
+    const ok = window.confirm(
+      `¿Eliminar proveedor?\n\n${row.name}\n\nOjo: si está ligado a presentaciones, se quedarán con “Falta elegir proveedor”.`
+    );
     if (!ok) return;
 
+    const snapshot = rows;
+    setRows((prev) => prev.filter((item) => item.id !== row.id));
+
     try {
-      await deleteSupplier(restaurantId, r.id);
-      await load({ initial: false });
+      await deleteSupplier(restaurantId, row.id);
+
       await onChanged?.();
-      if (editingId === r.id) resetForm();
+
+      showAlert({
+        severity: "success",
+        title: "Hecho",
+        message: "Proveedor eliminado correctamente.",
+      });
     } catch (e) {
-      setErr(normalizeErr(e, "No se pudo eliminar proveedor"));
+      setRows(snapshot);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudo eliminar proveedor"),
+      });
     }
   };
 
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 12000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div style={{ width: "min(980px, 100%)", background: "#fff", borderRadius: 14, border: "1px solid #eee" }}>
-        {/* Header */}
-        <div style={{ padding: 14, borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Proveedores</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Administra proveedores del restaurante.</div>
-          </div>
-          <button onClick={onClose} style={{ padding: "8px 10px", cursor: "pointer" }}>✕</button>
-        </div>
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        fullWidth
+        maxWidth="lg"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
+          }}
+        >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
+                }}
+              >
+                {title}
+              </Typography>
 
-        <div style={{ padding: 14, display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
-          {/* Left: list */}
-          <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ padding: 12, borderBottom: "1px solid #eee", background: "#fafafa", display: "flex", gap: 10, alignItems: "center" }}>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar proveedor…"
-                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid #ddd" }}
-              />
-              <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 800, fontSize: 13 }}>
-                <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />
-                Solo activos
-              </label>
-            </div>
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                Crea, edita y controla el estado de los proveedores que usarán tus ingredientes y presentaciones.
+              </Typography>
+            </Box>
 
-            {err && (
-              <div style={{ margin: 12, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line", borderRadius: 10 }}>
-                <strong>Error:</strong> {err}
-              </div>
-            )}
+            <IconButton
+              onClick={onClose}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-            {loading ? (
-              <div style={{ padding: 14 }}>Cargando proveedores…</div>
-            ) : rows.length === 0 ? (
-              <div style={{ padding: 14, opacity: 0.8 }}>No hay proveedores todavía.</div>
-            ) : (
-              <div style={{ maxHeight: 420, overflow: "auto" }}>
-                {rows.map((r) => (
-                  <div
-                    key={r.id}
-                    style={{
-                      padding: 12,
-                      borderBottom: "1px solid #f0f0f0",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      background: editingId === r.id ? "#f7f7ff" : "#fff",
+        <DialogContent
+          sx={{
+            p: { xs: 2, sm: 3 },
+            bgcolor: "background.default",
+          }}
+        >
+          <Card
+            sx={{
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Stack spacing={2.5}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={2}
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: { xs: 18, sm: 20 },
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      Catálogo de proveedores
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontSize: 14,
+                        color: "text.secondary",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Aquí puedes registrar proveedores y definir cuáles estarán disponibles para futuras compras.
+                    </Typography>
+                  </Box>
+
+                  <Button
+                    onClick={openCreate}
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 190 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, display: "flex", gap: 8, alignItems: "center" }}>
-                        {r.name}
-                        {r.status === "active" ? (
-                          <span style={pill("#e8f5e9", "#c8e6c9")}>Activo</span>
-                        ) : (
-                          <span style={pill("#ffe5e5", "#ffb3b3")}>Inactivo</span>
-                        )}
-                      </div>
-                      <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {r.phone || "—"} · {r.email || "—"}
-                      </div>
-                    </div>
+                    Nuevo proveedor
+                  </Button>
+                </Stack>
 
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => startEdit(r)} style={{ padding: "8px 10px", cursor: "pointer" }} title="Editar">
-                        ✏️
-                      </button>
-                      <button onClick={() => remove(r)} style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }} title="Eliminar">
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ padding: 10, borderTop: "1px solid #eee" }}>
-              <button
-                onClick={() => load({ initial: false })}
-                style={{ width: "100%", padding: "10px 12px", cursor: "pointer", borderRadius: 10, border: "1px solid #eee", background: "#f7f7f7", fontWeight: 900 }}
-              >
-                ↻ Recargar
-              </button>
-            </div>
-          </div>
-
-          {/* Right: form */}
-          <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 10 }}>
-              {isEdit ? "Editar proveedor" : "Nuevo proveedor"}
-            </div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Nombre *</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }} />
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Contacto</label>
-                <input value={contact_name} onChange={(e) => setContactName(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }} />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={{ fontWeight: 900, fontSize: 13 }}>Teléfono</label>
-                  <input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }} />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={{ fontWeight: 900, fontSize: 13 }}>Email</label>
-                  <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }} />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Notas</label>
-                <input value={notes} onChange={(e) => setNotes(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }} />
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Estado</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: 10, borderRadius: 10, border: "1px solid #ddd" }}>
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button onClick={resetForm} style={{ padding: "10px 12px", cursor: "pointer" }}>
-                  Limpiar
-                </button>
-                <button
-                  onClick={save}
-                  disabled={!canSave || saving}
-                  style={{
-                    padding: "10px 12px",
-                    cursor: !canSave || saving ? "not-allowed" : "pointer",
-                    background: "#111",
-                    color: "#fff",
-                    fontWeight: 900,
-                    borderRadius: 10,
-                    border: "1px solid #111",
-                    opacity: !canSave || saving ? 0.6 : 1,
+                <Paper
+                  sx={{
+                    p: 0,
+                    overflow: "hidden",
+                    borderRadius: 0,
+                    backgroundColor: "background.paper",
                   }}
                 >
-                  {saving ? "Guardando…" : "Guardar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+                  {loading ? (
+                    <Box
+                      sx={{
+                        minHeight: 240,
+                        display: "grid",
+                        placeItems: "center",
+                        px: 2,
+                      }}
+                    >
+                      <Stack spacing={2} alignItems="center">
+                        <CircularProgress color="primary" />
+                        <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+                          Cargando proveedores…
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  ) : rows.length === 0 ? (
+                    <Box
+                      sx={{
+                        px: 3,
+                        py: 5,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 20,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        No hay proveedores registrados
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          color: "text.secondary",
+                          fontSize: 14,
+                        }}
+                      >
+                        Crea tu primer proveedor para comenzar a asignarlo a presentaciones.
+                      </Typography>
+
+                      <Button
+                        onClick={openCreate}
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        sx={{
+                          mt: 2.5,
+                          minWidth: 220,
+                          height: 44,
+                          borderRadius: 2,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Nuevo proveedor
+                      </Button>
+                    </Box>
+                  ) : (
+                    <>
+                      {isMobile ? (
+                        <Stack spacing={1.5} sx={{ p: 2 }}>
+                          {paginatedItems.map((r) => {
+                            const active = r.status === "active";
+                            const busy = isSaving(r.id);
+
+                            return (
+                              <Card
+                                key={r.id}
+                                sx={{
+                                  borderRadius: 1,
+                                  boxShadow: "none",
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  backgroundColor: "#fff",
+                                }}
+                              >
+                                <Box sx={{ p: 2 }}>
+                                  <Stack spacing={1.5}>
+                                    <Stack
+                                      direction="row"
+                                      justifyContent="space-between"
+                                      alignItems="flex-start"
+                                      spacing={1}
+                                    >
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                          sx={{
+                                            fontSize: 15,
+                                            fontWeight: 800,
+                                            color: "text.primary",
+                                            lineHeight: 1.3,
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {r.name}
+                                        </Typography>
+
+                                        <Typography
+                                          sx={{
+                                            mt: 0.5,
+                                            fontSize: 13,
+                                            color: "text.secondary",
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {r.phone || "Sin teléfono"}
+                                        </Typography>
+                                      </Box>
+                                    </Stack>
+
+                                    <Stack spacing={1.25}>
+                                      <Box
+                                        sx={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "flex-start",
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <FormControlLabel
+                                          sx={{
+                                            m: 0,
+                                            minWidth: 0,
+                                            "& .MuiFormControlLabel-label": {
+                                              minWidth: 0,
+                                            },
+                                          }}
+                                          control={
+                                            <Switch
+                                              checked={active}
+                                              onChange={() => handleToggleStatus(r)}
+                                              disabled={busy}
+                                              color="primary"
+                                            />
+                                          }
+                                          label={
+                                            <Typography sx={switchLabelSx}>
+                                              {active ? "Activo" : "Inactivo"}
+                                            </Typography>
+                                          }
+                                        />
+                                      </Box>
+
+                                      <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                      >
+                                        <Tooltip title="Editar">
+                                          <IconButton
+                                            onClick={() => openEdit(r)}
+                                            sx={iconEditSx}
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+
+                                        <Tooltip title="Eliminar">
+                                          <IconButton
+                                            onClick={() => remove(r)}
+                                            sx={iconDeleteSx}
+                                          >
+                                            <DeleteOutlineIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Stack>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                              </Card>
+                            );
+                          })}
+                        </Stack>
+                      ) : (
+                        <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                          <Table sx={{ minWidth: 820 }}>
+                            <TableHead>
+                              <TableRow
+                                sx={{
+                                  "& th": {
+                                    backgroundColor: "primary.main",
+                                    color: "#fff",
+                                    fontWeight: 800,
+                                    fontSize: 13,
+                                    borderBottom: "none",
+                                    whiteSpace: "nowrap",
+                                  },
+                                }}
+                              >
+                                <TableCell>Nombre</TableCell>
+                                <TableCell>Teléfono</TableCell>
+                                <TableCell align="center">Estado</TableCell>
+                                <TableCell align="right">Acciones</TableCell>
+                              </TableRow>
+                            </TableHead>
+
+                            <TableBody>
+                              {paginatedItems.map((r) => {
+                                const active = r.status === "active";
+                                const busy = isSaving(r.id);
+
+                                return (
+                                  <TableRow
+                                    key={r.id}
+                                    hover
+                                    sx={{
+                                      "& td": {
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                        fontSize: 14,
+                                        color: "text.primary",
+                                        whiteSpace: "nowrap",
+                                      },
+                                    }}
+                                  >
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 800 }}>
+                                        {r.name}
+                                      </Typography>
+                                    </TableCell>
+
+                                    <TableCell>{r.phone || "—"}</TableCell>
+
+                                    <TableCell align="center">
+                                      <FormControlLabel
+                                        sx={{ m: 0 }}
+                                        control={
+                                          <Switch
+                                            checked={active}
+                                            onChange={() => handleToggleStatus(r)}
+                                            disabled={busy}
+                                            color="primary"
+                                          />
+                                        }
+                                        label={
+                                          <Typography sx={switchLabelSx}>
+                                            {active ? "Activo" : "Inactivo"}
+                                          </Typography>
+                                        }
+                                      />
+                                    </TableCell>
+
+                                    <TableCell align="right">
+                                      <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        justifyContent="flex-end"
+                                        alignItems="center"
+                                        flexWrap="nowrap"
+                                      >
+                                        <Tooltip title="Editar">
+                                          <IconButton
+                                            onClick={() => openEdit(r)}
+                                            sx={iconEditSx}
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+
+                                        <Tooltip title="Eliminar">
+                                          <IconButton
+                                            onClick={() => remove(r)}
+                                            sx={iconDeleteSx}
+                                          >
+                                            <DeleteOutlineIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Stack>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+
+                      <PaginationFooter
+                        page={page}
+                        totalPages={totalPages}
+                        startItem={startItem}
+                        endItem={endItem}
+                        total={total}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={prevPage}
+                        onNext={nextPage}
+                        itemLabel="proveedores"
+                      />
+                    </>
+                  )}
+                </Paper>
+              </Stack>
+            </CardContent>
+          </Card>
+        </DialogContent>
+      </Dialog>
+
+      <SupplierUpsertModal
+        open={upsertOpen}
+        onClose={() => setUpsertOpen(false)}
+        restaurantId={restaurantId}
+        editing={editing}
+        onSaved={async () => {
+          setUpsertOpen(false);
+          setEditing(null);
+          setReqTick((prev) => prev + 1);
+          await onChanged?.();
+        }}
+        api={{
+          createSupplier,
+          updateSupplier,
+        }}
+      />
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </>
   );
 }
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+};

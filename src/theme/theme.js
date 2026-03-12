@@ -294,12 +294,32 @@ const theme = createTheme({
     },
 
     MuiMenu: {
+      defaultProps: {
+        MenuListProps: {
+          sx: {
+            py: 0.5,
+          },
+        },
+        PaperProps: {
+          sx: {
+            borderRadius: 1,
+            maxHeight: 48 * 5 + 8,
+            overflowY: "auto",
+          },
+        },
+      },
       styleOverrides: {
         paper: {
-          borderRadius: 1
-        }
-      }
-    }
+          borderRadius: 1,
+          maxHeight: 48 * 5 + 8,
+          overflowY: "auto",
+        },
+        list: {
+          paddingTop: 4,
+          paddingBottom: 4,
+        },
+      },
+    },
 
   },
 });

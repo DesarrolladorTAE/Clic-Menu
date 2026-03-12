@@ -1,10 +1,25 @@
 // src/components/inventory/ingredients/IngredientFormModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Box, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogTitle, FormControl,
+  FormControlLabel, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography,
+  useMediaQuery, Alert,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import SaveIcon from "@mui/icons-material/Save";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+
+import AppAlert from "../../components/common/AppAlert";
+
 import { normalizeErr } from "../../utils/err";
-
 import { getIngredientGroups } from "../../services/inventory/ingredients/ingredientsGroups.service";
-
 import IngredientGroupWizard from "./IngredientsGroupWizard";
+
 
 const UNITS = [
   { value: "g", label: "g (gramos)" },
@@ -18,12 +33,21 @@ export default function IngredientFormModal({
   restaurantId,
   editRow,
   onSaved,
-  api, // api.createIngredient / api.updateIngredient
+  api,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const isEdit = !!editRow?.id;
 
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -34,22 +58,39 @@ export default function IngredientFormModal({
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [openGroupWizard, setOpenGroupWizard] = useState(false);
 
-  const [waste_percentage, setWaste] = useState("");
-  const [is_stock_item, setIsStock] = useState(true);
+  const [wastePercentage, setWastePercentage] = useState("");
+  const [isStockItem, setIsStockItem] = useState(true);
   const [status, setStatus] = useState("active");
 
-  // anti race conditions
   const reqRef = useRef(0);
 
-  // ---------- Load groups on open ----------
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
   const loadGroups = async () => {
     const myReq = ++reqRef.current;
     setGroupsLoading(true);
+
     try {
       const res = await getIngredientGroups(restaurantId);
       if (myReq !== reqRef.current) return;
       setGroups(res?.data || []);
-    } catch (e) {
+    } catch {
       if (myReq !== reqRef.current) return;
       setGroups([]);
     } finally {
@@ -60,42 +101,36 @@ export default function IngredientFormModal({
 
   useEffect(() => {
     if (!open) return;
-    setErr("");
     loadGroups();
     // eslint-disable-next-line
   }, [open, restaurantId]);
 
-  // ---------- Set form state on open / edit ----------
   useEffect(() => {
     if (!open) return;
-    setErr("");
 
     if (isEdit) {
       setCode(editRow.code || "");
       setName(editRow.name || "");
       setUnit(editRow.unit || "g");
-
-      // 👇 ahora es FK
-      setIngredientGroupId(editRow.ingredient_group_id ? String(editRow.ingredient_group_id) : "");
-
-      setWaste(editRow.waste_percentage ?? "");
-      setIsStock(!!editRow.is_stock_item);
+      setIngredientGroupId(
+        editRow.ingredient_group_id ? String(editRow.ingredient_group_id) : ""
+      );
+      setWastePercentage(editRow.waste_percentage ?? "");
+      setIsStockItem(!!editRow.is_stock_item);
       setStatus(editRow.status || "active");
     } else {
       setCode("");
       setName("");
       setUnit("g");
       setIngredientGroupId("");
-      setWaste("");
-      setIsStock(true);
+      setWastePercentage("");
+      setIsStockItem(true);
       setStatus("active");
     }
-    // eslint-disable-next-line
-  }, [open, editRow?.id]);
+  }, [open, isEdit, editRow]);
 
-  // ---------- Preconditions ----------
   const hasGroups = useMemo(() => {
-    if (groupsLoading) return true; // mientras carga no bloquees por "0"
+    if (groupsLoading) return true;
     return Array.isArray(groups) && groups.length > 0;
   }, [groups, groupsLoading]);
 
@@ -109,15 +144,23 @@ export default function IngredientFormModal({
 
   const title = isEdit ? "Editar ingrediente" : "Nuevo ingrediente";
 
-  // ---------- Save ----------
   const save = async () => {
-    setErr("");
-
     if (!hasGroups) {
-      return setErr("No hay grupos. Crea un grupo primero (botón +).");
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "No hay grupos. Crea un grupo primero con el botón +.",
+      });
+      return;
     }
+
     if (!ingredientGroupId) {
-      return setErr("Selecciona un grupo.");
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "Selecciona un grupo.",
+      });
+      return;
     }
 
     const payload = {
@@ -125,23 +168,47 @@ export default function IngredientFormModal({
       name: name.trim(),
       unit,
       ingredient_group_id: Number(ingredientGroupId),
-      is_stock_item: !!is_stock_item,
-      waste_percentage: waste_percentage === "" ? null : Number(waste_percentage),
+      is_stock_item: !!isStockItem,
+      waste_percentage:
+        wastePercentage === "" ? null : Number(wastePercentage),
       status,
     };
 
     if (!Number.isFinite(payload.ingredient_group_id)) {
-      return setErr("Grupo inválido.");
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Grupo inválido.",
+      });
+      return;
     }
 
-    if (payload.waste_percentage !== null && !Number.isFinite(payload.waste_percentage)) {
-      return setErr("Merma inválida.");
+    if (
+      payload.waste_percentage !== null &&
+      !Number.isFinite(payload.waste_percentage)
+    ) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Merma inválida.",
+      });
+      return;
     }
-    if (payload.waste_percentage !== null && (payload.waste_percentage < 0 || payload.waste_percentage > 100)) {
-      return setErr("Merma debe estar entre 0 y 100.");
+
+    if (
+      payload.waste_percentage !== null &&
+      (payload.waste_percentage < 0 || payload.waste_percentage > 100)
+    ) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "La merma debe estar entre 0 y 100.",
+      });
+      return;
     }
 
     setSaving(true);
+
     try {
       if (isEdit) {
         await api.updateIngredient(restaurantId, editRow.id, payload);
@@ -152,7 +219,11 @@ export default function IngredientFormModal({
       await onSaved?.();
       onClose?.();
     } catch (e) {
-      setErr(normalizeErr(e, "No se pudo guardar"));
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudo guardar"),
+      });
     } finally {
       setSaving(false);
     }
@@ -161,232 +232,486 @@ export default function IngredientFormModal({
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 10000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div style={{ width: "min(720px, 100%)", background: "#fff", borderRadius: 14, border: "1px solid #eee" }}>
-        {/* Header */}
-        <div
-          style={{
-            padding: 14,
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
+    <>
+      <Dialog
+        open={open}
+        onClose={saving ? undefined : onClose}
+        fullWidth
+        maxWidth="md"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Restaurante: <strong>{restaurantId}</strong>
-              {groupsLoading && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.65 }}>cargando grupos…</span>}
-            </div>
-          </div>
-
-          <button onClick={onClose} style={{ padding: "8px 10px", cursor: "pointer" }} title="Cerrar">
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: 14 }}>
-          {err && (
-            <div style={{ marginBottom: 12, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line", borderRadius: 10 }}>
-              <strong>Error:</strong> {err}
-            </div>
-          )}
-
-          {!groupsLoading && groups.length === 0 && (
-            <div style={{ marginBottom: 12, background: "#fff3cd", border: "1px solid #ffeeba", padding: 10, borderRadius: 10 }}>
-              No hay grupos de ingredientes. Primero crea uno con el botón <strong>+</strong>.
-            </div>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 900, fontSize: 13 }}>Nombre *</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej. Queso"
-                style={{ padding: "10px 10px", borderRadius: 10, border: "1px solid #ddd" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 900, fontSize: 13 }}>Clave (opcional)</label>
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Ej. QSO001"
-                style={{ padding: "10px 10px", borderRadius: 10, border: "1px solid #ddd" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 900, fontSize: 13 }}>Unidad base *</label>
-              <select
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                style={{ padding: "10px 10px", borderRadius: 10, border: "1px solid #ddd" }}
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
+                }}
               >
-                {UNITS.map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {title}
+              </Typography>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 900, fontSize: 13 }}>Grupo *</label>
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                {isEdit
+                  ? "Actualiza la información principal del ingrediente."
+                  : "Crea un nuevo ingrediente y asígnale un grupo desde el inicio."}
+              </Typography>
+            </Box>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <select
-                  value={ingredientGroupId}
-                  onChange={(e) => setIngredientGroupId(e.target.value)}
-                  disabled={groupsLoading || groups.length === 0}
-                  style={{
-                    flex: 1,
-                    padding: "10px",
-                    borderRadius: 10,
-                    border: "1px solid #ddd",
-                    background: groupsLoading ? "#fafafa" : "#fff",
-                  }}
-                >
-                  <option value="">
-                    {groupsLoading ? "Cargando grupos..." : groups.length === 0 ? "No hay grupos" : "Selecciona un grupo"}
-                  </option>
-
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} {g.status === "inactive" ? "(Inactivo)" : ""}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  onClick={() => setOpenGroupWizard(true)}
-                  title="Administrar grupos"
-                  style={{
-                    padding: "0 14px",
-                    borderRadius: 10,
-                    border: "1px solid #ddd",
-                    background: "#fafafa",
-                    fontWeight: 900,
-                    cursor: "pointer",
-                  }}
-                >
-                  +
-                </button>
-              </div>
-
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                El grupo viene de <code>ingredient_groups</code>. Si no existe, debes crearlo.
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 900, fontSize: 13 }}>Merma (%)</label>
-              <input
-                value={waste_percentage}
-                onChange={(e) => setWaste(e.target.value)}
-                placeholder="Ej. 5"
-                inputMode="decimal"
-                style={{ padding: "10px 10px", borderRadius: 10, border: "1px solid #ddd" }}
-              />
-              <div style={{ fontSize: 12, opacity: 0.7 }}>0 a 100. Si lo dejas vacío, queda NULL.</div>
-            </div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900 }}>
-                <input type="checkbox" checked={is_stock_item} onChange={(e) => setIsStock(e.target.checked)} />
-                Inventariable
-              </label>
-
-              <div style={{ display: "grid", gap: 8 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Estado</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  style={{ padding: "10px 10px", borderRadius: 10, border: "1px solid #ddd" }}
-                >
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={onClose} style={{ padding: "10px 12px", cursor: "pointer" }}>
-              Cancelar
-            </button>
-
-            <button
-              onClick={save}
-              disabled={!canSave || saving}
-              style={{
-                padding: "10px 12px",
-                cursor: !canSave || saving ? "not-allowed" : "pointer",
-                background: "#111",
+            <IconButton
+              onClick={onClose}
+              disabled={saving}
+              sx={{
                 color: "#fff",
-                fontWeight: 900,
-                borderRadius: 10,
-                border: "1px solid #111",
-                opacity: !canSave || saving ? 0.6 : 1,
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
               }}
-              title={!hasGroups ? "Primero crea un grupo" : !ingredientGroupId ? "Selecciona un grupo" : "Guardar"}
             >
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-          {isEdit && (
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-              Nota: <code>last_cost</code> y <code>avg_cost</code> no se editan aquí. Se calculan con compras reales.
-            </div>
-          )}
-        </div>
-      </div>
+        <DialogContent
+          sx={{
+            p: { xs: 2, sm: 3 },
+            bgcolor: "background.default",
+          }}
+        >
+          <Stack spacing={2.5}>
+            {!groupsLoading && groups.length === 0 && (
+              <Alert
+                severity="warning"
+                sx={{
+                  borderRadius: 1,
+                  alignItems: "flex-start",
+                }}
+              >
+                <Box>
+                  <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                    Sin grupos disponibles
+                  </Typography>
+                  <Typography variant="body2">
+                    Primero crea un grupo de ingredientes con el botón + para poder guardar.
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
 
-      {/* Wizard real */}
+            <Card
+              sx={{
+                borderRadius: 0,
+                backgroundColor: "background.paper",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2.5}>
+                  <Typography
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: { xs: 18, sm: 20 },
+                      color: "text.primary",
+                    }}
+                  >
+                    Datos del ingrediente
+                  </Typography>
+
+                  <Stack spacing={2}>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <FieldBlock
+                        label="Nombre *"
+                        input={
+                          <TextField
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Ej. Queso"
+                          />
+                        }
+                      />
+
+                      <FieldBlock
+                        label="Clave (opcional)"
+                        input={
+                          <TextField
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            placeholder="Ej. QSO001"
+                          />
+                        }
+                      />
+                    </Stack>
+
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <FieldBlock
+                        label="Unidad base *"
+                        input={
+                          <FormControl fullWidth>
+                            <Select
+                              value={unit}
+                              onChange={(e) => setUnit(e.target.value)}
+                              IconComponent={KeyboardArrowDownIcon}
+                              sx={selectSx}
+                            >
+                              {UNITS.map((u) => (
+                                <MenuItem key={u.value} value={u.value}>
+                                  {u.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        }
+                      />
+
+                      <FieldBlock
+                        label="Grupo *"
+                        help="El grupo viene de ingredient_groups. Si no existe, debes crearlo."
+                        input={
+                          <Stack direction="row" spacing={1}>
+                            <FormControl fullWidth>
+                              <Select
+                                value={ingredientGroupId}
+                                onChange={(e) => setIngredientGroupId(e.target.value)}
+                                disabled={groupsLoading || groups.length === 0}
+                                displayEmpty
+                                IconComponent={KeyboardArrowDownIcon}
+                                sx={selectSx}
+                              >
+                                <MenuItem value="">
+                                  {groupsLoading
+                                    ? "Cargando grupos..."
+                                    : groups.length === 0
+                                    ? "No hay grupos"
+                                    : "Selecciona un grupo"}
+                                </MenuItem>
+
+                                {groups.map((g) => (
+                                  <MenuItem key={g.id} value={String(g.id)}>
+                                    {g.name} {g.status === "inactive" ? "(Inactivo)" : ""}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+
+                            <Tooltip title="Administrar grupos">
+                              <IconButton
+                                type="button"
+                                onClick={() => setOpenGroupWizard(true)}
+                                sx={{
+                                  width: 44,
+                                  height: 44,
+                                  borderRadius: 1.5,
+                                  border: "1px solid",
+                                  borderColor: "primary.main",
+                                  bgcolor: "primary.main",
+                                  color: "#fff",
+                                  flexShrink: 0,
+                                  "&:hover": {
+                                    bgcolor: "primary.dark",
+                                    borderColor: "primary.dark",
+                                  },
+                                  "&:disabled": {
+                                    bgcolor: "action.disabledBackground",
+                                    borderColor: "action.disabledBackground",
+                                    color: "action.disabled",
+                                  },
+                                }}
+                              >
+                                <AddIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        }
+                      />
+                    </Stack>
+
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <FieldBlock
+                        label="Merma (%)"
+                        help="Valor entre 0 y 100. Si lo dejas vacío, quedará como NULL."
+                        input={
+                          <TextField
+                            value={wastePercentage}
+                            onChange={(e) => setWastePercentage(e.target.value)}
+                            placeholder="Ej. 5"
+                            inputProps={{ inputMode: "decimal" }}
+                          />
+                        }
+                      />
+
+                      {!isEdit ? (
+                        <FieldBlock
+                          label="Estado"
+                          input={
+                            <FormControl fullWidth>
+                              <Select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                IconComponent={KeyboardArrowDownIcon}
+                                sx={selectSx}
+                              >
+                                <MenuItem value="active">Activo</MenuItem>
+                                <MenuItem value="inactive">Inactivo</MenuItem>
+                              </Select>
+                            </FormControl>
+                          }
+                        />
+                      ) : (
+                        <Box sx={{ flex: 1, width: "100%" }}>
+                          <Typography
+                            sx={{
+                              fontSize: 14,
+                              fontWeight: 800,
+                              color: "text.primary",
+                              mb: 1,
+                            }}
+                          >
+                            Inventariable
+                          </Typography>
+
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={!!isStockItem}
+                                onChange={(e) => setIsStockItem(e.target.checked)}
+                                sx={{
+                                  color: "primary.main",
+                                  "&.Mui-checked": {
+                                    color: "primary.main",
+                                  },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                sx={{
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  color: "text.primary",
+                                }}
+                              >
+                                Este ingrediente se controla en inventario
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+                        </Box>
+                      )}
+                    </Stack>
+
+                    {!isEdit && (
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: "text.primary",
+                            mb: 1,
+                          }}
+                        >
+                          Inventariable
+                        </Typography>
+
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={!!isStockItem}
+                              onChange={(e) => setIsStockItem(e.target.checked)}
+                              sx={{
+                                color: "primary.main",
+                                "&.Mui-checked": {
+                                  color: "primary.main",
+                                },
+                              }}
+                            />
+                          }
+                          label={
+                            <Typography
+                              sx={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: "text.primary",
+                              }}
+                            >
+                              Este ingrediente se controla en inventario
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      </Box>
+                    )}
+
+                    {isEdit && (
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          color: "text.secondary",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Nota: <code>last_cost</code> y <code>avg_cost</code> no se editan aquí. Se calculan con compras reales.
+                      </Typography>
+                    )}
+                  </Stack>
+
+                  <Stack
+                    direction={{ xs: "column-reverse", sm: "row" }}
+                    justifyContent="flex-end"
+                    spacing={1.5}
+                    pt={1}
+                  >
+                    <Button
+                      type="button"
+                      onClick={onClose}
+                      disabled={saving}
+                      variant="outlined"
+                      sx={{
+                        minWidth: { xs: "100%", sm: 150 },
+                        height: 44,
+                        borderRadius: 2,
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={save}
+                      disabled={!canSave || saving}
+                      variant="contained"
+                      startIcon={<SaveIcon />}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 180 },
+                        height: 44,
+                        borderRadius: 2,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {saving ? "Guardando…" : "Guardar"}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
       <IngredientGroupWizard
         open={openGroupWizard}
         restaurantId={restaurantId}
         onClose={() => setOpenGroupWizard(false)}
         onChanged={async (evt) => {
-          // recarga grupos para selector
           const res = await getIngredientGroups(restaurantId);
           const next = res?.data || [];
           setGroups(next);
 
-          // auto-select recién creado
           if (evt?.type === "create" && evt?.created?.id) {
             setIngredientGroupId(String(evt.created.id));
           } else {
-            // si el actual fue eliminado, límpialo
-            if (ingredientGroupId && !next.some((g) => String(g.id) === String(ingredientGroupId))) {
+            if (
+              ingredientGroupId &&
+              !next.some((g) => String(g.id) === String(ingredientGroupId))
+            ) {
               setIngredientGroupId("");
             }
           }
         }}
       />
-    </div>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </>
   );
 }
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help && (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+const selectSx = {
+  bgcolor: "#F4F4F4",
+  borderRadius: 0,
+  minHeight: 44,
+  "& .MuiOutlinedInput-notchedOutline": {
+    border: "none",
+  },
+  "&:hover .MuiOutlinedInput-notchedOutline": {
+    border: "none",
+  },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    border: "1.5px solid #FF9800",
+  },
+  "& .MuiSelect-select": {
+    py: 1.25,
+    px: 1.5,
+    fontSize: 14,
+    color: "text.primary",
+  },
+};

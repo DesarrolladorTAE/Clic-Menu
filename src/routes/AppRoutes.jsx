@@ -121,6 +121,7 @@ export default function AppRoutes() {
           <Route path="sales-channels" element={<SalesChannelsPage />} />
         </Route>
 
+
         {/* Menu 2: Operación */}
         <Route path="/owner/restaurants/:restaurantId/operation" element={<RestaurantOperationLayout />}>
           <Route index element={<Navigate to="staff" replace />} />
@@ -129,20 +130,23 @@ export default function AppRoutes() {
           <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
           <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
 
+          <Route path="ingredients" element={<IngredientsPage />} />
+          <Route path="ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
+
+
         </Route>
 
+
+        
 
         <Route
           path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
           element={<ChannelProductsConfigPage />}
         />
-
-
-
-
-
-
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
+
+
+
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
@@ -162,12 +166,7 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
 
-        <Route path="/owner/restaurants/:restaurantId/settings/ingredients" element={<IngredientsPage />} />
-        <Route
-          path="/owner/restaurants/:restaurantId/settings/ingredients/:ingredientId/presentations"
-          element={<IngredientPresentationsPage />}
-        />
-
+        
         <Route path="/owner/restaurants/:restaurantId/products/:productId/recipes" element={<ProductRecipesPage />} />
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/tables" element={<BranchFloorPlanPage />} />

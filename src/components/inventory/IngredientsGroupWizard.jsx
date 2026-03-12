@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Tooltip, Typography, useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+
 import { normalizeErr } from "../../utils/err";
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../../components/common/PaginationFooter";
+import AppAlert from "../../components/common/AppAlert";
+
 import {
   getIngredientGroups,
   createIngredientGroup,
@@ -7,46 +25,81 @@ import {
   deleteIngredientGroup,
 } from "../../services/inventory/ingredients/ingredientsGroups.service";
 
-export default function IngredientGroupWizard({ open, restaurantId, onClose, onChanged }) {
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+import IngredientGroupUpsertModal from "./IngredientGroupUpsertModal";
 
+const PAGE_SIZE = 5;
+
+export default function IngredientGroupWizard({
+  open,
+  restaurantId,
+  onClose,
+  onChanged,
+}) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
 
-  // form (create/edit)
-  const [mode, setMode] = useState("create"); // create | edit
-  const [editId, setEditId] = useState(null);
+  const [savingMap, setSavingMap] = useState({});
+  const [reqTick, setReqTick] = useState(0);
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
-  const [status, setStatus] = useState("active");
+  const [upsertOpen, setUpsertOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
 
-  const [saving, setSaving] = useState(false);
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
 
   const reqRef = useRef(0);
 
-  const resetForm = () => {
-    setMode("create");
-    setEditId(null);
-    setName("");
-    setDescription("");
-    setSortOrder("0");
-    setStatus("active");
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
   };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  const setSaving = (groupId, value) => {
+    setSavingMap((prev) => ({ ...prev, [groupId]: value }));
+  };
+
+  const isSaving = (groupId) => !!savingMap[groupId];
+
+  const title = useMemo(() => "Administrar grupos de ingredientes", []);
 
   const load = async () => {
     const myReq = ++reqRef.current;
-    setErr("");
     setLoading(true);
+
     try {
       const res = await getIngredientGroups(restaurantId);
       if (myReq !== reqRef.current) return;
-      setRows(res?.data || []);
+
+      setRows(Array.isArray(res?.data) ? res.data : []);
     } catch (e) {
       if (myReq !== reqRef.current) return;
-      setErr(normalizeErr(e, "No se pudieron cargar los grupos"));
+
       setRows([]);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudieron cargar los grupos"),
+      });
     } finally {
       if (myReq !== reqRef.current) return;
       setLoading(false);
@@ -55,279 +108,644 @@ export default function IngredientGroupWizard({ open, restaurantId, onClose, onC
 
   useEffect(() => {
     if (!open) return;
-    resetForm();
+    setEditing(null);
+    setUpsertOpen(false);
     load();
-    // eslint-disable-next-line
-  }, [open, restaurantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, restaurantId, reqTick]);
 
-  const canSave = useMemo(() => {
-    if (!name.trim()) return false;
-    const n = Number(sortOrder);
-    if (!Number.isFinite(n) || n < 0) return false;
-    return true;
-  }, [name, sortOrder]);
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: rows,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
 
-  const onPickEdit = (g) => {
-    setErr("");
-    setMode("edit");
-    setEditId(g.id);
-    setName(g.name || "");
-    setDescription(g.description || "");
-    setSortOrder(String(g.sort_order ?? 0));
-    setStatus(g.status || "active");
+  const openCreate = () => {
+    setEditing(null);
+    setUpsertOpen(true);
   };
 
-  const save = async () => {
-    setErr("");
+  const openEdit = (row) => {
+    setEditing(row);
+    setUpsertOpen(true);
+  };
 
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || null,
-      sort_order: Number(sortOrder),
-      status,
-    };
+  const handleToggleStatus = async (row) => {
+    const groupId = row?.id;
+    if (!groupId || isSaving(groupId)) return;
 
-    if (!Number.isFinite(payload.sort_order) || payload.sort_order < 0) {
-      return setErr("sort_order inválido (usa 0 o más).");
-    }
+    const snapshot = rows;
+    const nextStatus = row.status === "active" ? "inactive" : "active";
 
-    setSaving(true);
+    setRows((prev) =>
+      prev.map((item) =>
+        item.id === groupId ? { ...item, status: nextStatus } : item
+      )
+    );
+    setSaving(groupId, true);
+
     try {
-      let created = null;
-
-      if (mode === "create") {
-        const res = await createIngredientGroup(restaurantId, payload);
-        created = res?.data || null;
-      } else {
-        await updateIngredientGroup(restaurantId, editId, payload);
-      }
-
-      await load();
-
-      // notificar afuera (para recargar selector)
-      await onChanged?.({
-        type: mode,
-        created,
+      await updateIngredientGroup(restaurantId, groupId, {
+        name: row.name,
+        description: row.description || null,
+        sort_order: Number(row.sort_order ?? 0),
+        status: nextStatus,
       });
 
-      if (mode === "create") {
-        // Deja el form listo para crear otro
-        resetForm();
-      }
+      await onChanged?.({ type: "update", updatedId: groupId });
     } catch (e) {
-      setErr(normalizeErr(e, "No se pudo guardar el grupo"));
+      setRows(snapshot);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudo actualizar el estado"),
+      });
     } finally {
-      setSaving(false);
+      setSaving(groupId, false);
     }
   };
 
-  const remove = async (g) => {
-    setErr("");
-    const ok = confirm(`¿Eliminar el grupo?\n\n${g.name}\n\nSi hay ingredientes usando este grupo, el backend debería bloquearlo.`);
+  const remove = async (row) => {
+    const ok = window.confirm(
+      `¿Eliminar el grupo?\n\n${row.name}\n\nSi hay ingredientes usando este grupo, el backend debería bloquearlo.`
+    );
     if (!ok) return;
 
+    const snapshot = rows;
+    setRows((prev) => prev.filter((item) => item.id !== row.id));
+
     try {
-      await deleteIngredientGroup(restaurantId, g.id);
-      await load();
-      await onChanged?.({ type: "delete", deletedId: g.id });
-      if (editId === g.id) resetForm();
+      await deleteIngredientGroup(restaurantId, row.id);
+
+      await onChanged?.({
+        type: "delete",
+        deletedId: row.id,
+      });
+
+      showAlert({
+        severity: "success",
+        title: "Hecho",
+        message: "Grupo eliminado correctamente.",
+      });
     } catch (e) {
-      setErr(normalizeErr(e, "No se pudo eliminar"));
+      setRows(snapshot);
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: normalizeErr(e, "No se pudo eliminar"),
+      });
     }
   };
 
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 11000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div style={{ width: "min(980px, 100%)", background: "#fff", borderRadius: 14, border: "1px solid #eee" }}>
-        {/* Header */}
-        <div style={{ padding: 14, borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Grupos de ingredientes</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Administra “Carnes”, “Lácteos”, etc. (Restaurante: <strong>{restaurantId}</strong>)
-            </div>
-          </div>
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        fullWidth
+        maxWidth="lg"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
+          }}
+        >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
+                }}
+              >
+                {title}
+              </Typography>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={resetForm} style={{ padding: "8px 10px", cursor: "pointer" }} title="Nuevo">
-              + Nuevo
-            </button>
-            <button onClick={onClose} style={{ padding: "8px 10px", cursor: "pointer" }}>
-              ✕
-            </button>
-          </div>
-        </div>
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                Organiza categorías como Carnes, Lácteos, Verduras y más para clasificar tus ingredientes.
+              </Typography>
+            </Box>
 
-        {/* Body */}
-        <div style={{ padding: 14, display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 14 }}>
-          {/* Left: table */}
-          <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ padding: 12, borderBottom: "1px solid #eee", fontWeight: 900 }}>
-              Lista
-              {loading && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>cargando…</span>}
-            </div>
+            <IconButton
+              onClick={onClose}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-            {err && (
-              <div style={{ margin: 12, background: "#ffe5e5", padding: 10, borderRadius: 10, whiteSpace: "pre-line" }}>
-                <strong>Error:</strong> {err}
-              </div>
-            )}
+        <DialogContent
+          sx={{
+            p: { xs: 2, sm: 3 },
+            bgcolor: "background.default",
+          }}
+        >
+          <Card
+            sx={{
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Stack spacing={2.5}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={2}
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: { xs: 18, sm: 20 },
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      Catálogo de grupos
+                    </Typography>
 
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
-                <thead>
-                  <tr style={{ background: "#fafafa" }}>
-                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Nombre</th>
-                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Orden</th>
-                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Estado</th>
-                    <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!loading && rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} style={{ padding: 12, opacity: 0.8 }}>
-                        No hay grupos. Crea el primero (sí, el sistema no adivina).
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((g) => (
-                      <tr key={g.id} style={editId === g.id ? { background: "#f7fbff" } : undefined}>
-                        <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                          <div style={{ fontWeight: 900 }}>{g.name}</div>
-                          {g.description && <div style={{ fontSize: 12, opacity: 0.75 }}>{g.description}</div>}
-                        </td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>{g.sort_order ?? 0}</td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                          <span style={{ fontWeight: 800, color: g.status === "active" ? "#0a7a0a" : "#a10000" }}>
-                            {g.status === "active" ? "Activo" : "Inactivo"}
-                          </span>
-                        </td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button
-                              onClick={() => onPickEdit(g)}
-                              style={{ padding: "8px 10px", cursor: "pointer" }}
-                              title="Editar"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => remove(g)}
-                              style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
-                              title="Eliminar"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontSize: 14,
+                        color: "text.secondary",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Crea, edita y activa o desactiva los grupos que usarán tus ingredientes.
+                    </Typography>
+                  </Box>
 
-            <div style={{ padding: 10, fontSize: 12, opacity: 0.7 }}>
-              Tip: si el backend bloquea eliminar porque hay ingredientes ligados, es correcto.
-            </div>
-          </div>
+                  <Button
+                    onClick={openCreate}
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Nuevo grupo
+                  </Button>
+                </Stack>
 
-          {/* Right: form */}
-          <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 10 }}>
-              {mode === "create" ? "Crear grupo" : `Editar grupo #${editId}`}
-            </div>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Nombre *</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej. Lácteos"
-                  style={{ padding: "10px", borderRadius: 10, border: "1px solid #ddd" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Descripción</label>
-                <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Opcional"
-                  style={{ padding: "10px", borderRadius: 10, border: "1px solid #ddd" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Orden</label>
-                <input
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  inputMode="numeric"
-                  style={{ padding: "10px", borderRadius: 10, border: "1px solid #ddd" }}
-                />
-                <div style={{ fontSize: 12, opacity: 0.7 }}>0 = normal. Entre más bajo, aparece primero.</div>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label style={{ fontWeight: 900, fontSize: 13 }}>Estado</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "10px", borderRadius: 10, border: "1px solid #ddd" }}>
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-                <button onClick={resetForm} style={{ padding: "10px 12px", cursor: "pointer" }}>
-                  Limpiar
-                </button>
-
-                <button
-                  onClick={save}
-                  disabled={!canSave || saving}
-                  style={{
-                    padding: "10px 12px",
-                    cursor: !canSave || saving ? "not-allowed" : "pointer",
-                    background: "#111",
-                    color: "#fff",
-                    fontWeight: 900,
-                    borderRadius: 10,
-                    border: "1px solid #111",
-                    opacity: !canSave || saving ? 0.6 : 1,
+                <Paper
+                  sx={{
+                    p: 0,
+                    overflow: "hidden",
+                    borderRadius: 0,
+                    backgroundColor: "background.paper",
                   }}
                 >
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+                  {loading ? (
+                    <Box
+                      sx={{
+                        minHeight: 240,
+                        display: "grid",
+                        placeItems: "center",
+                        px: 2,
+                      }}
+                    >
+                      <Stack spacing={2} alignItems="center">
+                        <CircularProgress color="primary" />
+                        <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+                          Cargando grupos…
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  ) : rows.length === 0 ? (
+                    <Box
+                      sx={{
+                        px: 3,
+                        py: 5,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 20,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        No hay grupos registrados
+                      </Typography>
 
-        {/* Footer */}
-        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "10px 12px", cursor: "pointer" }}>
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          color: "text.secondary",
+                          fontSize: 14,
+                        }}
+                      >
+                        Crea tu primer grupo para empezar a clasificar ingredientes.
+                      </Typography>
+
+                      <Button
+                        onClick={openCreate}
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        sx={{
+                          mt: 2.5,
+                          minWidth: 220,
+                          height: 44,
+                          borderRadius: 2,
+                          fontWeight: 800,
+                        }}
+                      >
+                        Nuevo grupo
+                      </Button>
+                    </Box>
+                  ) : (
+                    <>
+                      {isMobile ? (
+                        <Stack spacing={1.5} sx={{ p: 2 }}>
+                          {paginatedItems.map((g) => {
+                            const active = g.status === "active";
+                            const busy = isSaving(g.id);
+
+                            return (
+                              <Card
+                                key={g.id}
+                                sx={{
+                                  borderRadius: 1,
+                                  boxShadow: "none",
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  backgroundColor: "#fff",
+                                }}
+                              >
+                                <Box sx={{ p: 2 }}>
+                                  <Stack spacing={1.5}>
+                                    <Stack
+                                      direction="row"
+                                      justifyContent="space-between"
+                                      alignItems="flex-start"
+                                      spacing={1}
+                                    >
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                          sx={{
+                                            fontSize: 15,
+                                            fontWeight: 800,
+                                            color: "text.primary",
+                                            lineHeight: 1.3,
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          {g.name}
+                                        </Typography>
+
+                                        <Typography
+                                          sx={{
+                                            mt: 0.5,
+                                            fontSize: 13,
+                                            color: "text.secondary",
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
+                                          Orden: {g.sort_order ?? 0}
+                                        </Typography>
+                                      </Box>
+
+                                      <Chip
+                                        label={active ? "ACTIVO" : "INACTIVO"}
+                                        color={active ? "success" : "default"}
+                                        size="small"
+                                        sx={{ fontWeight: 800, flexShrink: 0 }}
+                                      />
+                                    </Stack>
+
+                                    {g.description ? (
+                                      <Box>
+                                        <Typography sx={mobileLabelSx}>
+                                          Descripción
+                                        </Typography>
+                                        <Typography sx={mobileValueSx}>
+                                          {g.description}
+                                        </Typography>
+                                      </Box>
+                                    ) : null}
+
+                                    <Stack spacing={1.25}>
+                                      <Box
+                                        sx={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "flex-start",
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <FormControlLabel
+                                          sx={{
+                                            m: 0,
+                                            minWidth: 0,
+                                            "& .MuiFormControlLabel-label": {
+                                              minWidth: 0,
+                                            },
+                                          }}
+                                          control={
+                                            <Switch
+                                              checked={active}
+                                              onChange={() => handleToggleStatus(g)}
+                                              disabled={busy}
+                                              color="primary"
+                                            />
+                                          }
+                                          label={
+                                            <Typography sx={switchLabelSx}>
+                                              {active ? "Activo" : "Inactivo"}
+                                            </Typography>
+                                          }
+                                        />
+                                      </Box>
+
+                                      <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                      >
+                                        <Tooltip title="Editar">
+                                          <IconButton
+                                            onClick={() => openEdit(g)}
+                                            sx={iconEditSx}
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+
+                                        <Tooltip title="Eliminar">
+                                          <IconButton
+                                            onClick={() => remove(g)}
+                                            sx={iconDeleteSx}
+                                          >
+                                            <DeleteOutlineIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Stack>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                              </Card>
+                            );
+                          })}
+                        </Stack>
+                      ) : (
+                        <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                          <Table sx={{ minWidth: 900 }}>
+                            <TableHead>
+                              <TableRow
+                                sx={{
+                                  "& th": {
+                                    backgroundColor: "primary.main",
+                                    color: "#fff",
+                                    fontWeight: 800,
+                                    fontSize: 13,
+                                    borderBottom: "none",
+                                    whiteSpace: "nowrap",
+                                  },
+                                }}
+                              >
+                                <TableCell>Nombre</TableCell>
+                                <TableCell>Descripción</TableCell>
+                                <TableCell>Orden</TableCell>
+                                <TableCell align="center">Activo</TableCell>
+                                <TableCell align="right">Acciones</TableCell>
+                              </TableRow>
+                            </TableHead>
+
+                            <TableBody>
+                              {paginatedItems.map((g) => {
+                                const active = g.status === "active";
+                                const busy = isSaving(g.id);
+
+                                return (
+                                  <TableRow
+                                    key={g.id}
+                                    hover
+                                    sx={{
+                                      "& td": {
+                                        borderBottom: "1px solid",
+                                        borderColor: "divider",
+                                        fontSize: 14,
+                                        color: "text.primary",
+                                        whiteSpace: "nowrap",
+                                      },
+                                    }}
+                                  >
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 800 }}>
+                                        {g.name}
+                                      </Typography>
+                                    </TableCell>
+
+                                    <TableCell
+                                      sx={{
+                                        whiteSpace: "normal !important",
+                                        minWidth: 220,
+                                      }}
+                                    >
+                                      {g.description || "—"}
+                                    </TableCell>
+
+                                    <TableCell>{g.sort_order ?? 0}</TableCell>
+
+                                    <TableCell align="center">
+                                      <FormControlLabel
+                                        sx={{ m: 0 }}
+                                        control={
+                                          <Switch
+                                            checked={active}
+                                            onChange={() => handleToggleStatus(g)}
+                                            disabled={busy}
+                                            color="primary"
+                                          />
+                                        }
+                                        label={
+                                          <Typography sx={switchLabelSx}>
+                                            {active ? "Activo" : "Inactivo"}
+                                          </Typography>
+                                        }
+                                      />
+                                    </TableCell>
+
+                                    <TableCell align="right">
+                                      <Stack
+                                        direction="row"
+                                        spacing={1}
+                                        justifyContent="flex-end"
+                                        alignItems="center"
+                                        flexWrap="nowrap"
+                                      >
+                                        <Tooltip title="Editar">
+                                          <IconButton
+                                            onClick={() => openEdit(g)}
+                                            sx={iconEditSx}
+                                          >
+                                            <EditIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+
+                                        <Tooltip title="Eliminar">
+                                          <IconButton
+                                            onClick={() => remove(g)}
+                                            sx={iconDeleteSx}
+                                          >
+                                            <DeleteOutlineIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Stack>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+
+                      <PaginationFooter
+                        page={page}
+                        totalPages={totalPages}
+                        startItem={startItem}
+                        endItem={endItem}
+                        total={total}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={prevPage}
+                        onNext={nextPage}
+                        itemLabel="grupos"
+                      />
+                    </>
+                  )}
+                </Paper>
+              </Stack>
+            </CardContent>
+          </Card>
+        </DialogContent>
+
+
+      </Dialog>
+
+      <IngredientGroupUpsertModal
+        open={upsertOpen}
+        onClose={() => setUpsertOpen(false)}
+        restaurantId={restaurantId}
+        editing={editing}
+        onSaved={async (evt) => {
+          setUpsertOpen(false);
+          setEditing(null);
+          setReqTick((prev) => prev + 1);
+          await onChanged?.(evt);
+        }}
+        api={{
+          createIngredientGroup,
+          updateIngredientGroup,
+        }}
+      />
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </>
   );
 }
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  mt: 0.25,
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+};
+
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+};
