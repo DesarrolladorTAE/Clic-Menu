@@ -1,14 +1,34 @@
-// src/pages/owner/products/components/CandidatePicker.jsx
 import React, { useEffect, useMemo, useState } from "react";
+
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Chip,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+
+import SearchIcon from "@mui/icons-material/Search";
+import AddIcon from "@mui/icons-material/Add";
+
 import { getComponentCandidates } from "../../services/products/catalog/productComponents.service";
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../common/PaginationFooter";
 
 function apiErrorToMessage(e, fallback) {
   return (
     e?.response?.data?.message ||
-    (e?.response?.data?.errors ? Object.values(e.response.data.errors).flat().join("\n") : "") ||
+    (e?.response?.data?.errors
+      ? Object.values(e.response.data.errors).flat().join("\n")
+      : "") ||
     fallback
   );
 }
+
+const PAGE_SIZE = 5;
 
 export default function CandidatePicker({
   restaurantId,
@@ -30,9 +50,16 @@ export default function CandidatePicker({
     };
   }, [branchId, q, excludeIds]);
 
+  useEffect(() => {
+    if (!err) return;
+    const timer = setTimeout(() => setErr(""), 5000);
+    return () => clearTimeout(timer);
+  }, [err]);
+
   const load = async () => {
     setErr("");
     setLoading(true);
+
     try {
       const res = await getComponentCandidates(restaurantId, productId, params);
       setData(res?.data || []);
@@ -47,81 +74,208 @@ export default function CandidatePicker({
   useEffect(() => {
     if (!branchId) return;
     load();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: data,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar producto vendible..."
-          style={{ flex: 1, minWidth: 240, padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-        />
-        <button
-          onClick={load}
-          style={{ padding: "10px 12px", cursor: "pointer" }}
-          disabled={loading}
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        overflow: "hidden",
+        backgroundColor: "#fff",
+      }}
+    >
+      <Box
+        sx={{
+          p: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ xs: "stretch", sm: "center" }}
         >
-          {loading ? "Buscando..." : "Buscar"}
-        </button>
-      </div>
+          <TextField
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar producto vendible..."
+          />
 
-      {err && (
-        <div style={{ marginTop: 10, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line" }}>
-          {err}
-        </div>
-      )}
+          <Button
+            onClick={load}
+            disabled={loading}
+            variant="outlined"
+            startIcon={<SearchIcon />}
+            sx={{
+              minWidth: { xs: "100%", sm: 140 },
+              height: 44,
+              borderRadius: 2,
+              fontWeight: 800,
+            }}
+          >
+            {loading ? "Buscando…" : "Buscar"}
+          </Button>
+        </Stack>
 
-      <div style={{ marginTop: 10, maxHeight: 240, overflow: "auto", borderTop: "1px solid #f3f3f3" }}>
-        {data.length === 0 ? (
-          <div style={{ padding: 10, opacity: 0.75 }}>
-            {loading ? "Cargando..." : "No hay candidatos."}
-          </div>
+        {err ? (
+          <Alert
+            severity="error"
+            sx={{
+              mt: 2,
+              borderRadius: 1,
+              alignItems: "flex-start",
+              whiteSpace: "pre-line",
+            }}
+          >
+            <Typography variant="body2">{err}</Typography>
+          </Alert>
+        ) : null}
+      </Box>
+
+      <Box
+        sx={{
+          p: 2,
+          maxHeight: 420,
+          overflowY: "auto",
+          display: "grid",
+          gap: 1.5,
+        }}
+      >
+        {!paginatedItems.length ? (
+          <Typography
+            sx={{
+              fontSize: 14,
+              color: "text.secondary",
+              textAlign: "center",
+              py: 3,
+            }}
+          >
+            {loading ? "Cargando candidatos…" : "No hay candidatos disponibles."}
+          </Typography>
         ) : (
-          <div style={{ display: "grid", gap: 8, paddingTop: 10 }}>
-            {data.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  border: "1px solid #eee",
-                  borderRadius: 10,
-                  padding: 10,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 900 }}>{p.name}</div>
-                  <div style={{ fontSize: 12, opacity: 0.75 }}>
-                    variantes: {p.has_variants ? `✅ (${p.variants_count})` : "❌"}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onPick(p)}
-                  style={{
-                    padding: "8px 10px",
-                    cursor: "pointer",
-                    borderRadius: 8,
-                    fontWeight: 900,
-                  }}
-                  title="Agregar componente"
+          paginatedItems.map((p) => (
+            <Card
+              key={p.id}
+              sx={{
+                borderRadius: 1,
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "#fff",
+              }}
+            >
+              <Box sx={{ p: 2 }}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                  spacing={1.5}
                 >
-                  + Agregar
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 15,
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      {p.name}
+                    </Typography>
 
-      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-        Solo aparecen productos <strong>activos</strong> y <strong>vendibles</strong> en esta sucursal/canales.
-      </div>
-    </div>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      useFlexGap
+                      sx={{ mt: 1 }}
+                    >
+                      <Chip
+                        size="small"
+                        label={
+                          p.has_variants
+                            ? `Variantes: ${p.variants_count || 0}`
+                            : "Sin variantes"
+                        }
+                        sx={{ fontWeight: 800 }}
+                      />
+                    </Stack>
+                  </Box>
+
+                  <Button
+                    onClick={() => onPick(p)}
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 140 },
+                      height: 40,
+                      borderRadius: 2,
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Agregar
+                  </Button>
+                </Stack>
+              </Box>
+            </Card>
+          ))
+        )}
+      </Box>
+
+      <PaginationFooter
+        page={page}
+        totalPages={totalPages}
+        startItem={startItem}
+        endItem={endItem}
+        total={total}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        onPrev={prevPage}
+        onNext={nextPage}
+        itemLabel="candidatos"
+      />
+
+      <Box
+        sx={{
+          px: 2,
+          py: 1.5,
+          borderTop: "1px solid",
+          borderColor: "divider",
+          backgroundColor: "#fff",
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.5,
+          }}
+        >
+          Solo aparecen productos <strong>activos</strong> y <strong>vendibles</strong> en esta sucursal.
+        </Typography>
+      </Box>
+    </Box>
   );
 }

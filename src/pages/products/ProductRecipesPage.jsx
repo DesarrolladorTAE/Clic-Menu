@@ -1,43 +1,84 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
+import {
+  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, IconButton, Paper, Stack,
+  Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
+  useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import AutoStoriesOutlinedIcon from "@mui/icons-material/AutoStoriesOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import EditIcon from "@mui/icons-material/Edit";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
-import { getIngredients } from "../../services/inventory/ingredients/ingredients.service";// ajusta si tu path real es otro
+import { getIngredients } from "../../services/inventory/ingredients/ingredients.service";
 
 import {
   getProductRecipes,
-  upsertProductRecipeBase,
-  upsertProductRecipeVariant,
   setProductRecipeItemStatus,
 } from "../../services/inventory/recipes/productRecipes.service";
+
+import PageContainer from "../../components/common/PageContainer";
+import AppAlert from "../../components/common/AppAlert";
+import PaginationFooter from "../../components/common/PaginationFooter";
+import usePagination from "../../hooks/usePagination";
+
+import ProductRecipeEditorModal from "../../components/products/recipes/ProductRecipeEditorModal";
+
+const PAGE_SIZE = 5;
+
+function normalizeErr(e) {
+  return (
+    e?.response?.data?.message ||
+    (e?.response?.data?.errors
+      ? Object.values(e.response.data.errors).flat().join("\n")
+      : "") ||
+    "Ocurrió un error"
+  );
+}
 
 export default function ProductRecipesPage() {
   const nav = useNavigate();
   const { restaurantId, productId } = useParams();
   const location = useLocation();
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const productNameFromState = location?.state?.product_name || "";
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  // settings
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "success",
+    title: "",
+    message: "",
+  });
+
   const [settings, setSettings] = useState(null);
-  const recipeMode = settings?.recipe_mode || "global"; // global | branch
+  const recipeMode = settings?.recipe_mode || "global";
   const branchMode = recipeMode === "branch";
 
-  // branches
   const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState(""); // select string
+  const [branchId, setBranchId] = useState("");
 
   const effectiveBranchId = useMemo(() => {
     if (!branchMode) return null;
     return branchId ? Number(branchId) : null;
   }, [branchMode, branchId]);
 
-  // ingredients (solo activos para selector)
   const [ingredients, setIngredients] = useState([]);
   const ingredientsById = useMemo(() => {
     const m = new Map();
@@ -45,71 +86,40 @@ export default function ProductRecipesPage() {
     return m;
   }, [ingredients]);
 
-  // API data
   const [product, setProduct] = useState({ id: null, name: "" });
   const [baseItems, setBaseItems] = useState([]);
   const [variants, setVariants] = useState([]);
 
-  // Modal editor state
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTitle, setEditorTitle] = useState("");
-  const [editorVariantId, setEditorVariantId] = useState(null); // null = base
-  const [editorItems, setEditorItems] = useState([]); // [{id?, ingredient_id, qty, notes, status, ingredient?}]
+  const [editorVariantId, setEditorVariantId] = useState(null);
+  const [editorItems, setEditorItems] = useState([]);
 
   const canUseBranch = !branchMode || !!effectiveBranchId;
 
-  const loadAll = async () => {
-    setErr("");
-    setLoading(true);
-    try {
-      const st = await getRestaurantSettings(restaurantId);
-      setSettings(st);
-
-      // branches si recipe_mode=branch
-      if ((st?.recipe_mode || "global") === "branch") {
-        const br = await getBranchesByRestaurant(restaurantId);
-        setBranches(br || []);
-
-        const chosen = branchId
-          ? Number(branchId)
-          : br?.[0]?.id
-          ? Number(br[0].id)
-          : null;
-
-        if (!branchId && chosen) setBranchId(String(chosen));
-      } else {
-        setBranches([]);
-        setBranchId("");
-      }
-
-      // ingredientes activos para selector
-      const ingResp = await getIngredients(restaurantId, { only_active: true, q: "" });
-      setIngredients(ingResp?.data || []);
-
-      // recetas
-      const branchParam = (st?.recipe_mode || "global") === "branch" ? (branchId ? Number(branchId) : (st ? null : null)) : null;
-      // Nota: branchParam real lo definimos abajo al recargar, aquí hacemos un primer fetch sin branch si es global.
-      // Si es branch-mode y aún no hay branchId seleccionado, el backend responde 422, lo manejamos.
-      try {
-        const recipes = await getProductRecipes(restaurantId, productId, {
-          branch_id: (st?.recipe_mode || "global") === "branch" ? (branchId ? Number(branchId) : null) : null,
-        });
-        hydrateFromRecipes(recipes);
-      } catch (e) {
-        // Si es branch-mode y aún no hay branch_id, no truena todo, solo deja aviso
-        const msg =
-          e?.response?.data?.message ||
-          (e?.response?.data?.errors
-            ? Object.values(e.response.data.errors).flat().join("\n")
-            : "No se pudieron cargar recetas");
-        setErr(msg);
-      }
-    } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo cargar la pantalla de recetas");
-    } finally {
-      setLoading(false);
-    }
+  const showAlert = ({
+    severity = "success",
+    title = "",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
   };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  useEffect(() => {
+    if (!err) return;
+    const timer = setTimeout(() => setErr(""), 5000);
+    return () => clearTimeout(timer);
+  }, [err]);
 
   const hydrateFromRecipes = (recipesResp) => {
     const d = recipesResp?.data || {};
@@ -121,56 +131,106 @@ export default function ProductRecipesPage() {
     setVariants(d?.variants || []);
   };
 
-  // carga inicial
+  const loadRecipes = async ({
+    settingsSnapshot = settings,
+    branchSnapshot = effectiveBranchId,
+  } = {}) => {
+    const branchParam =
+      (settingsSnapshot?.recipe_mode || "global") === "branch"
+        ? branchSnapshot
+        : null;
+
+    const recipes = await getProductRecipes(restaurantId, productId, {
+      branch_id: branchParam,
+    });
+
+    hydrateFromRecipes(recipes);
+  };
+
+  const loadAll = async () => {
+    setErr("");
+    setLoading(true);
+
+    try {
+      const st = await getRestaurantSettings(restaurantId);
+      setSettings(st);
+
+      let selectedBranchId = null;
+
+      if ((st?.recipe_mode || "global") === "branch") {
+        const br = await getBranchesByRestaurant(restaurantId);
+        const branchList = Array.isArray(br) ? br : [];
+        setBranches(branchList);
+
+        selectedBranchId = branchId
+          ? Number(branchId)
+          : branchList?.[0]?.id
+          ? Number(branchList[0].id)
+          : null;
+
+        if (!branchId && selectedBranchId) {
+          setBranchId(String(selectedBranchId));
+        }
+      } else {
+        setBranches([]);
+        setBranchId("");
+      }
+
+      const ingResp = await getIngredients(restaurantId, {
+        only_active: true,
+        q: "",
+      });
+      setIngredients(ingResp?.data || []);
+
+      try {
+        const recipes = await getProductRecipes(restaurantId, productId, {
+          branch_id:
+            (st?.recipe_mode || "global") === "branch"
+              ? selectedBranchId
+              : null,
+        });
+        hydrateFromRecipes(recipes);
+      } catch (e) {
+        setErr(normalizeErr(e, "No se pudieron cargar recetas"));
+      }
+    } catch (e) {
+      setErr(
+        e?.response?.data?.message ||
+          "No se pudo cargar la pantalla de recetas"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, productId]);
 
-  // recargar recetas cuando cambia sucursal (branch-mode)
   useEffect(() => {
     if (loading) return;
     if (!branchMode) return;
 
     if (!effectiveBranchId) {
-      // branch mode requiere branch
       setBaseItems([]);
-      setVariants((prev) => prev || []);
+      setVariants([]);
       return;
     }
 
     (async () => {
       try {
         setErr("");
-        const recipes = await getProductRecipes(restaurantId, productId, { branch_id: effectiveBranchId });
-        hydrateFromRecipes(recipes);
+        await loadRecipes({
+          settingsSnapshot: settings,
+          branchSnapshot: effectiveBranchId,
+        });
       } catch (e) {
-        const msg =
-          e?.response?.data?.message ||
-          (e?.response?.data?.errors
-            ? Object.values(e.response.data.errors).flat().join("\n")
-            : "No se pudieron cargar recetas");
-        setErr(msg);
+        setErr(normalizeErr(e, "No se pudieron cargar recetas"));
       }
     })();
-    // eslint-disable-next-line
-  }, [effectiveBranchId, branchMode, restaurantId, productId]);
-
-  const openBaseEditor = () => {
-    setErr("");
-    setEditorVariantId(null);
-    setEditorTitle("Receta del producto");
-    setEditorItems(normalizeItemsForEditor(baseItems));
-    setEditorOpen(true);
-  };
-
-  const openVariantEditor = (variant) => {
-    setErr("");
-    setEditorVariantId(variant?.id);
-    setEditorTitle(`Receta de variante: ${variant?.name || `#${variant?.id}`}`);
-    setEditorItems(normalizeItemsForEditor(variant?.items || []));
-    setEditorOpen(true);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveBranchId, branchMode]);
 
   const normalizeItemsForEditor = (items) => {
     return (items || []).map((it) => ({
@@ -185,565 +245,899 @@ export default function ProductRecipesPage() {
     }));
   };
 
-  const validateEditorItems = (items) => {
-    const errors = [];
-    const seen = new Set();
-
-    (items || []).forEach((it, idx) => {
-      const ingId = Number(it.ingredient_id || 0);
-      const qty = Number(it.qty || 0);
-
-      if (!ingId) errors.push(`Fila ${idx + 1}: ingrediente requerido`);
-      if (!(qty > 0)) errors.push(`Fila ${idx + 1}: cantidad debe ser > 0`);
-
-      const key = String(ingId);
-      if (ingId) {
-        if (seen.has(key)) errors.push(`Ingrediente repetido: ${labelIngredient(ingId)}`);
-        seen.add(key);
-      }
-
-      // Ingrediente activo (selector ya filtra, pero si llega algo raro)
-      const ing = ingredientsById.get(ingId);
-      if (ing && ing.status && ing.status !== "active") {
-        errors.push(`Ingrediente inactivo: ${ing.name}`);
-      }
-    });
-
-    return errors;
-  };
-
-  const labelIngredient = (ingredientId) => {
-    const ing = ingredientsById.get(Number(ingredientId));
-    if (ing?.name) return ing.name;
-    return `#${ingredientId}`;
-  };
-
-  const onSaveEditor = async () => {
+  const openBaseEditor = () => {
     setErr("");
-    const errors = validateEditorItems(editorItems);
-    if (errors.length) {
-      setErr(errors.join("\n"));
-      return;
-    }
+    setEditorVariantId(null);
+    setEditorTitle("Receta del producto principal");
+    setEditorItems(normalizeItemsForEditor(baseItems));
+    setEditorOpen(true);
+  };
 
-    if (branchMode && !effectiveBranchId) {
-      setErr("Selecciona una sucursal para editar recetas.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const payload = {
-        // en global-mode NO mandes branch_id, backend fuerza null
-        ...(branchMode ? { branch_id: effectiveBranchId } : {}),
-        items: editorItems.map((it) => ({
-          ingredient_id: Number(it.ingredient_id),
-          qty: Number(it.qty),
-          notes: it.notes?.trim() ? it.notes.trim() : null,
-          status: it.status || "active",
-        })),
-      };
-
-      if (editorVariantId) {
-        await upsertProductRecipeVariant(restaurantId, productId, editorVariantId, payload);
-      } else {
-        await upsertProductRecipeBase(restaurantId, productId, payload);
-      }
-
-      // recargar
-      const recipes = await getProductRecipes(restaurantId, productId, {
-        branch_id: branchMode ? effectiveBranchId : null,
-      });
-      hydrateFromRecipes(recipes);
-
-      setEditorOpen(false);
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        (e?.response?.data?.errors
-          ? Object.values(e.response.data.errors).flat().join("\n")
-          : "No se pudo guardar la receta");
-      setErr(msg);
-    } finally {
-      setSaving(false);
-    }
+  const openVariantEditor = (variant) => {
+    setErr("");
+    setEditorVariantId(variant?.id);
+    setEditorTitle(`Receta de variante: ${variant?.name || "Variante"}`);
+    setEditorItems(normalizeItemsForEditor(variant?.items || []));
+    setEditorOpen(true);
   };
 
   const onToggleItemStatus = async (item, nextStatus) => {
-    if (!item?.id) {
-      // si aún no existe en BD, solo cambia en UI del editor (si aplica)
-      return;
-    }
+    if (!item?.id) return;
+
     try {
       setErr("");
-      await setProductRecipeItemStatus(restaurantId, productId, item.id, nextStatus);
+      await setProductRecipeItemStatus(
+        restaurantId,
+        productId,
+        item.id,
+        nextStatus
+      );
 
-      // refrescar sin drama
-      const recipes = await getProductRecipes(restaurantId, productId, {
-        branch_id: branchMode ? effectiveBranchId : null,
+      await loadRecipes();
+      showAlert({
+        severity: "success",
+        title: "Estado actualizado",
+        message:
+          nextStatus === "active"
+            ? "El ingrediente quedó activo."
+            : "El ingrediente quedó inactivo.",
       });
-      hydrateFromRecipes(recipes);
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo cambiar el status");
+      setErr(normalizeErr(e, "No se pudo cambiar el estado"));
     }
   };
 
-  if (loading) return <div style={{ padding: 16 }}>Cargando recetas...</div>;
+  const basePagination = usePagination({
+    items: baseItems,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const variantCarousel = usePagination({
+    items: variants,
+    initialPage: 1,
+    pageSize: 1,
+    mode: "frontend",
+  });
+
+  const activeVariant = variantCarousel.paginatedItems?.[0] || null;
+
+  const activeVariantItemsPagination = usePagination({
+    items: activeVariant?.items || [],
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress color="primary" />
+            <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+              Cargando recetas…
+            </Typography>
+          </Stack>
+        </Box>
+      </PageContainer>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 1200, margin: "30px auto", padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>
-            Recetas — {product.name || productNameFromState || `Producto ${productId}`}
-          </h2>
-          <div style={{ marginTop: 6, opacity: 0.85 }}>
-            Restaurante: <strong>{restaurantId}</strong> · Producto: <strong>{productId}</strong> · recipe_mode:{" "}
-            <strong>{recipeMode}</strong>
-          </div>
-        </div>
-
-        <button
-          onClick={() => nav(-1)}
-          style={{ padding: "10px 14px", cursor: "pointer" }}
-          title="Regresar"
+    <PageContainer>
+      <Stack spacing={3}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", md: "center" }}
+          spacing={2}
         >
-          ← Volver
-        </button>
-      </div>
-
-      {branchMode && (
-        <div style={{ marginTop: 14, padding: 12, border: "1px solid #ddd", borderRadius: 10 }}>
-          <div style={{ fontWeight: 800 }}>Sucursal</div>
-          <select
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
-            style={{ marginTop: 8, padding: 10, width: "100%", borderRadius: 8 }}
-            disabled={!branches.length}
-          >
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name || `Sucursal ${b.id}`}
-              </option>
-            ))}
-          </select>
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-            En <strong>recipe_mode=branch</strong> las recetas se guardan por sucursal (branch_id).
-          </div>
-        </div>
-      )}
-
-      {!branchMode && (
-        <div style={{ marginTop: 14, padding: 12, border: "1px solid #ddd", borderRadius: 10, background: "#fafafa" }}>
-          <div style={{ fontWeight: 800 }}>Sucursal</div>
-          <div style={{ marginTop: 8, fontSize: 13 }}>
-            Selector deshabilitado: <strong>modo de receta global</strong>.
-          </div>
-        </div>
-      )}
-
-      {err && (
-        <div style={{ marginTop: 12, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line" }}>
-          {err}
-        </div>
-      )}
-
-      {!canUseBranch && (
-        <div style={{ marginTop: 12, background: "#fff7db", padding: 10, whiteSpace: "pre-line" }}>
-          En modo sucursal necesitas elegir una sucursal para ver/editar recetas.
-        </div>
-      )}
-
-      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        {/* Receta base */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-            <div style={{ fontWeight: 900 }}>1) Receta del producto</div>
-            <button
-              onClick={openBaseEditor}
-              style={{ padding: "8px 10px", cursor: canUseBranch ? "pointer" : "not-allowed", opacity: canUseBranch ? 1 : 0.6 }}
-              disabled={!canUseBranch}
+          <Box>
+            <Typography
+              sx={{
+                fontSize: { xs: 30, md: 42 },
+                fontWeight: 800,
+                color: "text.primary",
+                lineHeight: 1.1,
+              }}
             >
-              {baseItems?.length ? "Editar receta" : "Crear receta"}
-            </button>
-          </div>
+              Recetas del producto
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 1,
+                color: "text.secondary",
+                fontSize: { xs: 15, md: 18 },
+              }}
+            >
+              Administra las recetas de <strong>{product.name || "este producto"}</strong>.
+            </Typography>
+          </Box>
+
+          <Button
+            onClick={() =>
+              nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
+            }
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            sx={{
+              minWidth: { xs: "100%", sm: 220 },
+              height: 44,
+              borderRadius: 2,
+            }}
+          >
+            Volver a productos
+          </Button>
+        </Stack>
+
+        <Paper
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            borderRadius: 1,
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: "none",
+          }}
+        >
+          <Stack spacing={1.5}>
+            <Typography
+              sx={{
+                fontSize: 16,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              Antes de comenzar
+            </Typography>
+
+            <InstructionRow
+              icon={<AutoStoriesOutlinedIcon sx={{ fontSize: 18 }} />}
+              text="Crea la receta del producto principal. Es obligatoria porque funciona como base de consumo."
+            />
+
+            <InstructionRow
+              icon={<CategoryOutlinedIcon sx={{ fontSize: 18 }} />}
+              text="Las recetas de variantes son opcionales. Si una variante no tiene receta propia, puede seguir usando la receta base."
+            />
+
+            <InstructionRow
+              icon={<Inventory2OutlinedIcon sx={{ fontSize: 18 }} />}
+              text="Puedes activar o desactivar ingredientes desde esta pantalla para afectar consumos futuros sin borrar la receta."
+            />
+
+            <InstructionRow
+              icon={<StorefrontOutlinedIcon sx={{ fontSize: 18 }} />}
+              text={
+                recipeMode === "branch"
+                  ? "Modo receta por sucursal: los cambios se guardan únicamente en la sucursal seleccionada."
+                  : "Modo receta global: la misma receta aplica de forma general y no depende de sucursal."
+              }
+            />
+
+            {branchMode ? (
+              <Box sx={{ pt: 1 }}>
+                <Typography
+                  sx={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "text.primary",
+                    mb: 1,
+                  }}
+                >
+                  Sucursal
+                </Typography>
+
+                <Paper
+                  sx={{
+                    p: 1,
+                    borderRadius: 0,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    flexWrap="wrap"
+                    useFlexGap
+                  >
+                    {branches.map((b) => {
+                      const selected = String(b.id) === String(branchId);
+
+                      return (
+                        <Button
+                          key={b.id}
+                          variant={selected ? "contained" : "outlined"}
+                          onClick={() => setBranchId(String(b.id))}
+                          sx={{
+                            minHeight: 40,
+                            borderRadius: 2,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {b.name || "Sucursal"}
+                        </Button>
+                      );
+                    })}
+                  </Stack>
+                </Paper>
+              </Box>
+            ) : null}
+          </Stack>
+        </Paper>
+
+        {err ? (
+          <Alert
+            severity="error"
+            sx={{
+              borderRadius: 1,
+              alignItems: "flex-start",
+              whiteSpace: "pre-line",
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                Ocurrió un problema
+              </Typography>
+              <Typography variant="body2">{err}</Typography>
+            </Box>
+          </Alert>
+        ) : null}
+
+        {!canUseBranch ? (
+          <Alert
+            severity="warning"
+            sx={{
+              borderRadius: 1,
+              alignItems: "flex-start",
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                Falta seleccionar sucursal
+              </Typography>
+              <Typography variant="body2">
+                En modo por sucursal necesitas elegir una sucursal para ver o editar recetas.
+              </Typography>
+            </Box>
+          </Alert>
+        ) : null}
+
+        <Paper
+          sx={{
+            p: 0,
+            overflow: "hidden",
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: "1px solid",
+              borderColor: "divider",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              spacing={1.5}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  Receta del producto principal
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: 13,
+                    color: "text.secondary",
+                  }}
+                >
+                  Esta receta sirve como base general del producto.
+                </Typography>
+              </Box>
+
+              <Button
+                onClick={openBaseEditor}
+                variant="contained"
+                startIcon={<EditIcon />}
+                disabled={!canUseBranch}
+                sx={{
+                  minWidth: { xs: "100%", sm: 190 },
+                  height: 44,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                {baseItems?.length ? "Editar receta base" : "Crear receta base"}
+              </Button>
+            </Stack>
+          </Box>
 
           {!baseItems?.length ? (
-            <div style={{ marginTop: 10, opacity: 0.85 }}>
-              Este producto no tiene receta base.
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                Si no creas receta, las ventas futuras no podrán consumir ingredientes.
-              </div>
-            </div>
-          ) : (
-            <RecipeTable
-              items={baseItems}
-              onToggleStatus={(item, next) => onToggleItemStatus(item, next)}
-            />
-          )}
-        </div>
+            <Box
+              sx={{
+                px: 3,
+                py: 5,
+                textAlign: "center",
+              }}
+            >
+              <MenuBookOutlinedIcon
+                sx={{
+                  fontSize: 34,
+                  color: "text.secondary",
+                }}
+              />
 
-        {/* Recetas por variante */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontWeight: 900, marginBottom: 10 }}>2) Recetas por variante</div>
+              <Typography
+                sx={{
+                  mt: 1,
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}
+              >
+                Este producto no tiene receta base
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "text.secondary",
+                  fontSize: 14,
+                }}
+              >
+                Créala para definir el consumo principal de ingredientes.
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <RecipeItemsSection
+                items={basePagination.paginatedItems}
+                allItems={baseItems}
+                onToggleStatus={onToggleItemStatus}
+                isMobile={isMobile}
+                ingredientsById={ingredientsById}
+              />
+
+              <PaginationFooter
+                page={basePagination.page}
+                totalPages={basePagination.totalPages}
+                startItem={basePagination.startItem}
+                endItem={basePagination.endItem}
+                total={basePagination.total}
+                hasPrev={basePagination.hasPrev}
+                hasNext={basePagination.hasNext}
+                onPrev={basePagination.prevPage}
+                onNext={basePagination.nextPage}
+                itemLabel="ingredientes"
+              />
+            </>
+          )}
+        </Paper>
+
+        <Paper
+          sx={{
+            p: 0,
+            overflow: "hidden",
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: "1px solid",
+              borderColor: "divider",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Stack spacing={1.5}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                spacing={1.5}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Recetas por variante
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 13,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Define recetas específicas para cada variante cuando lo necesites.
+                  </Typography>
+                </Box>
+
+                {variants.length ? (
+                  <Stack direction="row" spacing={1}>
+                    <Tooltip title="Variante anterior">
+                      <span>
+                        <IconButton
+                          onClick={variantCarousel.prevPage}
+                          disabled={!variantCarousel.hasPrev}
+                          sx={navIconSx}
+                        >
+                          <NavigateBeforeIcon />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+
+                    <Tooltip title="Siguiente variante">
+                      <span>
+                        <IconButton
+                          onClick={variantCarousel.nextPage}
+                          disabled={!variantCarousel.hasNext}
+                          sx={navIconSx}
+                        >
+                          <NavigateNextIcon />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                ) : null}
+              </Stack>
+
+              {variants.length ? (
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    color: "text.secondary",
+                  }}
+                >
+                  Variante {variantCarousel.page} de {variantCarousel.totalPages}
+                </Typography>
+              ) : null}
+            </Stack>
+          </Box>
 
           {!variants?.length ? (
-            <div style={{ opacity: 0.85 }}>
-              Este producto no tiene variantes.
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                Si en el futuro agregas variantes, aquí podrás definir recetas específicas por variante.
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {variants.map((v) => {
-                const hasRecipe = (v?.items || []).length > 0;
-                const enabled = !!v?.is_enabled;
-
-                return (
-                  <div key={v.id} style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontWeight: 900 }}>
-                          Variante: {v.name || `Variante ${v.id}`}
-                          {!enabled && (
-                            <span style={{ marginLeft: 8, fontSize: 12, padding: "2px 6px", borderRadius: 999, background: "#f2f2f2" }}>
-                              deshabilitada
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
-                          {hasRecipe
-                            ? "Usa su receta propia."
-                            : "No tiene receta: usará la receta del producto."}
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => openVariantEditor(v)}
-                        style={{
-                          padding: "8px 10px",
-                          cursor: canUseBranch ? "pointer" : "not-allowed",
-                          opacity: canUseBranch ? 1 : 0.6,
-                        }}
-                        disabled={!canUseBranch}
-                        title="Editar/Agregar receta de variante"
-                      >
-                        {hasRecipe ? "Editar" : "Agregar"}
-                      </button>
-                    </div>
-
-                    {hasRecipe && (
-                      <div style={{ marginTop: 10 }}>
-                        <RecipeTable
-                          items={v.items}
-                          onToggleStatus={(item, next) => onToggleItemStatus(item, next)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal editor */}
-      {editorOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 12,
-            zIndex: 9999,
-          }}
-          onClick={() => !saving && setEditorOpen(false)}
-        >
-          <div
-            style={{
-              width: "min(980px, 100%)",
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #ddd",
-              padding: 14,
-              maxHeight: "85vh",
-              overflow: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-              <div>
-                <div style={{ fontWeight: 1000, fontSize: 18 }}>{editorTitle}</div>
-                <div style={{ marginTop: 4, fontSize: 12, opacity: 0.8 }}>
-                  {branchMode ? (
-                    <>
-                      Sucursal: <strong>{effectiveBranchId || "—"}</strong>
-                    </>
-                  ) : (
-                    <>Global (branch_id = NULL)</>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={() => !saving && setEditorOpen(false)}
-                style={{ padding: "8px 10px", cursor: saving ? "not-allowed" : "pointer" }}
-                disabled={saving}
+            <Box
+              sx={{
+                px: 3,
+                py: 5,
+                textAlign: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}
               >
-                ✕ Cerrar
-              </button>
-            </div>
+                Este producto no tiene variantes
+              </Typography>
 
-            <div style={{ marginTop: 12, border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
-              <div style={{ fontWeight: 900, marginBottom: 8 }}>Items</div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={th}>Ingrediente</th>
-                      <th style={th}>Cantidad</th>
-                      <th style={th}>Notas</th>
-                      <th style={th}>Status</th>
-                      <th style={th}>Acciones</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {editorItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} style={{ padding: 10, opacity: 0.8 }}>
-                          No hay ingredientes. Agrega al menos 1 si quieres que consuma inventario.
-                        </td>
-                      </tr>
-                    ) : (
-                      editorItems.map((it, idx) => (
-                        <tr key={`${it.ingredient_id}-${idx}`}>
-                          <td style={td}>
-                            <select
-                              value={String(it.ingredient_id || "")}
-                              onChange={(e) => {
-                                const v = Number(e.target.value || 0);
-                                setEditorItems((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], ingredient_id: v };
-                                  return copy;
-                                });
-                              }}
-                              style={{ width: "100%", padding: 8, borderRadius: 8 }}
-                              disabled={saving}
-                            >
-                              <option value="">Selecciona…</option>
-                              {ingredients.map((ing) => (
-                                <option key={ing.id} value={ing.id}>
-                                  {ing.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-
-                          <td style={td}>
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={String(it.qty ?? "")}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditorItems((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], qty: v === "" ? "" : Number(v) };
-                                  return copy;
-                                });
-                              }}
-                              style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #ddd" }}
-                              disabled={saving}
-                            />
-                          </td>
-
-                          <td style={td}>
-                            <input
-                              value={it.notes ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditorItems((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], notes: v };
-                                  return copy;
-                                });
-                              }}
-                              style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #ddd" }}
-                              disabled={saving}
-                            />
-                          </td>
-
-                          <td style={td}>
-                            <select
-                              value={it.status || "active"}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditorItems((prev) => {
-                                  const copy = [...prev];
-                                  copy[idx] = { ...copy[idx], status: v };
-                                  return copy;
-                                });
-                              }}
-                              style={{ width: "100%", padding: 8, borderRadius: 8 }}
-                              disabled={saving}
-                            >
-                              <option value="active">Activo</option>
-                              <option value="inactive">Inactivo</option>
-                            </select>
-                          </td>
-
-                          <td style={td}>
-                            <button
-                              onClick={() => {
-                                setEditorItems((prev) => prev.filter((_, i) => i !== idx));
-                              }}
-                              style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5", borderRadius: 8, border: "1px solid #f3b9b9" }}
-                              disabled={saving}
-                              title="Eliminar fila (se borra al guardar)"
-                            >
-                              🗑️
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{ marginTop: 10, display: "flex", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
-                <button
-                  onClick={() => {
-                    setEditorItems((prev) => [
-                      ...prev,
-                      { ingredient_id: "", qty: 1, notes: "", status: "active" },
-                    ]);
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "text.secondary",
+                  fontSize: 14,
+                }}
+              >
+                Cuando existan variantes, aquí podrás asignarles recetas propias.
+              </Typography>
+            </Box>
+          ) : activeVariant ? (
+            <>
+              <Box sx={{ p: 2 }}>
+                <Card
+                  sx={{
+                    borderRadius: 1,
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    backgroundColor: "#fff",
                   }}
-                  style={{ padding: "10px 12px", cursor: "pointer", borderRadius: 8 }}
-                  disabled={saving}
                 >
-                  ➕ Agregar ingrediente
-                </button>
+                  <Box sx={{ p: 2 }}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                      spacing={1.5}
+                    >
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontSize: 18,
+                            fontWeight: 800,
+                            color: "text.primary",
+                          }}
+                        >
+                          {activeVariant.name || "Variante"}
+                        </Typography>
 
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => !saving && setEditorOpen(false)}
-                    style={{ padding: "10px 12px", cursor: saving ? "not-allowed" : "pointer", borderRadius: 8 }}
-                    disabled={saving}
-                  >
-                    Cancelar
-                  </button>
+                        <Typography
+                          sx={{
+                            mt: 0.5,
+                            fontSize: 13,
+                            color: "text.secondary",
+                          }}
+                        >
+                          {(activeVariant?.items || []).length
+                            ? "Esta variante usa su propia receta."
+                            : "Esta variante no tiene receta propia y puede apoyarse en la receta base."}
+                        </Typography>
+                      </Box>
 
-                  <button
-                    onClick={onSaveEditor}
-                    style={{
-                      padding: "10px 12px",
-                      cursor: saving ? "not-allowed" : "pointer",
-                      borderRadius: 8,
-                      fontWeight: 900,
-                      opacity: saving ? 0.7 : 1,
+                      <Button
+                        onClick={() => openVariantEditor(activeVariant)}
+                        variant="contained"
+                        startIcon={<EditIcon />}
+                        disabled={!canUseBranch}
+                        sx={{
+                          minWidth: { xs: "100%", sm: 210 },
+                          height: 44,
+                          borderRadius: 2,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {(activeVariant?.items || []).length
+                          ? "Editar receta variante"
+                          : "Crear receta variante"}
+                      </Button>
+                    </Stack>
+                  </Box>
+                </Card>
+              </Box>
+
+              {(activeVariant?.items || []).length ? (
+                <>
+                  <RecipeItemsSection
+                    items={activeVariantItemsPagination.paginatedItems}
+                    allItems={activeVariant.items || []}
+                    onToggleStatus={onToggleItemStatus}
+                    isMobile={isMobile}
+                    ingredientsById={ingredientsById}
+                  />
+
+                  <PaginationFooter
+                    page={activeVariantItemsPagination.page}
+                    totalPages={activeVariantItemsPagination.totalPages}
+                    startItem={activeVariantItemsPagination.startItem}
+                    endItem={activeVariantItemsPagination.endItem}
+                    total={activeVariantItemsPagination.total}
+                    hasPrev={activeVariantItemsPagination.hasPrev}
+                    hasNext={activeVariantItemsPagination.hasNext}
+                    onPrev={activeVariantItemsPagination.prevPage}
+                    onNext={activeVariantItemsPagination.nextPage}
+                    itemLabel="ingredientes"
+                  />
+                </>
+              ) : (
+                <Box
+                  sx={{
+                    px: 3,
+                    py: 4,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 800,
+                      color: "text.primary",
                     }}
-                    disabled={saving}
                   >
-                    {saving ? "Guardando…" : "💾 Guardar receta"}
-                  </button>
-                </div>
-              </div>
+                    Esta variante no tiene receta propia
+                  </Typography>
 
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      fontSize: 14,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Puedes crearla si esta combinación necesita consumir ingredientes distintos.
+                  </Typography>
+                </Box>
+              )}
+            </>
+          ) : null}
+        </Paper>
+      </Stack>
+
+      <ProductRecipeEditorModal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        restaurantId={restaurantId}
+        productId={productId}
+        branchMode={branchMode}
+        effectiveBranchId={effectiveBranchId}
+        ingredients={ingredients}
+        initialItems={editorItems}
+        title={editorTitle}
+        variantId={editorVariantId}
+        onSaved={async () => {
+          setEditorOpen(false);
+          await loadRecipes();
+          showAlert({
+            severity: "success",
+            title: "Receta guardada",
+            message: "La receta se actualizó correctamente.",
+          });
+        }}
+      />
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </PageContainer>
   );
 }
 
-function RecipeTable({ items, onToggleStatus }) {
+function InstructionRow({ icon, text }) {
   return (
-    <div style={{ overflowX: "auto", marginTop: 10 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={th}>Ingrediente</th>
-            <th style={th}>Cantidad</th>
-            <th style={th}>Unidad</th>
-            <th style={th}>Notas</th>
-            <th style={th}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(items || []).map((it) => {
-            const ing = it.ingredient || null;
-            const status = it.status || "active";
-            const unit = ing?.unit || ing?.unidad || "—";
+    <Stack direction="row" spacing={1.25} alignItems="flex-start">
+      <Box
+        sx={{
+          minWidth: 28,
+          height: 28,
+          borderRadius: 999,
+          bgcolor: "primary.main",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        {icon}
+      </Box>
 
-            return (
-              <tr key={it.id || `${it.ingredient_id}-${it.qty}`}>
-                <td style={td}>
-                  <div style={{ fontWeight: 800 }}>
-                    {ing?.name || `Ingrediente ${it.ingredient_id}`}
-                  </div>
-                  {ing?.status && ing.status !== "active" && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#a10000" }}>
-                      Ingrediente inactivo
-                    </div>
-                  )}
-                </td>
-                <td style={td}>{it.qty}</td>
-                <td style={td}>{unit}</td>
-                <td style={td}>{it.notes || "—"}</td>
-                <td style={td}>
-                  <button
-                    onClick={() => onToggleStatus?.(it, status === "active" ? "inactive" : "active")}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 999,
-                      border: "1px solid #ddd",
-                      cursor: "pointer",
-                      background: status === "active" ? "#e8fff3" : "#f2f2f2",
-                      fontWeight: 900,
-                    }}
-                    title="Activar/Desactivar (afecta ventas futuras)"
-                  >
-                    {status === "active" ? "Activo" : "Inactivo"}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-
-          {(!items || items.length === 0) && (
-            <tr>
-              <td colSpan={5} style={{ padding: 10, opacity: 0.8 }}>
-                Sin receta.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+      <Typography
+        sx={{
+          fontSize: 14,
+          color: "text.primary",
+          lineHeight: 1.6,
+        }}
+      >
+        {text}
+      </Typography>
+    </Stack>
   );
 }
 
-const th = {
-  textAlign: "left",
-  fontSize: 12,
-  fontWeight: 900,
-  padding: "8px 10px",
-  borderBottom: "1px solid #eee",
-  whiteSpace: "nowrap",
+function RecipeItemsSection({
+  items,
+  allItems,
+  onToggleStatus,
+  isMobile,
+  ingredientsById,
+}) {
+  if (!isMobile) {
+    return (
+      <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+        <Table sx={{ minWidth: 980 }}>
+          <TableHead>
+            <TableRow
+              sx={{
+                "& th": {
+                  backgroundColor: "primary.main",
+                  color: "#fff",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  borderBottom: "none",
+                  whiteSpace: "nowrap",
+                },
+              }}
+            >
+              <TableCell>Ingrediente</TableCell>
+              <TableCell>Cantidad</TableCell>
+              <TableCell>Unidad</TableCell>
+              <TableCell>Notas</TableCell>
+              <TableCell>Estado</TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {items.map((it) => {
+              const ing = it.ingredient || ingredientsById.get(Number(it.ingredient_id)) || null;
+              const unit = ing?.unit || ing?.unidad || "—";
+              const status = it.status || "active";
+
+              return (
+                <TableRow
+                  key={it.id || `${it.ingredient_id}-${it.qty}`}
+                  hover
+                  sx={{
+                    "& td": {
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                      fontSize: 14,
+                      color: "text.primary",
+                      verticalAlign: "top",
+                    },
+                  }}
+                >
+                  <TableCell>
+                    <Typography sx={{ fontWeight: 800 }}>
+                      {ing?.name || "Ingrediente"}
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>{it.qty}</TableCell>
+                  <TableCell>{unit}</TableCell>
+                  <TableCell>{it.notes || "—"}</TableCell>
+
+                  <TableCell>
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          checked={status === "active"}
+                          onChange={(e) =>
+                            onToggleStatus?.(
+                              it,
+                              e.target.checked ? "active" : "inactive"
+                            )
+                          }
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Typography sx={switchLabelSx}>
+                          {status === "active" ? "Activo" : "Inactivo"}
+                        </Typography>
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  }
+
+  return (
+    <Stack spacing={1.5} sx={{ p: 2 }}>
+      {items.map((it) => {
+        const ing = it.ingredient || ingredientsById.get(Number(it.ingredient_id)) || null;
+        const unit = ing?.unit || ing?.unidad || "—";
+        const status = it.status || "active";
+
+        return (
+          <Card
+            key={it.id || `${it.ingredient_id}-${it.qty}`}
+            sx={{
+              borderRadius: 1,
+              boxShadow: "none",
+              border: "1px solid",
+              borderColor: "divider",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Box sx={{ p: 2 }}>
+              <Stack spacing={1.25}>
+                <InfoRow label="Ingrediente" value={ing?.name || "Ingrediente"} />
+                <InfoRow label="Cantidad" value={String(it.qty)} />
+                <InfoRow label="Unidad" value={unit} />
+                <InfoRow label="Notas" value={it.notes || "—"} />
+
+                <Box>
+                  <Typography sx={mobileLabelSx}>Estado</Typography>
+
+                  <FormControlLabel
+                    sx={{ m: 0, mt: 0.5 }}
+                    control={
+                      <Switch
+                        checked={status === "active"}
+                        onChange={(e) =>
+                          onToggleStatus?.(
+                            it,
+                            e.target.checked ? "active" : "inactive"
+                          )
+                        }
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Typography sx={switchLabelSx}>
+                        {status === "active" ? "Activo" : "Inactivo"}
+                      </Typography>
+                    }
+                  />
+                </Box>
+              </Stack>
+            </Box>
+          </Card>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <Box>
+      <Typography sx={mobileLabelSx}>{label}</Typography>
+      <Typography sx={mobileValueSx}>{value}</Typography>
+    </Box>
+  );
+}
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
 };
 
-const td = {
-  padding: "10px",
-  borderBottom: "1px solid #f2f2f2",
-  verticalAlign: "top",
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  mt: 0.25,
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+  lineHeight: 1.5,
+};
+
+const navIconSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#F4F4F4",
+  color: "text.primary",
+  borderRadius: 1.5,
+  border: "1px solid",
+  borderColor: "divider",
+  "&:hover": {
+    bgcolor: "#ECECEC",
+  },
+  "&.Mui-disabled": {
+    opacity: 0.45,
+  },
 };

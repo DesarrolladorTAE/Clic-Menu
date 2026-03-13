@@ -31,16 +31,11 @@ import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 import RestaurantAdminLayout from "../layouts/RestaurantAdminLayout";
 import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
-
-
 //Menu 2
 import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
 
-
 //Sucursales
 import BranchesPage from "../pages/restaurant/BranchesPage";
-import BranchCreate from "../pages/restaurant/BranchCreate";
-import BranchEdit from "../pages/restaurant/BranchEdit";
 
 //Menu y así
 import MenuManager from "../pages/menu/MenuManager";
@@ -136,12 +131,11 @@ export default function AppRoutes() {
           <Route path="menu" element={<MenuManager />} />
           <Route path="menu/products" element={<ProductsPage />} />
           <Route path="menu/products/:productId/variants" element={<ProductVariantsPage />} />
-
+          <Route path="menu/products/:productId/recipes" element={<ProductRecipesPage />} />
+          <Route path="menu/products/:productId/components" element={<ProductCompositionPage />} />
 
         </Route>
 
-
-        
 
         <Route
           path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
@@ -151,21 +145,14 @@ export default function AppRoutes() {
 
 
 
-
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
 
-        <Route
-          path="/owner/restaurants/:restaurantId/products/:productId/components"
-          element={<ProductCompositionPage />}
-        />
+        
         
 
-        
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
-
-        <Route path="/owner/restaurants/:restaurantId/products/:productId/recipes" element={<ProductRecipesPage />} />
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/tables" element={<BranchFloorPlanPage />} />
 

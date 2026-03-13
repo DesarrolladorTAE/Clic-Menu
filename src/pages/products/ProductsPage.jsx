@@ -412,7 +412,7 @@ export default function ProductsPage() {
 
   const onRecipes = (p) => {
     if (!p?.id) return;
-    nav(`/owner/restaurants/${restaurantId}/products/${p.id}/recipes`, {
+    nav(`/owner/restaurants/${restaurantId}/operation/menu/products/${p.id}/recipes`, {
       state: {
         product_name: p?.name || "",
         products_mode: productsMode,
@@ -424,7 +424,7 @@ export default function ProductsPage() {
   const onComponents = (p) => {
     if (!p?.id) return;
     nav(
-      `/owner/restaurants/${restaurantId}/products/${p.id}/components${buildBranchQuery()}`,
+      `/owner/restaurants/${restaurantId}/operation/menu/products/${p.id}/components${buildBranchQuery()}`,
       {
         state: {
           product_name: p?.name || "",
