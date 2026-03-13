@@ -2,6 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
+  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, IconButton, Paper, Stack, Switch,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import AddIcon from "@mui/icons-material/Add";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import TuneIcon from "@mui/icons-material/Tune";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import BlockIcon from "@mui/icons-material/Block";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import AutoAwesomeMotionIcon from "@mui/icons-material/AutoAwesomeMotion";
+
+import {
   getProductVariants,
   toggleProductVariant,
   setDefaultProductVariant,
@@ -9,23 +27,28 @@ import {
 } from "../../../services/products/variants/productVariants.service";
 
 import VariantWizardModal from "../../../components/variants/VariantWizardModal";
-import { normalizeErr } from "../../../utils/err";
-
 import RepairVariantModal from "../../../components/variants/RepairVariantModal";
-
 import VariantChannelsModal from "../../../components/variants/VariantChannelsModal";
 
+import PageContainer from "../../../components/common/PageContainer";
+import AppAlert from "../../../components/common/AppAlert";
+import PaginationFooter from "../../../components/common/PaginationFooter";
+import usePagination from "../../../hooks/usePagination";
+import { normalizeErr } from "../../../utils/err";
 
+const PAGE_SIZE = 5;
 
 function money(n) {
   if (n == null || n === "") return "—";
   const num = Number(n);
   if (!Number.isFinite(num)) return String(n);
-  return num.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+  return num.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
 }
 
 function buildAttrSummary(attributes) {
-  // attributes = [{attribute_name, values:[{value_name}]}]
   if (!attributes?.length) return "—";
   const parts = attributes.map((a) => {
     const vals = (a.values || []).map((v) => v.value_name).join(", ");
@@ -38,36 +61,35 @@ export default function ProductVariantsPage() {
   const nav = useNavigate();
   const { restaurantId, productId } = useParams();
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
 
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
+
   const [product, setProduct] = useState(null);
   const [preconditions, setPreconditions] = useState(null);
   const [basePrice, setBasePrice] = useState(null);
+  const [rows, setRows] = useState([]);
 
-  const [rows, setRows] = useState([]); // data del backend: [{variant, attributes}]
   const [wizardOpen, setWizardOpen] = useState(false);
-
-  // placeholder: cuál variante quieres "editar" (para futuro repair)
-  const [editTarget, setEditTarget] = useState(null);
-
-  //Modal reparar (2)
   const [repairOpen, setRepairOpen] = useState(false);
-  const [repairTarget, setRepairTarget] = useState(null); 
-
-  //Modal productos variantes
+  const [repairTarget, setRepairTarget] = useState(null);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [channelsTarget, setChannelsTarget] = useState(null);
 
-
-
-  // anti race-conditions
   const reqRef = useRef(0);
 
-  const titleName = product?.name || `Producto ${productId}`;
+  const titleName = product?.name || "Producto";
   const canCreateVariants = !!preconditions?.has_any_channel_price;
-
   const isEmpty = !loading && rows.length === 0;
 
   const basePriceLabel = useMemo(() => {
@@ -78,6 +100,24 @@ export default function ProductVariantsPage() {
     if (min === max) return money(min);
     return `${money(min)} - ${money(max)}`;
   }, [basePrice]);
+
+  const showAlert = ({
+    severity = "error",
+    title = "Error",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
 
   const load = async (opts = { initial: false }) => {
     const myReq = ++reqRef.current;
@@ -106,55 +146,72 @@ export default function ProductVariantsPage() {
 
   useEffect(() => {
     load({ initial: true });
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, productId]);
 
-  // --------- TOGGLE (optimistic) ----------
+  useEffect(() => {
+    if (!err) return;
+
+    const timer = setTimeout(() => {
+      setErr("");
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [err]);
+
   const onToggle = async (variantId, nextEnabled) => {
     setErr("");
 
     const row = rows.find((x) => x?.variant?.id === variantId);
     const v = row?.variant;
 
-    // 🚫 si es inválida, no hacemos nada
-    if (v?.is_invalid) {
-      return;
-    }
+    if (v?.is_invalid) return;
 
-    // optimistic patch
     const snapshot = rows;
     setRows((prev) =>
       prev.map((r) =>
         r.variant.id === variantId
           ? { ...r, variant: { ...r.variant, is_enabled: !!nextEnabled } }
-          : r,
-      ),
+          : r
+      )
     );
 
     try {
-      await toggleProductVariant(restaurantId, productId, variantId, nextEnabled);
+      await toggleProductVariant(
+        restaurantId,
+        productId,
+        variantId,
+        nextEnabled
+      );
+
+      showAlert({
+        severity: "success",
+        title: "Estado actualizado",
+        message: nextEnabled
+          ? "La variante quedó activa."
+          : "La variante quedó inactiva.",
+      });
     } catch (e) {
-      setRows(snapshot); // rollback
+      setRows(snapshot);
       setErr(normalizeErr(e, "No se pudo actualizar estado"));
     }
   };
 
-  // --------- DEFAULT (optimistic) ----------
   const onDefault = async (variantId, nextDefault) => {
     setErr("");
 
     const row = rows.find((x) => x?.variant?.id === variantId);
     const v = row?.variant;
 
-    // 🚫 default tampoco aplica a inválidas
     if (v?.is_invalid) {
-      setErr("No puedes marcar como default una variante inválida. Corrige o elimina la variante.");
+      setErr(
+        "No puedes marcar como default una variante inválida. Corrige o elimina la variante."
+      );
       return;
     }
 
     const snapshot = rows;
 
-    // optimistic: si pongo default, quito los otros
     setRows((prev) =>
       prev.map((r) => {
         if (r.variant.id === variantId) {
@@ -168,334 +225,823 @@ export default function ProductVariantsPage() {
             },
           };
         }
+
         return nextDefault
           ? { ...r, variant: { ...r.variant, is_default: false } }
           : r;
-      }),
+      })
     );
 
     try {
-      await setDefaultProductVariant(restaurantId, productId, variantId, nextDefault);
+      await setDefaultProductVariant(
+        restaurantId,
+        productId,
+        variantId,
+        nextDefault
+      );
+
+      showAlert({
+        severity: "success",
+        title: "Default actualizado",
+        message: nextDefault
+          ? "La variante quedó como predeterminada."
+          : "La variante dejó de ser predeterminada.",
+      });
     } catch (e) {
       setRows(snapshot);
       setErr(normalizeErr(e, "No se pudo actualizar default"));
     }
   };
 
-  // --------- DELETE (optimistic + rollback + recarga segura) ----------
   const onDelete = async (variantId, variantName) => {
     setErr("");
 
-    const ok = confirm(
-      `¿Eliminar esta variante?\n\n${variantName || "Variante"}\n\nEsto borrará también sus valores relacionados.`,
+    const ok = window.confirm(
+      `¿Eliminar esta variante?\n\n${variantName || "Variante"}\n\nEsto borrará también sus valores relacionados.`
     );
     if (!ok) return;
 
     const snapshot = rows;
-
-    // optimistic: quitarla de la tabla
     setRows((prev) => prev.filter((r) => r.variant.id !== variantId));
 
     try {
       await deleteProductVariant(restaurantId, productId, variantId);
-
-      // recarga segura
       await load({ initial: false });
+
+      showAlert({
+        severity: "success",
+        title: "Hecho",
+        message: "La variante fue eliminada correctamente.",
+      });
     } catch (e) {
       setRows(snapshot);
       setErr(normalizeErr(e, "No se pudo eliminar la variante"));
     }
   };
 
-  // --------- EDIT (placeholder) ----------
   const onEdit = (variantRow) => {
-    // Placeholder: por ahora solo guardas target + abres wizard
-    // En el futuro este modal será "RepairVariantModal" con selección de valores.
-    setEditTarget(variantRow);
-    setWizardOpen(true);
+    setRepairTarget(variantRow);
+    setRepairOpen(true);
   };
 
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: rows,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
   if (loading) {
-    return <div style={{ padding: 16 }}>Cargando variantes...</div>;
+    return (
+      <PageContainer>
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress color="primary" />
+            <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+              Cargando variantes…
+            </Typography>
+          </Stack>
+        </Box>
+      </PageContainer>
+    );
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "30px auto", padding: 16 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Variantes — {titleName}</h2>
-          <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
-            Restaurante: <strong>{restaurantId}</strong> · Producto: <strong>{productId}</strong>
-            {refreshing && <span style={{ marginLeft: 10, fontSize: 12, opacity: 0.75 }}>actualizando…</span>}
-          </div>
-          <div style={{ marginTop: 6, opacity: 0.85, fontSize: 13 }}>
-            Precio base heredado: <strong>{basePriceLabel}</strong>{" "}
-            <span style={{ fontSize: 12, opacity: 0.75 }}>(desde product_channel)</span>
-          </div>
-        </div>
+    <PageContainer>
+      <Stack spacing={3}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", md: "center" }}
+          spacing={2}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontSize: { xs: 30, md: 42 },
+                fontWeight: 800,
+                color: "text.primary",
+                lineHeight: 1.1,
+              }}
+            >
+              Variantes
+            </Typography>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => nav(`/owner/restaurants/${restaurantId}/products`)}
-            style={{ padding: "10px 14px", cursor: "pointer" }}
+            <Typography
+              sx={{
+                mt: 1,
+                color: "text.secondary",
+                fontSize: { xs: 15, md: 18 },
+              }}
+            >
+              Administra las combinaciones disponibles para <strong>{titleName}</strong>.
+            </Typography>
+
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+              sx={{ mt: 1.5 }}
+            >
+              <Chip
+                size="small"
+                color="secondary"
+                label={`Precio base: ${basePriceLabel}`}
+                sx={{ fontWeight: 800 }}
+              />
+
+              {refreshing ? (
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: "text.secondary",
+                    fontWeight: 700,
+                  }}
+                >
+                  Actualizando cambios…
+                </Typography>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Stack
+            direction={{ xs: "column-reverse", sm: "row" }}
+            spacing={1.5}
+            width={{ xs: "100%", md: "auto" }}
           >
-            ← Volver a productos
-          </button>
+            <Button
+              onClick={() =>
+                nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
+              }
+              variant="outlined"
+              startIcon={<ArrowBackIcon />}
+              sx={{
+                minWidth: { xs: "100%", sm: 210 },
+                height: 44,
+                borderRadius: 2,
+              }}
+            >
+              Volver a productos
+            </Button>
 
-          <button
-            onClick={() => {
-              setEditTarget(null);
-              setWizardOpen(true);
+            <Button
+              onClick={() => {
+                setWizardOpen(true);
+              }}
+              variant="contained"
+              startIcon={<AddIcon />}
+              disabled={!canCreateVariants}
+              title={
+                !canCreateVariants
+                  ? "Configura al menos un precio por canal antes"
+                  : "Crear variantes"
+              }
+              sx={{
+                minWidth: { xs: "100%", sm: 190 },
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
+            >
+              Crear variante
+            </Button>
+          </Stack>
+        </Stack>
+
+        <Paper
+          sx={{
+            p: { xs: 2, sm: 2.5 },
+            borderRadius: 1,
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: "none",
+          }}
+        >
+          <Stack spacing={1.5}>
+            <Typography
+              sx={{
+                fontSize: 16,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              Antes de comenzar
+            </Typography>
+
+            <InstructionRow
+              icon={<AutoAwesomeMotionIcon sx={{ fontSize: 18 }} />}
+              text="Las variantes permiten ofrecer diferentes combinaciones del mismo producto, como tamaño, sabor o presentación."
+            />
+
+            <InstructionRow
+              icon={<TuneIcon sx={{ fontSize: 18 }} />}
+              text="Una variante inválida no puede activarse ni quedar como predeterminada hasta corregirse o eliminarse."
+            />
+
+            <InstructionRow
+              icon={<Inventory2OutlinedIcon sx={{ fontSize: 18 }} />}
+              text="El precio base se hereda del producto. Después puedes ajustar precios específicos por canal en cada variante."
+            />
+          </Stack>
+        </Paper>
+
+        {!canCreateVariants ? (
+          <Alert
+            severity="warning"
+            sx={{
+              borderRadius: 1,
+              alignItems: "flex-start",
             }}
-            style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 900 }}
-            disabled={!canCreateVariants}
-            title={!canCreateVariants ? "Configura al menos un precio por canal antes" : "Crear variantes"}
           >
-            + Crear variante
-          </button>
-        </div>
-      </div>
+            <Box>
+              <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                No se pueden crear variantes todavía
+              </Typography>
+              <Typography variant="body2">
+                Este producto no tiene ningún precio habilitado por canal.
+                Configura primero el precio en <code>product_channel</code>.
+              </Typography>
+            </Box>
+          </Alert>
+        ) : null}
 
-      {/* Error persistente */}
-      {err && (
-        <div style={{ marginTop: 12, background: "#ffe5e5", padding: 10, whiteSpace: "pre-line", borderRadius: 10 }}>
-          <strong>Error:</strong> {err}
-        </div>
-      )}
-
-      {!canCreateVariants && (
-        <div style={{ marginTop: 12, background: "#fff3cd", border: "1px solid #ffeeba", padding: 10, borderRadius: 10 }}>
-          Este producto no tiene ningún precio habilitado por canal. Configura <code>product_channel</code> antes de crear variantes.
-        </div>
-      )}
-
-      {/* Estado vacío */}
-      {isEmpty ? (
-        <div style={{ marginTop: 16, border: "1px solid #eee", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontWeight: 900, fontSize: 16 }}>Este producto no tiene variantes.</div>
-          <div style={{ marginTop: 8, opacity: 0.85 }}>
-            Las variantes permiten vender el producto con combinaciones como Tamaño o Sabor.
-          </div>
-
-          <button
-            onClick={() => {
-              setEditTarget(null);
-              setWizardOpen(true);
+        {err ? (
+          <Alert
+            severity="error"
+            sx={{
+              borderRadius: 1,
+              alignItems: "flex-start",
+              whiteSpace: "pre-line",
             }}
-            style={{ marginTop: 12, padding: "10px 14px", cursor: "pointer", fontWeight: 900 }}
-            disabled={!canCreateVariants}
           >
-            + Crear variante
-          </button>
-        </div>
-      ) : (
-        /* Tabla viva */
-        <div style={{ marginTop: 16, border: "1px solid #ddd", borderRadius: 12, overflow: "hidden" }}>
-          <div style={{ padding: 12, borderBottom: "1px solid #eee", fontWeight: 900 }}>Variantes</div>
+            <Box>
+              <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                Ocurrió un problema
+              </Typography>
+              <Typography variant="body2">{err}</Typography>
+            </Box>
+          </Alert>
+        ) : null}
 
-          <div style={{ width: "100%", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
-              <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Variante</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Atributos</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Estado</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Precio base</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Acciones</th>
-                </tr>
-              </thead>
+        <Paper
+          sx={{
+            p: 0,
+            overflow: "hidden",
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: "1px solid",
+              borderColor: "divider",
+              backgroundColor: "#fff",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              Lista de variantes
+            </Typography>
+          </Box>
 
-              <tbody>
-                {rows.map((r) => {
-                  const v = r.variant;
-                  const attrs = r.attributes;
+          {isEmpty ? (
+            <Box
+              sx={{
+                px: 3,
+                py: 5,
+                textAlign: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 20,
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}
+              >
+                Este producto no tiene variantes
+              </Typography>
 
-                  const isInvalid = !!v.is_invalid;
-                  const invalidReason = v.invalid_reason || "";
+              <Typography
+                sx={{
+                  mt: 1,
+                  color: "text.secondary",
+                  fontSize: 14,
+                }}
+              >
+                Crea la primera variante para comenzar a manejar combinaciones.
+              </Typography>
 
-                  const canOpenChannels = !isInvalid && !!v.is_enabled;
+              <Button
+                onClick={() => setWizardOpen(true)}
+                variant="contained"
+                startIcon={<AddIcon />}
+                disabled={!canCreateVariants}
+                sx={{
+                  mt: 2.5,
+                  minWidth: 220,
+                  height: 44,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                Crear variante
+              </Button>
+            </Box>
+          ) : (
+            <>
+              {isMobile ? (
+                <Stack spacing={1.5} sx={{ p: 2 }}>
+                  {paginatedItems.map((r) => {
+                    const v = r.variant;
+                    const attrs = r.attributes;
 
-                  return (
-                    <tr key={v.id} style={isInvalid ? { background: "#fff7f7" } : undefined}>
-                      {/* Variante */}
-                      <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <div style={{ fontWeight: 900 }}>{v.name}</div>
+                    const isInvalid = !!v.is_invalid;
+                    const invalidReason = v.invalid_reason || "";
+                    const canOpenChannels = !isInvalid && !!v.is_enabled;
 
-                          {v.is_default && (
-                            <span
-                              style={{
-                                fontSize: 12,
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                background: "#e8f5e9",
-                                border: "1px solid #c8e6c9",
-                              }}
+                    return (
+                      <Card
+                        key={v.id}
+                        sx={{
+                          borderRadius: 1,
+                          boxShadow: "none",
+                          border: "1px solid",
+                          borderColor: isInvalid ? "#FFD1D1" : "divider",
+                          backgroundColor: isInvalid ? "#FFF7F7" : "#fff",
+                        }}
+                      >
+                        <Box sx={{ p: 2 }}>
+                          <Stack spacing={1.5}>
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                              spacing={1}
                             >
-                              Default
-                            </span>
-                          )}
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography
+                                  sx={{
+                                    fontSize: 16,
+                                    fontWeight: 800,
+                                    color: "text.primary",
+                                    lineHeight: 1.25,
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {v.name}
+                                </Typography>
 
-                          {isInvalid && (
-                            <span
-                              style={{
-                                fontSize: 12,
-                                padding: "2px 8px",
-                                borderRadius: 999,
-                                background: "#ffe5e5",
-                                border: "1px solid #ffb3b3",
-                                fontWeight: 900,
-                              }}
-                              title="Esta variante quedó inválida porque se borró un atributo/valor"
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                  sx={{ mt: 1 }}
+                                >
+                                  {v.is_default ? (
+                                    <Chip
+                                      size="small"
+                                      label="Default"
+                                      color="success"
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  ) : null}
+
+                                  {isInvalid ? (
+                                    <Chip
+                                      size="small"
+                                      label="Inválida"
+                                      color="error"
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  ) : null}
+                                </Stack>
+                              </Box>
+
+                              <Stack direction="row" spacing={1}>
+                                <Tooltip title="Editar">
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onEdit(r)}
+                                      disabled={!isInvalid}
+                                      sx={iconEditSx}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+
+                                <Tooltip title="Eliminar">
+                                  <IconButton
+                                    onClick={() => onDelete(v.id, v.name)}
+                                    sx={iconDeleteSx}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </Stack>
+
+                            {isInvalid ? (
+                              <Alert
+                                severity="error"
+                                sx={{
+                                  borderRadius: 1,
+                                  alignItems: "flex-start",
+                                }}
+                              >
+                                <Typography variant="body2">
+                                  {invalidReason ||
+                                    "Esta variante quedó inválida. Corrige o elimínala."}
+                                </Typography>
+                              </Alert>
+                            ) : null}
+
+                            <InfoRow
+                              label="Atributos"
+                              value={buildAttrSummary(attrs)}
+                            />
+
+                            <InfoRow
+                              label="Precio base"
+                              value={basePriceLabel}
+                            />
+
+                            <Box>
+                              <Typography sx={mobileLabelSx}>Estado</Typography>
+
+                              <FormControlLabel
+                                sx={{ m: 0, mt: 0.5 }}
+                                control={
+                                  <Switch
+                                    checked={!!v.is_enabled}
+                                    disabled={isInvalid}
+                                    onChange={(e) =>
+                                      onToggle(v.id, e.target.checked)
+                                    }
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography sx={switchLabelSx}>
+                                    {v.is_enabled ? "Activa" : "Inactiva"}
+                                  </Typography>
+                                }
+                              />
+                            </Box>
+
+                            <Box>
+                              <Typography sx={mobileLabelSx}>
+                                Predeterminada
+                              </Typography>
+
+                              <FormControlLabel
+                                sx={{ m: 0, mt: 0.5 }}
+                                control={
+                                  <Switch
+                                    checked={!!v.is_default}
+                                    disabled={isInvalid}
+                                    onChange={(e) =>
+                                      onDefault(v.id, e.target.checked)
+                                    }
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography sx={switchLabelSx}>
+                                    {v.is_default ? "Sí" : "No"}
+                                  </Typography>
+                                }
+                              />
+                            </Box>
+
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1}
                             >
-                              Inválida
-                            </span>
-                          )}
-                        </div>
+                              <Button
+                                onClick={() => {
+                                  setChannelsTarget(v);
+                                  setChannelsOpen(true);
+                                }}
+                                disabled={!canOpenChannels}
+                                variant="outlined"
+                                startIcon={<TuneIcon />}
+                                sx={{
+                                  flex: 1,
+                                  height: 40,
+                                  borderRadius: 2,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Canales
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        </Box>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              ) : (
+                <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                  <Table sx={{ minWidth: 1080 }}>
+                    <TableHead>
+                      <TableRow
+                        sx={{
+                          "& th": {
+                            backgroundColor: "primary.main",
+                            color: "#fff",
+                            fontWeight: 800,
+                            fontSize: 13,
+                            borderBottom: "none",
+                            whiteSpace: "nowrap",
+                          },
+                        }}
+                      >
+                        <TableCell>Variante</TableCell>
+                        <TableCell>Atributos</TableCell>
+                        <TableCell>Estado</TableCell>
+                        <TableCell>Precio base</TableCell>
+                        <TableCell align="right">Acciones</TableCell>
+                      </TableRow>
+                    </TableHead>
 
-                        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                          ID: {v.id}
-                        </div>
+                    <TableBody>
+                      {paginatedItems.map((r) => {
+                        const v = r.variant;
+                        const attrs = r.attributes;
 
-                        {/* Mensaje visual */}
-                        {isInvalid && (
-                          <div
-                            style={{
-                              marginTop: 6,
-                              fontSize: 12,
-                              color: "#8a0000",
-                              background: "#ffecec",
-                              border: "1px solid #ffd1d1",
-                              padding: "6px 8px",
-                              borderRadius: 10,
-                              whiteSpace: "pre-line",
+                        const isInvalid = !!v.is_invalid;
+                        const invalidReason = v.invalid_reason || "";
+                        const canOpenChannels = !isInvalid && !!v.is_enabled;
+
+                        return (
+                          <TableRow
+                            key={v.id}
+                            hover
+                            sx={{
+                              backgroundColor: isInvalid ? "#FFF7F7" : "inherit",
+                              "& td": {
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
+                                fontSize: 14,
+                                color: "text.primary",
+                                verticalAlign: "top",
+                              },
                             }}
                           >
-                            ⚠️ {invalidReason || "Esta variante quedó inválida. Corrige o elimínala."}
-                          </div>
-                        )}
-                      </td>
+                            <TableCell>
+                              <Stack spacing={0.75}>
+                                <Typography sx={{ fontWeight: 800 }}>
+                                  {v.name}
+                                </Typography>
+                                
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                >
+                                  {v.is_default ? (
+                                    <Chip
+                                      size="small"
+                                      label="Default"
+                                      color="success"
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  ) : null}
 
-                      {/* Atributos */}
-                      <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        <div style={{ fontSize: 13, opacity: 0.9 }}>
-                          {buildAttrSummary(attrs)}
-                        </div>
-                      </td>
+                                  {isInvalid ? (
+                                    <Chip
+                                      size="small"
+                                      label="Inválida"
+                                      color="error"
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  ) : null}
+                                </Stack>
 
-                      {/* Estado */}
-                      <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={!!v.is_enabled}
-                            disabled={isInvalid} // ✅ switch bloqueado
-                            onChange={(e) => onToggle(v.id, e.target.checked)}
-                            title={isInvalid ? "Variante inválida: corrige o elimina" : "Cambiar estado"}
-                          />
-                          <span style={{ fontWeight: 800, color: v.is_enabled ? "#0a7a0a" : "#a10000" }}>
-                            {v.is_enabled ? "Activa" : "Inactiva"}
-                          </span>
-                        </label>
+                                {isInvalid ? (
+                                  <Alert
+                                    severity="error"
+                                    sx={{
+                                      mt: 0.5,
+                                      borderRadius: 1,
+                                      alignItems: "flex-start",
+                                    }}
+                                  >
+                                    <Typography variant="body2">
+                                      {invalidReason ||
+                                        "Esta variante quedó inválida. Corrige o elimínala."}
+                                    </Typography>
+                                  </Alert>
+                                ) : null}
+                              </Stack>
+                            </TableCell>
 
-                        <label style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
-                          <input
-                            type="checkbox"
-                            checked={!!v.is_default}
-                            disabled={isInvalid} // ✅ default bloqueado si inválida
-                            onChange={(e) => onDefault(v.id, e.target.checked)}
-                            title={isInvalid ? "No puedes marcar default una inválida" : "Marcar default"}
-                          />
-                          <span style={{ fontWeight: 800 }}>Default</span>
-                        </label>
+                            <TableCell>
+                              <Typography
+                                sx={{
+                                  fontSize: 13,
+                                  color: "text.primary",
+                                  lineHeight: 1.55,
+                                  whiteSpace: "normal",
+                                }}
+                              >
+                                {buildAttrSummary(attrs)}
+                              </Typography>
+                            </TableCell>
 
-                        {isInvalid && (
-                          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                            No se puede activar hasta corregir.
-                          </div>
-                        )}
-                      </td>
+                            <TableCell>
+                              <Stack spacing={1}>
+                                <FormControlLabel
+                                  sx={{ m: 0 }}
+                                  control={
+                                    <Switch
+                                      checked={!!v.is_enabled}
+                                      disabled={isInvalid}
+                                      onChange={(e) =>
+                                        onToggle(v.id, e.target.checked)
+                                      }
+                                      color="primary"
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={switchLabelSx}>
+                                      {v.is_enabled ? "Activa" : "Inactiva"}
+                                    </Typography>
+                                  }
+                                />
 
-                      {/* Precio base */}
-                      <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        <div style={{ fontWeight: 900 }}>{basePriceLabel}</div>
-                        <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                          Hereda del producto
-                        </div>
-                      </td>
+                                <FormControlLabel
+                                  sx={{ m: 0 }}
+                                  control={
+                                    <Switch
+                                      checked={!!v.is_default}
+                                      disabled={isInvalid}
+                                      onChange={(e) =>
+                                        onDefault(v.id, e.target.checked)
+                                      }
+                                      color="primary"
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={switchLabelSx}>
+                                      {v.is_default ? "Default" : "Sin default"}
+                                    </Typography>
+                                  }
+                                />
 
-                      {/* Acciones */}
-                      <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          
+                                {isInvalid ? (
+                                  <Typography
+                                    sx={{
+                                      fontSize: 12,
+                                      color: "text.secondary",
+                                    }}
+                                  >
+                                    No se puede activar hasta corregir.
+                                  </Typography>
+                                ) : null}
+                              </Stack>
+                            </TableCell>
 
-                          <button
-                            onClick={() => {
-                              setChannelsTarget(v);
-                              setChannelsOpen(true);
-                            }}
-                            disabled={!canOpenChannels}
-                            title={
-                              !canOpenChannels
-                                ? isInvalid
-                                  ? "Variante inválida: corrige o elimina"
-                                  : "Variante inactiva: actívala para configurar canales"
-                                : "Configurar precio por canal (override)"
-                            }
-                            style={{
-                              padding: "8px 10px",
-                              cursor: canOpenChannels ? "pointer" : "not-allowed",
-                              opacity: canOpenChannels ? 1 : 0.6,
-                              fontWeight: 900,
-                            }}
-                          >
-                            💲 Canales
-                          </button>
+                            <TableCell>
+                              <Stack spacing={0.5}>
+                                <Typography sx={{ fontWeight: 800 }}>
+                                  {basePriceLabel}
+                                </Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "text.secondary",
+                                  }}
+                                >
+                                  Hereda del producto
+                                </Typography>
+                              </Stack>
+                            </TableCell>
 
+                            <TableCell align="right">
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                justifyContent="flex-end"
+                                alignItems="center"
+                                flexWrap="nowrap"
+                              >
+                                <Button
+                                  onClick={() => {
+                                    setChannelsTarget(v);
+                                    setChannelsOpen(true);
+                                  }}
+                                  disabled={!canOpenChannels}
+                                  variant="outlined"
+                                  sx={{
+                                    height: 36,
+                                    minWidth: 120,
+                                    borderRadius: 2,
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Canales
+                                </Button>
 
-                          {/* ✅ Editar habilitado SOLO si inválida (placeholder) */}
-                          <button
-                            onClick={() => onEdit(r)}
-                            disabled={!isInvalid}
-                            title={!isInvalid ? "Editar no aplica (nombre compuesto)" : "Corregir variante (próximo paso)"}
-                            style={{
-                              padding: "8px 10px",
-                              cursor: isInvalid ? "pointer" : "not-allowed",
-                              opacity: isInvalid ? 1 : 0.5,
-                            }}
-                          >
-                            ✏️
-                          </button>
+                                <Tooltip title="Editar">
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onEdit(r)}
+                                      disabled={!isInvalid}
+                                      sx={iconEditSx}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
 
-                          <button
-                            onClick={() => onDelete(v.id, v.name)}
-                            style={{ padding: "8px 10px", cursor: "pointer", background: "#ffe5e5" }}
-                            title="Eliminar"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                                <Tooltip title="Eliminar">
+                                  <IconButton
+                                    onClick={() => onDelete(v.id, v.name)}
+                                    sx={iconDeleteSx}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
 
-          <div style={{ padding: 10, fontSize: 12, opacity: 0.75 }}>
-            Nota: Si una variante se vuelve inválida por borrar un atributo/valor, queda inactiva y no puede reactivarse hasta corregirla o eliminarla.
-          </div>
-        </div>
-      )}
+              <PaginationFooter
+                page={page}
+                totalPages={totalPages}
+                startItem={startItem}
+                endItem={endItem}
+                total={total}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={prevPage}
+                onNext={nextPage}
+                itemLabel="variantes"
+              />
+            </>
+          )}
+        </Paper>
 
-      {/* Wizard */}
+        <Typography
+          sx={{
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.5,
+          }}
+        >
+          Nota: si una variante se vuelve inválida por borrar un atributo o valor,
+          queda inactiva y no puede reactivarse hasta corregirse o eliminarse.
+        </Typography>
+      </Stack>
+
       <VariantWizardModal
         open={wizardOpen}
         onClose={() => {
           setWizardOpen(false);
-          setEditTarget(null);
         }}
         restaurantId={restaurantId}
         productId={productId}
@@ -503,16 +1049,13 @@ export default function ProductVariantsPage() {
         disabledByPrecondition={!canCreateVariants}
         onGenerated={async () => {
           await load({ initial: false });
+          showAlert({
+            severity: "success",
+            title: "Hecho",
+            message: "Las variantes se actualizaron correctamente.",
+          });
         }}
       />
-
-      {/* debug opcional del target */}
-      {editTarget && (
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-          Edit target (placeholder): variante #{editTarget?.variant?.id}
-        </div>
-      )}
-
 
       <RepairVariantModal
         open={repairOpen}
@@ -525,9 +1068,13 @@ export default function ProductVariantsPage() {
         variantRow={repairTarget}
         onRepaired={async () => {
           await load({ initial: false });
+          showAlert({
+            severity: "success",
+            title: "Variante corregida",
+            message: "La variante fue reparada correctamente.",
+          });
         }}
       />
-
 
       <VariantChannelsModal
         open={channelsOpen}
@@ -540,7 +1087,101 @@ export default function ProductVariantsPage() {
         variant={channelsTarget}
       />
 
-
-    </div>
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </PageContainer>
   );
 }
+
+function InstructionRow({ icon, text }) {
+  return (
+    <Stack direction="row" spacing={1.25} alignItems="flex-start">
+      <Box
+        sx={{
+          minWidth: 28,
+          height: 28,
+          borderRadius: 999,
+          bgcolor: "primary.main",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        {icon}
+      </Box>
+
+      <Typography
+        sx={{
+          fontSize: 14,
+          color: "text.primary",
+          lineHeight: 1.6,
+        }}
+      >
+        {text}
+      </Typography>
+    </Stack>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <Box>
+      <Typography sx={mobileLabelSx}>{label}</Typography>
+      <Typography sx={mobileValueSx}>{value}</Typography>
+    </Box>
+  );
+}
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  mt: 0.25,
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+  lineHeight: 1.5,
+};
+
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#EFE7BF",
+    color: "rgba(255,255,255,0.85)",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+};

@@ -1,8 +1,27 @@
-// src/components/variants/VariantWizardModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, Stack, Step, StepLabel, Stepper, Typography, useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import TuneIcon from "@mui/icons-material/Tune";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import PlaylistAddCheckCircleOutlinedIcon from "@mui/icons-material/PlaylistAddCheckCircleOutlined";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+
 import { getVariantAttributes } from "../../services/products/variants/variantAttributes.service";
 import { getVariantAttributeValues } from "../../services/products/variants/variantAttributeValues.service";
 import { generateProductVariants } from "../../services/products/variants/productVariantGenerator.service";
+
 import VariantAttributesAdminModal from "./VariantAttributesAdminModal";
 
 function normalizeErr(e) {
@@ -16,24 +35,20 @@ function normalizeErr(e) {
 }
 
 function buildSelections(selectedAttributeIds, selectedValueIds) {
-  // backend espera: selections: [{ attribute_id, value_ids }]
-  const selections = selectedAttributeIds
+  return selectedAttributeIds
     .map((aid) => ({
       attribute_id: Number(aid),
       value_ids: (selectedValueIds[Number(aid)] || []).map(Number),
     }))
     .filter((x) => x.attribute_id > 0 && x.value_ids.length > 0);
-
-  return selections;
 }
 
 function cartesianPreview(
   attributesInOrder,
   valuesByAttribute,
   selectedValueIds,
-  maxPreview = 20,
+  maxPreview = 20
 ) {
-  // genera combos con nombres humanos solo para preview en UI (NO inserta)
   let combos = [[]];
 
   for (const attr of attributesInOrder) {
@@ -58,12 +73,24 @@ function cartesianPreview(
       }
       if (newCombos.length >= maxPreview) break;
     }
+
     combos = newCombos;
     if (combos.length >= maxPreview) break;
   }
 
   return combos;
 }
+
+function getCreatedCount(res) {
+  const raw =
+    res?.data?.created_count ??
+    res?.created_count ??
+    0;
+
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 
 export default function VariantWizardModal({
   open,
@@ -72,44 +99,44 @@ export default function VariantWizardModal({
   productId,
   productName,
   disabledByPrecondition = false,
-  onGenerated, // callback -> recargar lista afuera
+  onGenerated,
 }) {
-  const [step, setStep] = useState(2); // 2, 3, 4
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const [step, setStep] = useState(1); // 1, 2, 3
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // Step 2
-  const [attributes, setAttributes] = useState([]); // activos
-  const [selectedAttributeIds, setSelectedAttributeIds] = useState([]); // number[]
+  const [attributes, setAttributes] = useState([]);
+  const [selectedAttributeIds, setSelectedAttributeIds] = useState([]);
 
-  // Step 3
-  const [valuesByAttribute, setValuesByAttribute] = useState({}); // { [aid]: {attribute, data} }
-  const [selectedValueIds, setSelectedValueIds] = useState({}); // { [aid]: number[] }
+  const [valuesByAttribute, setValuesByAttribute] = useState({});
+  const [selectedValueIds, setSelectedValueIds] = useState({});
 
-  // Step 4
   const [replace, setReplace] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
 
-  // Admin modal
   const [adminOpen, setAdminOpen] = useState(false);
 
   const reqRef = useRef(0);
 
   const selectedAttributes = useMemo(() => {
-    const setIds = new Set(selectedAttributeIds.map(Number));
-    // respeta orden alfabético (ya viene ordenado del backend)
-    return attributes.filter((a) => setIds.has(Number(a.id)));
+    const ids = new Set(selectedAttributeIds.map(Number));
+    return attributes.filter((a) => ids.has(Number(a.id)));
   }, [attributes, selectedAttributeIds]);
 
-  const canContinueStep2 = selectedAttributeIds.length >= 1;
+  const canContinueStep1 = selectedAttributeIds.length >= 1;
 
-  const canContinueStep3 = useMemo(() => {
+  const canContinueStep2 = useMemo(() => {
     if (selectedAttributeIds.length < 1) return false;
+
     for (const aid of selectedAttributeIds) {
       const list = selectedValueIds[Number(aid)] || [];
       if (!list.length) return false;
     }
+
     return true;
   }, [selectedAttributeIds, selectedValueIds]);
 
@@ -118,24 +145,35 @@ export default function VariantWizardModal({
   }, [selectedAttributeIds, selectedValueIds]);
 
   const previewCombos = useMemo(() => {
-    if (step !== 4) return [];
-    return cartesianPreview(selectedAttributes, valuesByAttribute, selectedValueIds, 30);
+    if (step !== 3) return [];
+    return cartesianPreview(
+      selectedAttributes,
+      valuesByAttribute,
+      selectedValueIds,
+      30
+    );
   }, [step, selectedAttributes, valuesByAttribute, selectedValueIds]);
 
   const previewCount = useMemo(() => {
-    // conteo real (sin limitar) para mostrar en Step 4
-    // count = producto de cantidades por atributo
-    if (!canContinueStep3) return 0;
+    if (!canContinueStep2) return 0;
+
     let count = 1;
     for (const aid of selectedAttributeIds.map(Number)) {
       const n = (selectedValueIds[aid] || []).length;
       count *= n;
     }
     return count;
-  }, [canContinueStep3, selectedAttributeIds, selectedValueIds]);
+  }, [canContinueStep2, selectedAttributeIds, selectedValueIds]);
+
+  const title = `Crear variantes${productName ? ` — ${productName}` : ""}`;
+  const steps = [
+    "Selecciona los atributos",
+    "Selecciona valores por atributo",
+    "Generación automática",
+  ];
 
   const resetAll = () => {
-    setStep(2);
+    setStep(1);
     setErr("");
     setLoading(false);
     setAttributes([]);
@@ -152,14 +190,17 @@ export default function VariantWizardModal({
     const myReq = ++reqRef.current;
     setLoading(true);
     setErr("");
+
     try {
-      const res = await getVariantAttributes(restaurantId, { only_active: true });
+      const res = await getVariantAttributes(restaurantId, {
+        only_active: true,
+      });
+
       if (myReq !== reqRef.current) return;
 
       const list = res?.data || [];
       setAttributes(list);
 
-      // Limpia selección si alguien desactivó/eliminó atributos desde admin
       setSelectedAttributeIds((prev) => {
         const activeIds = new Set(list.map((x) => Number(x.id)));
         return prev.map(Number).filter((id) => activeIds.has(id));
@@ -173,23 +214,34 @@ export default function VariantWizardModal({
     }
   };
 
-  // load attrs on open
   useEffect(() => {
     if (!open) return;
     if (disabledByPrecondition) return;
     reloadAttributes();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, restaurantId, disabledByPrecondition]);
 
   useEffect(() => {
     if (!open) resetAll();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    if (!err) return;
+
+    const timer = setTimeout(() => {
+      setErr("");
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [err]);
 
   const toggleAttr = (id) => {
     setErr("");
     setResult(null);
+
     const n = Number(id);
+
     setSelectedAttributeIds((prev) => {
       const s = new Set(prev.map(Number));
       if (s.has(n)) s.delete(n);
@@ -198,8 +250,11 @@ export default function VariantWizardModal({
     });
   };
 
-  const goStep3 = async () => {
-    if (!canContinueStep2) return setErr("Selecciona al menos 1 atributo.");
+  const goStep2 = async () => {
+    if (!canContinueStep1) {
+      setErr("Selecciona al menos 1 atributo.");
+      return;
+    }
 
     setErr("");
     setResult(null);
@@ -211,13 +266,16 @@ export default function VariantWizardModal({
       const ids = selectedAttributeIds.map(Number);
 
       const responses = await Promise.all(
-        ids.map((aid) => getVariantAttributeValues(restaurantId, aid, { only_active: true })),
+        ids.map((aid) =>
+          getVariantAttributeValues(restaurantId, aid, { only_active: true })
+        )
       );
 
       if (myReq !== reqRef.current) return;
 
       const map = {};
       const sel = {};
+
       responses.forEach((r) => {
         const attribute = r?.attribute;
         const data = r?.data || [];
@@ -229,7 +287,7 @@ export default function VariantWizardModal({
 
       setValuesByAttribute(map);
       setSelectedValueIds(sel);
-      setStep(3);
+      setStep(2);
     } catch (e) {
       if (myReq !== reqRef.current) return;
       setErr(normalizeErr(e));
@@ -242,6 +300,7 @@ export default function VariantWizardModal({
   const toggleValue = (attributeId, valueId) => {
     setErr("");
     setResult(null);
+
     const aid = Number(attributeId);
     const vid = Number(valueId);
 
@@ -253,39 +312,67 @@ export default function VariantWizardModal({
     });
   };
 
-  const backToStep2 = () => {
-    setErr("");
-    setResult(null);
-    setStep(2);
-    setValuesByAttribute({});
-    setSelectedValueIds({});
-  };
+  const goStep3 = () => {
+    if (!canContinueStep2) {
+      setErr("Selecciona al menos 1 valor por cada atributo.");
+      return;
+    }
 
-  const goStep4 = () => {
-    if (!canContinueStep3) return setErr("Selecciona al menos 1 valor por cada atributo.");
-    setErr("");
-    setResult(null);
-    setStep(4);
-  };
-
-  const backToStep3 = () => {
     setErr("");
     setResult(null);
     setStep(3);
   };
 
   const doGenerate = async () => {
-    if (!canContinueStep3) return setErr("Selección inválida.");
-    if (!selections.length) return setErr("Debes seleccionar al menos 1 atributo con valores.");
+    if (!canContinueStep2) {
+      setErr("Selección inválida.");
+      return;
+    }
+
+    if (!selections.length) {
+      setErr("Debes seleccionar al menos 1 atributo con valores.");
+      return;
+    }
 
     setErr("");
     setResult(null);
     setGenerating(true);
 
     try {
-      const payload = { replace: !!replace, selections };
+      const payload = {
+        replace: !!replace,
+        selections,
+      };
+
       const res = await generateProductVariants(restaurantId, productId, payload);
-      setResult(res);
+
+      const createdCount = getCreatedCount(res);
+
+      if (createdCount === 0) {
+        setResult({
+          ...res,
+          uiSeverity: "warning",
+          uiTitle: "Variantes ya existentes",
+          uiMessage:
+            "Las combinaciones seleccionadas ya existen. No se creó ninguna variante nueva.",
+        });
+      } else if (createdCount < previewCount) {
+        setResult({
+          ...res,
+          uiSeverity: "warning",
+          uiTitle: "Generación parcial",
+          uiMessage: `Se crearon ${createdCount} variante(s), pero algunas combinaciones ya existían y no se duplicaron.`,
+        });
+      } else {
+        setResult({
+          ...res,
+          uiSeverity: "success",
+          uiTitle: "Resultado",
+          uiMessage:
+            res?.message ||
+            `Variantes generadas correctamente. Creadas: ${createdCount}`,
+        });
+      }
 
       await onGenerated?.(res);
     } catch (e) {
@@ -295,396 +382,946 @@ export default function VariantWizardModal({
     }
   };
 
-  if (!open) return null;
 
+
+  if (!open) return null;
   return (
     <>
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.35)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-          zIndex: 9999,
-        }}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose?.();
+      <Dialog
+        open={open}
+        onClose={generating ? undefined : onClose}
+        fullWidth
+        maxWidth="lg"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
         }}
       >
-        <div
-          style={{
-            width: "min(980px, 100%)",
-            background: "#fff",
-            borderRadius: 14,
-            border: "1px solid #eee",
-            overflow: "hidden",
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
           }}
         >
-          {/* Header */}
-          <div
-            style={{
-              padding: 14,
-              borderBottom: "1px solid #f0f0f0",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
           >
-            <div>
-              <div style={{ fontWeight: 900, fontSize: 16 }}>
-                Crear variantes — {productName || `Producto ${productId}`}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Paso {step} de 4</div>
-            </div>
-
-            <button onClick={onClose} style={{ padding: "8px 10px", cursor: "pointer" }}>
-              ✕
-            </button>
-          </div>
-
-          {/* Body */}
-          <div style={{ padding: 14 }}>
-            {disabledByPrecondition ? (
-              <div
-                style={{
-                  background: "#fff3cd",
-                  border: "1px solid #ffeeba",
-                  padding: 12,
-                  borderRadius: 10,
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
                 }}
               >
-                Primero configura al menos un precio habilitado por canal en el producto (
-                <code>product_channel</code>).
-              </div>
+                {title}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                Define atributos, selecciona valores y genera variantes de forma automática.
+              </Typography>
+            </Box>
+
+            <IconButton
+              onClick={onClose}
+              disabled={generating}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            p: { xs: 2, sm: 3 },
+            bgcolor: "background.default",
+          }}
+        >
+          <Stack spacing={2.5}>
+            {disabledByPrecondition ? (
+              <Alert
+                severity="warning"
+                sx={{
+                  borderRadius: 1,
+                  alignItems: "flex-start",
+                }}
+              >
+                <Box>
+                  <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                    No puedes crear variantes todavía
+                  </Typography>
+                  <Typography variant="body2">
+                    Primero configura al menos un precio habilitado por canal en el
+                    producto (<code>product_channel</code>).
+                  </Typography>
+                </Box>
+              </Alert>
             ) : (
               <>
-                {err && (
-                  <div
-                    style={{
-                      marginBottom: 12,
-                      background: "#ffe5e5",
-                      padding: 10,
+                {err ? (
+                  <Alert
+                    severity="error"
+                    sx={{
+                      borderRadius: 1,
+                      alignItems: "flex-start",
                       whiteSpace: "pre-line",
-                      borderRadius: 10,
                     }}
                   >
-                    <strong>Error:</strong> {err}
-                  </div>
-                )}
+                    <Box>
+                      <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                        No se pudo completar la acción
+                      </Typography>
+                      <Typography variant="body2">{err}</Typography>
+                    </Box>
+                  </Alert>
+                ) : null}
 
-                {loading ? (
-                  <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 10 }}>
-                    Cargando...
-                  </div>
-                ) : step === 2 ? (
-                  <>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        marginBottom: 8,
-                      }}
+                <Card sx={{ borderRadius: 0 }}>
+                  <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                    <Stepper
+                      activeStep={step - 1}
+                      alternativeLabel={!isMobile}
+                      orientation={isMobile ? "vertical" : "horizontal"}
                     >
-                      <div style={{ fontWeight: 900 }}>Paso 2: Selecciona los atributos</div>
+                      {steps.map((label) => (
+                        <Step key={label}>
+                          <StepLabel>{label}</StepLabel>
+                        </Step>
+                      ))}
+                    </Stepper>
+                  </CardContent>
+                </Card>
 
-                      <button
-                        onClick={() => setAdminOpen(true)}
-                        style={{
-                          marginLeft: "auto",
-                          padding: "8px 10px",
-                          cursor: "pointer",
-                          fontWeight: 900,
-                          borderRadius: 10,
-                          border: "1px solid #eee",
-                          background: "#f7f7f7",
-                        }}
-                        title="Crear/editar atributos y sus valores"
-                      >
-                        Administrar atributos
-                      </button>
-                    </div>
-
-                    {attributes.length === 0 ? (
-                      <div style={{ opacity: 0.85 }}>
-                        No hay atributos activos en este restaurante.
-                      </div>
-                    ) : (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {attributes.map((a) => {
-                          const checked = selectedAttributeIds.map(Number).includes(Number(a.id));
-                          return (
-                            <label
-                              key={a.id}
-                              style={{
-                                display: "flex",
-                                gap: 10,
-                                alignItems: "center",
-                                padding: 10,
-                                border: "1px solid #eee",
-                                borderRadius: 10,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleAttr(a.id)}
-                              />
-                              <div style={{ fontWeight: 800 }}>{a.name}</div>
-                              <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.7 }}>
-                                {a.status}
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                ) : step === 3 ? (
-                  <>
-                    <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                      Paso 3: Selecciona valores por atributo
-                    </div>
-
-                    {selectedAttributes.length === 0 ? (
-                      <div style={{ opacity: 0.85 }}>No hay atributos seleccionados.</div>
-                    ) : (
-                      <div style={{ display: "grid", gap: 14 }}>
-                        {selectedAttributes.map((a) => {
-                          const aid = Number(a.id);
-                          const pack = valuesByAttribute[aid];
-                          const values = pack?.data || [];
-                          const selected = new Set((selectedValueIds[aid] || []).map(Number));
-
-                          return (
-                            <div
-                              key={aid}
-                              style={{
-                                border: "1px solid #eee",
-                                borderRadius: 12,
-                                padding: 12,
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div style={{ fontWeight: 900 }}>{a.name}</div>
-                                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                                  Selecciona mínimo 1 valor
-                                </div>
-                                <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.7 }}>
-                                  {(selectedValueIds[aid] || []).length} seleccionados
-                                </div>
-                              </div>
-
-                              {values.length === 0 ? (
-                                <div style={{ marginTop: 10, opacity: 0.85 }}>
-                                  Este atributo no tiene valores activos.
-                                </div>
-                              ) : (
-                                <div
-                                  style={{
-                                    marginTop: 10,
-                                    display: "grid",
-                                    gridTemplateColumns:
-                                      "repeat(auto-fill, minmax(180px, 1fr))",
-                                    gap: 10,
-                                  }}
-                                >
-                                  {values.map((v) => {
-                                    const checked = selected.has(Number(v.id));
-                                    return (
-                                      <label
-                                        key={v.id}
-                                        style={{
-                                          display: "flex",
-                                          gap: 10,
-                                          alignItems: "center",
-                                          padding: 10,
-                                          border: "1px solid #f0f0f0",
-                                          borderRadius: 10,
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
-                                          onChange={() => toggleValue(aid, v.id)}
-                                        />
-                                        <div style={{ fontWeight: 800 }}>{v.value}</div>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontWeight: 900, marginBottom: 8 }}>
-                      Paso 4: Generación automática
-                    </div>
-
-                    <div style={{ display: "grid", gap: 10 }}>
-                      <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
-                        <div style={{ fontWeight: 900 }}>Resumen</div>
-                        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
-                          Combinaciones totales: <strong>{previewCount}</strong>
-                          {previewCount > 500 && (
-                            <span style={{ marginLeft: 8, color: "#a10000", fontWeight: 800 }}>
-                              (El backend bloqueará si &gt; 500)
-                            </span>
-                          )}
-                        </div>
-
-                        <label
-                          style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={replace}
-                            onChange={(e) => setReplace(e.target.checked)}
-                            disabled={generating}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 900 }}>Reemplazar existentes</div>
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>
-                              Si está activo, borra variantes actuales del producto antes de generar.
-                            </div>
-                          </div>
-                        </label>
-                      </div>
-
-                      <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
-                        <div style={{ fontWeight: 900, marginBottom: 8 }}>Preview (máx 30)</div>
-                        {previewCombos.length === 0 ? (
-                          <div style={{ opacity: 0.85 }}>No hay combinaciones para mostrar.</div>
-                        ) : (
-                          <div style={{ display: "grid", gap: 8 }}>
-                            {previewCombos.map((combo, idx) => (
-                              <div
-                                key={idx}
-                                style={{
-                                  padding: 10,
-                                  border: "1px solid #f0f0f0",
-                                  borderRadius: 10,
-                                  display: "flex",
-                                  flexWrap: "wrap",
-                                  gap: 8,
-                                  alignItems: "center",
-                                }}
-                              >
-                                <span style={{ fontWeight: 900 }}>Variante:</span>
-                                <span style={{ fontWeight: 800 }}>
-                                  {(productName || "Producto") +
-                                    " " +
-                                    combo.map((x) => x.value_name).join(" ")}
-                                </span>
-
-                                <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.75 }}>
-                                  {combo
-                                    .map((x) => `${x.attribute_name}: ${x.value_name}`)
-                                    .join(" | ")}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {result && (
-                        <div
-                          style={{
-                            padding: 12,
-                            border: "1px solid #d1e7dd",
-                            background: "#d1e7dd",
-                            borderRadius: 12,
+                <Card
+                  sx={{
+                    borderRadius: 0,
+                    backgroundColor: "background.paper",
+                  }}
+                >
+                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                    <Stack spacing={2.5}>
+                      {loading ? (
+                        <Box
+                          sx={{
+                            minHeight: 220,
+                            display: "grid",
+                            placeItems: "center",
                           }}
                         >
-                          <div style={{ fontWeight: 900 }}>Resultado</div>
-                          <div style={{ marginTop: 6 }}>
-                            {result?.message || "Variantes generadas"} · Creadas:{" "}
-                            <strong>{result?.data?.created_count ?? "?"}</strong>
-                          </div>
-                        </div>
+                          <Stack spacing={2} alignItems="center">
+                            <Chip
+                              label="Cargando..."
+                              sx={{ fontWeight: 800 }}
+                            />
+                            <Typography
+                              sx={{ fontSize: 14, color: "text.secondary" }}
+                            >
+                              Espera un momento mientras se prepara la información.
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      ) : step === 1 ? (
+                        <>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            justifyContent="space-between"
+                            alignItems={{ xs: "stretch", sm: "center" }}
+                            spacing={1.5}
+                          >
+                            <Box>
+                              <Typography
+                                sx={{
+                                  fontWeight: 800,
+                                  fontSize: { xs: 18, sm: 20 },
+                                  color: "text.primary",
+                                }}
+                              >
+                                Paso 1. Selecciona los atributos
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  mt: 0.75,
+                                  fontSize: 13,
+                                  color: "text.secondary",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                Elige los atributos que formarán parte de las variantes.
+                                Puedes usar uno o varios.
+                              </Typography>
+                            </Box>
+
+                            <Button
+                              type="button"
+                              onClick={() => setAdminOpen(true)}
+                              variant="outlined"
+                              startIcon={<TuneIcon />}
+                              sx={{
+                                minWidth: { xs: "100%", sm: 210 },
+                                height: 44,
+                                borderRadius: 2,
+                                fontWeight: 800,
+                              }}
+                            >
+                              Administrar atributos
+                            </Button>
+                          </Stack>
+
+                          {attributes.length === 0 ? (
+                            <Box
+                              sx={{
+                                p: 3,
+                                border: "1px dashed",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                textAlign: "center",
+                                bgcolor: "#fff",
+                              }}
+                            >
+                              <CategoryOutlinedIcon
+                                sx={{
+                                  fontSize: 34,
+                                  color: "text.secondary",
+                                }}
+                              />
+                              <Typography
+                                sx={{
+                                  mt: 1,
+                                  fontSize: 14,
+                                  color: "text.secondary",
+                                }}
+                              >
+                                No hay atributos activos disponibles para este restaurante.
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Box
+                              sx={{
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                overflow: "hidden",
+                                backgroundColor: "#fff",
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  px: 2,
+                                  py: 1.25,
+                                  borderBottom: "1px solid",
+                                  borderColor: "divider",
+                                  bgcolor: "#fff",
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: 13,
+                                    fontWeight: 800,
+                                    color: "text.secondary",
+                                  }}
+                                >
+                                  Atributos disponibles
+                                </Typography>
+                              </Box>
+
+                              <Box
+                                sx={{
+                                  maxHeight: 320,
+                                  overflowY: "auto",
+                                  p: 1.5,
+                                  display: "grid",
+                                  gap: 1.25,
+                                }}
+                              >
+                                {attributes.map((a) => {
+                                  const checked = selectedAttributeIds
+                                    .map(Number)
+                                    .includes(Number(a.id));
+
+                                  return (
+                                    <Card
+                                      key={a.id}
+                                      sx={{
+                                        borderRadius: 1,
+                                        border: "1px solid",
+                                        borderColor: checked
+                                          ? "primary.main"
+                                          : "divider",
+                                        boxShadow: "none",
+                                        backgroundColor: checked
+                                          ? "#FFF8EE"
+                                          : "#fff",
+                                      }}
+                                    >
+                                      <Box sx={{ px: 1.5, py: 1.25 }}>
+                                        <FormControlLabel
+                                          sx={{
+                                            m: 0,
+                                            width: "100%",
+                                            alignItems: "center",
+                                            "& .MuiFormControlLabel-label": {
+                                              width: "100%",
+                                            },
+                                          }}
+                                          control={
+                                            <Checkbox
+                                              checked={checked}
+                                              onChange={() => toggleAttr(a.id)}
+                                              sx={{
+                                                color: "primary.main",
+                                                "&.Mui-checked": {
+                                                  color: "primary.main",
+                                                },
+                                              }}
+                                            />
+                                          }
+                                          label={
+                                            <Stack
+                                              direction="row"
+                                              justifyContent="space-between"
+                                              alignItems="center"
+                                              spacing={1}
+                                              sx={{ width: "100%" }}
+                                            >
+                                              <Typography
+                                                sx={{
+                                                  fontSize: 14,
+                                                  fontWeight: 800,
+                                                  color: "text.primary",
+                                                }}
+                                              >
+                                                {a.name}
+                                              </Typography>
+
+                                              <Chip
+                                                size="small"
+                                                label={a.status}
+                                                sx={{ fontWeight: 800 }}
+                                              />
+                                            </Stack>
+                                          }
+                                        />
+                                      </Box>
+                                    </Card>
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          )}
+                        </>
+                      ) : step === 2 ? (
+                        <>
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: { xs: 18, sm: 20 },
+                                color: "text.primary",
+                              }}
+                            >
+                              Paso 2. Selecciona valores por atributo
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.75,
+                                fontSize: 13,
+                                color: "text.secondary",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              Elige al menos un valor por cada atributo seleccionado.
+                            </Typography>
+                          </Box>
+
+                          {selectedAttributes.length === 0 ? (
+                            <Alert
+                              severity="warning"
+                              sx={{
+                                borderRadius: 1,
+                                alignItems: "flex-start",
+                              }}
+                            >
+                              <Typography variant="body2">
+                                No hay atributos seleccionados. Regresa al paso anterior.
+                              </Typography>
+                            </Alert>
+                          ) : (
+                            <Stack spacing={2}>
+                              {selectedAttributes.map((a) => {
+                                const aid = Number(a.id);
+                                const pack = valuesByAttribute[aid];
+                                const values = pack?.data || [];
+                                const selected = new Set(
+                                  (selectedValueIds[aid] || []).map(Number)
+                                );
+
+                                return (
+                                  <Card
+                                    key={aid}
+                                    sx={{
+                                      borderRadius: 0,
+                                      boxShadow: "none",
+                                      border: "1px solid",
+                                      borderColor: "divider",
+                                      backgroundColor: "#fff",
+                                    }}
+                                  >
+                                    <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                                      <Stack spacing={1.5}>
+                                        <Stack
+                                          direction={{ xs: "column", sm: "row" }}
+                                          justifyContent="space-between"
+                                          alignItems={{ xs: "flex-start", sm: "center" }}
+                                          spacing={1}
+                                        >
+                                          <Box>
+                                            <Typography
+                                              sx={{
+                                                fontSize: 16,
+                                                fontWeight: 800,
+                                                color: "text.primary",
+                                              }}
+                                            >
+                                              {a.name}
+                                            </Typography>
+
+                                            <Typography
+                                              sx={{
+                                                mt: 0.5,
+                                                fontSize: 12,
+                                                color: "text.secondary",
+                                              }}
+                                            >
+                                              Selecciona mínimo 1 valor.
+                                            </Typography>
+                                          </Box>
+
+                                          <Chip
+                                            size="small"
+                                            color={
+                                              (selectedValueIds[aid] || []).length > 0
+                                                ? "success"
+                                                : "default"
+                                            }
+                                            label={`${(selectedValueIds[aid] || []).length} seleccionados`}
+                                            sx={{ fontWeight: 800 }}
+                                          />
+                                        </Stack>
+
+                                        {values.length === 0 ? (
+                                          <Alert
+                                            severity="warning"
+                                            sx={{
+                                              borderRadius: 1,
+                                              alignItems: "flex-start",
+                                            }}
+                                          >
+                                            <Typography variant="body2">
+                                              Este atributo no tiene valores activos.
+                                            </Typography>
+                                          </Alert>
+                                        ) : (
+                                          <Box
+                                            sx={{
+                                              maxHeight: 300,
+                                              overflowY: "auto",
+                                              pr: 0.5,
+                                              display: "grid",
+                                              gridTemplateColumns: {
+                                                xs: "1fr",
+                                                sm: "repeat(2, minmax(0, 1fr))",
+                                                md: "repeat(3, minmax(0, 1fr))",
+                                              },
+                                              gap: 1.25,
+                                            }}
+                                          >
+                                            {values.map((v) => {
+                                              const checked = selected.has(Number(v.id));
+
+                                              return (
+                                                <Card
+                                                  key={v.id}
+                                                  sx={{
+                                                    borderRadius: 1,
+                                                    border: "1px solid",
+                                                    borderColor: checked
+                                                      ? "primary.main"
+                                                      : "divider",
+                                                    boxShadow: "none",
+                                                    backgroundColor: checked
+                                                      ? "#FFF8EE"
+                                                      : "#fff",
+                                                  }}
+                                                >
+                                                  <Box sx={{ px: 1.25, py: 1 }}>
+                                                    <FormControlLabel
+                                                      sx={{
+                                                        m: 0,
+                                                        width: "100%",
+                                                        alignItems: "center",
+                                                        "& .MuiFormControlLabel-label": {
+                                                          width: "100%",
+                                                        },
+                                                      }}
+                                                      control={
+                                                        <Checkbox
+                                                          checked={checked}
+                                                          onChange={() =>
+                                                            toggleValue(aid, v.id)
+                                                          }
+                                                          sx={{
+                                                            color: "primary.main",
+                                                            "&.Mui-checked": {
+                                                              color: "primary.main",
+                                                            },
+                                                          }}
+                                                        />
+                                                      }
+                                                      label={
+                                                        <Typography
+                                                          sx={{
+                                                            fontSize: 14,
+                                                            fontWeight: 700,
+                                                            color: "text.primary",
+                                                            wordBreak: "break-word",
+                                                          }}
+                                                        >
+                                                          {v.value}
+                                                        </Typography>
+                                                      }
+                                                    />
+                                                  </Box>
+                                                </Card>
+                                              );
+                                            })}
+                                          </Box>
+                                        )}
+                                      </Stack>
+                                    </CardContent>
+                                  </Card>
+                                );
+                              })}
+                            </Stack>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: { xs: 18, sm: 20 },
+                                color: "text.primary",
+                              }}
+                            >
+                              Paso 3. Generación automática
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.75,
+                                fontSize: 13,
+                                color: "text.secondary",
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              Revisa el resumen antes de generar las combinaciones en automático.
+                            </Typography>
+                          </Box>
+
+                          <Card
+                            sx={{
+                              borderRadius: 0,
+                              boxShadow: "none",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              backgroundColor: "#fff",
+                            }}
+                          >
+                            <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                              <Stack spacing={2}>
+                                <Box>
+                                  <Typography
+                                    sx={{
+                                      fontSize: 16,
+                                      fontWeight: 800,
+                                      color: "text.primary",
+                                    }}
+                                  >
+                                    Resumen
+                                  </Typography>
+
+                                  <Typography
+                                    sx={{
+                                      mt: 0.75,
+                                      fontSize: 14,
+                                      color: "text.primary",
+                                    }}
+                                  >
+                                    Combinaciones totales:{" "}
+                                    <strong>{previewCount}</strong>
+                                  </Typography>
+
+                                  {previewCount > 500 ? (
+                                    <Typography
+                                      sx={{
+                                        mt: 0.75,
+                                        fontSize: 12,
+                                        color: "error.main",
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      Reduce combinaciones. El backend bloqueará si exceden 500.
+                                    </Typography>
+                                  ) : null}
+                                </Box>
+
+                                <Box
+                                  sx={{
+                                    p: 1.5,
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    borderRadius: 1,
+                                    backgroundColor: "#FAFAFA",
+                                  }}
+                                >
+                                  <FormControlLabel
+                                    sx={{ m: 0 }}
+                                    control={
+                                      <Checkbox
+                                        checked={replace}
+                                        onChange={(e) =>
+                                          setReplace(e.target.checked)
+                                        }
+                                        disabled={generating}
+                                        sx={{
+                                          color: "primary.main",
+                                          "&.Mui-checked": {
+                                            color: "primary.main",
+                                          },
+                                        }}
+                                      />
+                                    }
+                                    label={
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            fontSize: 14,
+                                            fontWeight: 800,
+                                            color: "text.primary",
+                                          }}
+                                        >
+                                          Reemplazar variantes existentes
+                                        </Typography>
+
+                                        <Typography
+                                          sx={{
+                                            mt: 0.35,
+                                            fontSize: 12,
+                                            color: "text.secondary",
+                                            lineHeight: 1.45,
+                                          }}
+                                        >
+                                          Si está activo, se borrarán las variantes actuales del
+                                          producto antes de generar las nuevas.
+                                        </Typography>
+                                      </Box>
+                                    }
+                                  />
+                                </Box>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+
+                          <Card
+                            sx={{
+                              borderRadius: 0,
+                              boxShadow: "none",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              backgroundColor: "#fff",
+                            }}
+                          >
+                            <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                              <Stack spacing={1.5}>
+                                <Typography
+                                  sx={{
+                                    fontSize: 16,
+                                    fontWeight: 800,
+                                    color: "text.primary",
+                                  }}
+                                >
+                                  Preview de combinaciones
+                                </Typography>
+
+                                <Typography
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "text.secondary",
+                                  }}
+                                >
+                                  Se muestran máximo 30 combinaciones para vista previa.
+                                </Typography>
+
+                                {previewCombos.length === 0 ? (
+                                  <Box
+                                    sx={{
+                                      p: 3,
+                                      border: "1px dashed",
+                                      borderColor: "divider",
+                                      borderRadius: 1,
+                                      textAlign: "center",
+                                      bgcolor: "#fff",
+                                    }}
+                                  >
+                                    <InfoOutlinedIcon
+                                      sx={{
+                                        fontSize: 34,
+                                        color: "text.secondary",
+                                      }}
+                                    />
+                                    <Typography
+                                      sx={{
+                                        mt: 1,
+                                        fontSize: 14,
+                                        color: "text.secondary",
+                                      }}
+                                    >
+                                      No hay combinaciones para mostrar.
+                                    </Typography>
+                                  </Box>
+                                ) : (
+                                  <Box
+                                    sx={{
+                                      maxHeight: 220,
+                                      overflowY: "auto",
+                                      display: "grid",
+                                      gap: 1.25,
+                                      pr: 0.5,
+                                    }}
+                                  >
+                                    {previewCombos.map((combo, idx) => (
+                                      <Card
+                                        key={idx}
+                                        sx={{
+                                          borderRadius: 1,
+                                          border: "1px solid",
+                                          borderColor: "divider",
+                                          boxShadow: "none",
+                                          backgroundColor: "#fff",
+                                        }}
+                                      >
+                                        <Box sx={{ p: 1.5 }}>
+                                          <Stack spacing={0.75}>
+                                            <Typography
+                                              sx={{
+                                                fontSize: 14,
+                                                fontWeight: 800,
+                                                color: "text.primary",
+                                                wordBreak: "break-word",
+                                              }}
+                                            >
+                                              {(productName || "Producto") +
+                                                " " +
+                                                combo.map((x) => x.value_name).join(" ")}
+                                            </Typography>
+
+                                            <Typography
+                                              sx={{
+                                                fontSize: 12,
+                                                color: "text.secondary",
+                                                lineHeight: 1.5,
+                                              }}
+                                            >
+                                              {combo
+                                                .map(
+                                                  (x) =>
+                                                    `${x.attribute_name}: ${x.value_name}`
+                                                )
+                                                .join(" | ")}
+                                            </Typography>
+                                          </Stack>
+                                        </Box>
+                                      </Card>
+                                    ))}
+                                  </Box>
+                                )}
+                              </Stack>
+                            </CardContent>
+                          </Card>
+
+                          {result ? (
+                            <Alert
+                              severity={result?.uiSeverity || "success"}
+                              sx={{
+                                borderRadius: 1,
+                                alignItems: "flex-start",
+                              }}
+                            >
+                              <Box>
+                                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                                  {result?.uiTitle || "Resultado"}
+                                </Typography>
+                                <Typography variant="body2">
+                                  {result?.uiMessage ||
+                                    `${result?.message || "Variantes generadas"} · Creadas: ${
+                                      result?.data?.created_count ?? "?"
+                                    }`}
+                                </Typography>
+                              </Box>
+                            </Alert>
+                          ) : null}
+                        </>
                       )}
-                    </div>
-                  </>
-                )}
+
+                      <Stack
+                        direction={{ xs: "column-reverse", sm: "row" }}
+                        justifyContent="space-between"
+                        spacing={1.5}
+                        pt={1}
+                      >
+                        <Box>
+                          {step === 1 ? (
+                            <Button
+                              type="button"
+                              onClick={onClose}
+                              disabled={generating}
+                              variant="outlined"
+                              sx={{
+                                minWidth: { xs: "100%", sm: 150 },
+                                height: 44,
+                                borderRadius: 2,
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              onClick={() => setStep((prev) => prev - 1)}
+                              disabled={generating}
+                              variant="outlined"
+                              startIcon={<ArrowBackIcon />}
+                              sx={{
+                                minWidth: { xs: "100%", sm: 150 },
+                                height: 44,
+                                borderRadius: 2,
+                              }}
+                            >
+                              Atrás
+                            </Button>
+                          )}
+                        </Box>
+
+                        <Box>
+                          {step === 1 ? (
+                            <Button
+                              type="button"
+                              onClick={goStep2}
+                              disabled={
+                                disabledByPrecondition ||
+                                !canContinueStep1 ||
+                                loading ||
+                                generating
+                              }
+                              variant="contained"
+                              endIcon={<ArrowForwardIcon />}
+                              sx={{
+                                minWidth: { xs: "100%", sm: 200 },
+                                height: 44,
+                                borderRadius: 2,
+                                fontWeight: 800,
+                              }}
+                            >
+                              Siguiente
+                            </Button>
+                          ) : step === 2 ? (
+                            <Button
+                              type="button"
+                              onClick={goStep3}
+                              disabled={
+                                disabledByPrecondition ||
+                                !canContinueStep2 ||
+                                loading ||
+                                generating
+                              }
+                              variant="contained"
+                              endIcon={<ArrowForwardIcon />}
+                              sx={{
+                                minWidth: { xs: "100%", sm: 220 },
+                                height: 44,
+                                borderRadius: 2,
+                                fontWeight: 800,
+                              }}
+                            >
+                              Ver generación
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              onClick={doGenerate}
+                              disabled={
+                                disabledByPrecondition ||
+                                generating ||
+                                previewCount === 0 ||
+                                previewCount > 500
+                              }
+                              variant="contained"
+                              startIcon={<AutoAwesomeIcon />}
+                              sx={{
+                                minWidth: { xs: "100%", sm: 220 },
+                                height: 44,
+                                borderRadius: 2,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {generating ? "Generando…" : "Confirmar y crear"}
+                            </Button>
+                          )}
+                        </Box>
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
               </>
             )}
-          </div>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
-          {/* Footer */}
-          <div
-            style={{
-              padding: 14,
-              borderTop: "1px solid #f0f0f0",
-              display: "flex",
-              gap: 10,
-              justifyContent: "flex-end",
-            }}
-          >
-            <button onClick={onClose} style={{ padding: "10px 14px", cursor: "pointer" }} disabled={generating}>
-              Cancelar
-            </button>
-
-            {step === 3 && (
-              <button onClick={backToStep2} style={{ padding: "10px 14px", cursor: "pointer" }} disabled={generating}>
-                ← Atrás
-              </button>
-            )}
-
-            {step === 4 && (
-              <button onClick={backToStep3} style={{ padding: "10px 14px", cursor: "pointer" }} disabled={generating}>
-                ← Atrás
-              </button>
-            )}
-
-            {step === 2 ? (
-              <button
-                onClick={goStep3}
-                style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 900 }}
-                disabled={disabledByPrecondition || !canContinueStep2 || loading || generating}
-                title={!canContinueStep2 ? "Selecciona al menos 1 atributo" : "Continuar"}
-              >
-                Continuar →
-              </button>
-            ) : step === 3 ? (
-              <button
-                onClick={goStep4}
-                style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 900 }}
-                disabled={disabledByPrecondition || !canContinueStep3 || loading || generating}
-                title={!canContinueStep3 ? "Selecciona mínimo 1 valor por atributo" : "Preview y generar"}
-              >
-                Generar variantes →
-              </button>
-            ) : (
-              <button
-                onClick={doGenerate}
-                style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 900 }}
-                disabled={disabledByPrecondition || generating || previewCount === 0 || previewCount > 500}
-                title={previewCount > 500 ? "Reduce combinaciones (max 500)" : "Crear en backend"}
-              >
-                {generating ? "Generando..." : "Confirmar y crear"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Admin modal */}
       <VariantAttributesAdminModal
         open={adminOpen}
         onClose={() => setAdminOpen(false)}
         restaurantId={restaurantId}
         onDone={async () => {
-          // al cerrar, recargamos los atributos activos del wizard
           await reloadAttributes();
         }}
       />

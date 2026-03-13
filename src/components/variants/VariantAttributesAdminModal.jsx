@@ -1,18 +1,32 @@
-// src/components/variants/VariantAttributesAdminModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Alert, Box, Button, Card, Chip, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, Paper,
+  Stack, Switch, Tooltip, Typography, useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import TuneIcon from "@mui/icons-material/Tune";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+
 import {
   getVariantAttributes,
-  createVariantAttribute,
   updateVariantAttribute,
   deleteVariantAttribute,
 } from "../../services/products/variants/variantAttributes.service";
 
-import {
-  getVariantAttributeValues,
-  createVariantAttributeValue,
-  updateVariantAttributeValue,
-  deleteVariantAttributeValue,
-} from "../../services/products/variants/variantAttributeValues.service";
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../common/PaginationFooter";
+import PageContainer from "../common/PageContainer";
+import AppAlert from "../common/AppAlert";
+
+import VariantAttributeUpsertModal from "./VariantAttributeUpsertModal";
+import VariantAttributeValuesModal from "./VariantAttributeValuesModal";
 
 function normalizeErr(e) {
   return (
@@ -24,38 +38,7 @@ function normalizeErr(e) {
   );
 }
 
-function pillStyle(bg, border) {
-  return {
-    fontSize: 12,
-    padding: "2px 8px",
-    borderRadius: 999,
-    background: bg,
-    border: `1px solid ${border}`,
-    fontWeight: 800,
-  };
-}
-
-function inputStyle(disabled = false) {
-  return {
-    padding: "10px 10px",
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    opacity: disabled ? 0.6 : 1,
-    width: "100%",
-  };
-}
-
-function btnStyle({ bg = "#f7f7f7", danger = false, disabled = false } = {}) {
-  return {
-    padding: "8px 10px",
-    cursor: disabled ? "not-allowed" : "pointer",
-    borderRadius: 10,
-    border: "1px solid #eee",
-    background: danger ? "#ffe5e5" : bg,
-    fontWeight: 900,
-    opacity: disabled ? 0.6 : 1,
-  };
-}
+const PAGE_SIZE = 4;
 
 export default function VariantAttributesAdminModal({
   open,
@@ -63,64 +46,69 @@ export default function VariantAttributesAdminModal({
   restaurantId,
   onDone,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // attributes list
   const [attributes, setAttributes] = useState([]);
+  const [selectedAttribute, setSelectedAttribute] = useState(null);
 
-  // create/edit attribute
-  const [newAttrName, setNewAttrName] = useState("");
-  const [creatingAttr, setCreatingAttr] = useState(false);
+  const [upsertOpen, setUpsertOpen] = useState(false);
+  const [editingAttribute, setEditingAttribute] = useState(null);
 
-  // edit state for attribute rows
-  const [editingAttrId, setEditingAttrId] = useState(null);
-  const [editingAttrName, setEditingAttrName] = useState("");
+  const [valuesOpen, setValuesOpen] = useState(false);
+  const [valuesTarget, setValuesTarget] = useState(null);
 
-  // -------- Values admin selector (KEY CHANGE) ----------
-  const [valuesAttrId, setValuesAttrId] = useState(""); // <select> value
-  const valuesAttr = useMemo(() => {
-    const id = Number(valuesAttrId);
-    return attributes.find((a) => Number(a.id) === id) || null;
-  }, [attributes, valuesAttrId]);
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "success",
+    title: "",
+    message: "",
+  });
 
-  // values panel
-  const [valuesLoading, setValuesLoading] = useState(false);
-  const [values, setValues] = useState([]);
-  const [attrInfo, setAttrInfo] = useState(null);
-
-  // create value
-  const [newValue, setNewValue] = useState("");
-  const [creatingValue, setCreatingValue] = useState(false);
-
-  // edit value
-  const [editingValueId, setEditingValueId] = useState(null);
-  const [editingValueText, setEditingValueText] = useState("");
-  const [editingValueOrder, setEditingValueOrder] = useState("");
-
-  // anti race conditions
   const reqRef = useRef(0);
-  const reqValuesRef = useRef(0);
 
-  const loadAttributes = async () => {
+  const showAlert = ({
+    severity = "success",
+    title = "",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  const loadAttributes = async ({ silent = false } = {}) => {
     const myReq = ++reqRef.current;
-    setLoading(true);
+
+    if (!silent) setLoading(true);
     setErr("");
+
     try {
-      const res = await getVariantAttributes(restaurantId, { only_active: false });
+      const res = await getVariantAttributes(restaurantId, {
+        only_active: false,
+      });
+
       if (myReq !== reqRef.current) return;
 
-      const list = res?.data || [];
+      const list = Array.isArray(res?.data) ? res.data : [];
       setAttributes(list);
 
-      // si no hay atributo seleccionado para valores, auto elige el primero
-      if (!valuesAttrId && list.length) {
-        setValuesAttrId(String(list[0].id));
-      } else if (valuesAttrId) {
-        // si borraron el seleccionado, elige otro
-        const exists = list.some((x) => Number(x.id) === Number(valuesAttrId));
-        if (!exists && list.length) setValuesAttrId(String(list[0].id));
-        if (!exists && !list.length) setValuesAttrId("");
+      if (selectedAttribute) {
+        const freshSelected = list.find(
+          (item) => Number(item.id) === Number(selectedAttribute.id)
+        );
+        setSelectedAttribute(freshSelected || null);
       }
     } catch (e) {
       if (myReq !== reqRef.current) return;
@@ -131,696 +119,636 @@ export default function VariantAttributesAdminModal({
     }
   };
 
-  const loadValues = async (attributeId) => {
-    if (!attributeId) {
-      setValues([]);
-      setAttrInfo(null);
-      return;
-    }
-    const myReq = ++reqValuesRef.current;
-    setValuesLoading(true);
-    setErr("");
-    try {
-      const res = await getVariantAttributeValues(restaurantId, attributeId, { only_active: false });
-      if (myReq !== reqValuesRef.current) return;
-
-      setAttrInfo(res?.attribute || null);
-
-      // aseguramos orden por sort_order (backend ya lo ordena, pero no confío en nadie)
-      const list = (res?.data || []).slice().sort((a, b) => {
-        const ao = Number(a.sort_order ?? 0);
-        const bo = Number(b.sort_order ?? 0);
-        if (ao !== bo) return ao - bo;
-        return String(a.value || "").localeCompare(String(b.value || ""));
-      });
-
-      setValues(list);
-    } catch (e) {
-      if (myReq !== reqValuesRef.current) return;
-      setErr(normalizeErr(e));
-    } finally {
-      if (myReq !== reqValuesRef.current) return;
-      setValuesLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!open) return;
-
-    setErr("");
-    setNewAttrName("");
-    setNewValue("");
-    setEditingAttrId(null);
-    setEditingValueId(null);
-    setEditingValueText("");
-    setEditingValueOrder("");
-
     loadAttributes();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, restaurantId]);
 
-  // cada que cambia selector de atributo para valores, recarga valores
+
   useEffect(() => {
-    if (!open) return;
-    if (!valuesAttrId) {
-      setValues([]);
-      setAttrInfo(null);
-      return;
-    }
-    loadValues(valuesAttrId);
-    // eslint-disable-next-line
-  }, [valuesAttrId, open]);
+    if (!err) return;
+
+    const timer = setTimeout(() => {
+      setErr("");
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [err]);
 
   const close = async () => {
     onClose?.();
     await onDone?.();
   };
 
-  // ---------------- ATTRIBUTES CRUD ----------------
-  const createAttr = async () => {
-    const name = newAttrName.trim();
-    if (!name) return setErr("Escribe el nombre del atributo.");
-    setErr("");
-    setCreatingAttr(true);
+  const onCreate = () => {
+    setEditingAttribute(null);
+    setUpsertOpen(true);
+  };
+
+  const onEdit = (row) => {
+    setEditingAttribute(row);
+    setUpsertOpen(true);
+  };
+
+  const onManageValues = (row) => {
+    setValuesTarget(row);
+    setValuesOpen(true);
+  };
+
+  const onToggleStatus = async (row) => {
+    const nextStatus = row.status === "active" ? "inactive" : "active";
+    const snapshot = attributes;
+
+    setAttributes((prev) =>
+      prev.map((item) =>
+        Number(item.id) === Number(row.id)
+          ? { ...item, status: nextStatus }
+          : item
+      )
+    );
+
     try {
-      await createVariantAttribute(restaurantId, { name, status: "active" });
-      setNewAttrName("");
-      await loadAttributes();
+      await updateVariantAttribute(restaurantId, row.id, {
+        status: nextStatus,
+      });
+
+      showAlert({
+        severity: "success",
+        title: "Estado actualizado",
+        message:
+          nextStatus === "active"
+            ? "El atributo quedó activo."
+            : "El atributo quedó inactivo.",
+      });
+
+      await loadAttributes({ silent: true });
     } catch (e) {
-      setErr(normalizeErr(e));
-    } finally {
-      setCreatingAttr(false);
-    }
-  };
-
-  const startEditAttr = (row) => {
-    setErr("");
-    setEditingAttrId(Number(row.id));
-    setEditingAttrName(String(row.name || ""));
-  };
-
-  const cancelEditAttr = () => {
-    setEditingAttrId(null);
-    setEditingAttrName("");
-  };
-
-  const saveEditAttr = async (attrId) => {
-    const name = editingAttrName.trim();
-    if (!name) return setErr("El nombre no puede ir vacío.");
-    setErr("");
-    try {
-      await updateVariantAttribute(restaurantId, attrId, { name });
-      cancelEditAttr();
-      await loadAttributes();
-
-      // si estás viendo valores de ese atributo, refresca panel derecho
-      if (Number(valuesAttrId) === Number(attrId)) {
-        await loadValues(attrId);
-      }
-    } catch (e) {
-      setErr(normalizeErr(e));
-    }
-  };
-
-  const toggleAttrStatus = async (row) => {
-    const next = row.status === "active" ? "inactive" : "active";
-    setErr("");
-    try {
-      await updateVariantAttribute(restaurantId, row.id, { status: next });
-      await loadAttributes();
-      if (Number(valuesAttrId) === Number(row.id)) {
-        await loadValues(row.id);
-      }
-    } catch (e) {
+      setAttributes(snapshot);
       setErr(normalizeErr(e));
     }
   };
 
-  const removeAttr = async (row) => {
-    setErr("");
-    const ok = confirm(
-      `¿Eliminar atributo "${row.name}"?\n\nEsto invalidará variantes relacionadas (según tu backend).`,
+  const onDelete = async (row) => {
+    const ok = window.confirm(
+      `¿Eliminar atributo?\n\n${row.name}\n\nEsto puede invalidar variantes relacionadas.`
     );
     if (!ok) return;
+
+    const snapshot = attributes;
+    setAttributes((prev) =>
+      prev.filter((item) => Number(item.id) !== Number(row.id))
+    );
 
     try {
       await deleteVariantAttribute(restaurantId, row.id);
-      await loadAttributes();
-    } catch (e) {
-      setErr(normalizeErr(e));
-    }
-  };
 
-  // ---------------- VALUES CRUD + sort_order ----------------
-
-  const getNextSortOrder = () => {
-    // toma el mayor sort_order actual y suma 1
-    if (!values?.length) return 1;
-    const max = Math.max(...values.map((x) => Number(x.sort_order ?? 0)));
-    return (Number.isFinite(max) ? max : 0) + 1;
-  };
-
-  const createValue = async () => {
-    const v = newValue.trim();
-    if (!valuesAttrId) return setErr("Selecciona un atributo para asignar valores.");
-    if (!v) return setErr("Escribe un valor.");
-    setErr("");
-    setCreatingValue(true);
-    try {
-      await createVariantAttributeValue(restaurantId, valuesAttrId, {
-        value: v,
-        status: "active",
-        sort_order: getNextSortOrder(),
+      showAlert({
+        severity: "success",
+        title: "Atributo eliminado",
+        message: "El atributo se eliminó correctamente.",
       });
-      setNewValue("");
-      await loadValues(valuesAttrId);
+
+      if (valuesTarget && Number(valuesTarget.id) === Number(row.id)) {
+        setValuesOpen(false);
+        setValuesTarget(null);
+      }
+
+      await loadAttributes({ silent: true });
     } catch (e) {
-      setErr(normalizeErr(e));
-    } finally {
-      setCreatingValue(false);
-    }
-  };
-
-  const startEditValue = (row) => {
-    setErr("");
-    setEditingValueId(Number(row.id));
-    setEditingValueText(String(row.value || ""));
-    setEditingValueOrder(String(row.sort_order ?? 0));
-  };
-
-  const cancelEditValue = () => {
-    setEditingValueId(null);
-    setEditingValueText("");
-    setEditingValueOrder("");
-  };
-
-  const saveEditValue = async (valueRowId) => {
-    const v = editingValueText.trim();
-    const order = Number(editingValueOrder);
-
-    if (!valuesAttrId) return setErr("Selecciona un atributo para valores.");
-    if (!v) return setErr("El valor no puede ir vacío.");
-    if (!Number.isFinite(order) || order < 0) return setErr("sort_order debe ser un número >= 0.");
-
-    setErr("");
-    try {
-      await updateVariantAttributeValue(restaurantId, valuesAttrId, valueRowId, {
-        value: v,
-        sort_order: order,
-      });
-      cancelEditValue();
-      await loadValues(valuesAttrId);
-    } catch (e) {
+      setAttributes(snapshot);
       setErr(normalizeErr(e));
     }
   };
 
-  const toggleValueStatus = async (row) => {
-    if (!valuesAttrId) return setErr("Selecciona un atributo para valores.");
-    const next = row.status === "active" ? "inactive" : "active";
-    setErr("");
-    try {
-      await updateVariantAttributeValue(restaurantId, valuesAttrId, row.id, { status: next });
-      await loadValues(valuesAttrId);
-    } catch (e) {
-      setErr(normalizeErr(e));
-    }
-  };
-
-  const removeValue = async (row) => {
-    setErr("");
-    if (!valuesAttrId) return setErr("Selecciona un atributo para valores.");
-
-    const ok = confirm(
-      `¿Eliminar valor "${row.value}"?\n\nEsto invalidará variantes que lo usen (según tu backend).`,
-    );
-    if (!ok) return;
-
-    try {
-      await deleteVariantAttributeValue(restaurantId, valuesAttrId, row.id);
-      await loadValues(valuesAttrId);
-    } catch (e) {
-      setErr(normalizeErr(e));
-    }
-  };
-
-  // reordenamiento simple: swap con vecino actual (sin endpoints extra)
-  const swapOrder = async (row, direction /* -1 up, +1 down */) => {
-    if (!valuesAttrId) return;
-
-    const list = values.slice().sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
-    const idx = list.findIndex((x) => Number(x.id) === Number(row.id));
-    if (idx < 0) return;
-
-    const otherIdx = idx + direction;
-    if (otherIdx < 0 || otherIdx >= list.length) return;
-
-    const a = list[idx];
-    const b = list[otherIdx];
-
-    // optimistic: swap local
-    const snapshot = values;
-    const swapped = values.map((x) => {
-      if (Number(x.id) === Number(a.id)) return { ...x, sort_order: Number(b.sort_order ?? 0) };
-      if (Number(x.id) === Number(b.id)) return { ...x, sort_order: Number(a.sort_order ?? 0) };
-      return x;
+  const sortedAttributes = useMemo(() => {
+    return [...attributes].sort((a, b) => {
+      if (a.status !== b.status) {
+        return a.status === "active" ? -1 : 1;
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""), "es");
     });
-    setValues(swapped);
+  }, [attributes]);
 
-    try {
-      // persiste ambos updates
-      await Promise.all([
-        updateVariantAttributeValue(restaurantId, valuesAttrId, a.id, {
-          sort_order: Number(b.sort_order ?? 0),
-        }),
-        updateVariantAttributeValue(restaurantId, valuesAttrId, b.id, {
-          sort_order: Number(a.sort_order ?? 0),
-        }),
-      ]);
-
-      await loadValues(valuesAttrId);
-    } catch (e) {
-      setValues(snapshot); // rollback
-      setErr(normalizeErr(e));
-    }
-  };
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: sortedAttributes,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
 
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 10000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-    >
-      <div
-        style={{
-          width: "min(1100px, 100%)",
-          background: "#fff",
-          borderRadius: 14,
-          border: "1px solid #eee",
-          overflow: "hidden",
+    <>
+      <Dialog
+        open={open}
+        onClose={loading ? undefined : close}
+        fullWidth
+        maxWidth="lg"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: 14,
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            alignItems: "center",
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Administrar atributos y valores</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Restaurante: <strong>{restaurantId}</strong>
-            </div>
-          </div>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
+                }}
+              >
+                Administrar atributos
+              </Typography>
 
-          <button onClick={close} style={{ padding: "8px 10px", cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                Crea, edita, activa o elimina atributos, y administra sus valores
+                desde una vista separada.
+              </Typography>
+            </Box>
 
-        {/* Body */}
-        <div style={{ padding: 14 }}>
-          {err && (
-            <div
-              style={{
-                marginBottom: 12,
-                background: "#ffe5e5",
-                padding: 10,
-                whiteSpace: "pre-line",
-                borderRadius: 10,
+            <IconButton
+              onClick={close}
+              disabled={loading}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
               }}
             >
-              <strong>Error:</strong> {err}
-            </div>
-          )}
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
 
-          <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 14 }}>
-            {/* Left: Attributes */}
-            <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: 12, borderBottom: "1px solid #f0f0f0" }}>
-                <div style={{ fontWeight: 900 }}>Atributos</div>
-                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                  Crea/edita/activa/desactiva. Eliminar invalida variantes relacionadas.
-                </div>
+        <DialogContent
+          sx={{
+            p: 0,
+            bgcolor: "background.default",
+          }}
+        >
+          <PageContainer
+            maxWidth={1100}
+            sx={{
+              py: { xs: 2, sm: 3 },
+              px: { xs: 2, sm: 3 },
+            }}
+            innerSx={{
+              width: "100%",
+            }}
+          >
+            <Stack spacing={2.5}>
+              {err ? (
+                <Alert
+                  severity="error"
+                  sx={{
+                    borderRadius: 1,
+                    alignItems: "flex-start",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                      No se pudo completar la acción
+                    </Typography>
+                    <Typography variant="body2">{err}</Typography>
+                  </Box>
+                </Alert>
+              ) : null}
 
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <input
-                    value={newAttrName}
-                    onChange={(e) => setNewAttrName(e.target.value)}
-                    placeholder="Ej. Tamaño"
-                    style={{ ...inputStyle(false), flex: 1 }}
-                  />
-                  <button
-                    onClick={createAttr}
-                    disabled={creatingAttr}
-                    style={btnStyle({ disabled: creatingAttr })}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "stretch", sm: "center" }}
+                spacing={1.5}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
                   >
-                    + Crear
-                  </button>
-                </div>
-              </div>
+                    Atributos disponibles
+                  </Typography>
 
-              <div style={{ maxHeight: 460, overflow: "auto" }}>
-                {loading ? (
-                  <div style={{ padding: 12 }}>Cargando atributos…</div>
-                ) : attributes.length === 0 ? (
-                  <div style={{ padding: 12, opacity: 0.8 }}>No hay atributos. Crea el primero.</div>
-                ) : (
-                  <div style={{ display: "grid" }}>
-                    {attributes.map((a) => {
-                      const isEditing = Number(editingAttrId) === Number(a.id);
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 13,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Mostrando {total} atributos registrados.
+                  </Typography>
+                </Box>
 
-                      return (
-                        <div
-                          key={a.id}
-                          style={{
-                            padding: 10,
-                            borderBottom: "1px solid #f0f0f0",
-                            background: Number(valuesAttrId) === Number(a.id) ? "#f7fbff" : "#fff",
-                          }}
-                        >
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            {isEditing ? (
-                              <input
-                                value={editingAttrName}
-                                onChange={(e) => setEditingAttrName(e.target.value)}
-                                style={{ ...inputStyle(false), flex: 1, padding: "8px 10px" }}
-                              />
-                            ) : (
-                              <div style={{ fontWeight: 900, flex: 1 }}>{a.name}</div>
-                            )}
+                <Button
+                  onClick={onCreate}
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 190 },
+                    height: 44,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  Crear atributo
+                </Button>
+              </Stack>
 
-                            <span
-                              style={
-                                a.status === "active"
-                                  ? pillStyle("#e8f5e9", "#c8e6c9")
-                                  : pillStyle("#fff3cd", "#ffeeba")
-                              }
-                            >
-                              {a.status}
-                            </span>
-                          </div>
+              {loading ? (
+                <Paper
+                  sx={{
+                    p: 4,
+                    borderRadius: 0,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                    Cargando atributos…
+                  </Typography>
+                </Paper>
+              ) : total === 0 ? (
+                <Paper
+                  sx={{
+                    p: 4,
+                    borderRadius: 0,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    textAlign: "center",
+                  }}
+                >
+                  <CategoryOutlinedIcon
+                    sx={{
+                      fontSize: 34,
+                      color: "text.secondary",
+                    }}
+                  />
 
-                          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                            <button
-                              onClick={() => setValuesAttrId(String(a.id))}
-                              style={btnStyle({ bg: "#eef5ff" })}
-                              title="Usar este atributo para administrar sus valores"
-                            >
-                              🎯 Administrar valores
-                            </button>
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    No hay atributos todavía
+                  </Typography>
 
-                            {isEditing ? (
-                              <>
-                                <button
-                                  onClick={() => saveEditAttr(a.id)}
-                                  style={btnStyle({ bg: "#e8f5e9" })}
-                                >
-                                  Guardar
-                                </button>
-                                <button onClick={cancelEditAttr} style={btnStyle()}>
-                                  Cancelar
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => startEditAttr(a)} style={btnStyle()}>
-                                  ✏️ Editar
-                                </button>
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      fontSize: 14,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Crea el primer atributo para comenzar a organizar las variantes.
+                  </Typography>
 
-                                <button
-                                  onClick={() => toggleAttrStatus(a)}
-                                  style={btnStyle({
-                                    bg: a.status === "active" ? "#fff3cd" : "#e8f5e9",
-                                  })}
-                                  title="Activar/Desactivar"
-                                >
-                                  {a.status === "active" ? "⏸ Desactivar" : "▶️ Activar"}
-                                </button>
-
-                                <button onClick={() => removeAttr(a)} style={btnStyle({ danger: true })}>
-                                  🗑 Eliminar
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ padding: 12, borderTop: "1px solid #f0f0f0" }}>
-                <button onClick={loadAttributes} style={{ ...btnStyle(), width: "100%" }}>
-                  ↻ Recargar
-                </button>
-              </div>
-            </div>
-
-            {/* Right: Values */}
-            <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: 12, borderBottom: "1px solid #f0f0f0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontWeight: 900 }}>Valores</div>
-                  <div style={{ fontSize: 12, opacity: 0.75 }}>
-                    (primero selecciona el atributo)
-                  </div>
-                </div>
-
-                {/* SELECTOR (KEY CHANGE) */}
-                <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
-                  <select
-                    value={valuesAttrId}
-                    onChange={(e) => setValuesAttrId(e.target.value)}
-                    style={{
-                      padding: "10px 10px",
-                      borderRadius: 10,
-                      border: "1px solid #ddd",
-                      background: "#fff",
+                  <Button
+                    onClick={onCreate}
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    sx={{
+                      mt: 2,
+                      minWidth: 200,
+                      height: 44,
+                      borderRadius: 2,
                       fontWeight: 800,
                     }}
                   >
-                    <option value="">Selecciona atributo…</option>
-                    {attributes.map((a) => (
-                      <option key={a.id} value={String(a.id)}>
-                        {a.name} ({a.status})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    onClick={() => loadValues(valuesAttrId)}
-                    disabled={!valuesAttrId}
-                    style={btnStyle({ disabled: !valuesAttrId })}
-                  >
-                    ↻ Recargar
-                  </button>
-                </div>
-
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <input
-                    value={newValue}
-                    onChange={(e) => setNewValue(e.target.value)}
-                    placeholder={valuesAttr ? `Ej. ${valuesAttr.name} → Chico` : "Selecciona un atributo"}
-                    disabled={!valuesAttr}
-                    style={{ ...inputStyle(!valuesAttr), flex: 1 }}
-                  />
-                  <button
-                    onClick={createValue}
-                    disabled={!valuesAttr || creatingValue}
-                    style={btnStyle({ disabled: !valuesAttr || creatingValue })}
-                  >
-                    + Agregar
-                  </button>
-                </div>
-
-                {attrInfo && attrInfo.status !== "active" && (
-                  <div
-                    style={{
-                      marginTop: 10,
-                      background: "#fff3cd",
-                      border: "1px solid #ffeeba",
-                      padding: 10,
-                      borderRadius: 10,
-                      fontSize: 13,
+                    Crear atributo
+                  </Button>
+                </Paper>
+              ) : (
+                <Paper
+                  sx={{
+                    p: 0,
+                    overflow: "hidden",
+                    borderRadius: 0,
+                    backgroundColor: "background.paper",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      p: 2,
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        md: "repeat(2, minmax(0, 1fr))",
+                      },
+                      gap: 2,
                     }}
                   >
-                    Este atributo está <strong>{attrInfo.status}</strong>. Puedes editar valores, pero no saldrá en el wizard si filtras “activos”.
-                  </div>
-                )}
-
-                {valuesAttr && (
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-                    Orden: se controla con <strong>sort_order</strong>. Nuevo valor se crea con el siguiente número disponible.
-                  </div>
-                )}
-              </div>
-
-              <div style={{ maxHeight: 460, overflow: "auto" }}>
-                {valuesLoading ? (
-                  <div style={{ padding: 12 }}>Cargando valores…</div>
-                ) : !valuesAttr ? (
-                  <div style={{ padding: 12, opacity: 0.8 }}>
-                    Selecciona un atributo en el selector de arriba.
-                  </div>
-                ) : values.length === 0 ? (
-                  <div style={{ padding: 12, opacity: 0.8 }}>
-                    No hay valores para este atributo. Agrega el primero.
-                  </div>
-                ) : (
-                  <div style={{ display: "grid" }}>
-                    {values.map((v, idx) => {
-                      const isEditing = Number(editingValueId) === Number(v.id);
+                    {paginatedItems.map((row) => {
+                      const isActive = row.status === "active";
 
                       return (
-                        <div
-                          key={v.id}
-                          style={{
-                            padding: 10,
-                            borderBottom: "1px solid #f0f0f0",
-                            background: "#fff",
+                        <Card
+                          key={row.id}
+                          sx={{
+                            borderRadius: 1,
+                            boxShadow: "none",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            backgroundColor: "#fff",
                           }}
                         >
-                          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            {/* sort order */}
-                            <div style={{ width: 92 }}>
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  value={editingValueOrder}
-                                  onChange={(e) => setEditingValueOrder(e.target.value)}
-                                  style={{ ...inputStyle(false), padding: "8px 10px" }}
-                                  title="sort_order"
-                                />
-                              ) : (
-                                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                                  <strong>#{Number(v.sort_order ?? 0)}</strong>
-                                </div>
-                              )}
-                            </div>
+                          <Box sx={{ p: 2 }}>
+                            <Stack spacing={1.75}>
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="flex-start"
+                                spacing={1.5}
+                              >
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography
+                                    sx={{
+                                      fontSize: 18,
+                                      fontWeight: 800,
+                                      color: "text.primary",
+                                      lineHeight: 1.25,
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
+                                    {row.name}
+                                  </Typography>
 
-                            {/* value */}
-                            <div style={{ flex: 1 }}>
-                              {isEditing ? (
-                                <input
-                                  value={editingValueText}
-                                  onChange={(e) => setEditingValueText(e.target.value)}
-                                  style={{ ...inputStyle(false), padding: "8px 10px" }}
-                                />
-                              ) : (
-                                <div style={{ fontWeight: 900 }}>{v.value}</div>
-                              )}
-                            </div>
+                                  <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    flexWrap="wrap"
+                                    useFlexGap
+                                    sx={{ mt: 1 }}
+                                  >
+                                    <Chip
+                                      size="small"
+                                      label={isActive ? "Activo" : "Inactivo"}
+                                      color={isActive ? "success" : "default"}
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  </Stack>
+                                </Box>
 
-                            <span
-                              style={
-                                v.status === "active"
-                                  ? pillStyle("#e8f5e9", "#c8e6c9")
-                                  : pillStyle("#fff3cd", "#ffeeba")
-                              }
-                            >
-                              {v.status}
-                            </span>
-                          </div>
+                                <Stack direction="row" spacing={1}>
+                                  <Tooltip title="Editar">
+                                    <IconButton
+                                      onClick={() => onEdit(row)}
+                                      sx={iconEditSx}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
 
-                          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                            {/* reorder buttons */}
-                            <button
-                              onClick={() => swapOrder(v, -1)}
-                              disabled={idx === 0}
-                              style={btnStyle({ disabled: idx === 0 })}
-                              title="Subir (swap con el anterior)"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              onClick={() => swapOrder(v, +1)}
-                              disabled={idx === values.length - 1}
-                              style={btnStyle({ disabled: idx === values.length - 1 })}
-                              title="Bajar (swap con el siguiente)"
-                            >
-                              ↓
-                            </button>
+                                  <Tooltip title="Eliminar">
+                                    <IconButton
+                                      onClick={() => onDelete(row)}
+                                      sx={iconDeleteSx}
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Stack>
+                              </Stack>
 
-                            {isEditing ? (
-                              <>
-                                <button
-                                  onClick={() => saveEditValue(v.id)}
-                                  style={btnStyle({ bg: "#e8f5e9" })}
+                              <Stack spacing={1}>
+                                <Stack
+                                  direction={{ xs: "column", sm: "row" }}
+                                  spacing={{ xs: 0.5, sm: 1.25 }}
+                                  alignItems={{ xs: "flex-start", sm: "center" }}
                                 >
-                                  Guardar
-                                </button>
-                                <button onClick={cancelEditValue} style={btnStyle()}>
-                                  Cancelar
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button onClick={() => startEditValue(v)} style={btnStyle()}>
-                                  ✏️ Editar
-                                </button>
+                                  <Typography sx={mobileLabelSx}>
+                                    Estado
+                                  </Typography>
 
-                                <button
-                                  onClick={() => toggleValueStatus(v)}
-                                  style={btnStyle({
-                                    bg: v.status === "active" ? "#fff3cd" : "#e8f5e9",
-                                  })}
-                                  title="Activar/Desactivar"
+                                  <FormControlLabel
+                                    sx={{
+                                      m: 0,
+                                      "& .MuiFormControlLabel-label": {
+                                        minWidth: 0,
+                                      },
+                                    }}
+                                    control={
+                                      <Switch
+                                        checked={isActive}
+                                        onChange={() => onToggleStatus(row)}
+                                        color="primary"
+                                      />
+                                    }
+                                    label={
+                                      <Typography sx={switchLabelSx}>
+                                        {isActive ? "Activo" : "Inactivo"}
+                                      </Typography>
+                                    }
+                                  />
+                                </Stack>
+                              </Stack>
+
+                              <Box
+                                sx={{
+                                  pt: 1,
+                                  borderTop: "1px solid",
+                                  borderColor: "divider",
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    color: "text.secondary",
+                                    mb: 1,
+                                    textTransform: "uppercase",
+                                    letterSpacing: 0.35,
+                                  }}
                                 >
-                                  {v.status === "active" ? "⏸ Desactivar" : "▶️ Activar"}
-                                </button>
+                                  Gestión relacionada
+                                </Typography>
 
-                                <button onClick={() => removeValue(v)} style={btnStyle({ danger: true })}>
-                                  🗑 Eliminar
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                                <Button
+                                  onClick={() => onManageValues(row)}
+                                  variant="outlined"
+                                  startIcon={<TuneIcon />}
+                                  sx={{
+                                    height: 40,
+                                    borderRadius: 2,
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Administrar valores
+                                </Button>
+                              </Box>
+                            </Stack>
+                          </Box>
+                        </Card>
                       );
                     })}
-                  </div>
-                )}
-              </div>
+                  </Box>
 
-              <div
-                style={{
-                  padding: 12,
-                  borderTop: "1px solid #f0f0f0",
-                  display: "flex",
-                  gap: 10,
+                  <PaginationFooter
+                    page={page}
+                    totalPages={totalPages}
+                    startItem={startItem}
+                    endItem={endItem}
+                    total={total}
+                    hasPrev={hasPrev}
+                    hasNext={hasNext}
+                    onPrev={prevPage}
+                    onNext={nextPage}
+                    itemLabel="atributos"
+                  />
+                </Paper>
+              )}
+
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: "text.secondary",
+                  lineHeight: 1.5,
                 }}
               >
-                <button onClick={close} style={{ ...btnStyle({ bg: "#111" }), color: "#fff", flex: 1 }}>
-                  Listo
-                </button>
-              </div>
-            </div>
-          </div>
+                Tip: desactivar suele ser menos agresivo que eliminar. Ya sé, a veces
+                borrar cosas da paz espiritual, pero luego las variantes lloran.
+              </Typography>
+            </Stack>
+          </PageContainer>
+        </DialogContent>  
+      </Dialog>
 
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-            Tip: desactivar es “menos destructivo” que eliminar. Pero como tú sí quieres borrar, tu backend ya invalida variantes afectadas, así que al menos no explota todo.
-          </div>
-        </div>
-      </div>
-    </div>
+      <VariantAttributeUpsertModal
+        open={upsertOpen}
+        onClose={() => {
+          setUpsertOpen(false);
+          setEditingAttribute(null);
+        }}
+        restaurantId={restaurantId}
+        editing={editingAttribute}
+        onSaved={async () => {
+          setUpsertOpen(false);
+          setEditingAttribute(null);
+          await loadAttributes({ silent: true });
+
+          showAlert({
+            severity: "success",
+            title: editingAttribute ? "Atributo actualizado" : "Atributo creado",
+            message: editingAttribute
+              ? "El atributo se actualizó correctamente."
+              : "El atributo se creó correctamente.",
+          });
+        }}
+      />
+
+      <VariantAttributeValuesModal
+        open={valuesOpen}
+        onClose={() => {
+          setValuesOpen(false);
+          setValuesTarget(null);
+        }}
+        restaurantId={restaurantId}
+        attribute={valuesTarget}
+        onSaved={async () => {
+          await loadAttributes({ silent: true });
+        }}
+      />
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </>
   );
 }
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+};

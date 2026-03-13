@@ -1,9 +1,30 @@
-// src/components/variants/VariantChannelsModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Alert, Box, Button, Card, Chip, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton,
+  Paper, Stack, Switch, Tab, Tabs, TextField,Tooltip, Typography, useMediaQuery,
+} from "@mui/material";
+
+import { useTheme } from "@mui/material/styles";
+
+import CloseIcon from "@mui/icons-material/Close";
+import SaveIcon from "@mui/icons-material/Save";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
+import {
+  getVariantChannels,
+  upsertVariantChannels,
+} from "../../services/products/variants/productVariantChannels.service";
 
+import PageContainer from "../common/PageContainer";
+import PaginationFooter from "../common/PaginationFooter";
+import AppAlert from "../common/AppAlert";
+import usePagination from "../../hooks/usePagination";
 
-import { getVariantChannels, upsertVariantChannels } from "../../services/products/variants/productVariantChannels.service";
+const PAGE_SIZE = 5;
 
 function money(n) {
   if (n == null || n === "") return "—";
@@ -15,21 +36,11 @@ function money(n) {
 function normalizeErr(e, fallback = "Ocurrió un error") {
   return (
     e?.response?.data?.message ||
-    (e?.response?.data?.errors ? Object.values(e.response.data.errors).flat().join("\n") : "") ||
+    (e?.response?.data?.errors
+      ? Object.values(e.response.data.errors).flat().join("\n")
+      : "") ||
     fallback
   );
-}
-
-function pillStyle(bg, border) {
-  return {
-    fontSize: 12,
-    padding: "2px 8px",
-    borderRadius: 999,
-    background: bg,
-    border: `1px solid ${border}`,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-  };
 }
 
 export default function VariantChannelsModal({
@@ -37,29 +48,60 @@ export default function VariantChannelsModal({
   onClose,
   restaurantId,
   productId,
-  variant, // {id,name,is_enabled,is_default}
+  variant,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [err, setErr] = useState("");
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
 
+  const [tableReady, setTableReady] = useState(false);
   const [loadingTable, setLoadingTable] = useState(false);
-  const [table, setTable] = useState(null); // response completo
+  const [table, setTable] = useState(null);
   const [rows, setRows] = useState([]);
 
-  // cambios locales por branch_sales_channel_id
-  // { [bscId]: { mode:'set'|'remove', is_enabled:boolean, price:number|string } }
   const [draft, setDraft] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "success",
+    title: "",
+    message: "",
+  });
 
   const reqRef = useRef(0);
 
   const variantDisabled = !variant?.is_enabled;
 
   const canEditGlobal = useMemo(() => {
-    // regla: si variante inactiva NO se puede configurar
     return open && !variantDisabled;
   }, [open, variantDisabled]);
+
+  const selectedBranchName = useMemo(() => {
+    return branches.find((b) => String(b.id) === String(branchId))?.name || "";
+  }, [branches, branchId]);
+
+  const showAlert = ({
+    severity = "success",
+    title = "",
+    message = "",
+  }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
 
   const close = () => {
     setErr("");
@@ -67,19 +109,35 @@ export default function VariantChannelsModal({
     setRows([]);
     setDraft({});
     setBranchId("");
+    setTableReady(false);
     onClose?.();
   };
+
+  useEffect(() => {
+    if (!err) return;
+
+    const timer = setTimeout(() => {
+      setErr("");
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [err]);
 
   const loadBranches = async () => {
     const myReq = ++reqRef.current;
     setErr("");
     setLoadingBranches(true);
+
     try {
       const data = await getBranchesByRestaurant(restaurantId);
-      const list = Array.isArray(data) ? data : (data?.data || data?.branches || []);
+      if (myReq !== reqRef.current) return;
+
+      const list = Array.isArray(data)
+        ? data
+        : data?.data || data?.branches || [];
+
       setBranches(list);
 
-      // auto-select primero
       if (!branchId && list.length) {
         setBranchId(String(list[0].id));
       }
@@ -100,7 +158,13 @@ export default function VariantChannelsModal({
     setLoadingTable(true);
 
     try {
-      const data = await getVariantChannels(restaurantId, productId, variant.id, Number(bId));
+      const data = await getVariantChannels(
+        restaurantId,
+        productId,
+        variant.id,
+        Number(bId)
+      );
+
       if (myReq !== reqRef.current) return;
 
       setTable(data);
@@ -115,45 +179,45 @@ export default function VariantChannelsModal({
     } finally {
       if (myReq !== reqRef.current) return;
       setLoadingTable(false);
+      setTableReady(true);
     }
   };
 
   useEffect(() => {
     if (!open) return;
+
     setErr("");
     setBranches([]);
     setBranchId("");
     setTable(null);
     setRows([]);
     setDraft({});
+    setSaving(false);
+    setTableReady(false);
+
     loadBranches();
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, restaurantId, productId, variant?.id]);
 
   useEffect(() => {
-    if (!open) return;
-    if (!branchId) return;
+    if (!open || !branchId) return;
     loadTable(branchId);
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, branchId]);
 
   const resolvedRow = (r) => {
     const bscId = r.branch_sales_channel_id;
     const d = draft[bscId];
 
-    // base/override vienen del backend
-    const base = r.base; // {is_enabled, price} or null
-    const ovr = r.override; // {id,is_enabled,price} or null
+    const base = r.base;
+    const ovr = r.override;
 
-    // valores actuales (lo que muestra UI)
     let visible = r.visible;
     let price = r.price;
     let origin = r.origin;
 
-    // si hay draft, eso manda
     if (d) {
       if (d.mode === "remove") {
-        // volvemos a fallback (lo mostramos como base)
         if (r.branch_is_active) {
           if (base) {
             visible = !!base.is_enabled;
@@ -176,8 +240,7 @@ export default function VariantChannelsModal({
       }
     }
 
-    // bloqueos por regla
-    const channelDisabled = !r.branch_is_active; // canal apagado en sucursal
+    const channelDisabled = !r.branch_is_active;
     const rowLocked = variantDisabled || channelDisabled;
 
     return {
@@ -185,25 +248,45 @@ export default function VariantChannelsModal({
       _base: base,
       _override: ovr,
       _draft: d || null,
-
       ui_visible: visible,
       ui_price: price,
       ui_origin: origin,
-
       ui_channelDisabled: channelDisabled,
       ui_rowLocked: rowLocked,
     };
   };
 
-  const mergedRows = useMemo(() => rows.map(resolvedRow), [rows, draft]); // eslint-disable-line
+  const mergedRows = useMemo(() => {
+    return rows.map(resolvedRow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, draft, variantDisabled]);
+
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: mergedRows,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
 
   const onChangeVisible = (bscId, next) => {
     setErr("");
+
     setDraft((prev) => {
       const current = prev[bscId];
-
-      // si estaba en remove, pasamos a set con defaults
-      const base = rows.find((x) => x.branch_sales_channel_id === bscId)?.base;
+      const base = rows.find(
+        (x) => x.branch_sales_channel_id === bscId
+      )?.base;
       const suggestedPrice = base?.price ?? 0;
 
       return {
@@ -222,20 +305,16 @@ export default function VariantChannelsModal({
 
   const onChangePrice = (bscId, nextPrice) => {
     setErr("");
-    // Convertimos a string para permitir editar libremente
+
     setDraft((prev) => {
       const current = prev[bscId];
-      const base = rows.find((x) => x.branch_sales_channel_id === bscId)?.base;
-      const suggestedVisible =
-        current?.mode === "set"
-          ? !!current.is_enabled
-          : true;
 
       return {
         ...prev,
         [bscId]: {
           mode: "set",
-          is_enabled: suggestedVisible,
+          is_enabled:
+            current?.mode === "set" ? !!current.is_enabled : true,
           price: nextPrice,
         },
       };
@@ -268,20 +347,26 @@ export default function VariantChannelsModal({
       const bscId = Number(k);
 
       if (v.mode === "remove") {
-        items.push({ branch_sales_channel_id: bscId, mode: "remove" });
+        items.push({
+          branch_sales_channel_id: bscId,
+          mode: "remove",
+        });
         continue;
       }
 
-      // mode=set
       const rawPrice = v.price;
 
       if (rawPrice === "" || rawPrice == null) {
-        throw new Error(`Falta precio para branch_sales_channel_id=${bscId}`);
+        throw new Error(
+          `Falta precio para branch_sales_channel_id=${bscId}`
+        );
       }
 
       const num = Number(rawPrice);
       if (!Number.isFinite(num) || num < 0) {
-        throw new Error(`Precio inválido para branch_sales_channel_id=${bscId}`);
+        throw new Error(
+          `Precio inválido para branch_sales_channel_id=${bscId}`
+        );
       }
 
       items.push({
@@ -298,390 +383,994 @@ export default function VariantChannelsModal({
   const save = async () => {
     setErr("");
 
-    if (!branchId) return setErr("Selecciona una sucursal.");
-    if (variantDisabled) return setErr("La variante está inactiva. Actívala para configurar precios por canal.");
+    if (!branchId) {
+      setErr("Selecciona una sucursal.");
+      return;
+    }
+
+    if (variantDisabled) {
+      setErr(
+        "La variante está inactiva. Actívala para configurar precios por canal."
+      );
+      return;
+    }
+
     if (!hasChanges) return;
 
-    // Extra regla: no dejar guardar cambios en canales apagados
-    const disabledTouched = mergedRows.some((r) => r.ui_channelDisabled && draft[r.branch_sales_channel_id]);
+    const disabledTouched = mergedRows.some(
+      (r) => r.ui_channelDisabled && draft[r.branch_sales_channel_id]
+    );
+
     if (disabledTouched) {
-      return setErr("Hay cambios en un canal apagado por sucursal. No se puede configurar ahí.");
+      setErr(
+        "Hay cambios en un canal apagado por sucursal. No se puede configurar ahí."
+      );
+      return;
     }
 
     let items;
     try {
       items = buildItemsPayload();
     } catch (e) {
-      return setErr(e.message || "Payload inválido");
+      setErr(e.message || "Payload inválido");
+      return;
     }
 
+    setSaving(true);
+
     try {
-      await upsertVariantChannels(restaurantId, productId, variant.id, items);
-      // recargar tabla
+      await upsertVariantChannels(
+        restaurantId,
+        productId,
+        variant.id,
+        items
+      );
+
+      showAlert({
+        severity: "success",
+        title: "Cambios guardados",
+        message:
+          "La configuración de precios por canal se actualizó correctamente.",
+      });
+
       await loadTable(branchId);
     } catch (e) {
       setErr(normalizeErr(e, "No se pudo guardar configuración"));
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const branchTabSx = {
+    minHeight: 52,
+    px: { xs: 2, sm: 2.5 },
+    py: 1,
+    fontSize: { xs: 14, sm: 16 },
+    fontWeight: 800,
+    textTransform: "none",
+    color: "text.secondary",
+    borderRadius: "12px 12px 0 0",
+    transition:
+      "background-color 0.18s ease, color 0.18s ease, transform 0.12s ease",
+    "&.Mui-selected": {
+      color: "primary.main",
+      bgcolor: "transparent",
+    },
+    "&:hover": {
+      bgcolor: "rgba(255, 152, 0, 0.06)",
+    },
+    "&:active": {
+      bgcolor: "rgba(255, 152, 0, 0.14)",
+      transform: "scale(0.98)",
+    },
+    "&.Mui-focusVisible": {
+      bgcolor: "rgba(255, 152, 0, 0.10)",
+    },
   };
 
   if (!open) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 10000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-    >
-      <div
-        style={{
-          width: "min(1050px, 100%)",
-          background: "#fff",
-          borderRadius: 14,
-          border: "1px solid #eee",
-          overflow: "hidden",
+    <>
+      <Dialog
+        open={open}
+        onClose={saving || loadingTable ? undefined : close}
+        fullWidth
+        maxWidth="lg"
+        fullScreen={isMobile}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: { xs: 0, sm: 1 },
+              overflow: "hidden",
+              backgroundColor: "background.paper",
+            },
+          },
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: 14,
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            alignItems: "center",
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2,
+            bgcolor: "#111111",
+            color: "#fff",
           }}
         >
-          <div>
-            <div style={{ fontWeight: 950, fontSize: 16 }}>
-              {table?.product?.name || "Producto"} — {variant?.name || "Variante"}
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-              Configuración por canal (override en <code>product_variant_channel</code>)
-            </div>
-          </div>
-
-          <button onClick={close} style={{ padding: "8px 10px", cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: 14 }}>
-          {err && (
-            <div
-              style={{
-                marginBottom: 12,
-                background: "#ffe5e5",
-                padding: 10,
-                whiteSpace: "pre-line",
-                borderRadius: 10,
-              }}
-            >
-              <strong>Error:</strong> {err}
-            </div>
-          )}
-
-          {/* Bloqueo por variante desactivada */}
-          {variantDisabled && (
-            <div
-              style={{
-                marginBottom: 12,
-                background: "#fff3cd",
-                border: "1px solid #ffeeba",
-                padding: 10,
-                borderRadius: 10,
-              }}
-            >
-              Esta variante está <strong>inactiva</strong>. Puedes ver la tabla, pero{" "}
-              <strong>no puedes configurar</strong> precios por canal hasta activarla.
-            </div>
-          )}
-
-          {/* Selector sucursal */}
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              flexWrap: "wrap",
-              marginBottom: 12,
-              border: "1px solid #eee",
-              borderRadius: 12,
-              padding: 12,
-              background: "#fafafa",
-            }}
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
           >
-            <div style={{ fontWeight: 900 }}>Sucursal</div>
-
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              disabled={loadingBranches}
-              style={{
-                padding: "10px 10px",
-                borderRadius: 10,
-                border: "1px solid #ddd",
-                minWidth: 260,
-              }}
-            >
-              {branches.length === 0 ? (
-                <option value="">{loadingBranches ? "Cargando..." : "Sin sucursales"}</option>
-              ) : (
-                branches.map((b) => (
-                  <option key={b.id} value={String(b.id)}>
-                    {b.name || `Sucursal #${b.id}`}
-                  </option>
-                ))
-              )}
-            </select>
-
-            <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
-              {loadingTable ? "Cargando canales..." : branchId ? `branch_id=${branchId}` : "Selecciona sucursal"}
-            </div>
-          </div>
-
-          {/* Tabla */}
-          <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
-            <div style={{ padding: 12, borderBottom: "1px solid #f0f0f0", fontWeight: 900 }}>
-              Canales
-            </div>
-
-            {loadingTable ? (
-              <div style={{ padding: 12 }}>Cargando…</div>
-            ) : mergedRows.length === 0 ? (
-              <div style={{ padding: 12, opacity: 0.8 }}>
-                No hay canales configurados para esta sucursal.
-              </div>
-            ) : (
-              <div style={{ width: "100%", overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
-                  <thead>
-                    <tr style={{ background: "#fafafa" }}>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Canal</th>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Estado canal</th>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Visible</th>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Precio</th>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Origen</th>
-                      <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #eee" }}>Acción</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {mergedRows.map((r) => {
-                      const bscId = r.branch_sales_channel_id;
-
-                      const locked = r.ui_rowLocked || !canEditGlobal; // variante inactiva o canal apagado
-                      const hasOverride = !!r._override;
-                      const hasDraft = !!r._draft;
-
-                      return (
-                        <tr key={bscId}>
-                          {/* Canal */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            <div style={{ fontWeight: 900 }}>{r.sales_channel?.name}</div>
-                            <div style={{ fontSize: 12, opacity: 0.75 }}>
-                              {r.sales_channel?.code} · bsc_id: {bscId}
-                            </div>
-                          </td>
-
-                          {/* Estado canal */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            <span
-                              style={
-                                r.branch_is_active
-                                  ? pillStyle("#e8f5e9", "#c8e6c9")
-                                  : pillStyle("#ffe5e5", "#ffb3b3")
-                              }
-                              title={r.branch_is_active ? "Activo en sucursal" : "Apagado en sucursal"}
-                            >
-                              {r.branch_is_active ? "Activo" : "Apagado"}
-                            </span>
-                          </td>
-
-                          {/* Visible */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                              <input
-                                type="checkbox"
-                                checked={!!r.ui_visible}
-                                disabled={locked}
-                                onChange={(e) => onChangeVisible(bscId, e.target.checked)}
-                                title={
-                                  locked
-                                    ? variantDisabled
-                                      ? "Variante inactiva: no se puede configurar"
-                                      : "Canal apagado en sucursal: no se puede configurar"
-                                    : "Cambiar visibilidad"
-                                }
-                              />
-                              <span style={{ fontWeight: 900, opacity: locked ? 0.6 : 1 }}>
-                                {r.ui_visible ? "Sí" : "No"}
-                              </span>
-                            </label>
-                          </td>
-
-                          {/* Precio */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            <input
-                              value={r.ui_price == null ? "" : String(r.ui_price)}
-                              disabled={locked || !r.ui_visible}
-                              onChange={(e) => onChangePrice(bscId, e.target.value)}
-                              placeholder="—"
-                              style={{
-                                width: 140,
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                border: "1px solid #ddd",
-                                opacity: locked || !r.ui_visible ? 0.6 : 1,
-                              }}
-                              inputMode="decimal"
-                            />
-                            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                              Base: {r._base ? money(r._base.price) : "—"}
-                            </div>
-                          </td>
-
-                          {/* Origen */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            {r.ui_origin === "variant" && (
-                              <span style={pillStyle("#e8f0fe", "#c7d2fe")}>Variante</span>
-                            )}
-                            {r.ui_origin === "product" && (
-                              <span style={pillStyle("#f1f5f9", "#e2e8f0")}>Producto</span>
-                            )}
-                            {!r.ui_origin && <span style={{ opacity: 0.7 }}>—</span>}
-
-                            {hasOverride && (
-                              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                                Override guardado
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Acciones */}
-                          <td style={{ padding: 10, borderBottom: "1px solid #f0f0f0" }}>
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button
-                                onClick={() => useProductFallback(bscId)}
-                                disabled={locked}
-                                title={
-                                  locked
-                                    ? "No editable"
-                                    : "Eliminar override y volver al precio del producto"
-                                }
-                                style={{
-                                  padding: "8px 10px",
-                                  borderRadius: 10,
-                                  border: "1px solid #eee",
-                                  cursor: locked ? "not-allowed" : "pointer",
-                                  opacity: locked ? 0.6 : 1,
-                                }}
-                              >
-                                Usar producto
-                              </button>
-
-                              {hasDraft && (
-                                <button
-                                  onClick={() => clearDraftRow(bscId)}
-                                  disabled={locked}
-                                  title="Descartar cambio local"
-                                  style={{
-                                    padding: "8px 10px",
-                                    borderRadius: 10,
-                                    border: "1px solid #eee",
-                                    cursor: locked ? "not-allowed" : "pointer",
-                                    opacity: locked ? 0.6 : 1,
-                                    background: "#f7f7f7",
-                                  }}
-                                >
-                                  Descartar
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Footer */}
-            <div style={{ padding: 12, borderTop: "1px solid #f0f0f0", display: "flex", gap: 10 }}>
-              <button
-                onClick={() => loadTable(branchId)}
-                disabled={!branchId}
-                style={{
-                  padding: "10px 12px",
-                  cursor: branchId ? "pointer" : "not-allowed",
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  background: "#f7f7f7",
-                  fontWeight: 900,
+            <Box>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
+                  color: "#fff",
                 }}
               >
-                ↻ Recargar
-              </button>
+                Precios de variante por canal
+              </Typography>
 
-              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
-                <button
-                  onClick={close}
-                  style={{
-                    padding: "10px 12px",
-                    cursor: "pointer",
-                    borderRadius: 10,
-                    border: "1px solid #eee",
-                    background: "#f7f7f7",
-                    fontWeight: 900,
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.82)",
+                }}
+              >
+                {table?.product?.name || "Producto"} · {variant?.name || "Variante"}
+              </Typography>
+            </Box>
+
+            <IconButton
+              onClick={close}
+              disabled={saving || loadingTable}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            p: 0,
+            bgcolor: "background.default",
+          }}
+        >
+          <PageContainer
+            maxWidth={1100}
+            sx={{
+              py: { xs: 2, sm: 3 },
+              px: { xs: 2, sm: 3 },
+            }}
+            innerSx={{
+              width: "100%",
+            }}
+          >
+            <Stack spacing={2.5}>
+              {err ? (
+                <Alert
+                  severity="error"
+                  sx={{
+                    borderRadius: 1,
+                    alignItems: "flex-start",
+                    whiteSpace: "pre-line",
                   }}
                 >
-                  Cerrar
-                </button>
+                  <Box>
+                    <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                      No se pudo completar la acción
+                    </Typography>
+                    <Typography variant="body2">{err}</Typography>
+                  </Box>
+                </Alert>
+              ) : null}
 
-                <button
-                  onClick={save}
-                  disabled={!canEditGlobal || !hasChanges || loadingTable}
-                  title={
-                    variantDisabled
-                      ? "Variante inactiva"
-                      : !hasChanges
-                        ? "Sin cambios"
-                        : "Guardar"
-                  }
-                  style={{
-                    padding: "10px 12px",
-                    cursor: !canEditGlobal || !hasChanges ? "not-allowed" : "pointer",
-                    borderRadius: 10,
-                    border: "1px solid #111",
-                    background: "#111",
-                    color: "#fff",
-                    fontWeight: 950,
-                    opacity: !canEditGlobal || !hasChanges ? 0.5 : 1,
+              {variantDisabled ? (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    borderRadius: 1,
+                    alignItems: "flex-start",
                   }}
                 >
-                  Guardar cambios
-                </button>
-              </div>
-            </div>
-          </div>
+                  <Box>
+                    <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                      Variante inactiva
+                    </Typography>
+                    <Typography variant="body2">
+                      Puedes revisar la configuración, pero no podrás cambiar
+                      precios por canal hasta que la variante vuelva a estar activa.
+                    </Typography>
+                  </Box>
+                </Alert>
+              ) : null}
 
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
-            Regla: si hay override (variante) se usa ese precio; si no, se usa el precio del producto (<code>product_channel</code>).
-          </div>
-        </div>
-      </div>
-    </div>
+              <Paper
+                sx={{
+                  p: { xs: 2, sm: 2.5 },
+                  borderRadius: 0,
+                  backgroundColor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "none",
+                }}
+              >
+                <Stack spacing={1.5}>
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", md: "center" }}
+                    spacing={1.5}
+                  >
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 16,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        Sucursal
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.5,
+                          fontSize: 13,
+                          color: "text.secondary",
+                        }}
+                      >
+                        Selecciona la sucursal para editar el override de la variante
+                        sobre los canales disponibles.
+                      </Typography>
+                    </Box>
+
+                    <Chip
+                      icon={<StorefrontOutlinedIcon />}
+                      label={
+                        loadingTable
+                          ? "Cargando canales..."
+                          : selectedBranchName || "Sin sucursal"
+                      }
+                      sx={{ fontWeight: 800 }}
+                    />
+                  </Stack>
+
+                  <Box
+                    sx={{
+                      width: "100%",
+                      overflowX: "auto",
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                    }}
+                  >
+                    <Tabs
+                      value={branchId}
+                      onChange={(_, value) => setBranchId(value)}
+                      variant="scrollable"
+                      scrollButtons="auto"
+                      allowScrollButtonsMobile
+                      textColor="inherit"
+                      slotProps={{
+                        indicator: {
+                          sx: {
+                            height: 3,
+                            borderRadius: "999px 999px 0 0",
+                            backgroundColor: "primary.main",
+                          },
+                        },
+                      }}
+                      sx={{
+                        minHeight: 52,
+                        "& .MuiTabs-flexContainer": {
+                          gap: { xs: 1, sm: 2 },
+                        },
+                        "& .MuiTabs-scrollButtons": {
+                          color: "text.secondary",
+                        },
+                      }}
+                    >
+                      {loadingBranches ? (
+                        <Tab
+                          value=""
+                          disabled
+                          label="Cargando..."
+                          sx={branchTabSx}
+                        />
+                      ) : branches.length ? (
+                        branches.map((b) => (
+                          <Tab
+                            key={b.id}
+                            value={String(b.id)}
+                            label={b.name || `Sucursal ${b.id}`}
+                            disableRipple
+                            sx={branchTabSx}
+                          />
+                        ))
+                      ) : (
+                        <Tab
+                          value=""
+                          disabled
+                          label="Sin sucursales"
+                          sx={branchTabSx}
+                        />
+                      )}
+                    </Tabs>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              {!tableReady || loadingTable ? (
+                <Paper
+                  sx={{
+                    p: 4,
+                    borderRadius: 0,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                    Cargando configuración por canal…
+                  </Typography>
+                </Paper>
+              ) : total === 0 ? (
+                <Paper
+                  sx={{
+                    p: 4,
+                    borderRadius: 0,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    textAlign: "center",
+                  }}
+                >
+                  <PointOfSaleOutlinedIcon
+                    sx={{
+                      fontSize: 34,
+                      color: "text.secondary",
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    No hay canales configurados
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      fontSize: 14,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Esta sucursal no tiene canales disponibles para esta variante.
+                  </Typography>
+                </Paper>
+              ) : (
+                <>
+                  {!isMobile ? (
+                    <Paper
+                      sx={{
+                        p: 0,
+                        overflow: "hidden",
+                        borderRadius: 0,
+                        backgroundColor: "background.paper",
+                        border: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Box sx={{ width: "100%", overflowX: "auto" }}>
+                        <Box
+                          component="table"
+                          sx={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            minWidth: 980,
+                          }}
+                        >
+                          <Box component="thead">
+                            <Box
+                              component="tr"
+                              sx={{ backgroundColor: "#fafafa" }}
+                            >
+                              <TableHeadCell>Canal</TableHeadCell>
+                              <TableHeadCell>Estado canal</TableHeadCell>
+                              <TableHeadCell>Visible</TableHeadCell>
+                              <TableHeadCell>Precio</TableHeadCell>
+                              <TableHeadCell>Origen</TableHeadCell>
+                              <TableHeadCell>Acciones</TableHeadCell>
+                            </Box>
+                          </Box>
+
+                          <Box component="tbody">
+                            {paginatedItems.map((r) => {
+                              const bscId = r.branch_sales_channel_id;
+                              const locked = r.ui_rowLocked || !canEditGlobal;
+                              const hasDraft = !!r._draft;
+
+                              return (
+                                <Box component="tr" key={bscId}>
+                                  <TableBodyCell>
+                                    <Typography
+                                      sx={{
+                                        fontSize: 14,
+                                        fontWeight: 800,
+                                        color: "text.primary",
+                                      }}
+                                    >
+                                      {r.sales_channel?.name}
+                                    </Typography>
+
+                                    <Typography
+                                      sx={{
+                                        mt: 0.35,
+                                        fontSize: 12,
+                                        color: "text.secondary",
+                                      }}
+                                    >
+                                      {r.sales_channel?.code} · bsc_id: {bscId}
+                                    </Typography>
+                                  </TableBodyCell>
+
+                                  <TableBodyCell>
+                                    <Chip
+                                      size="small"
+                                      label={
+                                        r.branch_is_active ? "Activo" : "Apagado"
+                                      }
+                                      color={
+                                        r.branch_is_active ? "success" : "default"
+                                      }
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  </TableBodyCell>
+
+                                  <TableBodyCell>
+                                    <FormControlLabel
+                                      sx={{
+                                        m: 0,
+                                        "& .MuiFormControlLabel-label": {
+                                          minWidth: 0,
+                                        },
+                                      }}
+                                      control={
+                                        <Switch
+                                          checked={!!r.ui_visible}
+                                          disabled={locked}
+                                          onChange={(e) =>
+                                            onChangeVisible(
+                                              bscId,
+                                              e.target.checked
+                                            )
+                                          }
+                                          color="primary"
+                                        />
+                                      }
+                                      label={
+                                        <Typography sx={switchLabelSx}>
+                                          {r.ui_visible ? "Activo" : "Inactivo"}
+                                        </Typography>
+                                      }
+                                    />
+                                  </TableBodyCell>
+
+                                  <TableBodyCell>
+                                    <TextField
+                                      value={
+                                        r.ui_price == null ? "" : String(r.ui_price)
+                                      }
+                                      disabled={locked || !r.ui_visible}
+                                      onChange={(e) =>
+                                        onChangePrice(bscId, e.target.value)
+                                      }
+                                      placeholder="0.00"
+                                      inputProps={{
+                                        inputMode: "decimal",
+                                      }}
+                                      sx={{ maxWidth: 150 }}
+                                    />
+
+                                    <Typography
+                                      sx={{
+                                        mt: 0.75,
+                                        fontSize: 12,
+                                        color: "text.secondary",
+                                      }}
+                                    >
+                                      Base: {r._base ? money(r._base.price) : "—"}
+                                    </Typography>
+                                  </TableBodyCell>
+
+                                  <TableBodyCell>
+                                    {r.ui_origin === "variant" ? (
+                                      <Chip
+                                        size="small"
+                                        label="Variante"
+                                        color="info"
+                                        sx={{ fontWeight: 800 }}
+                                      />
+                                    ) : r.ui_origin === "product" ? (
+                                      <Chip
+                                        size="small"
+                                        label="Producto"
+                                        sx={{ fontWeight: 800 }}
+                                      />
+                                    ) : (
+                                      <Typography
+                                        sx={{
+                                          fontSize: 13,
+                                          color: "text.secondary",
+                                        }}
+                                      >
+                                        —
+                                      </Typography>
+                                    )}
+                                  </TableBodyCell>
+
+                                  <TableBodyCell>
+                                    <Stack direction="row" spacing={1}>
+                                      <Button
+                                        onClick={() => useProductFallback(bscId)}
+                                        disabled={locked}
+                                        variant="outlined"
+                                        startIcon={<RestartAltIcon />}
+                                        sx={{
+                                          height: 40,
+                                          borderRadius: 2,
+                                          fontSize: 12,
+                                          fontWeight: 800,
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        Usar producto
+                                      </Button>
+
+                                      {hasDraft ? (
+                                        <Button
+                                          onClick={() => clearDraftRow(bscId)}
+                                          disabled={locked}
+                                          variant="outlined"
+                                          sx={{
+                                            height: 40,
+                                            borderRadius: 2,
+                                            fontSize: 12,
+                                            fontWeight: 800,
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          Descartar
+                                        </Button>
+                                      ) : null}
+                                    </Stack>
+                                  </TableBodyCell>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      </Box>
+
+                      <PaginationFooter
+                        page={page}
+                        totalPages={totalPages}
+                        startItem={startItem}
+                        endItem={endItem}
+                        total={total}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={prevPage}
+                        onNext={nextPage}
+                        itemLabel="canales"
+                      />
+                    </Paper>
+                  ) : (
+                    <Paper
+                      sx={{
+                        p: 0,
+                        overflow: "hidden",
+                        borderRadius: 0,
+                        backgroundColor: "background.paper",
+                        border: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          p: 2,
+                          display: "grid",
+                          gridTemplateColumns: "1fr",
+                          gap: 2,
+                        }}
+                      >
+                        {paginatedItems.map((r) => {
+                          const bscId = r.branch_sales_channel_id;
+                          const locked = r.ui_rowLocked || !canEditGlobal;
+                          const hasDraft = !!r._draft;
+
+                          return (
+                            <Card
+                              key={bscId}
+                              sx={{
+                                borderRadius: 1,
+                                boxShadow: "none",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                backgroundColor: "#fff",
+                              }}
+                            >
+                              <Box sx={{ p: 2 }}>
+                                <Stack spacing={1.75}>
+                                  <Stack
+                                    direction="row"
+                                    justifyContent="space-between"
+                                    alignItems="flex-start"
+                                    spacing={1.5}
+                                  >
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Typography
+                                        sx={{
+                                          fontSize: 18,
+                                          fontWeight: 800,
+                                          color: "text.primary",
+                                          lineHeight: 1.25,
+                                          wordBreak: "break-word",
+                                        }}
+                                      >
+                                        {r.sales_channel?.name}
+                                      </Typography>
+
+                                      <Typography
+                                        sx={{
+                                          mt: 0.5,
+                                          fontSize: 12,
+                                          color: "text.secondary",
+                                        }}
+                                      >
+                                        {r.sales_channel?.code} · bsc_id: {bscId}
+                                      </Typography>
+                                    </Box>
+
+                                    <Chip
+                                      size="small"
+                                      label={
+                                        r.branch_is_active ? "Activo" : "Apagado"
+                                      }
+                                      color={
+                                        r.branch_is_active ? "success" : "default"
+                                      }
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  </Stack>
+
+                                  <Stack spacing={1}>
+                                    <InfoRow
+                                      label="Estado"
+                                      value={
+                                        <FormControlLabel
+                                          sx={{
+                                            m: 0,
+                                            "& .MuiFormControlLabel-label": {
+                                              minWidth: 0,
+                                            },
+                                          }}
+                                          control={
+                                            <Switch
+                                              checked={!!r.ui_visible}
+                                              disabled={locked}
+                                              onChange={(e) =>
+                                                onChangeVisible(
+                                                  bscId,
+                                                  e.target.checked
+                                                )
+                                              }
+                                              color="primary"
+                                            />
+                                          }
+                                          label={
+                                            <Typography sx={switchLabelSx}>
+                                              {r.ui_visible
+                                                ? "Activo"
+                                                : "Inactivo"}
+                                            </Typography>
+                                          }
+                                        />
+                                      }
+                                    />
+
+                                    <InfoRow
+                                      label="Origen"
+                                      value={
+                                        r.ui_origin === "variant" ? (
+                                          <Chip
+                                            size="small"
+                                            label="Variante"
+                                            color="info"
+                                            sx={{ fontWeight: 800 }}
+                                          />
+                                        ) : r.ui_origin === "product" ? (
+                                          <Chip
+                                            size="small"
+                                            label="Producto"
+                                            sx={{ fontWeight: 800 }}
+                                          />
+                                        ) : (
+                                          "—"
+                                        )
+                                      }
+                                    />
+
+                                    <Box>
+                                      <Typography sx={mobileLabelSx}>
+                                        Precio
+                                      </Typography>
+
+                                      <TextField
+                                        value={
+                                          r.ui_price == null
+                                            ? ""
+                                            : String(r.ui_price)
+                                        }
+                                        disabled={locked || !r.ui_visible}
+                                        onChange={(e) =>
+                                          onChangePrice(bscId, e.target.value)
+                                        }
+                                        placeholder="0.00"
+                                        inputProps={{
+                                          inputMode: "decimal",
+                                        }}
+                                        sx={{ mt: 0.75 }}
+                                      />
+
+                                      <Typography
+                                        sx={{
+                                          mt: 0.75,
+                                          fontSize: 12,
+                                          color: "text.secondary",
+                                        }}
+                                      >
+                                        Base: {r._base ? money(r._base.price) : "—"}
+                                      </Typography>
+                                    </Box>
+                                  </Stack>
+
+                                  <Box
+                                    sx={{
+                                      pt: 1,
+                                      borderTop: "1px solid",
+                                      borderColor: "divider",
+                                    }}
+                                  >
+                                    <Typography
+                                      sx={{
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        color: "text.secondary",
+                                        mb: 1,
+                                        textTransform: "uppercase",
+                                        letterSpacing: 0.35,
+                                      }}
+                                    >
+                                      Acciones
+                                    </Typography>
+
+                                    <Stack
+                                      direction={{ xs: "column", sm: "row" }}
+                                      spacing={1}
+                                    >
+                                      <Button
+                                        onClick={() => useProductFallback(bscId)}
+                                        disabled={locked}
+                                        variant="outlined"
+                                        startIcon={<RestartAltIcon />}
+                                        sx={{
+                                          height: 40,
+                                          borderRadius: 2,
+                                          fontSize: 12,
+                                          fontWeight: 800,
+                                        }}
+                                      >
+                                        Usar producto
+                                      </Button>
+
+                                      {hasDraft ? (
+                                        <Button
+                                          onClick={() => clearDraftRow(bscId)}
+                                          disabled={locked}
+                                          variant="outlined"
+                                          sx={{
+                                            height: 40,
+                                            borderRadius: 2,
+                                            fontSize: 12,
+                                            fontWeight: 800,
+                                          }}
+                                        >
+                                          Descartar
+                                        </Button>
+                                      ) : null}
+                                    </Stack>
+                                  </Box>
+                                </Stack>
+                              </Box>
+                            </Card>
+                          );
+                        })}
+                      </Box>
+
+                      <PaginationFooter
+                        page={page}
+                        totalPages={totalPages}
+                        startItem={startItem}
+                        endItem={endItem}
+                        total={total}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={prevPage}
+                        onNext={nextPage}
+                        itemLabel="canales"
+                      />
+                    </Paper>
+                  )}
+
+                  <Stack
+                    direction={{ xs: "column-reverse", sm: "row" }}
+                    justifyContent="flex-end"
+                    spacing={1.5}
+                  >
+                    <Button
+                      type="button"
+                      onClick={close}
+                      disabled={saving}
+                      variant="outlined"
+                      sx={{
+                        minWidth: { xs: "100%", sm: 150 },
+                        height: 44,
+                        borderRadius: 2,
+                      }}
+                    >
+                      Cerrar
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={save}
+                      disabled={
+                        !canEditGlobal || !hasChanges || loadingTable || saving
+                      }
+                      variant="contained"
+                      startIcon={<SaveIcon />}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 200 },
+                        height: 44,
+                        borderRadius: 2,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {saving ? "Guardando…" : "Guardar cambios"}
+                    </Button>
+                  </Stack>
+                </>
+              )}
+
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  color: "text.secondary",
+                  lineHeight: 1.5,
+                }}
+              >
+                Regla: si existe override de variante se usa ese precio. Si no,
+                se toma el precio heredado del producto por canal.
+              </Typography>
+            </Stack>
+          </PageContainer>
+        </DialogContent>
+      </Dialog>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4000}
+      />
+    </>
   );
 }
+
+function InfoRow({ label, value }) {
+  return (
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={{ xs: 0.5, sm: 1.25 }}
+      alignItems={{ xs: "flex-start", sm: "center" }}
+    >
+      <Typography sx={mobileLabelSx}>{label}</Typography>
+
+      {typeof value === "string" ? (
+        <Typography sx={mobileValueSx}>{value}</Typography>
+      ) : (
+        value
+      )}
+    </Stack>
+  );
+}
+
+function TableHeadCell({ children }) {
+  return (
+    <Box
+      component="th"
+      sx={{
+        textAlign: "left",
+        px: 2,
+        py: 1.5,
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        fontSize: 13,
+        fontWeight: 800,
+        color: "text.primary",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+function TableBodyCell({ children }) {
+  return (
+    <Box
+      component="td"
+      sx={{
+        px: 2,
+        py: 1.5,
+        borderBottom: "1px solid",
+        borderColor: "#f0f0f0",
+        verticalAlign: "top",
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const mobileLabelSx = {
+  fontSize: 11,
+  fontWeight: 800,
+  color: "text.secondary",
+  textTransform: "uppercase",
+  letterSpacing: 0.3,
+};
+
+const mobileValueSx = {
+  fontSize: 14,
+  color: "text.primary",
+  wordBreak: "break-word",
+  lineHeight: 1.5,
+};

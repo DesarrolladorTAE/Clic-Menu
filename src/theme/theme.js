@@ -41,6 +41,19 @@ const theme = createTheme({
     divider: "#D9D3D3",
   },
 
+  customLayout: {
+    pageMaxWidth: 1100,
+    pagePaddingX: {
+      xs: 2,
+      sm: 3,
+      md: 4,
+    },
+    pagePaddingY: {
+      xs: 8,
+      md: 4,
+    },
+  },
+
   shape: {
     borderRadius: 6,
   },
