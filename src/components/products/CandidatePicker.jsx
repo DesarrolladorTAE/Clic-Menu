@@ -1,22 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Chip,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, Card, Chip, Stack, TextField, Typography,
 } from "@mui/material";
 
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
 
-import { getComponentCandidates } from "../../services/products/catalog/productComponents.service";
 import usePagination from "../../hooks/usePagination";
 import PaginationFooter from "../common/PaginationFooter";
+
+import { getComponentCandidates } from "../../services/products/catalog/productComponents.service";
 
 function apiErrorToMessage(e, fallback) {
   return (
@@ -33,6 +27,7 @@ const PAGE_SIZE = 5;
 export default function CandidatePicker({
   restaurantId,
   productId,
+  productsMode = "global",
   branchId,
   excludeIds = [],
   onPick,
@@ -44,11 +39,11 @@ export default function CandidatePicker({
 
   const params = useMemo(() => {
     return {
-      branch_id: branchId,
+      ...(productsMode === "branch" ? { branch_id: branchId } : {}),
       q: q.trim() || undefined,
       exclude_ids: excludeIds?.length ? excludeIds : undefined,
     };
-  }, [branchId, q, excludeIds]);
+  }, [productsMode, branchId, q, excludeIds]);
 
   useEffect(() => {
     if (!err) return;
@@ -61,7 +56,12 @@ export default function CandidatePicker({
     setLoading(true);
 
     try {
-      const res = await getComponentCandidates(restaurantId, productId, params);
+      const res = await getComponentCandidates(
+        restaurantId,
+        productId,
+        params,
+        productsMode
+      );
       setData(res?.data || []);
     } catch (e) {
       setErr(apiErrorToMessage(e, "No se pudo cargar candidatos"));
@@ -72,10 +72,10 @@ export default function CandidatePicker({
   };
 
   useEffect(() => {
-    if (!branchId) return;
+    if (productsMode === "branch" && !branchId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
+  }, [branchId, productsMode]);
 
   const {
     page,
@@ -273,7 +273,16 @@ export default function CandidatePicker({
             lineHeight: 1.5,
           }}
         >
-          Solo aparecen productos <strong>activos</strong> y <strong>vendibles</strong> en esta sucursal.
+          {productsMode === "global" ? (
+            <>
+              Solo aparecen productos <strong>activos</strong>, <strong>globales</strong>,
+              <strong> habilitados</strong> y <strong>vendibles</strong> en todas las sucursales.
+            </>
+          ) : (
+            <>
+              Solo aparecen productos <strong>activos</strong> y <strong>vendibles</strong> en esta sucursal.
+            </>
+          )}
         </Typography>
       </Box>
     </Box>

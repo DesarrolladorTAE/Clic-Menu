@@ -1,21 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  Paper,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Alert, Box, Button, Card, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, Paper, Stack, Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -53,7 +40,10 @@ export default function CompositionWizard({
   const [localErr, setLocalErr] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canPickCandidates = useMemo(() => !!branchId, [branchId]);
+  const canPickCandidates = useMemo(() => {
+    if (productsMode === "global") return true;
+    return !!branchId;
+  }, [productsMode, branchId]);
 
   useEffect(() => {
     if (!open) return;
@@ -225,7 +215,9 @@ export default function CompositionWizard({
                 color: "rgba(255,255,255,0.82)",
               }}
             >
-              Modo: {productsMode} · {branchId ? "Sucursal lista" : "Falta sucursal"}
+              {productsMode === "global"
+                ? "Modo: global · Aplica para todas las sucursales"
+                : `Modo: branch · ${branchId ? "Sucursal fija" : "Sin sucursal disponible"}`}
             </Typography>
           </Box>
 
@@ -320,13 +312,14 @@ export default function CompositionWizard({
                     }}
                   >
                     <Typography variant="body2">
-                      Selecciona una sucursal para listar productos vendibles.
+                      No se pudo resolver la sucursal fija del producto.
                     </Typography>
                   </Alert>
                 ) : (
                   <CandidatePicker
                     restaurantId={restaurantId}
                     productId={productId}
+                    productsMode={productsMode}
                     branchId={branchId}
                     excludeIds={rows.map((x) => x.component_product_id)}
                     onPick={onAddCandidate}

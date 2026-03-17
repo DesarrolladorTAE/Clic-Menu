@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Alert, Box, Button, Card, Chip,CircularProgress, FormControlLabel, IconButton, Paper,Stack, Switch,
-  Tab, Tabs, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography,
+  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
   useMediaQuery,
 } from "@mui/material";
 
@@ -13,9 +13,14 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SettingsInputComponentOutlinedIcon from "@mui/icons-material/SettingsInputComponentOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
-import AutoAwesomeMotionIcon from "@mui/icons-material/AutoAwesomeMotion";
 import EditIcon from "@mui/icons-material/Edit";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+
+import PageContainer from "../../components/common/PageContainer";
+import AppAlert from "../../components/common/AppAlert";
+import PaginationFooter from "../../components/common/PaginationFooter";
+import usePagination from "../../hooks/usePagination";
+import CompositionWizard from "../../components/products/CompositionWizard";
 
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
@@ -25,11 +30,6 @@ import {
 } from "../../services/products/catalog/productComponents.service";
 import { getProduct } from "../../services/products/products.service";
 
-import PageContainer from "../../components/common/PageContainer";
-import AppAlert from "../../components/common/AppAlert";
-import PaginationFooter from "../../components/common/PaginationFooter";
-import usePagination from "../../hooks/usePagination";
-import CompositionWizard from "../../components/products/CompositionWizard";
 
 function apiErrorToMessage(e, fallback) {
   return (
@@ -46,7 +46,6 @@ const PAGE_SIZE = 5;
 export default function ProductCompositionPage() {
   const nav = useNavigate();
   const { restaurantId, productId } = useParams();
-  const [sp, setSp] = useSearchParams();
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -66,12 +65,22 @@ export default function ProductCompositionPage() {
   const requiresBranch = productsMode === "branch";
 
   const [branches, setBranches] = useState([]);
-  const [branchId, setBranchId] = useState("");
+
+  const [uiMeta, setUiMeta] = useState({
+    show_branch_selector: false,
+    locked_branch_id: null,
+    effective_branch_id: null,
+  });
+
+  const lockedBranchId = uiMeta?.locked_branch_id ?? null;
+  const backendEffectiveBranchId = uiMeta?.effective_branch_id ?? null;
 
   const effectiveBranchId = useMemo(() => {
-    if (requiresBranch) return branchId ? Number(branchId) : null;
-    return branchId ? Number(branchId) : null;
-  }, [requiresBranch, branchId]);
+    if (!requiresBranch) return null;
+    if (backendEffectiveBranchId) return Number(backendEffectiveBranchId);
+    if (lockedBranchId) return Number(lockedBranchId);
+    return null;
+  }, [requiresBranch, backendEffectiveBranchId, lockedBranchId]);
 
   const [product, setProduct] = useState(null);
   const [items, setItems] = useState([]);
@@ -79,10 +88,12 @@ export default function ProductCompositionPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const branchLabel = useMemo(() => {
-    if (!branchId) return "—";
-    const b = branches.find((x) => String(x.id) === String(branchId));
+    const currentId = effectiveBranchId ? String(effectiveBranchId) : "";
+    if (!currentId) return "—";
+
+    const b = branches.find((x) => String(x.id) === currentId);
     return b?.name || "Sucursal";
-  }, [branches, branchId]);
+  }, [branches, effectiveBranchId]);
 
   const showAlert = ({
     severity = "success",
@@ -120,22 +131,24 @@ export default function ProductCompositionPage() {
       const branchList = Array.isArray(br) ? br : [];
       setBranches(branchList);
 
-      const qBranch = sp.get("branch_id");
-      const chosen = qBranch || (branchList?.[0]?.id ? String(branchList[0].id) : "");
-
-      if (chosen && chosen !== branchId) {
-        setBranchId(chosen);
-      }
-
       const p = await getProduct(restaurantId, productId);
       setProduct(p);
 
-      const params =
-        st?.products_mode === "branch"
-          ? { branch_id: chosen ? Number(chosen) : undefined }
-          : {};
+      // Ya no hay selector. En branch el backend resuelve la sucursal efectiva.
+      const comp = await getProductComponents(
+        restaurantId,
+        productId,
+        {},
+        st?.products_mode || "global"
+      );
 
-      const comp = await getProductComponents(restaurantId, productId, params);
+      const incomingUi = comp?.ui || {
+        show_branch_selector: false,
+        locked_branch_id: null,
+        effective_branch_id: null,
+      };
+
+      setUiMeta(incomingUi);
       setItems(comp?.data?.items || []);
     } catch (e) {
       setErr(apiErrorToMessage(e, "No se pudo cargar composición"));
@@ -148,14 +161,6 @@ export default function ProductCompositionPage() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, productId]);
-
-  useEffect(() => {
-    if (!branchId) return;
-    const next = new URLSearchParams(sp);
-    next.set("branch_id", branchId);
-    setSp(next, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId]);
 
   const warningCompositeNoItems = useMemo(() => {
     if (!product) return false;
@@ -176,7 +181,7 @@ export default function ProductCompositionPage() {
     }
 
     if (requiresBranch && !effectiveBranchId) {
-      setErr("Selecciona una sucursal.");
+      setErr("No se pudo resolver la sucursal fija del producto.");
       return;
     }
 
@@ -194,7 +199,17 @@ export default function ProductCompositionPage() {
     };
 
     try {
-      await upsertProductComponents(restaurantId, productId, payload);
+      const saveRes = await upsertProductComponents(
+        restaurantId,
+        productId,
+        payload,
+        productsMode
+      );
+
+      if (saveRes?.ui) {
+        setUiMeta(saveRes.ui);
+      }
+
       await loadAll();
       setWizardOpen(false);
 
@@ -351,8 +366,8 @@ export default function ProductCompositionPage() {
               icon={<StorefrontOutlinedIcon sx={{ fontSize: 18 }} />}
               text={
                 productsMode === "global"
-                  ? "Modo global: la sucursal seleccionada se usa para evaluar qué productos son vendibles."
-                  : "Modo por sucursal: la composición se guarda específicamente en la sucursal seleccionada."
+                  ? "Modo global: la composición se configura una sola vez y aplica para todas las sucursales. Solo se muestran componentes globalmente válidos."
+                  : `Modo por sucursal: este producto está fijado a la sucursal ${branchLabel}.`
               }
             />
           </Stack>
@@ -376,83 +391,39 @@ export default function ProductCompositionPage() {
           </Alert>
         ) : null}
 
-        <Paper
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            borderRadius: 1,
-            backgroundColor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <Stack spacing={1.5}>
-            <Typography
-              sx={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Sucursales
-            </Typography>
-
-            <Typography
-              sx={{
-                fontSize: 13,
-                color: "text.secondary",
-              }}
-            >
-              Seleccionada: <strong>{branchLabel}</strong>
-            </Typography>
-
-            <Box
-              sx={{
-                width: "100%",
-                overflowX: "auto",
-                borderBottom: "1px solid",
-                borderColor: "divider",
-              }}
-            >
-              <Tabs
-                value={branchId}
-                onChange={(_, value) => setBranchId(value)}
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-                textColor="inherit"
-                slotProps={{
-                  indicator: {
-                    sx: {
-                      height: 3,
-                      borderRadius: "999px 999px 0 0",
-                      backgroundColor: "primary.main",
-                    },
-                  },
-                }}
+        {requiresBranch ? (
+          <Paper
+            sx={{
+              p: { xs: 2, sm: 2.5 },
+              borderRadius: 1,
+              backgroundColor: "background.paper",
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
+            }}
+          >
+            <Stack spacing={1}>
+              <Typography
                 sx={{
-                  minHeight: 56,
-                  "& .MuiTabs-flexContainer": {
-                    gap: { xs: 1, sm: 2 },
-                  },
-                  "& .MuiTabs-scrollButtons": {
-                    color: "text.secondary",
-                  },
+                  fontSize: 16,
+                  fontWeight: 800,
+                  color: "text.primary",
                 }}
               >
-                {branches.map((b) => (
-                  <Tab
-                    key={b.id}
-                    value={String(b.id)}
-                    label={b.name || "Sucursal"}
-                    disableRipple
-                    sx={branchTabSx}
-                  />
-                ))}
-              </Tabs>
-            </Box>
-          </Stack>
-        </Paper>
+                Sucursal fija
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: "text.secondary",
+                }}
+              >
+                Este producto pertenece a <strong>{branchLabel}</strong>. La composición se edita únicamente para esa sucursal.
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
 
         {warningCompositeNoItems ? (
           <Alert
@@ -859,33 +830,6 @@ function InfoRow({ label, value }) {
     </Box>
   );
 }
-
-const branchTabSx = {
-  minHeight: 56,
-  px: { xs: 2, sm: 2.5 },
-  py: 1,
-  fontSize: { xs: 15, sm: 17 },
-  fontWeight: 800,
-  textTransform: "none",
-  color: "text.secondary",
-  borderRadius: "12px 12px 0 0",
-  transition:
-    "background-color 0.18s ease, color 0.18s ease, transform 0.12s ease",
-  "&.Mui-selected": {
-    color: "primary.main",
-    bgcolor: "transparent",
-  },
-  "&:hover": {
-    bgcolor: "rgba(255, 152, 0, 0.06)",
-  },
-  "&:active": {
-    bgcolor: "rgba(255, 152, 0, 0.14)",
-    transform: "scale(0.98)",
-  },
-  "&.Mui-focusVisible": {
-    bgcolor: "rgba(255, 152, 0, 0.10)",
-  },
-};
 
 const switchLabelSx = {
   fontSize: 14,
