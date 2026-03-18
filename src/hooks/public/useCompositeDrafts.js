@@ -1,30 +1,45 @@
-// src/hooks/public/useCompositeDrafts.js
 import { useCallback, useMemo, useState } from "react";
+import { buildCompositeDetailsFromDraft } from "./publicMenu.utils";
 
 function normalizeCompositeDraftFromProduct(p) {
   const items = Array.isArray(p?.composite?.items) ? p.composite.items : [];
+
   return items.map((it) => {
+    const selector = it?.selector || {};
     const cid = Number(it?.component_product_id || it?.component_product?.id || 0);
     const qty = it?.qty == null ? 1 : Number(it.qty);
-    const allowVariant = !!it?.allow_variant;
-    const isOptional = !!it?.is_optional;
+
+    const options = Array.isArray(selector?.options) ? selector.options : [];
+    const variantOptions = options.filter((o) => o?.option_type === "variant");
 
     return {
       component_product_id: cid,
       variant_id: null,
       quantity: Number.isFinite(qty) ? qty : 1,
-      included: !isOptional, // requeridos ON, opcionales OFF por default
-      allow_variant: allowVariant,
-      is_optional: isOptional,
+      included: !it?.is_optional,
+      allow_variant: !!it?.allow_variant,
+      is_optional: !!it?.is_optional,
       apply_variant_price: !!it?.apply_variant_price,
       name:
         it?.component_product?.display_name ||
         it?.component_product?.name ||
         "Componente",
-      variants: Array.isArray(it?.component_product?.variants)
-        ? it.component_product.variants
-        : [],
+      variants:
+        variantOptions.length > 0
+          ? variantOptions.map((v) => ({
+              id: Number(v.variant_id),
+              name: v.label || "Variante",
+              price: Number(v.price_reference || 0),
+              price_adjustment_preview: Number(v.price_adjustment_preview || 0),
+            }))
+          : Array.isArray(it?.component_product?.variants)
+          ? it.component_product.variants
+          : [],
       notes: it?.notes || "",
+      selection_kind: selector?.selection_kind || it?.selection_kind || "fixed",
+      required: !!selector?.required || !it?.is_optional,
+      can_skip: !!selector?.can_skip || !!it?.is_optional,
+      base_price: Number(selector?.base_price || it?.component_product?.base_price || 0),
     };
   });
 }
@@ -40,86 +55,110 @@ function draftToSubmitComponents(draft) {
     }));
 }
 
-/**
- * Maneja drafts de componentes por producto compuesto.
- * Mantiene la misma lógica:
- * - init lazy por producto
- * - toggle included / variant
- * - sync al primer item del carrito si ya existe
- */
-export function useCompositeDrafts({ cartOrder }) {
-  // shape: { [productId]: DraftComponent[] }
+export function useCompositeDrafts() {
   const [compositeDrafts, setCompositeDrafts] = useState({});
 
-  const getOrInitCompositeDraft = useCallback((p) => {
+  const getOrInitCompositeDraft = useCallback(
+    (p) => {
+      const pid = Number(p?.id || 0);
+      if (!pid) return [];
+
+      const existing = compositeDrafts[pid];
+      if (Array.isArray(existing)) return existing;
+
+      const init = normalizeCompositeDraftFromProduct(p);
+      setCompositeDrafts((prev) => ({ ...prev, [pid]: init }));
+      return init;
+    },
+    [compositeDrafts],
+  );
+
+  const resetDraftForProduct = useCallback((p) => {
     const pid = Number(p?.id || 0);
     if (!pid) return [];
-    const existing = compositeDrafts[pid];
-    if (Array.isArray(existing)) return existing;
-
     const init = normalizeCompositeDraftFromProduct(p);
     setCompositeDrafts((prev) => ({ ...prev, [pid]: init }));
     return init;
-  }, [compositeDrafts]);
+  }, []);
 
-  const setDraftIncluded = useCallback((pid, component_product_id, included) => {
+  const setDraftIncluded = useCallback((pid, componentProductId, included) => {
     setCompositeDrafts((prev) => {
       const cur = Array.isArray(prev[pid]) ? prev[pid] : [];
-      const next = cur.map((x) =>
-        Number(x.component_product_id) === Number(component_product_id)
-          ? { ...x, included: !!included }
-          : x
-      );
-      return { ...prev, [pid]: next };
+      return {
+        ...prev,
+        [pid]: cur.map((x) =>
+          Number(x.component_product_id) === Number(componentProductId)
+            ? { ...x, included: !!included }
+            : x,
+        ),
+      };
     });
   }, []);
 
-  const setDraftVariant = useCallback((pid, component_product_id, variant_id) => {
+  const setDraftVariant = useCallback((pid, componentProductId, variantId) => {
     setCompositeDrafts((prev) => {
       const cur = Array.isArray(prev[pid]) ? prev[pid] : [];
-      const next = cur.map((x) =>
-        Number(x.component_product_id) === Number(component_product_id)
-          ? { ...x, variant_id: variant_id ? Number(variant_id) : null }
-          : x
-      );
-      return { ...prev, [pid]: next };
+      return {
+        ...prev,
+        [pid]: cur.map((x) =>
+          Number(x.component_product_id) === Number(componentProductId)
+            ? { ...x, variant_id: variantId ? Number(variantId) : null }
+            : x,
+        ),
+      };
     });
   }, []);
 
-  const syncDraftToCartFirstItemIfExists = useCallback((pid) => {
-    const it = cartOrder?.cart?.find((x) => Number(x.product_id) === Number(pid));
-    if (!it) return false;
+  const buildSubmitComponentsFromProduct = useCallback(
+    (product) => {
+      const pid = Number(product?.id || 0);
+      if (!pid) return [];
+      const draft = Array.isArray(compositeDrafts[pid])
+        ? compositeDrafts[pid]
+        : getOrInitCompositeDraft(product);
+      return draftToSubmitComponents(draft);
+    },
+    [compositeDrafts, getOrInitCompositeDraft],
+  );
 
-    const draft = compositeDrafts[pid];
-    if (!Array.isArray(draft)) return false;
-
-    cartOrder.setCartComponents(it.key, draftToSubmitComponents(draft));
-    return true;
-  }, [cartOrder, compositeDrafts]);
+  const buildDetailsFromProduct = useCallback(
+    (product) => {
+      const pid = Number(product?.id || 0);
+      if (!pid) return [];
+      const draft = Array.isArray(compositeDrafts[pid])
+        ? compositeDrafts[pid]
+        : getOrInitCompositeDraft(product);
+      return buildCompositeDetailsFromDraft(product, draft);
+    },
+    [compositeDrafts, getOrInitCompositeDraft],
+  );
 
   const resetCompositeDrafts = useCallback(() => {
     setCompositeDrafts({});
   }, []);
 
-  const api = useMemo(() => {
-    return {
+  return useMemo(
+    () => ({
       compositeDrafts,
       setCompositeDrafts,
-      resetCompositeDrafts,
       getOrInitCompositeDraft,
+      resetDraftForProduct,
       setDraftIncluded,
       setDraftVariant,
-      syncDraftToCartFirstItemIfExists,
+      buildSubmitComponentsFromProduct,
+      buildDetailsFromProduct,
       draftToSubmitComponents,
-    };
-  }, [
-    compositeDrafts,
-    resetCompositeDrafts,
-    getOrInitCompositeDraft,
-    setDraftIncluded,
-    setDraftVariant,
-    syncDraftToCartFirstItemIfExists,
-  ]);
-
-  return api;
+      resetCompositeDrafts,
+    }),
+    [
+      compositeDrafts,
+      getOrInitCompositeDraft,
+      resetDraftForProduct,
+      setDraftIncluded,
+      setDraftVariant,
+      buildSubmitComponentsFromProduct,
+      buildDetailsFromProduct,
+      resetCompositeDrafts,
+    ],
+  );
 }

@@ -1,14 +1,18 @@
-// src/hooks/public/useCartAndOrder.js
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendPublicOrderItems,
   createPublicOrder,
   getPublicOrder,
 } from "../../services/public/publicMenu.service";
-import { makeKey, safeNum } from "./publicMenu.utils";
+import {
+  buildCartKey,
+  normalizeCompositeComponentsForKey,
+  safeNum,
+} from "./publicMenu.utils";
 
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
+
   return arr.map((it) => {
     const out = {
       product_id: Number(it.product_id),
@@ -17,8 +21,8 @@ function normalizeItemsForApi(cart) {
       notes: it.notes ? String(it.notes).slice(0, 500) : null,
     };
 
-    if (Array.isArray(it.components)) {
-      out.components = it.components.map((c) => ({
+    if (Array.isArray(it.components) && it.components.length > 0) {
+      out.components = normalizeCompositeComponentsForKey(it.components).map((c) => ({
         component_product_id: Number(c.component_product_id),
         variant_id: c.variant_id ? Number(c.variant_id) : null,
         quantity: c.quantity == null ? null : Number(c.quantity),
@@ -39,110 +43,109 @@ export function useCartAndOrder({
   sessionUnavailable,
 }) {
   const [cart, setCart] = useState([]);
-
-  // Modal de envío (solo para primer envío)
   const [sendOpen, setSendOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [sending, setSending] = useState(false);
   const [sendToast, setSendToast] = useState("");
 
-  // ✅ Orden/Comanda
-  const [pendingOrder, setPendingOrder] = useState(null); // { id, status: "pending"|"accepted"|"rejected"|"expired" }
-  const [activeOrder, setActiveOrder] = useState(null); // { id, status, customer_name, total, ... }
-  const [oldItems, setOldItems] = useState([]); // items ya registrados
+  const [pendingOrder, setPendingOrder] = useState(null);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [oldItems, setOldItems] = useState([]);
 
   const lastOrderIdRef = useRef(null);
 
-  function addToCartFromProduct(p, componentsOverride) {
-    if (String(activeOrder?.status || "") === "paying") return;
-    const pid = Number(p?.id);
-    if (!pid) return;
-
-    const key = makeKey(pid, null);
-
+  function upsertCartItem(nextItem) {
     setCart((prev) => {
-      const idx = prev.findIndex((x) => x.key === key);
+      const idx = prev.findIndex((x) => x.key === nextItem.key);
+
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = {
           ...next[idx],
-          quantity: Math.min(99, safeNum(next[idx].quantity, 1) + 1),
-          ...(Array.isArray(componentsOverride)
-            ? { components: componentsOverride }
-            : {}),
+          quantity: Math.min(99, safeNum(next[idx].quantity, 1) + safeNum(nextItem.quantity, 1)),
+          components: nextItem.components ?? next[idx].components ?? [],
+          components_detail:
+            nextItem.components_detail ?? next[idx].components_detail ?? [],
         };
         return next;
       }
 
-      const isComposite = String(p?.product_type || "simple") === "composite";
-      const base = {
-        key,
-        product_id: pid,
-        variant_id: null,
-        name: p?.display_name || p?.name || "Producto",
-        variant_name: null,
-        unit_price: safeNum(p?.price, 0),
-        quantity: 1,
-        notes: "",
-        product_type: String(p?.product_type || "simple"),
-      };
-
-      if (isComposite) {
-        base.components = Array.isArray(componentsOverride) ? componentsOverride : [];
-      }
-
-      return [...prev, base];
+      return [...prev, nextItem];
     });
   }
 
-  function addToCartFromVariant(p, v, componentsOverride) {
+  function addToCartFromProduct(p, componentsOverride = [], componentsDetailOverride = []) {
     if (String(activeOrder?.status || "") === "paying") return;
+
+    const pid = Number(p?.id);
+    if (!pid) return;
+
+    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
+    const key = buildCartKey(pid, null, normalizedComponents);
+    const isComposite = String(p?.product_type || "simple") === "composite";
+
+    upsertCartItem({
+      key,
+      product_id: pid,
+      variant_id: null,
+      name: p?.display_name || p?.name || "Producto",
+      variant_name: null,
+      unit_price: safeNum(p?.price, 0),
+      quantity: 1,
+      notes: "",
+      product_type: String(p?.product_type || "simple"),
+      components: isComposite ? normalizedComponents : [],
+      components_detail: isComposite
+        ? Array.isArray(componentsDetailOverride)
+          ? componentsDetailOverride
+          : []
+        : [],
+    });
+  }
+
+  function addToCartFromVariant(p, v, componentsOverride = [], componentsDetailOverride = []) {
+    if (String(activeOrder?.status || "") === "paying") return;
+
     const pid = Number(p?.id);
     const vid = Number(v?.id);
     if (!pid || !vid) return;
 
-    const key = makeKey(pid, vid);
+    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
+    const key = buildCartKey(pid, vid, normalizedComponents);
+    const isComposite = String(p?.product_type || "simple") === "composite";
 
-    setCart((prev) => {
-      const idx = prev.findIndex((x) => x.key === key);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          quantity: Math.min(99, safeNum(next[idx].quantity, 1) + 1),
-          ...(Array.isArray(componentsOverride)
-            ? { components: componentsOverride }
-            : {}),
-        };
-        return next;
-      }
-
-      const isComposite = String(p?.product_type || "simple") === "composite";
-      const base = {
-        key,
-        product_id: pid,
-        variant_id: vid,
-        name: p?.display_name || p?.name || "Producto",
-        variant_name: v?.name || "Variante",
-        unit_price: safeNum(v?.price, safeNum(p?.price, 0)),
-        quantity: 1,
-        notes: "",
-        product_type: String(p?.product_type || "simple"),
-      };
-
-      if (isComposite) {
-        base.components = Array.isArray(componentsOverride) ? componentsOverride : [];
-      }
-
-      return [...prev, base];
+    upsertCartItem({
+      key,
+      product_id: pid,
+      variant_id: vid,
+      name: p?.display_name || p?.name || "Producto",
+      variant_name: v?.name || "Variante",
+      unit_price: safeNum(v?.price, safeNum(p?.price, 0)),
+      quantity: 1,
+      notes: "",
+      product_type: String(p?.product_type || "simple"),
+      components: isComposite ? normalizedComponents : [],
+      components_detail: isComposite
+        ? Array.isArray(componentsDetailOverride)
+          ? componentsDetailOverride
+          : []
+        : [],
     });
   }
 
-  function setCartComponents(itemKey, components) {
+  function setCartComponents(itemKey, components, componentsDetail = null) {
+    const normalized = normalizeCompositeComponentsForKey(components);
+
     setCart((prev) =>
       prev.map((x) =>
         x.key === itemKey
-          ? { ...x, components: Array.isArray(components) ? components : [] }
+          ? {
+              ...x,
+              components: normalized,
+              components_detail: Array.isArray(componentsDetail)
+                ? componentsDetail
+                : x.components_detail || [],
+            }
           : x,
       ),
     );
@@ -158,7 +161,9 @@ export function useCartAndOrder({
   }
 
   function setCartNotes(key, notes) {
-    setCart((prev) => prev.map((x) => (x.key === key ? { ...x, notes: String(notes || "") } : x)));
+    setCart((prev) =>
+      prev.map((x) => (x.key === key ? { ...x, notes: String(notes || "") } : x)),
+    );
   }
 
   const cartTotal = useMemo(() => {
@@ -170,51 +175,72 @@ export function useCartAndOrder({
 
   const oldTotal = useMemo(() => {
     const arr = Array.isArray(oldItems) ? oldItems : [];
-    return arr.reduce((acc, it) => acc + safeNum(it.line_total, safeNum(it.unit_price, 0) * safeNum(it.quantity, 1)), 0);
+    return arr.reduce(
+      (acc, it) =>
+        acc +
+        safeNum(it.line_total, safeNum(it.unit_price, 0) * safeNum(it.quantity, 1)),
+      0,
+    );
   }, [oldItems]);
 
-  // Total global (lo que vas a mostrar arriba)
   const totalGlobal = useMemo(() => {
     return Math.round((safeNum(oldTotal, 0) + safeNum(cartTotal, 0)) * 100) / 100;
   }, [oldTotal, cartTotal]);
 
   const orderUi = activeOrder?.customer_ui || null;
 
-  const allowBase =
-    canSelect &&
-    hasTable &&
-    sessionActive &&
-    orderingMode === "customer_assisted" &&
-    cart.length > 0 &&
-    !sessionBusy &&
-    !sessionUnavailable &&
-    (orderUi?.can_add_items ?? true) &&
-    String(activeOrder?.status || "") !== "paying";
+  const hasItems = cart.length > 0;
+  const modeOk = String(orderingMode || "").toLowerCase() === "customer_assisted";
+  const tableOk = !!hasTable;
+  const sessionOk = !!sessionActive;
+  const selectableOk = !!canSelect;
+  const busyOk = !sessionBusy;
+  const unavailableOk = !sessionUnavailable;
+  const payingOk = String(activeOrder?.status || "") !== "paying";
+  const orderUiOk = orderUi?.can_add_items ?? true;
 
-  const hasPending = !!pendingOrder?.id && String(pendingOrder?.status || "pending") === "pending";
+  const allowBase =
+    selectableOk &&
+    tableOk &&
+    sessionOk &&
+    modeOk &&
+    hasItems &&
+    busyOk &&
+    unavailableOk &&
+    orderUiOk &&
+    payingOk;
+
+  const hasPending =
+    !!pendingOrder?.id && String(pendingOrder?.status || "pending") === "pending";
+
   const canAppend =
     !!activeOrder?.id &&
     ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase()) &&
     (orderUi?.can_send_items ?? true) &&
-    String(activeOrder?.status || "") !== "paying";
+    payingOk;
 
-  // ✅ reglas:
-  // - Si hay pending: NO puedes mandar otra (Laravel lo bloquea por sesión/orden).
-  // - Si hay open: puedes append.
-  const allowSendNow = allowBase && (!hasPending) && (orderUi?.can_send_items ?? true);
+  const allowSendNow = allowBase && !hasPending && (orderUi?.can_send_items ?? true);
 
   const refreshOrder = useCallback(
     async (orderId) => {
       if (!orderId) return null;
-      const res = await getPublicOrder({ orderId: Number(orderId), token: String(token || "") });
+
+      const res = await getPublicOrder({
+        orderId: Number(orderId),
+        token: String(token || ""),
+      });
+
       if (res?.ok) {
         const o = res?.data?.order || null;
         const items = Array.isArray(res?.data?.items) ? res.data.items : [];
+
         setActiveOrder(o ? { ...o } : { id: Number(orderId) });
         setOldItems(items);
         lastOrderIdRef.current = Number(orderId);
+
         return { order: o, items };
       }
+
       return null;
     },
     [token],
@@ -223,6 +249,7 @@ export function useCartAndOrder({
   const createFirstOrder = useCallback(
     async (name) => {
       const items = normalizeItemsForApi(cart);
+
       const res = await createPublicOrder({
         token: String(token || ""),
         customer_name: name,
@@ -231,12 +258,14 @@ export function useCartAndOrder({
 
       if (res?.ok) {
         const orderId = res?.data?.order_id || res?.data?.id || res?.order_id || null;
+
         if (orderId) {
           setPendingOrder({ id: Number(orderId), status: "pending" });
           lastOrderIdRef.current = Number(orderId);
         } else {
           setPendingOrder({ id: null, status: "pending" });
         }
+
         setCart([]);
         setCustomerName("");
         setSendOpen(false);
@@ -253,6 +282,7 @@ export function useCartAndOrder({
   const appendToOpenOrder = useCallback(
     async (orderId) => {
       const items = normalizeItemsForApi(cart);
+
       const res = await appendPublicOrderItems({
         orderId: Number(orderId),
         token: String(token || ""),
@@ -262,7 +292,6 @@ export function useCartAndOrder({
       if (res?.ok) {
         setCart([]);
         setSendToast("✅ Productos agregados a la orden.");
-        // refresca items viejos (lo que ya quedó guardado)
         await refreshOrder(orderId);
         return { ok: true };
       }
@@ -273,16 +302,27 @@ export function useCartAndOrder({
     [cart, token, refreshOrder],
   );
 
+  function buildBlockerMessage() {
+    const reasons = [];
+
+    if (!tableOk) reasons.push("mesa no detectada");
+    if (!sessionOk) reasons.push("sesión no activa");
+    if (!modeOk) reasons.push("modo no permitido");
+    if (!selectableOk) reasons.push("menú no seleccionable");
+    if (!busyOk) reasons.push("mesa ocupada por otro dispositivo");
+    if (!unavailableOk) reasons.push("sesión no disponible");
+    if (!hasItems) reasons.push("sin productos");
+    if (!orderUiOk) reasons.push("orden bloqueada para agregar");
+    if (!payingOk) reasons.push("cuenta en proceso de pago");
+
+    return reasons.length
+      ? `⚠️ No se puede enviar en este momento: ${reasons.join(", ")}.`
+      : "⚠️ No se puede enviar en este momento.";
+  }
+
   async function submitOrderOrAppend() {
     if (sending) return;
 
-    if (!allowBase) {
-      setSendToast("⚠️ No se puede enviar en este momento (sesión no activa o menú no seleccionable).");
-      setTimeout(() => setSendToast(""), 4500);
-      return;
-    }
-
-    // Si la orden ya está open, esto es APPEND (sin modal nombre)
     if (canAppend && activeOrder?.id) {
       setSending(true);
       setSendToast("");
@@ -303,14 +343,18 @@ export function useCartAndOrder({
       return;
     }
 
-    // Si hay pending, no hay nada que hacer
+    if (!allowBase) {
+      setSendToast(buildBlockerMessage());
+      setTimeout(() => setSendToast(""), 5000);
+      return;
+    }
+
     if (hasPending) {
       setSendToast("⏳ Ya hay una comanda en espera de aprobación. No puedes enviar otra.");
       setTimeout(() => setSendToast(""), 5000);
       return;
     }
 
-    // Primer envío: requiere nombre (Laravel: customer_name)
     const name = String(customerName || "").trim();
     if (!name) {
       setSendToast("⚠️ Escribe tu nombre para enviar la comanda.");
@@ -337,21 +381,12 @@ export function useCartAndOrder({
     }
   }
 
-  /**
-   * ✅ Sincroniza estado desde session poll (Laravel)
-   * Tu backend puede mandar "pending_approval" / "open" etc.
-   * Aquí solo usamos heurística simple:
-   * - si detectamos open -> pasamos pending->accepted y cargamos order/items
-   * - si detectamos rejected/expired -> marcamos pending accordingly
-   */
   const syncOrderStatusFromSession = useCallback(
     async (sessionOrderStatus) => {
       const st = String(sessionOrderStatus || "").toLowerCase();
       const oid = pendingOrder?.id || activeOrder?.id || lastOrderIdRef.current;
-
       if (!oid) return;
 
-      // accepted/open
       if (st.includes("open") || st.includes("ready")) {
         if (pendingOrder?.id) {
           setPendingOrder((p) => (p ? { ...p, status: "accepted" } : p));
@@ -367,20 +402,24 @@ export function useCartAndOrder({
         return;
       }
 
-      // pending
       if (st.includes("pending")) {
-        if (pendingOrder?.id) setPendingOrder((p) => (p ? { ...p, status: "pending" } : p));
+        if (pendingOrder?.id) {
+          setPendingOrder((p) => (p ? { ...p, status: "pending" } : p));
+        }
         return;
       }
 
-      // rejected/expired
       if (st.includes("rejected")) {
-        if (pendingOrder?.id) setPendingOrder((p) => (p ? { ...p, status: "rejected" } : p));
+        if (pendingOrder?.id) {
+          setPendingOrder((p) => (p ? { ...p, status: "rejected" } : p));
+        }
         return;
       }
+
       if (st.includes("expired")) {
-        if (pendingOrder?.id) setPendingOrder((p) => (p ? { ...p, status: "expired" } : p));
-        return;
+        if (pendingOrder?.id) {
+          setPendingOrder((p) => (p ? { ...p, status: "expired" } : p));
+        }
       }
     },
     [pendingOrder, activeOrder, refreshOrder],
@@ -398,7 +437,6 @@ export function useCartAndOrder({
   }
 
   return {
-    // cart
     cart,
     setCart,
     addToCartFromProduct,
@@ -408,30 +446,25 @@ export function useCartAndOrder({
     setCartQty,
     setCartNotes,
 
-    // totals
     cartTotal,
     oldTotal,
     totalGlobal,
 
-    // modal
     sendOpen,
     setSendOpen,
     customerName,
     setCustomerName,
 
-    // sending/status
     sending,
     sendToast,
     setSendToast,
 
-    // order state
     pendingOrder,
     activeOrder,
     oldItems,
     refreshOrder,
     syncOrderStatusFromSession,
 
-    // action
     allowSendNow,
     canAppend,
     submitOrderOrAppend,

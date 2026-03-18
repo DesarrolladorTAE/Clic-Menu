@@ -1,4 +1,3 @@
-// src/hooks/staff/useStaffCartAndOrder.js
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendWaiterOrderItems,
@@ -6,10 +5,15 @@ import {
   getCurrentTableOrder,
   getOrderById,
 } from "../../services/staff/waiter/staffOrders.service";
-import { makeKey, safeNum } from "../public/publicMenu.utils";
+import {
+  buildCartKey,
+  normalizeCompositeComponentsForKey,
+  safeNum,
+} from "../public/publicMenu.utils";
 
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
+
   return arr.map((it) => {
     const out = {
       product_id: Number(it.product_id),
@@ -18,8 +22,8 @@ function normalizeItemsForApi(cart) {
       notes: it.notes ? String(it.notes).slice(0, 500) : null,
     };
 
-    if (Array.isArray(it.components)) {
-      out.components = it.components.map((c) => ({
+    if (Array.isArray(it.components) && it.components.length > 0) {
+      out.components = normalizeCompositeComponentsForKey(it.components).map((c) => ({
         component_product_id: Number(c.component_product_id),
         variant_id: c.variant_id ? Number(c.variant_id) : null,
         quantity: c.quantity == null ? null : Number(c.quantity),
@@ -40,97 +44,100 @@ export function useStaffCartAndOrder({ tableId }) {
   const [sendToast, setSendToast] = useState("");
 
   // orden
-  const [activeOrder, setActiveOrder] = useState(null); // { id, status, customer_name }
+  const [activeOrder, setActiveOrder] = useState(null);
   const [oldItems, setOldItems] = useState([]);
 
   const lastLoadedRef = useRef({ tableId: null, orderId: null });
 
-  function addToCartFromProduct(p, componentsOverride) {
-    const pid = Number(p?.id);
-    if (!pid) return;
-
-    const key = makeKey(pid, null);
-
+  function upsertCartItem(nextItem) {
     setCart((prev) => {
-      const idx = prev.findIndex((x) => x.key === key);
+      const idx = prev.findIndex((x) => x.key === nextItem.key);
+
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = {
           ...next[idx],
-          quantity: Math.min(99, safeNum(next[idx].quantity, 1) + 1),
-          ...(Array.isArray(componentsOverride)
-            ? { components: componentsOverride }
-            : {}),
+          quantity:
+            Math.min(99, safeNum(next[idx].quantity, 1) + safeNum(nextItem.quantity, 1)),
+          components: nextItem.components ?? next[idx].components ?? [],
+          components_detail:
+            nextItem.components_detail ?? next[idx].components_detail ?? [],
         };
         return next;
       }
 
-      const isComposite = String(p?.product_type || "simple") === "composite";
-      const base = {
-        key,
-        product_id: pid,
-        variant_id: null,
-        name: p?.display_name || p?.name || "Producto",
-        variant_name: null,
-        unit_price: safeNum(p?.price, 0),
-        quantity: 1,
-        notes: "",
-        product_type: String(p?.product_type || "simple"),
-      };
-
-      if (isComposite) base.components = Array.isArray(componentsOverride)
-        ? componentsOverride
-        : [];
-      return [...prev, base];
+      return [...prev, nextItem];
     });
   }
 
-  function addToCartFromVariant(p, v, componentsOverride) {
+  function addToCartFromProduct(p, componentsOverride = [], componentsDetailOverride = []) {
+    const pid = Number(p?.id);
+    if (!pid) return;
+
+    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
+    const key = buildCartKey(pid, null, normalizedComponents);
+    const isComposite = String(p?.product_type || "simple") === "composite";
+
+    upsertCartItem({
+      key,
+      product_id: pid,
+      variant_id: null,
+      name: p?.display_name || p?.name || "Producto",
+      variant_name: null,
+      unit_price: safeNum(p?.price, 0),
+      quantity: 1,
+      notes: "",
+      product_type: String(p?.product_type || "simple"),
+      components: isComposite ? normalizedComponents : [],
+      components_detail: isComposite
+        ? Array.isArray(componentsDetailOverride)
+          ? componentsDetailOverride
+          : []
+        : [],
+    });
+  }
+
+  function addToCartFromVariant(p, v, componentsOverride = [], componentsDetailOverride = []) {
     const pid = Number(p?.id);
     const vid = Number(v?.id);
     if (!pid || !vid) return;
 
-    const key = makeKey(pid, vid);
+    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
+    const key = buildCartKey(pid, vid, normalizedComponents);
+    const isComposite = String(p?.product_type || "simple") === "composite";
 
-    setCart((prev) => {
-      const idx = prev.findIndex((x) => x.key === key);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          quantity: Math.min(99, safeNum(next[idx].quantity, 1) + 1),
-          ...(Array.isArray(componentsOverride)
-            ? { components: componentsOverride }
-            : {}),
-        };
-        return next;
-      }
-
-      const isComposite = String(p?.product_type || "simple") === "composite";
-      const base = {
-        key,
-        product_id: pid,
-        variant_id: vid,
-        name: p?.display_name || p?.name || "Producto",
-        variant_name: v?.name || "Variante",
-        unit_price: safeNum(v?.price, safeNum(p?.price, 0)),
-        quantity: 1,
-        notes: "",
-        product_type: String(p?.product_type || "simple"),
-      };
-
-      if (isComposite) base.components = Array.isArray(componentsOverride)
-        ? componentsOverride
-        : [];
-      return [...prev, base];
+    upsertCartItem({
+      key,
+      product_id: pid,
+      variant_id: vid,
+      name: p?.display_name || p?.name || "Producto",
+      variant_name: v?.name || "Variante",
+      unit_price: safeNum(v?.price, safeNum(p?.price, 0)),
+      quantity: 1,
+      notes: "",
+      product_type: String(p?.product_type || "simple"),
+      components: isComposite ? normalizedComponents : [],
+      components_detail: isComposite
+        ? Array.isArray(componentsDetailOverride)
+          ? componentsDetailOverride
+          : []
+        : [],
     });
   }
 
-  function setCartComponents(itemKey, components) {
+  function setCartComponents(itemKey, components, componentsDetail = null) {
+    const normalized = normalizeCompositeComponentsForKey(components);
+
     setCart((prev) =>
       prev.map((x) =>
         x.key === itemKey
-          ? { ...x, components: Array.isArray(components) ? components : [] }
+          ? {
+              ...x,
+              components: normalized,
+              components_detail: Array.isArray(componentsDetail)
+                ? componentsDetail
+                : x.components_detail || [],
+            }
           : x,
       ),
     );
@@ -172,8 +179,8 @@ export function useStaffCartAndOrder({ tableId }) {
   }, [oldTotal, cartTotal]);
 
   const canAppend =
-  !!activeOrder?.id &&
-  ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
+    !!activeOrder?.id &&
+    ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
   const loadExisting = useCallback(
     async ({ orderId } = {}) => {
@@ -194,7 +201,6 @@ export function useStaffCartAndOrder({ tableId }) {
 
       let res = null;
 
-      // Si viene orderId, intentamos por ID, mas si falla, caemos a current-order por mesa.
       if (oIdNum) {
         try {
           res = await getOrderById(oIdNum);
@@ -234,13 +240,17 @@ export function useStaffCartAndOrder({ tableId }) {
 
       if (res?.ok) {
         const orderId = res?.data?.order_id || res?.data?.id || null;
+
         setCart([]);
         setCustomerName("");
         setSendOpen(false);
         setSendToast("✅ Comanda creada.");
 
-        if (orderId) await loadExisting({ orderId });
-        else await loadExisting({});
+        if (orderId) {
+          await loadExisting({ orderId });
+        } else {
+          await loadExisting({});
+        }
 
         return { ok: true, orderId };
       }

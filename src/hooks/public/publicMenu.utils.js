@@ -1,7 +1,3 @@
-// src/pages/public/publicMenu.utils.js
-// Utilidades puras (helpers, traducciones, formato, constants, detección de errores)
-// Objetivo: tener TODO lo reutilizable y sin UI aquí para que el page quede limpio.
-
 export const PUBLIC_QR_DISABLED_MSG =
   "Menú digital temporalmente fuera de servicio. Por favor, solicita una carta física";
 
@@ -88,25 +84,6 @@ export function fmtMMSS(totalSeconds) {
   return `${mm}:${ss}`;
 }
 
-/**
- * =========================================================
- * Cart helpers (items para backend)
- * =========================================================
- *
- * cartItem shape:
- * {
- *   key: "p:12" | "v:12:55",
- *   product_id,
- *   variant_id: null|number,
- *   name,
- *   variant_name,
- *   unit_price,
- *   quantity,
- *   notes,
- *   product_type,
- *   components: [{ component_product_id, variant_id?, quantity? }]
- * }
- */
 export function makeKey(productId, variantId) {
   return variantId ? `v:${productId}:${variantId}` : `p:${productId}`;
 }
@@ -123,4 +100,75 @@ export function safeHash(obj) {
   } catch {
     return String(Date.now());
   }
+}
+
+export function normalizeCompositeComponentsForKey(components) {
+  const arr = Array.isArray(components) ? components : [];
+  return arr
+    .map((c) => ({
+      component_product_id: Number(c?.component_product_id || 0),
+      variant_id: c?.variant_id ? Number(c.variant_id) : null,
+      quantity:
+        c?.quantity == null || c?.quantity === ""
+          ? null
+          : Number(c.quantity),
+    }))
+    .filter((c) => c.component_product_id > 0)
+    .sort((a, b) => {
+      if (a.component_product_id !== b.component_product_id) {
+        return a.component_product_id - b.component_product_id;
+      }
+      return safeNum(a.variant_id, 0) - safeNum(b.variant_id, 0);
+    });
+}
+
+export function buildCartKey(productId, variantId, components = []) {
+  const base = makeKey(productId, variantId);
+  const normalized = normalizeCompositeComponentsForKey(components);
+  if (!normalized.length) return base;
+  return `${base}:c:${safeHash(normalized)}`;
+}
+
+export function formatComponentDetailLabel(detail) {
+  const base =
+    detail?.component_display_name ||
+    detail?.component_name ||
+    (detail?.component_product_id
+      ? `Componente #${detail.component_product_id}`
+      : "Componente");
+
+  const variant =
+    detail?.variant_name ||
+    detail?.selected_variant_name ||
+    detail?.variant_label ||
+    "";
+
+  return variant ? `${base} · ${variant}` : base;
+}
+
+export function buildCompositeDetailsFromDraft(product, draftRows = []) {
+  const rows = Array.isArray(draftRows) ? draftRows : [];
+
+  return rows
+    .filter((r) => r && r.included !== false)
+    .map((r) => {
+      const variant = Array.isArray(r.variants)
+        ? r.variants.find((v) => Number(v.id) === Number(r.variant_id))
+        : null;
+
+      return {
+        component_product_id: Number(r.component_product_id),
+        component_name: r.name || "Componente",
+        component_display_name: r.name || "Componente",
+        variant_id: r.variant_id ? Number(r.variant_id) : null,
+        variant_name: variant?.name || null,
+        quantity:
+          r.quantity == null || r.quantity === ""
+            ? 1
+            : Number(r.quantity),
+        is_optional: !!r.is_optional,
+        allow_variant: !!r.allow_variant,
+        apply_variant_price: !!r.apply_variant_price,
+      };
+    });
 }
