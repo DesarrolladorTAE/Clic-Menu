@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { Alert,Box, Button, Card, CardContent, CircularProgress, Divider, FormControl,
-  MenuItem, Select, Stack, Typography, } from "@mui/material";
+import {
+  Alert, Box, Button, Card, CardContent, CircularProgress, Divider, FormControl, MenuItem, Select,
+  Stack, Typography,
+} from "@mui/material";
+
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import RuleIcon from "@mui/icons-material/Rule";
 import GroupsIcon from "@mui/icons-material/Groups";
@@ -33,6 +36,7 @@ export default function RestaurantSettings() {
     inventory_mode: "branch",
     products_mode: "global",
     recipe_mode: "global",
+    modifiers_mode: "global",
   });
 
   const title = useMemo(() => `Configuración del restaurante`, [restaurantId]);
@@ -44,13 +48,16 @@ export default function RestaurantSettings() {
     setWarn("");
     setSuccessMsg("");
     setLoading(true);
+
     try {
       const st = await getRestaurantSettings(restaurantId);
+
       if (st) {
         const next = {
           inventory_mode: st.inventory_mode ?? "branch",
           products_mode: st.products_mode ?? "global",
           recipe_mode: st.recipe_mode ?? "global",
+          modifiers_mode: st.modifiers_mode ?? "global",
         };
 
         if (next.products_mode === "branch" && next.recipe_mode !== "branch") {
@@ -70,7 +77,7 @@ export default function RestaurantSettings() {
     load();
     // eslint-disable-next-line
   }, [restaurantId]);
-  
+
   useEffect(() => {
     if (!successMsg) return;
 
@@ -80,7 +87,6 @@ export default function RestaurantSettings() {
 
     return () => clearTimeout(t);
   }, [successMsg]);
-  
 
   const onChange = (key, value) => {
     setErr("");
@@ -94,14 +100,22 @@ export default function RestaurantSettings() {
         if (value === "branch") {
           if (next.recipe_mode !== "branch") {
             next.recipe_mode = "branch";
-            setWarn("Se fijó “Modo de recetas” en “Por sucursal” porque elegiste “Productos por sucursal”.");
+            setWarn(
+              "Se fijó “Modo de recetas” en “Por sucursal” porque elegiste “Productos por sucursal”."
+            );
           } else {
-            setWarn("Con productos por sucursal, las recetas también deben ser por sucursal.");
+            setWarn(
+              "Con productos por sucursal, las recetas también deben ser por sucursal."
+            );
           }
         }
       }
 
-      if (key === "recipe_mode" && next.products_mode === "branch" && value !== "branch") {
+      if (
+        key === "recipe_mode" &&
+        next.products_mode === "branch" &&
+        value !== "branch"
+      ) {
         next.recipe_mode = "branch";
         setWarn("Los productos por sucursal no pueden tener recetas globales.");
       }
@@ -132,7 +146,6 @@ export default function RestaurantSettings() {
       }
 
       setSuccessMsg("La configuración se guardó correctamente.");
-
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo guardar la configuración");
     } finally {
@@ -267,6 +280,15 @@ export default function RestaurantSettings() {
                   help="Global: catálogo base compartido. Por sucursal: cada sucursal administra su catálogo."
                 />
 
+
+                <FieldSelect
+                  label="Modo de modificadores"
+                  value={form.modifiers_mode}
+                  onChange={(v) => onChange("modifiers_mode", v)}
+                  options={MODES}
+                  help="Global: todos los extras y modificadores se comparten en todo el restaurante. Por sucursal: cada sucursal podrá manejar sus propios modificadores."
+                />
+
                 <FieldSelect
                   label="Modo de recetas"
                   value={form.recipe_mode}
@@ -277,7 +299,8 @@ export default function RestaurantSettings() {
                   tooltipByValue={
                     productsIsBranch
                       ? {
-                          global: "Los productos por sucursal no pueden tener recetas globales",
+                          global:
+                            "Los productos por sucursal no pueden tener recetas globales",
                         }
                       : {}
                   }
@@ -343,7 +366,9 @@ export default function RestaurantSettings() {
                   title="Canales de venta"
                   description="Define los canales a nivel restaurante (sin sucursales, sin productos)."
                   buttonText="Canales de venta"
-                  onClick={() => nav(`/owner/restaurants/${restaurantId}/sales-channels`)}
+                  onClick={() =>
+                    nav(`/owner/restaurants/${restaurantId}/sales-channels`)
+                  }
                 />
 
               </Stack>
@@ -355,7 +380,6 @@ export default function RestaurantSettings() {
             justifyContent="flex-end"
             spacing={1.5}
           >
-        
             <Button
               onClick={onSave}
               disabled={saving}
