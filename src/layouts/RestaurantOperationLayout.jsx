@@ -31,6 +31,8 @@ export default function RestaurantOperationLayout() {
     currentKey = "menu";
   } else if (pathname.includes("/catalog")) {
     currentKey = "catalog";
+  } else if (pathname.includes("/modifiers")) {
+    currentKey = "modifiers";
   } else if (pathname.includes("/tables")) {
     currentKey = "tables";
   }
@@ -57,6 +59,10 @@ export default function RestaurantOperationLayout() {
 
       case "catalog":
         nav(`${base}/catalog`, { state: { restaurantName } });
+        break;
+
+      case "modifiers":
+        nav(`${base}/modifiers`, { state: { restaurantName } });
         break;
 
       case "tables":

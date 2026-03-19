@@ -34,6 +34,8 @@ import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 //Menu 2
 import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
 
+import ModifierManager from "../pages/menu/ModifierManager";
+
 //Sucursales
 import BranchesPage from "../pages/restaurant/BranchesPage";
 
@@ -133,6 +135,9 @@ export default function AppRoutes() {
           <Route path="menu/products/:productId/variants" element={<ProductVariantsPage />} />
           <Route path="menu/products/:productId/recipes" element={<ProductRecipesPage />} />
           <Route path="menu/products/:productId/components" element={<ProductCompositionPage />} />
+
+
+          <Route path="modifiers" element={<ModifierManager />} />
 
         </Route>
 

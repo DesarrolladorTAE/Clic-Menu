@@ -16,6 +16,7 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
+import TuneIcon from "@mui/icons-material/Tune";
 
 const DRAWER_WIDTH = 240;
 const DRAWER_COLLAPSED = 78;
@@ -67,6 +68,11 @@ export default function RestaurantOperationSidebar({
             key: "catalog",
             label: "Catálogo",
             icon: <CategoryIcon />,
+          },
+          {
+            key: "modifiers",
+            label: "Modificadores",
+            icon: <TuneIcon />,
           },
         ],
       },
