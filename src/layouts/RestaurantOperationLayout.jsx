@@ -23,6 +23,8 @@ export default function RestaurantOperationLayout() {
 
   if (isBranchSalesChannelsSection) {
     currentKey = "branch-sales-channels";
+  } else if (pathname.includes("/modifiers")) {
+    currentKey = "modifiers";
   } else if (pathname.includes("/staff")) {
     currentKey = "staff";
   } else if (pathname.includes("/ingredients")) {
@@ -31,8 +33,6 @@ export default function RestaurantOperationLayout() {
     currentKey = "menu";
   } else if (pathname.includes("/catalog")) {
     currentKey = "catalog";
-  } else if (pathname.includes("/modifiers")) {
-    currentKey = "modifiers";
   } else if (pathname.includes("/tables")) {
     currentKey = "tables";
   }

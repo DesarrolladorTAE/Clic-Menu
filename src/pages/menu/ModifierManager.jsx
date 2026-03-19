@@ -2,26 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Box,
-  Button,
-  CircularProgress,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
+  Box, Button, CircularProgress, MenuItem, Paper, Stack,
+  TextField, Typography,
 } from "@mui/material";
 
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import TuneIcon from "@mui/icons-material/Tune";
+import SettingsApplicationsIcon from "@mui/icons-material/SettingsApplications";
 
 import PageContainer from "../../components/common/PageContainer";
 import AppAlert from "../../components/common/AppAlert";
 
-
 import ModifierTabs from "../../components/menu/modifiers/ModifierTabs";
 import ModifierGroupsPanel from "../../components/menu/modifiers/ModifierGroupsPanel";
 import ModifierOptionsPanel from "../../components/menu/modifiers/ModifierOptionsPanel";
+import ModifierCatalogsDialog from "../../components/menu/modifiers/catalogs/ModifierCatalogsDialog";
 
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
@@ -39,6 +33,7 @@ export default function ModifierManager() {
   const { restaurantId } = useParams();
 
   const [loading, setLoading] = useState(true);
+  const [catalogsDialogOpen, setCatalogsDialogOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -140,8 +135,8 @@ export default function ModifierManager() {
         selectedBranchId = branchId
           ? Number(branchId)
           : loadedBranches?.[0]?.id
-          ? Number(loadedBranches[0].id)
-          : null;
+            ? Number(loadedBranches[0].id)
+            : null;
 
         if (!branchId && selectedBranchId) {
           setBranchId(String(selectedBranchId));
@@ -163,7 +158,10 @@ export default function ModifierManager() {
 
       setGroups(loadedGroups);
 
-      const loadedOptions = await getAllModifierOptions(restaurantId, loadedGroups);
+      const loadedOptions = await getAllModifierOptions(
+        restaurantId,
+        loadedGroups
+      );
       setOptions(Array.isArray(loadedOptions) ? loadedOptions : []);
     } catch (e) {
       showAlert({
@@ -203,6 +201,45 @@ export default function ModifierManager() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requiresBranch, effectiveBranchId, restaurantId]);
+
+  const handleSelectCatalog = (catalogKey) => {
+    setCatalogsDialogOpen(false);
+
+    switch (catalogKey) {
+      case "products":
+        nav(
+          `/owner/restaurants/${restaurantId}/operation/modifiers/catalogs/products`
+        );
+        break;
+
+      case "variants":
+        showAlert({
+          severity: "info",
+          title: "Próximamente",
+          message: "El catálogo de variantes aún no está disponible.",
+        });
+        break;
+
+      case "components":
+        showAlert({
+          severity: "info",
+          title: "Próximamente",
+          message: "El catálogo de componentes aún no está disponible.",
+        });
+        break;
+
+      case "component-variants":
+        showAlert({
+          severity: "info",
+          title: "Próximamente",
+          message: "El catálogo de variantes de componentes aún no está disponible.",
+        });
+        break;
+
+      default:
+        break;
+    }
+  };
 
   if (loading) {
     return (
@@ -257,21 +294,25 @@ export default function ModifierManager() {
             </Typography>
           </Box>
 
-          <Button
-            onClick={() =>
-              nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
-            }
-            variant="contained"
-            startIcon={<TuneIcon />}
-            sx={{
-              minWidth: { xs: "100%", sm: 240 },
-              height: 44,
-              borderRadius: 2,
-              fontWeight: 800,
-            }}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            sx={{ width: { xs: "100%", md: "auto" } }}
           >
-            Ir a productos
-          </Button>
+            <Button
+              onClick={() => setCatalogsDialogOpen(true)}
+              variant="outlined"
+              startIcon={<SettingsApplicationsIcon />}
+              sx={{
+                minWidth: { xs: "100%", sm: 230 },
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
+            >
+              Administrar catálogos
+            </Button>
+          </Stack>
         </Stack>
 
         <Paper
@@ -380,6 +421,12 @@ export default function ModifierManager() {
           />
         )}
       </Stack>
+
+      <ModifierCatalogsDialog
+        open={catalogsDialogOpen}
+        onClose={() => setCatalogsDialogOpen(false)}
+        onSelect={handleSelectCatalog}
+      />
 
       <AppAlert
         open={alertState.open}
