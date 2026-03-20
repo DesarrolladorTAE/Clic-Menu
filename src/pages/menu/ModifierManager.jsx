@@ -226,11 +226,9 @@ export default function ModifierManager() {
 
 
       case "component-variants":
-        showAlert({
-          severity: "info",
-          title: "Próximamente",
-          message: "El catálogo de variantes de componentes aún no está disponible.",
-        });
+        nav(
+          `/owner/restaurants/${restaurantId}/operation/modifiers/catalogs/component-variants`
+        );
         break;
 
       default:

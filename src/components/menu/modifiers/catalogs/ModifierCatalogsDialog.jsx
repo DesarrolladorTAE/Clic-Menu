@@ -39,7 +39,7 @@ const cards = [
     title: "Variantes de componentes",
     description: "Asigna grupos a variantes específicas de un componente.",
     icon: <AccountTreeOutlinedIcon sx={{ fontSize: 30 }} />,
-    disabled: true,
+    disabled: false,
   },
 ];
 
