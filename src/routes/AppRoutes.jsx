@@ -37,7 +37,7 @@ import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
 import ModifierManager from "../pages/menu/ModifierManager";
 import ProductModifierCatalogPage from "../pages/menu/modifiers/catalogs/ProductModifierCatalogPage";
 import VariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/VariantModifierCatalogPage";
-
+import CompositeComponentModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentModifierCatalogPage";
 
 //Sucursales
 import BranchesPage from "../pages/restaurant/BranchesPage";
@@ -143,6 +143,7 @@ export default function AppRoutes() {
           <Route path="modifiers" element={<ModifierManager />} />
           <Route path="modifiers/catalogs/products" element={<ProductModifierCatalogPage />} />
           <Route path="modifiers/catalogs/variants" element={<VariantModifierCatalogPage />} />
+          <Route path="modifiers/catalogs/components" element={<CompositeComponentModifierCatalogPage />} />
 
 
         </Route>

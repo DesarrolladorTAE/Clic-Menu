@@ -1,21 +1,10 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Grid,
-  IconButton,
-  Stack,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, Grid, IconButton,
+  Stack,Typography, useMediaQuery,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
+import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
@@ -43,7 +32,7 @@ const cards = [
     title: "Componentes",
     description: "Asigna grupos a componentes dentro de productos compuestos.",
     icon: <WidgetsOutlinedIcon sx={{ fontSize: 30 }} />,
-    disabled: true,
+    disabled: false,
   },
   {
     key: "component-variants",
