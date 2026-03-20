@@ -2,42 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  CircularProgress,
-  FormControlLabel,
-  IconButton,
-  ListSubheader,
-  MenuItem,
-  Paper,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-  TextField,
+  Box, Button, CircularProgress, MenuItem, Paper, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
-import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
-import PaginationFooter from "../../../../components/common/PaginationFooter";
 import usePagination from "../../../../hooks/usePagination";
-import ProductCategoryTabs from "../../../../components/products/ProductCategoryTabs";
 
 import { getRestaurantSettings } from "../../../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../../../services/restaurant/branch.service";
@@ -54,8 +28,20 @@ import {
 
 import VariantModifierGroupUpsertModal from "../../../../components/menu/modifiers/catalogs/VariantModifierGroupUpsertModal";
 
-const PAGE_SIZE = 5;
-const ALL_CATEGORIES_VALUE = "__all__";
+import ModifierCatalogInstructionsCard from "../../../../components/menu/modifiers/catalogs/shared/ModifierCatalogInstructionsCard";
+import ModifierCatalogBranchSelector from "../../../../components/menu/modifiers/catalogs/shared/ModifierCatalogBranchSelector";
+import ProductCatalogFilterPanel from "../../../../components/menu/modifiers/catalogs/shared/ProductCatalogFilterPanel";
+import ProductSelectorPanel from "../../../../components/menu/modifiers/catalogs/shared/ProductSelectorPanel";
+import ProductSelectionSummaryCard from "../../../../components/menu/modifiers/catalogs/shared/ProductSelectionSummaryCard";
+import ModifierAssignmentsPanel from "../../../../components/menu/modifiers/catalogs/shared/ModifierAssignmentsPanel";
+
+import {
+  ALL_CATEGORIES_VALUE,
+  PAGE_SIZE,
+  fieldLabelSx,
+  getBranchHelpText,
+  groupProductsByCategory,
+} from "../../../../components/menu/modifiers/catalogs/shared/catalogShared";
 
 export default function VariantModifierCatalogPage() {
   const { restaurantId } = useParams();
@@ -69,9 +55,13 @@ export default function VariantModifierCatalogPage() {
   const [editing, setEditing] = useState(null);
 
   const [settings, setSettings] = useState(null);
+
   const modifiersMode = settings?.modifiers_mode || "global";
   const productsMode = settings?.products_mode || "global";
-  const requiresBranch = modifiersMode === "branch";
+
+  const modifiersAreByBranch = modifiersMode === "branch";
+  const productsAreByBranch = productsMode === "branch";
+  const needsBranchSelector = productsAreByBranch || modifiersAreByBranch;
 
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState("");
@@ -96,11 +86,7 @@ export default function VariantModifierCatalogPage() {
     message: "",
   });
 
-  const showAlert = ({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
+  const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({
       open: true,
       severity,
@@ -115,9 +101,9 @@ export default function VariantModifierCatalogPage() {
   };
 
   const effectiveBranchId = useMemo(() => {
-    if (!requiresBranch) return null;
+    if (!needsBranchSelector) return null;
     return branchId ? Number(branchId) : null;
-  }, [requiresBranch, branchId]);
+  }, [needsBranchSelector, branchId]);
 
   const categoryTabs = useMemo(() => {
     return [
@@ -127,16 +113,11 @@ export default function VariantModifierCatalogPage() {
   }, [categories]);
 
   const selectedProduct = useMemo(() => {
-    return (
-      products.find((p) => String(p.id) === String(selectedProductId)) || null
-    );
+    return products.find((p) => String(p.id) === String(selectedProductId)) || null;
   }, [products, selectedProductId]);
 
   const selectedVariantRow = useMemo(() => {
-    return (
-      variants.find((v) => String(v.variant?.id) === String(selectedVariantId)) ||
-      null
-    );
+    return variants.find((v) => String(v.variant?.id) === String(selectedVariantId)) || null;
   }, [variants, selectedVariantId]);
 
   const selectedVariant = selectedVariantRow?.variant || null;
@@ -148,28 +129,7 @@ export default function VariantModifierCatalogPage() {
   }, [groups]);
 
   const groupedProducts = useMemo(() => {
-    const map = new Map();
-
-    (Array.isArray(products) ? products : []).forEach((product) => {
-      const categoryName = product?.category?.name || "Sin categoría";
-
-      if (!map.has(categoryName)) {
-        map.set(categoryName, []);
-      }
-
-      map.get(categoryName).push(product);
-    });
-
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0], "es", { sensitivity: "base" }))
-      .map(([categoryName, rows]) => ({
-        categoryName,
-        products: [...rows].sort((a, b) =>
-          (a?.name || "").localeCompare(b?.name || "", "es", {
-            sensitivity: "base",
-          })
-        ),
-      }));
+    return groupProductsByCategory(products);
   }, [products]);
 
   const sortedAssignments = useMemo(() => {
@@ -209,27 +169,24 @@ export default function VariantModifierCatalogPage() {
   const isSaving = (assignmentId) => !!savingMap[assignmentId];
 
   const getModifierParams = () => {
-    if (!requiresBranch || !effectiveBranchId) return {};
+    if (!modifiersAreByBranch || !effectiveBranchId) return {};
     return { branch_id: effectiveBranchId };
   };
 
   const getCategoryParams = () => {
-    if (productsMode === "branch" && effectiveBranchId) {
-      return {
-        status: "active",
-        branch_id: effectiveBranchId,
-      };
+    const params = { status: "active" };
+
+    if (productsAreByBranch && effectiveBranchId) {
+      params.branch_id = effectiveBranchId;
     }
 
-    return {
-      status: "active",
-    };
+    return params;
   };
 
   const getProductParams = () => {
     const params = {};
 
-    if (productsMode === "branch" && effectiveBranchId) {
+    if (productsAreByBranch && effectiveBranchId) {
       params.branch_id = effectiveBranchId;
     }
 
@@ -356,7 +313,7 @@ export default function VariantModifierCatalogPage() {
       let selectedBranch = null;
       let loadedBranches = [];
 
-      if (st?.modifiers_mode === "branch") {
+      if (st?.products_mode === "branch" || st?.modifiers_mode === "branch") {
         loadedBranches = await getBranchesByRestaurant(restaurantId);
         loadedBranches = Array.isArray(loadedBranches) ? loadedBranches : [];
         setBranches(loadedBranches);
@@ -364,8 +321,8 @@ export default function VariantModifierCatalogPage() {
         selectedBranch = branchId
           ? Number(branchId)
           : loadedBranches?.[0]?.id
-          ? Number(loadedBranches[0].id)
-          : null;
+            ? Number(loadedBranches[0].id)
+            : null;
 
         if (!branchId && selectedBranch) {
           setBranchId(String(selectedBranch));
@@ -375,10 +332,12 @@ export default function VariantModifierCatalogPage() {
         setBranchId("");
       }
 
-      const categoryParams =
-        st?.products_mode === "branch" && selectedBranch
-          ? { status: "active", branch_id: selectedBranch }
-          : { status: "active" };
+      const categoryParams = {
+        status: "active",
+        ...(st?.products_mode === "branch" && selectedBranch
+          ? { branch_id: selectedBranch }
+          : {}),
+      };
 
       const modifierParams =
         st?.modifiers_mode === "branch" && selectedBranch
@@ -465,25 +424,30 @@ export default function VariantModifierCatalogPage() {
 
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId]);
 
   useEffect(() => {
     if (!settings) return;
 
-    if (requiresBranch && !effectiveBranchId) {
+    if (needsBranchSelector && !effectiveBranchId) {
       setCategories([]);
       setProducts([]);
       setSelectedProductId("");
       setVariants([]);
       setSelectedVariantId("");
       setAssignments([]);
+      if (modifiersAreByBranch) {
+        setGroups([]);
+      }
       return;
     }
 
     (async () => {
       try {
-        await refreshGroups();
+        if (modifiersAreByBranch || !groups.length) {
+          await refreshGroups();
+        }
+
         await refreshCategories();
 
         const refreshedProducts = await refreshProducts();
@@ -527,15 +491,16 @@ export default function VariantModifierCatalogPage() {
         });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveBranchId]);
 
   useEffect(() => {
     if (!settings) return;
-    if (requiresBranch && !effectiveBranchId) return;
+    if (needsBranchSelector && !effectiveBranchId) return;
 
     (async () => {
       try {
+        await refreshCategories();
+
         const refreshedProducts = await refreshProducts();
 
         if (!refreshedProducts.length) {
@@ -577,7 +542,6 @@ export default function VariantModifierCatalogPage() {
         });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryFilter, statusFilter]);
 
   useEffect(() => {
@@ -616,7 +580,6 @@ export default function VariantModifierCatalogPage() {
         });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProductId]);
 
   useEffect(() => {
@@ -638,7 +601,6 @@ export default function VariantModifierCatalogPage() {
         });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVariantId]);
 
   const openCreate = () => {
@@ -653,12 +615,9 @@ export default function VariantModifierCatalogPage() {
 
   const onToggleStatus = async (row) => {
     const assignmentId = row?.id;
-    if (
-      !assignmentId ||
-      !selectedProduct?.id ||
-      !selectedVariant?.id ||
-      isSaving(assignmentId)
-    ) return;
+    if (!assignmentId || !selectedProduct?.id || !selectedVariant?.id || isSaving(assignmentId)) {
+      return;
+    }
 
     setSaving(assignmentId, true);
 
@@ -669,7 +628,7 @@ export default function VariantModifierCatalogPage() {
         is_active: !row.is_active,
       };
 
-      if (requiresBranch) {
+      if (modifiersAreByBranch) {
         payload.branch_id = effectiveBranchId;
       }
 
@@ -702,7 +661,7 @@ export default function VariantModifierCatalogPage() {
     if (!ok) return;
 
     try {
-      const params = requiresBranch ? { branch_id: effectiveBranchId } : {};
+      const params = modifiersAreByBranch ? { branch_id: effectiveBranchId } : {};
       await deleteVariantModifierGroup(
         restaurantId,
         selectedProduct.id,
@@ -799,204 +758,41 @@ export default function VariantModifierCatalogPage() {
           </Button>
         </Stack>
 
-        <Paper
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            borderRadius: 1,
-            backgroundColor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <Stack spacing={1.25}>
-            <Typography
-              sx={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Antes de comenzar
-            </Typography>
+        <ModifierCatalogInstructionsCard
+          steps={[
+            needsBranchSelector
+              ? "Selecciona la sucursal si este escenario trabaja productos o modificadores por sucursal."
+              : "Este escenario trabaja todo de forma global, así que no necesitas seleccionar sucursal.",
+            "Filtra por categoría o por estado para ubicar más fácil el producto.",
+            "Después elige el producto, selecciona la variante y administra sus grupos.",
+          ]}
+        />
 
-            <InstructionRow
-              step="1"
-              text="Selecciona la sucursal si tu restaurante maneja modificadores por sucursal."
-            />
+        <ModifierCatalogBranchSelector
+          visible={needsBranchSelector}
+          branches={branches}
+          branchId={branchId}
+          onChange={setBranchId}
+          helpText={getBranchHelpText({
+            productsAreByBranch,
+            modifiersAreByBranch,
+          })}
+        />
 
-            <InstructionRow
-              step="2"
-              text="Filtra por categoría o por estado para ubicar más fácil el producto."
-            />
+        <ProductCatalogFilterPanel
+          categories={categoryTabs}
+          categoryFilter={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          statusFilter={statusFilter}
+          onStatusChange={setStatusFilter}
+        />
 
-            <InstructionRow
-              step="3"
-              text="Después elige el producto, selecciona la variante y administra sus grupos."
-            />
-          </Stack>
-        </Paper>
-
-        {requiresBranch ? (
-          <Paper
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              borderRadius: 1,
-              backgroundColor: "background.paper",
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "none",
-            }}
-          >
-            <Stack spacing={1.25}>
-              <Typography sx={fieldLabelSx}>Sucursal</Typography>
-
-              <TextField
-                select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                SelectProps={{
-                  IconComponent: KeyboardArrowDownIcon,
-                }}
-              >
-                {branches.map((b) => (
-                  <MenuItem key={b.id} value={String(b.id)}>
-                    {b.name || `Sucursal ${b.id}`}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <Typography
-                sx={{
-                  fontSize: 12,
-                  color: "text.secondary",
-                }}
-              >
-                Los cambios se aplicarán solo en la sucursal seleccionada.
-              </Typography>
-            </Stack>
-          </Paper>
-        ) : null}
-
-        <Paper
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            borderRadius: 1,
-            backgroundColor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <Stack spacing={2}>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={2}
-              alignItems={{ xs: "stretch", md: "flex-end" }}
-              justifyContent="space-between"
-            >
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={fieldLabelSx}>Categorías</Typography>
-
-                <ProductCategoryTabs
-                  categories={categoryTabs}
-                  value={categoryFilter}
-                  onChange={setCategoryFilter}
-                />
-
-                <Typography
-                  sx={{
-                    mt: 1,
-                    fontSize: 12,
-                    color: "text.secondary",
-                  }}
-                >
-                  Filtra los productos por categoría para encontrarlos más rápido.
-                </Typography>
-              </Box>
-
-              <Box sx={{ width: { xs: "100%", md: 240 } }}>
-                <Typography sx={fieldLabelSx}>Mostrar</Typography>
-
-                <TextField
-                  select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  SelectProps={{
-                    IconComponent: KeyboardArrowDownIcon,
-                  }}
-                >
-                  <MenuItem value="active">Solo activos</MenuItem>
-                  <MenuItem value="inactive">Solo inactivos</MenuItem>
-                  <MenuItem value="all">Todos</MenuItem>
-                </TextField>
-              </Box>
-            </Stack>
-          </Stack>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            borderRadius: 1,
-            backgroundColor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <Stack spacing={1.25}>
-            <Typography sx={fieldLabelSx}>Producto</Typography>
-
-            <TextField
-              select
-              value={selectedProductId}
-              onChange={(e) => setSelectedProductId(e.target.value)}
-              SelectProps={{
-                IconComponent: KeyboardArrowDownIcon,
-              }}
-              disabled={!products.length}
-            >
-              {groupedProducts.length === 0 ? (
-                <MenuItem disabled value="">
-                  No hay productos disponibles
-                </MenuItem>
-              ) : (
-                groupedProducts.flatMap((group) => [
-                  <ListSubheader
-                    key={`subheader-${group.categoryName}`}
-                    sx={{
-                      lineHeight: "36px",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      color: "text.secondary",
-                      bgcolor: "background.paper",
-                    }}
-                  >
-                    {group.categoryName}
-                  </ListSubheader>,
-                  ...group.products.map((product) => (
-                    <MenuItem key={product.id} value={String(product.id)}>
-                      {product.name}
-                      {product.status === "inactive" ? " · Inactivo" : ""}
-                    </MenuItem>
-                  )),
-                ])
-              )}
-            </TextField>
-
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: "text.secondary",
-              }}
-            >
-              {products.length
-                ? `Mostrando ${products.length} producto${products.length === 1 ? "" : "s"} según tus filtros.`
-                : "No hay productos disponibles para este contexto."}
-            </Typography>
-          </Stack>
-        </Paper>
+        <ProductSelectorPanel
+          groupedProducts={groupedProducts}
+          products={products}
+          selectedProductId={selectedProductId}
+          onChange={setSelectedProductId}
+        />
 
         <Paper
           sx={{
@@ -1050,481 +846,54 @@ export default function VariantModifierCatalogPage() {
           </Stack>
         </Paper>
 
-        {selectedProduct ? (
-          <Card
-            sx={{
-              borderRadius: 1,
-              boxShadow: "none",
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor: "background.paper",
-            }}
-          >
-            <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-              <Stack spacing={1.25}>
-                <Typography
-                  sx={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    color: "text.secondary",
-                    textTransform: "uppercase",
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  Selección actual
-                </Typography>
+        <ProductSelectionSummaryCard
+          product={selectedProduct}
+          productsAreByBranch={productsAreByBranch}
+          title="Selección actual"
+          extraChips={
+            selectedVariant
+              ? [
+                  {
+                    label: `Variante: ${selectedVariant.name}`,
+                    color: "secondary",
+                  },
+                ]
+              : []
+          }
+        />
 
-                <Typography
-                  sx={{
-                    fontSize: { xs: 22, sm: 28 },
-                    fontWeight: 800,
-                    color: "text.primary",
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {selectedProduct.name}
-                </Typography>
-
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip
-                    label={
-                      selectedProduct.status === "active" ? "Activo" : "Inactivo"
-                    }
-                    size="small"
-                    sx={{ fontWeight: 800 }}
-                  />
-
-                  {selectedProduct.category?.name ? (
-                    <Chip
-                      label={selectedProduct.category.name}
-                      size="small"
-                      sx={{
-                        fontWeight: 800,
-                        bgcolor: "#FFF3E0",
-                        color: "#A75A00",
-                      }}
-                    />
-                  ) : null}
-
-                  {selectedVariant ? (
-                    <Chip
-                      label={`Variante: ${selectedVariant.name}`}
-                      size="small"
-                      color="secondary"
-                      sx={{ fontWeight: 800 }}
-                    />
-                  ) : null}
-                </Stack>
-              </Stack>
-            </Box>
-          </Card>
-        ) : null}
-
-        <Paper
-          sx={{
-            p: 0,
-            overflow: "hidden",
-            borderRadius: 0,
-            backgroundColor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.75,
-              borderBottom: "1px solid",
-              borderColor: "divider",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 2,
-              flexWrap: "wrap",
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 18,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Grupos asignados a la variante
-            </Typography>
-
-            <Button
-              onClick={openCreate}
-              variant="contained"
-              startIcon={<AddIcon />}
-              disabled={!selectedProduct || !selectedVariant || availableGroups.length === 0}
-              sx={{
-                minWidth: { xs: "100%", sm: 170 },
-                height: 42,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Asignar grupo
-            </Button>
-          </Box>
-
-          {!selectedProduct ? (
-            <Box sx={{ px: 3, py: 5, textAlign: "center" }}>
-              <Typography
-                sx={{
-                  fontSize: 20,
-                  fontWeight: 800,
-                  color: "text.primary",
-                }}
-              >
-                Selecciona un producto
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: "text.secondary",
-                  fontSize: 14,
-                }}
-              >
-                Primero elige un producto para poder administrar sus variantes.
-              </Typography>
-            </Box>
-          ) : !selectedVariant ? (
-            <Box sx={{ px: 3, py: 5, textAlign: "center" }}>
-              <Typography
-                sx={{
-                  fontSize: 20,
-                  fontWeight: 800,
-                  color: "text.primary",
-                }}
-              >
-                Selecciona una variante
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: "text.secondary",
-                  fontSize: 14,
-                }}
-              >
-                Elige la variante a la que quieres asignarle grupos de modificadores.
-              </Typography>
-            </Box>
-          ) : sortedAssignments.length === 0 ? (
-            <Box sx={{ px: 3, py: 5, textAlign: "center" }}>
-              <Typography
-                sx={{
-                  fontSize: 20,
-                  fontWeight: 800,
-                  color: "text.primary",
-                }}
-              >
-                No hay grupos asignados
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: "text.secondary",
-                  fontSize: 14,
-                }}
-              >
-                Asigna tu primer grupo de modificadores a esta variante.
-              </Typography>
-
-              <Button
-                onClick={openCreate}
-                variant="contained"
-                startIcon={<AddIcon />}
-                disabled={availableGroups.length === 0}
-                sx={{
-                  mt: 2.5,
-                  minWidth: 220,
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                Asignar grupo
-              </Button>
-            </Box>
-          ) : (
-            <>
-              {isMobile ? (
-                <Stack spacing={1.5} sx={{ p: 2 }}>
-                  {paginatedItems.map((row) => {
-                    const active = !!row.is_active;
-                    const busy = isSaving(row.id);
-                    const group = row.modifier_group || row.modifierGroup || {};
-                    const optionsCount = Array.isArray(group?.options)
-                      ? group.options.length
-                      : 0;
-
-                    return (
-                      <Card
-                        key={row.id}
-                        sx={{
-                          borderRadius: 1,
-                          boxShadow: "none",
-                          border: "1px solid",
-                          borderColor: "divider",
-                          backgroundColor: "#fff",
-                        }}
-                      >
-                        <Box sx={{ p: 2 }}>
-                          <Stack spacing={1.5}>
-                            <Stack
-                              direction="row"
-                              justifyContent="space-between"
-                              alignItems="flex-start"
-                              spacing={1}
-                            >
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                  sx={{
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    color: "text.primary",
-                                    lineHeight: 1.3,
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {group?.name || "Grupo sin nombre"}
-                                </Typography>
-
-                                {group?.description ? (
-                                  <Typography
-                                    sx={{
-                                      mt: 0.5,
-                                      fontSize: 13,
-                                      color: "text.secondary",
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
-                                    {group.description}
-                                  </Typography>
-                                ) : null}
-                              </Box>
-
-                              <Chip
-                                label={`Orden ${row.sort_order ?? 0}`}
-                                size="small"
-                                sx={{
-                                  fontWeight: 800,
-                                  bgcolor: "#FFF3E0",
-                                  color: "#A75A00",
-                                }}
-                              />
-                            </Stack>
-
-                            <Stack direction="row" spacing={1} flexWrap="wrap">
-                              <Chip
-                                label={`${optionsCount} opción${optionsCount === 1 ? "" : "es"}`}
-                                size="small"
-                              />
-                              <Chip
-                                label={getAppliesToLabel(group?.applies_to)}
-                                size="small"
-                              />
-                            </Stack>
-
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 1,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <FormControlLabel
-                                sx={{ m: 0 }}
-                                control={
-                                  <Switch
-                                    checked={active}
-                                    onChange={() => onToggleStatus(row)}
-                                    disabled={busy}
-                                    color="primary"
-                                  />
-                                }
-                                label={
-                                  <Typography sx={switchLabelSx}>
-                                    {active ? "Activo" : "Inactivo"}
-                                  </Typography>
-                                }
-                              />
-
-                              <Stack direction="row" spacing={1}>
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    onClick={() => openEdit(row)}
-                                    sx={iconEditSx}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(row)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Stack>
-                            </Box>
-                          </Stack>
-                        </Box>
-                      </Card>
-                    );
-                  })}
-                </Stack>
-              ) : (
-                <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                  <Table sx={{ minWidth: 1080 }}>
-                    <TableHead>
-                      <TableRow
-                        sx={{
-                          "& th": {
-                            backgroundColor: "primary.main",
-                            color: "#fff",
-                            fontWeight: 800,
-                            fontSize: 13,
-                            borderBottom: "none",
-                            whiteSpace: "nowrap",
-                          },
-                        }}
-                      >
-                        <TableCell>Grupo</TableCell>
-                        <TableCell>Descripción</TableCell>
-                        <TableCell>Aplica para</TableCell>
-                        <TableCell>Opciones</TableCell>
-                        <TableCell>Orden</TableCell>
-                        <TableCell align="center">Estado</TableCell>
-                        <TableCell align="right">Acciones</TableCell>
-                      </TableRow>
-                    </TableHead>
-
-                    <TableBody>
-                      {paginatedItems.map((row) => {
-                        const active = !!row.is_active;
-                        const busy = isSaving(row.id);
-                        const group = row.modifier_group || row.modifierGroup || {};
-                        const optionsCount = Array.isArray(group?.options)
-                          ? group.options.length
-                          : 0;
-
-                        return (
-                          <TableRow
-                            key={row.id}
-                            hover
-                            sx={{
-                              "& td": {
-                                borderBottom: "1px solid",
-                                borderColor: "divider",
-                                fontSize: 14,
-                                color: "text.primary",
-                                whiteSpace: "nowrap",
-                              },
-                            }}
-                          >
-                            <TableCell>
-                              <Typography sx={{ fontWeight: 800 }}>
-                                {group?.name || "Grupo sin nombre"}
-                              </Typography>
-                            </TableCell>
-
-                            <TableCell
-                              sx={{
-                                whiteSpace: "normal !important",
-                                minWidth: 260,
-                              }}
-                            >
-                              {group?.description || "—"}
-                            </TableCell>
-
-                            <TableCell>
-                              {getAppliesToLabel(group?.applies_to)}
-                            </TableCell>
-
-                            <TableCell>{optionsCount}</TableCell>
-
-                            <TableCell>{row.sort_order ?? 0}</TableCell>
-
-                            <TableCell align="center">
-                              <FormControlLabel
-                                sx={{ m: 0 }}
-                                control={
-                                  <Switch
-                                    checked={active}
-                                    onChange={() => onToggleStatus(row)}
-                                    disabled={busy}
-                                    color="primary"
-                                  />
-                                }
-                                label={
-                                  <Typography sx={switchLabelSx}>
-                                    {active ? "Activo" : "Inactivo"}
-                                  </Typography>
-                                }
-                              />
-                            </TableCell>
-
-                            <TableCell align="right">
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                justifyContent="flex-end"
-                                alignItems="center"
-                                flexWrap="nowrap"
-                              >
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    onClick={() => openEdit(row)}
-                                    sx={iconEditSx}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(row)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-
-              <PaginationFooter
-                page={page}
-                totalPages={totalPages}
-                startItem={startItem}
-                endItem={endItem}
-                total={total}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                onPrev={prevPage}
-                onNext={nextPage}
-                itemLabel="asignaciones"
-              />
-            </>
-          )}
-        </Paper>
+        <ModifierAssignmentsPanel
+          isMobile={isMobile}
+          title="Grupos asignados a la variante"
+          addButtonText="Asignar grupo"
+          emptyTitle="No hay grupos asignados"
+          emptyMessage="Asigna tu primer grupo de modificadores a esta variante."
+          missingSelectionTitle={!selectedProduct ? "Selecciona un producto" : "Selecciona una variante"}
+          missingSelectionMessage={
+            !selectedProduct
+              ? "Primero elige un producto para poder administrar sus variantes."
+              : "Elige la variante a la que quieres asignarle grupos de modificadores."
+          }
+          canAssign={!!selectedProduct && !!selectedVariant && availableGroups.length > 0}
+          hasSelection={!!selectedProduct && !!selectedVariant}
+          rows={sortedAssignments}
+          paginatedItems={paginatedItems}
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={total}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={prevPage}
+          onNext={nextPage}
+          onCreate={openCreate}
+          onEdit={openEdit}
+          onDelete={onDelete}
+          onToggleStatus={onToggleStatus}
+          isSaving={isSaving}
+          itemLabel="asignaciones"
+        />
       </Stack>
 
       <VariantModifierGroupUpsertModal
@@ -1533,7 +902,7 @@ export default function VariantModifierCatalogPage() {
         restaurantId={restaurantId}
         product={selectedProduct}
         variant={selectedVariant}
-        requiresBranch={requiresBranch}
+        requiresBranch={modifiersAreByBranch}
         effectiveBranchId={effectiveBranchId}
         availableGroups={availableGroups}
         editing={editing}
@@ -1561,85 +930,3 @@ export default function VariantModifierCatalogPage() {
     </PageContainer>
   );
 }
-
-function InstructionRow({ step, text }) {
-  return (
-    <Stack direction="row" spacing={1.25} alignItems="flex-start">
-      <Box
-        sx={{
-          minWidth: 28,
-          height: 28,
-          borderRadius: 999,
-          bgcolor: "primary.main",
-          color: "#fff",
-          display: "grid",
-          placeItems: "center",
-          fontSize: 13,
-          fontWeight: 800,
-        }}
-      >
-        {step}
-      </Box>
-
-      <Typography
-        sx={{
-          fontSize: 14,
-          color: "text.primary",
-          lineHeight: 1.6,
-        }}
-      >
-        {text}
-      </Typography>
-    </Stack>
-  );
-}
-
-function getAppliesToLabel(value) {
-  switch (value) {
-    case "product":
-      return "Producto";
-    case "variant":
-      return "Variante";
-    case "component":
-      return "Componente";
-    case "any":
-      return "Cualquiera";
-    default:
-      return "Producto";
-  }
-}
-
-const fieldLabelSx = {
-  fontSize: 14,
-  fontWeight: 800,
-  color: "text.primary",
-  mb: 1,
-};
-
-const switchLabelSx = {
-  fontSize: 14,
-  fontWeight: 700,
-  color: "text.primary",
-};
-
-const iconEditSx = {
-  width: 40,
-  height: 40,
-  bgcolor: "#E3C24A",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "#C9AA39",
-  },
-};
-
-const iconDeleteSx = {
-  width: 40,
-  height: 40,
-  bgcolor: "error.main",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "error.dark",
-  },
-};
