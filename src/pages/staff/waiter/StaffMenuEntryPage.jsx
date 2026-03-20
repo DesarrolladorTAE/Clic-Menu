@@ -11,6 +11,7 @@ import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder"
 import MenuHeaderCard from "../../../components/menu/shared/MenuHeaderCard";
 import MenuProductCard from "../../../components/menu/shared/MenuProductCard";
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
+import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
 
 export default function StaffMenuEntryPage() {
@@ -33,6 +34,9 @@ export default function StaffMenuEntryPage() {
 
   const [compositeModalOpen, setCompositeModalOpen] = useState(false);
   const [selectedCompositeProduct, setSelectedCompositeProduct] = useState(null);
+
+  const [extrasModalOpen, setExtrasModalOpen] = useState(false);
+  const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -115,6 +119,11 @@ export default function StaffMenuEntryPage() {
     cartOrder.addToCartFromProduct(selectedCompositeProduct, components, details);
     setCompositeModalOpen(false);
     setSelectedCompositeProduct(null);
+  };
+
+  const openExtrasViewer = (product) => {
+    setSelectedExtrasProduct(product);
+    setExtrasModalOpen(true);
   };
 
   if (loading) {
@@ -289,6 +298,16 @@ export default function StaffMenuEntryPage() {
         confirmLabel="Agregar compuesto"
       />
 
+      <ProductExtrasModal
+        open={extrasModalOpen}
+        product={selectedExtrasProduct}
+        onClose={() => {
+          setExtrasModalOpen(false);
+          setSelectedExtrasProduct(null);
+        }}
+        onSelectPlaceholder={() => {}}
+      />
+
       <MenuHeaderCard
         title={header?.restaurantName || data?.restaurant?.trade_name || "Restaurante"}
         subtitle={
@@ -379,6 +398,7 @@ export default function StaffMenuEntryPage() {
                     onAddSimple={(product) => cartOrder.addToCartFromProduct(product)}
                     onAddVariant={(product, variant) => cartOrder.addToCartFromVariant(product, variant)}
                     onOpenComposite={openCompositeConfigurator}
+                    onOpenExtras={openExtrasViewer}
                   />
                 ))
               ) : (

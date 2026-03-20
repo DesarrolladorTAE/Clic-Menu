@@ -1,4 +1,3 @@
-// src/pages/public/PublicMenuEntryPage.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -34,6 +33,7 @@ import { useCompositeDrafts } from "../../hooks/public/useCompositeDrafts";
 import MenuHeaderCard from "../../components/menu/shared/MenuHeaderCard";
 import MenuProductCard from "../../components/menu/shared/MenuProductCard";
 import CompositeProductModal from "../../components/menu/shared/CompositeProductModal";
+import ProductExtrasModal from "../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../components/menu/shared/MenuCartPanel";
 
 export default function PublicMenuEntryPage() {
@@ -44,6 +44,9 @@ export default function PublicMenuEntryPage() {
 
   const [compositeModalOpen, setCompositeModalOpen] = useState(false);
   const [selectedCompositeProduct, setSelectedCompositeProduct] = useState(null);
+
+  const [extrasModalOpen, setExtrasModalOpen] = useState(false);
+  const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
 
   const {
     loading,
@@ -79,6 +82,8 @@ export default function PublicMenuEntryPage() {
       composite.resetCompositeDrafts?.();
       setCompositeModalOpen(false);
       setSelectedCompositeProduct(null);
+      setExtrasModalOpen(false);
+      setSelectedExtrasProduct(null);
     },
     setCallLocked,
   });
@@ -93,8 +98,6 @@ export default function PublicMenuEntryPage() {
 
   const orderingMode = String(header?.orderingMode || "");
 
-  // IMPORTANTE:
-  // Este hook debe construirse con los valores REALES ya resueltos del menú y de la sesión QR.
   const cartOrder = useCartAndOrder({
     token,
     canSelect,
@@ -105,7 +108,6 @@ export default function PublicMenuEntryPage() {
     sessionUnavailable: qr.sessionUnavailable,
   });
 
-  // Solo resetea cambio de canal en modo web
   useEffect(() => {
     if (!isWeb) return;
     cartOrder.resetOnChannelChange?.();
@@ -127,7 +129,6 @@ export default function PublicMenuEntryPage() {
 
   const lastLoadedOrderIdRef = useRef(null);
 
-  // Si la sesión ya trae order_id, cargar SIEMPRE la orden real
   useEffect(() => {
     const sessionOrderId = Number(qr?.session?.order_id || 0);
     const sessionStatus = String(qr?.session?.status || "");
@@ -146,7 +147,6 @@ export default function PublicMenuEntryPage() {
     });
   }, [qr?.session?.order_id, qr?.session?.status, cartOrder]);
 
-  // sincronizar status si backend empieza a reflejarlo
   useEffect(() => {
     cartOrder.syncOrderStatusFromSession?.(qr.sessionOrderStatus)?.catch?.(() => {});
   }, [qr.sessionOrderStatus, cartOrder]);
@@ -309,6 +309,11 @@ export default function PublicMenuEntryPage() {
     cartOrder.addToCartFromProduct(selectedCompositeProduct, components, details);
     setCompositeModalOpen(false);
     setSelectedCompositeProduct(null);
+  };
+
+  const openExtrasViewer = (product) => {
+    setSelectedExtrasProduct(product);
+    setExtrasModalOpen(true);
   };
 
   if (loading) {
@@ -674,6 +679,16 @@ export default function PublicMenuEntryPage() {
         confirmLabel="Agregar compuesto"
       />
 
+      <ProductExtrasModal
+        open={extrasModalOpen}
+        product={selectedExtrasProduct}
+        onClose={() => {
+          setExtrasModalOpen(false);
+          setSelectedExtrasProduct(null);
+        }}
+        onSelectPlaceholder={() => {}}
+      />
+
       <MenuHeaderCard
         title={header?.restaurantName}
         subtitle={
@@ -866,6 +881,7 @@ export default function PublicMenuEntryPage() {
                     onAddSimple={(product) => cartOrder.addToCartFromProduct(product)}
                     onAddVariant={(product, variant) => cartOrder.addToCartFromVariant(product, variant)}
                     onOpenComposite={openCompositeConfigurator}
+                    onOpenExtras={openExtrasViewer}
                   />
                 ))
               ) : (

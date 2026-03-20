@@ -4,7 +4,10 @@ import {
   PillButton,
   ProductThumb,
 } from "../../../pages/public/publicMenu.ui";
-import { money } from "../../../hooks/public/publicMenu.utils";
+import {
+  hasAnyModifierGroups,
+  money,
+} from "../../../hooks/public/publicMenu.utils";
 
 export default function MenuProductCard({
   product,
@@ -14,10 +17,10 @@ export default function MenuProductCard({
   onAddSimple,
   onAddVariant,
   onOpenComposite,
+  onOpenExtras,
 }) {
   const [variantsOpen, setVariantsOpen] = useState(false);
 
-  const pid = Number(product?.id || 0);
   const title = product?.display_name || product?.name || "Producto";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   const hasVariants = variants.length > 0;
@@ -27,6 +30,7 @@ export default function MenuProductCard({
     ? product.composite.items
     : [];
   const hasComposite = isComposite && compositeItems.length > 0;
+  const hasExtras = hasAnyModifierGroups(product);
 
   return (
     <div
@@ -52,7 +56,9 @@ export default function MenuProductCard({
             alignItems: "start",
           }}
         >
-          <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>{title}</div>
+          <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>
+            {title}
+          </div>
           <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>
             {money(product?.price)}
           </div>
@@ -79,32 +85,60 @@ export default function MenuProductCard({
               border: "1px solid rgba(0,0,0,0.08)",
             }}
           >
-            Incluye <strong>{compositeItems.length}</strong> componente(s). 
+            Incluye <strong>{compositeItems.length}</strong> componente(s).
           </div>
         ) : null}
 
-        {showSelectBtn ? (
-          <PillButton
-            tone="default"
-            onClick={() => {
-              if (isComposite && hasComposite) {
-                onOpenComposite?.(product);
-                return;
-              }
-              onAddSimple?.(product);
+        {hasExtras ? (
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.8,
+              padding: "8px 10px",
+              borderRadius: 12,
+              background: "#fff7ed",
+              border: "1px solid rgba(255,122,0,0.18)",
+              color: "#9a4a00",
             }}
-            title={
-              !canSelect
-                ? "Solo lectura"
-                : isComposite
-                ? "Configurar producto compuesto"
-                : "Agregar a comanda"
-            }
-            disabled={!canSelect}
           >
-            {isComposite ? "⚙️ Configurar" : "➕ Seleccionar"}
-          </PillButton>
+            Extras disponibles según contexto.
+          </div>
         ) : null}
+
+        <div style={{ display: "grid", gap: 8 }}>
+          {showSelectBtn ? (
+            <PillButton
+              tone="default"
+              onClick={() => {
+                if (isComposite && hasComposite) {
+                  onOpenComposite?.(product);
+                  return;
+                }
+                onAddSimple?.(product);
+              }}
+              title={
+                !canSelect
+                  ? "Solo lectura"
+                  : isComposite
+                  ? "Configurar producto compuesto"
+                  : "Agregar a comanda"
+              }
+              disabled={!canSelect}
+            >
+              {isComposite ? "⚙️ Configurar" : "➕ Seleccionar"}
+            </PillButton>
+          ) : null}
+
+          {hasExtras ? (
+            <PillButton
+              tone="soft"
+              onClick={() => onOpenExtras?.(product)}
+              title="Ver extras disponibles de este producto"
+            >
+              ✨ Extras
+            </PillButton>
+          ) : null}
+        </div>
 
         {!isComposite && hasVariants ? (
           <div style={{ marginTop: 2 }}>
@@ -133,6 +167,10 @@ export default function MenuProductCard({
               <div style={{ display: "grid", gap: 8 }}>
                 {variants.map((v, idx) => {
                   const vid = v.id || idx;
+                  const variantHasExtras =
+                    Array.isArray(v?.modifier_groups) &&
+                    v.modifier_groups.length > 0;
+
                   return (
                     <div
                       key={vid}
@@ -165,6 +203,12 @@ export default function MenuProductCard({
                           {money(v.price)}
                         </div>
                       </div>
+
+                      {variantHasExtras ? (
+                        <div style={{ fontSize: 12, opacity: 0.75, color: "#9a4a00" }}>
+                          Esta variante tiene extras disponibles.
+                        </div>
+                      ) : null}
 
                       {showSelectBtn ? (
                         <PillButton
