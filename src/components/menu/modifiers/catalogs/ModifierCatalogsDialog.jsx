@@ -35,8 +35,9 @@ const cards = [
     title: "Variantes",
     description: "Asigna grupos a variantes específicas de tus productos.",
     icon: <ViewInArOutlinedIcon sx={{ fontSize: 30 }} />,
-    disabled: true,
+    disabled: false,
   },
+  
   {
     key: "components",
     title: "Componentes",
