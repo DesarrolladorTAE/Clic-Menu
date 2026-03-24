@@ -5,6 +5,7 @@ import OwnerRoute from "./OwnerRoute";
 import StaffProtectedRoute from "./StaffProtectedRoute";
 
 import TestMui from "../pages/TestMui";
+import WebsocketSmokeTest from "../pages/WebsocketSmokeTest";
 
 //Registro o Login OWNER
 import Register from "../pages/auth/Register";
@@ -80,6 +81,7 @@ export default function AppRoutes() {
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
 
       <Route path="/test-mui" element={<TestMui />} />
+      <Route path="/ws-test" element={<WebsocketSmokeTest />} />
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />

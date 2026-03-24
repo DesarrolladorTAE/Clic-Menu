@@ -71,7 +71,7 @@ export default function Login() {
       const roleId = String(res?.user?.role_id);
 
       const isOwner = roleName === "propietario" || roleId === "2";
-      const fallback = isOwner ? "/owner/restaurants" : "/app";
+      const fallback = isOwner ? "/owner/restaurants-home" : "/app";
 
       const target = !res?.userChanged && isSafeRedirect(from) ? from : fallback;
 
