@@ -31,6 +31,8 @@ import {
   rejectTableSessionRequest,
 } from "../../../services/staff/waiter/tableSessionRequests.service";
 
+import echo from "../../../realtime/echo";
+
 // -------------------------
 // UI helpers
 // -------------------------
@@ -209,7 +211,6 @@ export default function WaiterTablesGrid() {
   const [billBusyId, setBillBusyId] = useState(null);
   const [payingBusyOrderId, setPayingBusyOrderId] = useState(null);
 
-  // Mantiene viva en UI la capacidad de cobrar aunque el aviso se marque como leído
   const [billOrderIds, setBillOrderIds] = useState([]);
 
   const [toast, setToast] = useState({
@@ -218,14 +219,24 @@ export default function WaiterTablesGrid() {
     type: "info",
   });
 
+  const pollRef = useRef(null);
+  const toastTimerRef = useRef(null);
+  const wsRefreshTimerRef = useRef(null);
+
   const showToast = (message, type = "info") => {
+    if (!message) return;
     setToast({ open: true, message, type });
-    setTimeout(() => setToast((t) => ({ ...t, open: false })), 4500);
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = setTimeout(() => {
+      setToast((t) => ({ ...t, open: false }));
+    }, 4500);
   };
 
   const closeToast = () => setToast((t) => ({ ...t, open: false }));
-
-  const pollRef = useRef(null);
 
   const pickErr = (e, fallback) =>
     e?.response?.data?.message || e?.message || fallback;
@@ -278,7 +289,9 @@ export default function WaiterTablesGrid() {
     const start = () => {
       if (pollRef.current) return;
       pollRef.current = setInterval(() => {
-        if (document.visibilityState === "visible") load({ silent: true });
+        if (document.visibilityState === "visible") {
+          load({ silent: true });
+        }
       }, 10000);
     };
 
@@ -300,8 +313,6 @@ export default function WaiterTablesGrid() {
     [data],
   );
 
-  // Conserva órdenes "cobrables" aunque el aviso se lea,
-  // pero limpia las que ya no existen como activas en el grid
   useEffect(() => {
     const activeOrderIds = (tables || [])
       .map((t) => Number(t?.active_order?.id || 0))
@@ -333,6 +344,62 @@ export default function WaiterTablesGrid() {
     }
     return counts;
   }, [tables]);
+
+  useEffect(() => {
+    const branchId = Number(meta?.branch_id || 0);
+    const staffId = Number(meta?.staff_id || 0);
+
+    if (!branchId) return;
+
+    const channelName = `branch.${branchId}.tables`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshTimerRef.current) {
+        clearTimeout(wsRefreshTimerRef.current);
+      }
+
+      wsRefreshTimerRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 180);
+    };
+
+    const handleGridUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+
+      scheduleRefresh();
+
+      const targetStaffId = Number(payload?.target_staff_id || 0);
+      const msg = String(payload?.message || "").trim();
+
+      if (msg && (!targetStaffId || targetStaffId === staffId)) {
+        showToast(msg, "info");
+      }
+    };
+
+    echo.channel(channelName).listen(".table.grid.updated", handleGridUpdated);
+
+    return () => {
+      if (wsRefreshTimerRef.current) {
+        clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta?.branch_id, meta?.staff_id]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+      if (wsRefreshTimerRef.current) {
+        clearTimeout(wsRefreshTimerRef.current);
+      }
+    };
+  }, []);
 
   const doAttend = async (table) => {
     const id = table?.id;
@@ -543,7 +610,10 @@ export default function WaiterTablesGrid() {
       showToast(res?.message || "Aviso de cuenta marcado como leído.", "success");
       await load({ silent: true });
     } catch (e) {
-      showToast(pickErr(e, "No se pudo marcar el aviso de cuenta como leído."), "error");
+      showToast(
+        pickErr(e, "No se pudo marcar el aviso de cuenta como leído."),
+        "error",
+      );
     } finally {
       setBillBusyId(null);
     }
@@ -790,7 +860,6 @@ export default function WaiterTablesGrid() {
         </div>
       </div>
 
-      {/* AVISOS DE CUENTA */}
       {Array.isArray(billRequests) && billRequests.length > 0 ? (
         <div
           style={{
@@ -844,7 +913,9 @@ export default function WaiterTablesGrid() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <PillButton
                     tone="ok"
-                    disabled={billBusyId === n.id || payingBusyOrderId === n.order_id}
+                    disabled={
+                      billBusyId === n.id || payingBusyOrderId === n.order_id
+                    }
                     onClick={() => doReadBillRequest(n.id)}
                     title="Marcar aviso de cuenta como leído"
                   >
@@ -857,7 +928,6 @@ export default function WaiterTablesGrid() {
         </div>
       ) : null}
 
-      {/* AVISOS DE PEDIDO LISTO */}
       {Array.isArray(readyNotifications) && readyNotifications.length > 0 ? (
         <div
           style={{
@@ -923,7 +993,6 @@ export default function WaiterTablesGrid() {
         </div>
       ) : null}
 
-      {/* JOIN REQUESTS */}
       {Array.isArray(requests) && requests.length > 0 ? (
         <div
           style={{
@@ -1054,34 +1123,82 @@ export default function WaiterTablesGrid() {
 
               const canAttend = !!t?.actions?.can_attend;
               const canFinish = !!t?.actions?.can_finish_attention;
+              const canRejectCall = !!t?.actions?.can_reject_call;
 
               const canAccept = !!t?.actions?.can_accept_order && hasPending;
               const canReject = !!t?.actions?.can_reject_order && hasPending;
 
               const canMarkPaid = !!t?.actions?.can_mark_paid && hasOpenOrder;
-              const showReleaseSession =
-                !!t?.actions?.can_release_session && hasOpenOrder;
 
               const canMarkOccupied = !!t?.actions?.can_mark_occupied;
               const canMarkFree = !!t?.actions?.can_mark_free;
-              const canCreateOrder = !!t?.actions?.can_create_order && !hasOpenOrder;
+              const canCreateOrder =
+                !!t?.actions?.can_create_order && !hasOpenOrder;
               const canViewOrder =
                 !!t?.actions?.can_view_order && hasOpenOrder;
-              const canRejectCall = !!t?.actions?.can_reject_call;
 
               const showWaiterOnlyActions =
                 orderingMode === "waiter_only" || orderingMode === "waiter";
 
               const isCalling = uiState === "call";
-              const isMine = uiState === "mine";
+              const isMine = !!t?.is_mine || uiState === "mine";
+              const isLockedLike = uiState === "locked" || uiState === "blocked";
+
+              const belongsToMe =
+                !!t?.is_mine ||
+                (Number(t?.assigned_waiter_id || 0) > 0 &&
+                  Number(t?.assigned_waiter_id || 0) ===
+                    Number(meta?.staff_id || 0));
+
+              const isUnassignedTable = Number(t?.assigned_waiter_id || 0) === 0;
+
+              const shouldShowOrderSummary = belongsToMe && hasOpenOrder;
+
+              const showReleaseSession =
+                belongsToMe &&
+                !!t?.actions?.can_release_session &&
+                hasOpenOrder;
 
               const showChargeButton =
+                belongsToMe &&
                 hasOpenOrder &&
                 (orderStatus === "open" || orderStatus === "ready");
 
               const canChargeFromTable =
+                belongsToMe &&
                 !!t?.actions?.can_start_payment &&
                 (orderStatus === "open" || orderStatus === "ready");
+
+              // IMPORTANTE:
+              // - llamada abierta sin dueño => todos pueden atender
+              // - llamada/orden con dueño ajeno => nadie más ve botones
+              const safeCanAttend =
+                isCalling &&
+                canAttend &&
+                (belongsToMe || isUnassignedTable);
+
+              const safeCanRejectCall =
+                isCalling &&
+                canRejectCall &&
+                belongsToMe;
+
+              const safeCanFinish =
+                belongsToMe &&
+                isMine &&
+                canFinish;
+
+              const safeCanMarkPaid =
+                belongsToMe &&
+                canMarkPaid;
+
+              const safeCanAccept =
+                canAccept &&
+                !isLockedLike;
+
+              const safeCanReject =
+                canReject &&
+                !isLockedLike &&
+                (belongsToMe || isUnassignedTable);
 
               return (
                 <div
@@ -1132,7 +1249,7 @@ export default function WaiterTablesGrid() {
                     </div>
                   </div>
 
-                  {hasOpenOrder ? (
+                  {shouldShowOrderSummary ? (
                     <div
                       style={{
                         background: "rgba(255,255,255,0.65)",
@@ -1153,7 +1270,7 @@ export default function WaiterTablesGrid() {
                   ) : null}
 
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {isCalling && canAttend ? (
+                    {safeCanAttend ? (
                       <PillButton
                         tone="ok"
                         onClick={() => doAttend(t)}
@@ -1163,7 +1280,7 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {isCalling && canRejectCall ? (
+                    {safeCanRejectCall ? (
                       <PillButton
                         tone="danger"
                         onClick={() => doRejectCall(t)}
@@ -1173,7 +1290,7 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {isMine && canFinish ? (
+                    {safeCanFinish ? (
                       <PillButton
                         tone="soft"
                         onClick={() => doFinish(t)}
@@ -1242,14 +1359,17 @@ export default function WaiterTablesGrid() {
                       <PillButton
                         tone="orange"
                         onClick={() => doStartPayment(openOrderId)}
-                        disabled={!canChargeFromTable || payingBusyOrderId === openOrderId}
+                        disabled={
+                          !canChargeFromTable ||
+                          payingBusyOrderId === openOrderId
+                        }
                         title="Iniciar proceso de cobro"
                       >
                         {payingBusyOrderId === openOrderId ? "Abriendo…" : "Cobrar"}
                       </PillButton>
                     ) : null}
 
-                    {canMarkPaid ? (
+                    {safeCanMarkPaid ? (
                       <PillButton
                         tone="ok"
                         onClick={() => doMarkPaid(t)}
@@ -1259,7 +1379,7 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {canAccept ? (
+                    {safeCanAccept ? (
                       <PillButton
                         tone="ok"
                         onClick={() => doAccept(t)}
@@ -1269,7 +1389,7 @@ export default function WaiterTablesGrid() {
                       </PillButton>
                     ) : null}
 
-                    {canReject ? (
+                    {safeCanReject ? (
                       <PillButton
                         tone="danger"
                         onClick={() => doReject(t)}
