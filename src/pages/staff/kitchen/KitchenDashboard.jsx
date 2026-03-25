@@ -10,6 +10,7 @@ import {
   readyKitchenItem,
   notifyKitchenOrderReady,
 } from "../../../services/staff/kitchen/kitchenKds.service";
+import echo from "../../../realtime/echo";
 
 /**
  * Traducciones visibles
@@ -18,6 +19,7 @@ const ESTADO_ITEM_ES = {
   queued: "Pendiente",
   in_progress: "Preparando",
   ready: "Listo",
+  picked_up: "Recogido",
 };
 
 const ESTADO_ORDEN_ES = {
@@ -41,6 +43,93 @@ function tOrderStatus(st) {
   return ESTADO_ORDEN_ES[key] || (key ? "Desconocido" : "—");
 }
 
+function prettyNotes(notes) {
+  if (!notes) return "";
+  if (typeof notes === "string") return notes;
+  try {
+    return JSON.stringify(notes);
+  } catch {
+    return String(notes);
+  }
+}
+
+function formatWhen(value) {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
+  } catch {
+    return String(value);
+  }
+}
+
+function formatElapsed(createdAt) {
+  if (!createdAt) return "—";
+  try {
+    const d = new Date(createdAt);
+    const ms = Date.now() - d.getTime();
+    if (!Number.isFinite(ms) || ms < 0) return "—";
+
+    const total = Math.floor(ms / 1000);
+    const mm = Math.floor(total / 60);
+    const ss = total % 60;
+
+    const mm2 = String(mm).padStart(2, "0");
+    const ss2 = String(ss).padStart(2, "0");
+    return `${mm2}:${ss2}`;
+  } catch {
+    return "—";
+  }
+}
+
+function pill(status) {
+  const s = String(status || "");
+  if (s === "queued") return { ...pillBase, background: "#fff7ed", borderColor: "#fed7aa", color: "#9a3412" };
+  if (s === "in_progress") return { ...pillBase, background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" };
+  if (s === "ready") return { ...pillBase, background: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" };
+  if (s === "picked_up") return { ...pillBase, background: "#f3f4f6", borderColor: "#d1d5db", color: "#374151" };
+  return { ...pillBase, background: "#f3f4f6", borderColor: "#e5e7eb", color: "#374151" };
+}
+
+function recalcOrderDerived(order, includeReady) {
+  const rawItems = Array.isArray(order?.items) ? order.items : [];
+
+  const nonReadyCount = rawItems.filter((it) => {
+    const st = String(it?.kitchen_status || "");
+    return st !== "ready" && st !== "picked_up";
+  }).length;
+
+  const readyUnpickedCount = rawItems.filter(
+    (it) => String(it?.kitchen_status || "") === "ready"
+  ).length;
+
+  const allReady = nonReadyCount === 0;
+  const readyNoticeSent = !!order?.ready_notice_sent;
+
+  const visibleItems = includeReady
+    ? rawItems.filter((it) => {
+        const st = String(it?.kitchen_status || "");
+        return st === "queued" || st === "in_progress" || st === "ready";
+      })
+    : rawItems.filter((it) => {
+        const st = String(it?.kitchen_status || "");
+        return st !== "ready" && st !== "picked_up";
+      });
+
+  return {
+    ...order,
+    items: visibleItems,
+    all_ready: allReady,
+    non_ready_count: nonReadyCount,
+    ready_unpicked_count: readyUnpickedCount,
+    actions: {
+      ...(order?.actions || {}),
+      can_notify_ready: allReady && readyUnpickedCount > 0 && !readyNoticeSent,
+    },
+  };
+}
+
 export default function KitchenDashboard() {
   const nav = useNavigate();
   const { clearStaff, exitSmart } = useStaffAuth();
@@ -54,9 +143,21 @@ export default function KitchenDashboard() {
   const [includeReady, setIncludeReady] = useState(false);
   const [orders, setOrders] = useState([]);
   const [notifyingOrderId, setNotifyingOrderId] = useState(null);
+  const [busyItemIds, setBusyItemIds] = useState({});
 
   const pollRef = useRef(null);
   const abortRef = useRef(false);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
+
+  const setItemBusy = (itemId, value) => {
+    setBusyItemIds((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[itemId];
+      else next[itemId] = value;
+      return next;
+    });
+  };
 
   const loadContext = useCallback(async () => {
     setErr("");
@@ -127,6 +228,27 @@ export default function KitchenDashboard() {
     [includeReady, nav, clearStaff]
   );
 
+  const patchOrderByItemId = useCallback((itemId, updater) => {
+    if (!itemId) return;
+    setOrders((prev) =>
+      (prev || []).map((order) => {
+        const hasItem = Array.isArray(order?.items) && order.items.some((it) => Number(it?.id) === Number(itemId));
+        if (!hasItem) return order;
+        return updater(order);
+      })
+    );
+  }, []);
+
+  const patchOrderById = useCallback((orderId, updater) => {
+    if (!orderId) return;
+    setOrders((prev) =>
+      (prev || []).map((order) => {
+        if (Number(order?.id) !== Number(orderId)) return order;
+        return updater(order);
+      })
+    );
+  }, []);
+
   useEffect(() => {
     abortRef.current = false;
 
@@ -144,15 +266,16 @@ export default function KitchenDashboard() {
     return () => {
       abortRef.current = true;
     };
-  }, [loadContext]);
+  }, [loadContext, loadOrders]);
 
+  // Fallback: respaldo, no protagonista.
   useEffect(() => {
     const startPolling = () => {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(() => {
         if (document.hidden) return;
         loadOrders({ silent: true });
-      }, 3500);
+      }, 10000);
     };
 
     startPolling();
@@ -160,6 +283,7 @@ export default function KitchenDashboard() {
     const onVis = () => {
       if (!document.hidden) loadOrders({ silent: true });
     };
+
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
@@ -171,6 +295,66 @@ export default function KitchenDashboard() {
   useEffect(() => {
     loadOrders({ silent: true });
   }, [includeReady, loadOrders]);
+
+  const branchId = Number(ctx?.branch?.id || ctx?.branch_id || 0);
+  const staffId = Number(ctx?.user?.id || ctx?.staff_id || 0);
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    const channelName = `branch.${branchId}.kitchen`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+
+      // Primer refresh rápido
+      wsRefreshFastRef.current = setTimeout(() => {
+        loadOrders({ silent: true });
+      }, 120);
+
+      // Segundo refresh de confirmación
+      wsRefreshSlowRef.current = setTimeout(() => {
+        loadOrders({ silent: true });
+      }, 900);
+    };
+
+    const handleKitchenUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+
+      scheduleRefresh();
+
+      const targetStaffId = Number(payload?.target_staff_id || 0);
+      const msg = String(payload?.message || "").trim();
+
+      if (msg && (!targetStaffId || targetStaffId === staffId)) {
+        setOkMsg(msg);
+      }
+    };
+
+    echo.channel(channelName).listen(".kitchen.kds.updated", handleKitchenUpdated);
+
+    return () => {
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+  }, [branchId, staffId, loadOrders]);
+
+  useEffect(() => {
+    return () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+    };
+  }, []);
 
   const onExit = async () => {
     setErr("");
@@ -200,15 +384,29 @@ export default function KitchenDashboard() {
     const id = item?.id;
     if (!id) return;
 
-    setRefreshing(true);
+    setItemBusy(id, "start");
+
+    patchOrderByItemId(id, (order) => {
+      const nextItems = (order.items || []).map((it) => {
+        if (Number(it?.id) !== Number(id)) return it;
+        return {
+          ...it,
+          kitchen_status: "in_progress",
+          kitchen_started_at: it?.kitchen_started_at || new Date().toISOString(),
+        };
+      });
+
+      return recalcOrderDerived({ ...order, items: nextItems }, includeReady);
+    });
+
     try {
       await startKitchenItem(id);
       setOkMsg("Ítem enviado a preparación.");
-      await loadOrders({ silent: true });
     } catch (e) {
+      await loadOrders({ silent: true });
       setErr(e?.response?.data?.message || "No se pudo iniciar el ítem.");
     } finally {
-      setRefreshing(false);
+      setItemBusy(id, null);
     }
   };
 
@@ -218,15 +416,29 @@ export default function KitchenDashboard() {
     const id = item?.id;
     if (!id) return;
 
-    setRefreshing(true);
+    setItemBusy(id, "ready");
+
+    patchOrderByItemId(id, (order) => {
+      const nextItems = (order.items || []).map((it) => {
+        if (Number(it?.id) !== Number(id)) return it;
+        return {
+          ...it,
+          kitchen_status: "ready",
+          kitchen_ready_at: new Date().toISOString(),
+        };
+      });
+
+      return recalcOrderDerived({ ...order, items: nextItems }, includeReady);
+    });
+
     try {
       await readyKitchenItem(id);
       setOkMsg("Ítem marcado como listo.");
-      await loadOrders({ silent: true });
     } catch (e) {
+      await loadOrders({ silent: true });
       setErr(e?.response?.data?.message || "No se pudo marcar como listo el ítem.");
     } finally {
-      setRefreshing(false);
+      setItemBusy(id, null);
     }
   };
 
@@ -238,6 +450,20 @@ export default function KitchenDashboard() {
     setOkMsg("");
     setNotifyingOrderId(orderId);
 
+    patchOrderById(orderId, (current) =>
+      recalcOrderDerived(
+        {
+          ...current,
+          ready_notice_sent: true,
+          actions: {
+            ...(current?.actions || {}),
+            can_notify_ready: false,
+          },
+        },
+        includeReady
+      )
+    );
+
     try {
       const res = await notifyKitchenOrderReady(orderId);
       setOkMsg(
@@ -246,8 +472,8 @@ export default function KitchenDashboard() {
             ? "El aviso de pedido listo ya estaba enviado."
             : "Aviso enviado al mesero.")
       );
-      await loadOrders({ silent: true });
     } catch (e) {
+      await loadOrders({ silent: true });
       setErr(e?.response?.data?.message || "No se pudo enviar el aviso de pedido listo.");
     } finally {
       setNotifyingOrderId(null);
@@ -315,6 +541,7 @@ export default function KitchenDashboard() {
                   onNotifyReady={doNotifyReady}
                   busy={refreshing}
                   notifying={notifyingOrderId === o.id}
+                  busyItemIds={busyItemIds}
                 />
               ))}
             </div>
@@ -325,7 +552,7 @@ export default function KitchenDashboard() {
   );
 }
 
-function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying }) {
+function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, busyItemIds }) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const createdAt = formatWhen(order?.created_at);
 
@@ -369,7 +596,14 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying }) 
       <div style={ticketBody}>
         {hasVisibleItems ? (
           items.map((it) => (
-            <ItemRow key={it.id} item={it} onStart={onStart} onReady={onReady} busy={busy} />
+            <ItemRow
+              key={it.id}
+              item={it}
+              onStart={onStart}
+              onReady={onReady}
+              busy={busy}
+              itemBusyState={busyItemIds?.[it.id] || null}
+            />
           ))
         ) : readyNoticeSent ? (
           <div style={emptyItemsBox}>
@@ -425,7 +659,7 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying }) 
   );
 }
 
-function ItemRow({ item, onStart, onReady, busy }) {
+function ItemRow({ item, onStart, onReady, busy, itemBusyState }) {
   const st = String(item?.kitchen_status || "");
   const canStart = st === "queued";
   const canReady = st === "in_progress";
@@ -486,73 +720,25 @@ function ItemRow({ item, onStart, onReady, busy }) {
 
       <div style={ticketRight}>
         <button
-          style={btnAction(canStart)}
+          style={btnAction(canStart && !itemBusyState)}
           onClick={() => onStart(item)}
-          disabled={!canStart || busy}
+          disabled={!canStart || busy || !!itemBusyState}
           title={canStart ? "Marcar como en proceso" : "Solo se permite si está pendiente"}
         >
-          Empezar
+          {itemBusyState === "start" ? "Empezando…" : "Empezar"}
         </button>
 
         <button
-          style={btnActionOk(canReady)}
+          style={btnActionOk(canReady && !itemBusyState)}
           onClick={() => onReady(item)}
-          disabled={!canReady || busy}
+          disabled={!canReady || busy || !!itemBusyState}
           title={canReady ? "Marcar como listo" : "Solo se permite si está en proceso"}
         >
-          Listo
+          {itemBusyState === "ready" ? "Marcando…" : "Listo"}
         </button>
       </div>
     </div>
   );
-}
-
-function prettyNotes(notes) {
-  if (!notes) return "";
-  if (typeof notes === "string") return notes;
-  try {
-    return JSON.stringify(notes);
-  } catch {
-    return String(notes);
-  }
-}
-
-function formatWhen(value) {
-  if (!value) return "";
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return String(value);
-    return d.toLocaleString();
-  } catch {
-    return String(value);
-  }
-}
-
-function formatElapsed(createdAt) {
-  if (!createdAt) return "—";
-  try {
-    const d = new Date(createdAt);
-    const ms = Date.now() - d.getTime();
-    if (!Number.isFinite(ms) || ms < 0) return "—";
-
-    const total = Math.floor(ms / 1000);
-    const mm = Math.floor(total / 60);
-    const ss = total % 60;
-
-    const mm2 = String(mm).padStart(2, "0");
-    const ss2 = String(ss).padStart(2, "0");
-    return `${mm2}:${ss2}`;
-  } catch {
-    return "—";
-  }
-}
-
-function pill(status) {
-  const s = String(status || "");
-  if (s === "queued") return { ...pillBase, background: "#fff7ed", borderColor: "#fed7aa", color: "#9a3412" };
-  if (s === "in_progress") return { ...pillBase, background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" };
-  if (s === "ready") return { ...pillBase, background: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" };
-  return { ...pillBase, background: "#f3f4f6", borderColor: "#e5e7eb", color: "#374151" };
 }
 
 /* ================== estilos inline ================== */

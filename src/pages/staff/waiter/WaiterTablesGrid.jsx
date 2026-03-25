@@ -221,7 +221,8 @@ export default function WaiterTablesGrid() {
 
   const pollRef = useRef(null);
   const toastTimerRef = useRef(null);
-  const wsRefreshTimerRef = useRef(null);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
 
   const showToast = (message, type = "info") => {
     if (!message) return;
@@ -354,13 +355,16 @@ export default function WaiterTablesGrid() {
     const channelName = `branch.${branchId}.tables`;
 
     const scheduleRefresh = () => {
-      if (wsRefreshTimerRef.current) {
-        clearTimeout(wsRefreshTimerRef.current);
-      }
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
 
-      wsRefreshTimerRef.current = setTimeout(() => {
+      wsRefreshFastRef.current = setTimeout(() => {
         load({ silent: true });
-      }, 180);
+      }, 120);
+
+      wsRefreshSlowRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 900);
     };
 
     const handleGridUpdated = (payload = {}) => {
@@ -380,9 +384,13 @@ export default function WaiterTablesGrid() {
     echo.channel(channelName).listen(".table.grid.updated", handleGridUpdated);
 
     return () => {
-      if (wsRefreshTimerRef.current) {
-        clearTimeout(wsRefreshTimerRef.current);
-        wsRefreshTimerRef.current = null;
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
       }
 
       echo.leaveChannel(channelName);
@@ -395,8 +403,11 @@ export default function WaiterTablesGrid() {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
-      if (wsRefreshTimerRef.current) {
-        clearTimeout(wsRefreshTimerRef.current);
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+      }
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
       }
     };
   }, []);
@@ -1169,9 +1180,6 @@ export default function WaiterTablesGrid() {
                 !!t?.actions?.can_start_payment &&
                 (orderStatus === "open" || orderStatus === "ready");
 
-              // IMPORTANTE:
-              // - llamada abierta sin dueño => todos pueden atender
-              // - llamada/orden con dueño ajeno => nadie más ve botones
               const safeCanAttend =
                 isCalling &&
                 canAttend &&

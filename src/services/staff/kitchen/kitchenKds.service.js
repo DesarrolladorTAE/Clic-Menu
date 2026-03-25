@@ -9,23 +9,47 @@ import staffApi from "../../staffApi";
  * - notifyReady (aviso a mesero)
  */
 
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-cache, no-store, must-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 export async function fetchKitchenKdsOrders(params = {}) {
-  // params: { include_ready_items?: 0|1 }
-  const res = await staffApi.get(`/staff/kitchen/kds/orders`, { params });
+  const res = await staffApi.get(`/staff/kitchen/kds/orders`, {
+    params: {
+      ...params,
+      _t: Date.now(), // rompe caché
+    },
+    headers: NO_CACHE_HEADERS,
+  });
+
   return res?.data;
 }
 
 export async function startKitchenItem(itemId) {
-  const res = await staffApi.post(`/staff/kitchen/kds/order-items/${itemId}/start`);
+  const res = await staffApi.post(
+    `/staff/kitchen/kds/order-items/${itemId}/start`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
   return res?.data;
 }
 
 export async function readyKitchenItem(itemId) {
-  const res = await staffApi.post(`/staff/kitchen/kds/order-items/${itemId}/ready`);
+  const res = await staffApi.post(
+    `/staff/kitchen/kds/order-items/${itemId}/ready`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
   return res?.data;
 }
 
 export async function notifyKitchenOrderReady(orderId) {
-  const res = await staffApi.post(`/staff/kitchen/kds/orders/${orderId}/notify-ready`);
+  const res = await staffApi.post(
+    `/staff/kitchen/kds/orders/${orderId}/notify-ready`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
   return res?.data;
 }
