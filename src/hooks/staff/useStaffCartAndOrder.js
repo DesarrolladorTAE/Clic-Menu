@@ -183,18 +183,23 @@ export function useStaffCartAndOrder({ tableId }) {
     ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
   const loadExisting = useCallback(
-    async ({ orderId } = {}) => {
+    async ({ orderId, force = false } = {}) => {
       const tid = Number(tableId || 0);
       if (!tid) return;
 
       const oIdNum = orderId ? Number(orderId) : null;
 
       if (
+        !force &&
         lastLoadedRef.current.tableId === tid &&
         lastLoadedRef.current.orderId === (oIdNum || null) &&
         (Array.isArray(oldItems) ? oldItems.length : 0) > 0
       ) {
-        return;
+        return {
+          order: activeOrder,
+          items: oldItems,
+          skipped: true,
+        };
       }
 
       lastLoadedRef.current = { tableId: tid, orderId: oIdNum || null };
@@ -220,8 +225,10 @@ export function useStaffCartAndOrder({ tableId }) {
         setOldItems(items);
         return { order: o, items };
       }
+
+      return null;
     },
-    [tableId, oldItems],
+    [tableId, oldItems, activeOrder],
   );
 
   const createFirstOrder = useCallback(
@@ -247,9 +254,9 @@ export function useStaffCartAndOrder({ tableId }) {
         setSendToast("✅ Comanda creada.");
 
         if (orderId) {
-          await loadExisting({ orderId });
+          await loadExisting({ orderId, force: true });
         } else {
-          await loadExisting({});
+          await loadExisting({ force: true });
         }
 
         return { ok: true, orderId };
@@ -269,7 +276,7 @@ export function useStaffCartAndOrder({ tableId }) {
       if (res?.ok) {
         setCart([]);
         setSendToast("✅ Productos agregados a la orden.");
-        await loadExisting({ orderId });
+        await loadExisting({ orderId, force: true });
         return { ok: true };
       }
 

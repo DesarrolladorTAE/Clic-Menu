@@ -1,8 +1,8 @@
 // src/hooks/public/usePublicMenuLoader.js
-// carga del menú + polling cada 15s + manejo de errores públicos (QR desactivado / modo incorrecto)
-// Objetivo: sacar del Page toda la lógica de fetch y refresco silencioso.
+// carga del menú sin polling visible.
+// Ahora la resincronización principal ocurre por WS desde el Page.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   PUBLIC_QR_DISABLED_MSG,
   PUBLIC_QR_WRONG_MODE_MSG,
@@ -17,13 +17,10 @@ export function usePublicMenuLoader({ token }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [data, setData] = useState(null);
 
-  // WEB selector
   const [webChannelId, setWebChannelId] = useState("");
 
-  // ✅ callLocked: si backend dice “CALL_DISABLED_ATTENDED”, se queda bloqueado hasta que payload diga call_waiter_enabled true
   const [callLocked, setCallLocked] = useState(false);
 
-  const pollRef = useRef(null);
   const lastPayloadHashRef = useRef("");
 
   const load = useCallback(
@@ -32,11 +29,11 @@ export function usePublicMenuLoader({ token }) {
         setLoading(true);
         setErrorMsg("");
       }
+
       try {
         const payload = await fetchResolvedMenu(token);
         const normalized = payload;
 
-        // WEB default
         if (String(normalized?.type) === "web") {
           const def = normalized?.default_channel_id
             ? String(normalized.default_channel_id)
@@ -54,20 +51,19 @@ export function usePublicMenuLoader({ token }) {
             : normalized?.sections || [];
 
         const h = safeHash(sectionsForHash);
-        if (h !== lastPayloadHashRef.current) {
-          lastPayloadHashRef.current = h;
-          setData(normalized);
-        } else if (!data) {
-          setData(normalized);
-        }
+        lastPayloadHashRef.current = h;
 
-        // ✅ Si estaba bloqueado el call y backend ya lo habilitó de nuevo, desbloquea
+        // importante:
+        // aunque las sections no cambien, sí queremos refrescar ui/table/flags globales
+        setData(normalized);
+
         if (callLocked) {
           const uiFromPayload =
             normalized?.ui ||
             normalized?.menus_by_channel?.[
               String(normalized?.default_channel_id || "")
             ]?.ui;
+
           if (uiFromPayload && uiFromPayload.call_waiter_enabled === true) {
             setCallLocked(false);
           }
@@ -94,33 +90,8 @@ export function usePublicMenuLoader({ token }) {
         if (!silent) setLoading(false);
       }
     },
-    [token, data, callLocked],
+    [token, callLocked],
   );
-
-  // carga inicial
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  // polling 15s solo cuando la pestaña está visible
-  useEffect(() => {
-    const start = () => {
-      if (pollRef.current) return;
-      pollRef.current = setInterval(() => {
-        if (document.visibilityState === "visible") load({ silent: true });
-      }, 15000);
-    };
-    const stop = () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-    start();
-    return stop;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
 
   return {
     loading,
@@ -131,5 +102,6 @@ export function usePublicMenuLoader({ token }) {
     setWebChannelId,
     callLocked,
     setCallLocked,
+    setLoading,
   };
 }

@@ -31,7 +31,6 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
 
   const [sessionUnavailable, setSessionUnavailable] = useState(null);
 
-  const sessionPollRef = useRef(null);
   const tickRef = useRef(null);
   const heartbeatRef = useRef(null);
 
@@ -46,63 +45,6 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
     if (joinPollRef.current) clearInterval(joinPollRef.current);
     joinPollRef.current = null;
   }, []);
-
-  const startJoinPoll = useCallback(
-    (tid) => {
-      if (!tid) return;
-      if (joinPollRef.current) return;
-
-      joinPollRef.current = setInterval(async () => {
-        try {
-          const res = await getJoinRequestStatus(tid);
-          const st = String(res?.data?.status || "").toLowerCase();
-
-          if (st === "pending") {
-            setJoinReq((p) => ({ ...(p || {}), status: "pending" }));
-            return;
-          }
-
-          if (st === "approved") {
-            setJoinReq({ status: "approved", message: res?.message || "Aprobado." });
-            stopJoinPoll();
-            setTimeout(() => {
-              startScanSession();
-            }, 250);
-            return;
-          }
-
-          if (st === "rejected") {
-            setJoinReq({ status: "rejected", message: res?.message || "No fuiste aprobado." });
-            stopJoinPoll();
-            return;
-          }
-
-          if (st === "closed") {
-            setJoinReq({ status: "closed", message: res?.message || "La sesión ya fue cerrada." });
-            stopJoinPoll();
-            return;
-          }
-
-          setJoinReq({ status: "unavailable", message: res?.message || "No disponible." });
-          stopJoinPoll();
-        } catch (e) {
-          const msg = e?.response?.data?.message || e?.message || "Error consultando aprobación.";
-          const code = String(e?.response?.data?.code || "").toUpperCase();
-          const st = e?.response?.status;
-
-          if (
-            st === 409 &&
-            (code.includes("REJECT") ||
-              String(msg).toLowerCase().includes("no fuiste aprobado"))
-          ) {
-            setJoinReq({ status: "rejected", message: msg });
-            stopJoinPoll();
-          }
-        }
-      }, 1500);
-    },
-    [stopJoinPoll],
-  );
 
   const startScanSession = useCallback(async () => {
     if (!tableId) return;
@@ -180,6 +122,140 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
     }
   }, [tableId, stopJoinPoll]);
 
+  const refreshSession = useCallback(
+    async ({ allowScanFallback = false } = {}) => {
+      if (session?.session_id) {
+        try {
+          const res = await getTableSession(session.session_id);
+          const s = normalizeSessionPayload(res?.data || null);
+
+          if (s?.session_id) {
+            setSession(s);
+            setRemainingSec(Number(s.remaining_seconds || 0));
+          } else {
+            setSession(null);
+            setRemainingSec(0);
+          }
+
+          return { ok: true, session: s };
+        } catch (e) {
+          const status = e?.response?.status;
+          const code = e?.response?.data?.code;
+
+          if (status === 403 && code === "DEVICE_MISMATCH") {
+            setSessionBusy({ session_id: session.session_id, status: "active" });
+            setSession(null);
+            setRemainingSec(0);
+            return { ok: false, reason: "device_mismatch" };
+          }
+
+          if (status === 410) {
+            setSession((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    status: "expired",
+                    remaining_seconds: 0,
+                  }
+                : prev,
+            );
+            setRemainingSec(0);
+            return { ok: false, reason: "expired" };
+          }
+
+          if (allowScanFallback) {
+            await startScanSession();
+            return { ok: true, reason: "fallback_scan" };
+          }
+
+          return { ok: false, reason: "error", error: e };
+        }
+      }
+
+      if (
+        allowScanFallback &&
+        tableId &&
+        hasTable &&
+        String(activeMenuPayload?.type) === "physical"
+      ) {
+        await startScanSession();
+        return { ok: true, reason: "scan" };
+      }
+
+      return { ok: false, reason: "no_session" };
+    },
+    [session?.session_id, tableId, hasTable, activeMenuPayload?.type, startScanSession],
+  );
+
+  const startJoinPoll = useCallback(
+    (tid) => {
+      if (!tid) return;
+      if (joinPollRef.current) return;
+
+      joinPollRef.current = setInterval(async () => {
+        try {
+          const res = await getJoinRequestStatus(tid);
+          const st = String(res?.data?.status || "").toLowerCase();
+
+          if (st === "pending") {
+            setJoinReq((p) => ({ ...(p || {}), status: "pending" }));
+            return;
+          }
+
+          if (st === "approved") {
+            setJoinReq({ status: "approved", message: res?.message || "Aprobado." });
+            stopJoinPoll();
+            setTimeout(() => {
+              startScanSession();
+            }, 250);
+            return;
+          }
+
+          if (st === "rejected") {
+            setJoinReq({
+              status: "rejected",
+              message: res?.message || "No fuiste aprobado.",
+            });
+            stopJoinPoll();
+            return;
+          }
+
+          if (st === "closed") {
+            setJoinReq({
+              status: "closed",
+              message: res?.message || "La sesión ya fue cerrada.",
+            });
+            stopJoinPoll();
+            return;
+          }
+
+          setJoinReq({
+            status: "unavailable",
+            message: res?.message || "No disponible.",
+          });
+          stopJoinPoll();
+        } catch (e) {
+          const msg =
+            e?.response?.data?.message ||
+            e?.message ||
+            "Error consultando aprobación.";
+          const code = String(e?.response?.data?.code || "").toUpperCase();
+          const st = e?.response?.status;
+
+          if (
+            st === 409 &&
+            (code.includes("REJECT") ||
+              String(msg).toLowerCase().includes("no fuiste aprobado"))
+          ) {
+            setJoinReq({ status: "rejected", message: msg });
+            stopJoinPoll();
+          }
+        }
+      }, 1500);
+    },
+    [stopJoinPoll, startScanSession],
+  );
+
   useEffect(() => {
     if (!activeMenuPayload) return;
     if (!hasTable) return;
@@ -202,56 +278,6 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
       tickRef.current = null;
     };
   }, []);
-
-  useEffect(() => {
-    const stop = () => {
-      if (sessionPollRef.current) clearInterval(sessionPollRef.current);
-      sessionPollRef.current = null;
-    };
-
-    if (!session?.session_id) {
-      stop();
-      return;
-    }
-
-    stop();
-
-    sessionPollRef.current = setInterval(async () => {
-      try {
-        const res = await getTableSession(session.session_id);
-        const s = normalizeSessionPayload(res?.data || null);
-        if (!s) return;
-
-        setSession(s);
-        setRemainingSec(Number(s.remaining_seconds || 0));
-      } catch (e) {
-        const status = e?.response?.status;
-        const code = e?.response?.data?.code;
-
-        if (status === 403 && code === "DEVICE_MISMATCH") {
-          setSessionBusy({ session_id: session.session_id, status: "active" });
-          setSession(null);
-          setRemainingSec(0);
-          return;
-        }
-
-        if (status === 410) {
-          setSession((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  status: "expired",
-                  remaining_seconds: 0,
-                }
-              : prev,
-          );
-          setRemainingSec(0);
-        }
-      }
-    }, 10000);
-
-    return stop;
-  }, [session?.session_id]);
 
   useEffect(() => {
     const stop = () => {
@@ -347,6 +373,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
       callToast,
       setCallToast,
       startScanSession,
+      refreshSession,
       takeover,
       joinReq,
       requestJoin,
@@ -364,6 +391,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
       sessionOrderStatus,
       callToast,
       startScanSession,
+      refreshSession,
       takeover,
       joinReq,
       requestJoin,

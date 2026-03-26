@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
+import echo from "../../../realtime/echo";
+
 import { fetchStaffWaiterMenu } from "../../../services/staff/waiter/staffOrders.service";
 
 import { Badge, Modal, PillButton, SkeletonCard } from "../../public/publicMenu.ui";
@@ -45,6 +47,8 @@ export default function StaffMenuEntryPage() {
   const cartOrder = useStaffCartAndOrder({ tableId: Number(tableId) });
   const composite = useCompositeDrafts();
 
+  const realtimeBusyRef = useRef(false);
+
   const header = data?.header || {
     restaurantName: data?.restaurant?.trade_name,
     branchName: data?.branch?.name,
@@ -69,6 +73,7 @@ export default function StaffMenuEntryPage() {
       setLoading(true);
       setErrorMsg("");
     }
+
     try {
       const res = await fetchStaffWaiterMenu(Number(tableId));
       const payload = res?.data ? res.data : res;
@@ -97,8 +102,49 @@ export default function StaffMenuEntryPage() {
     if (!effectiveOrderId) return;
 
     onceRef.current = true;
-    cartOrder.loadExisting({ orderId: effectiveOrderId }).catch(() => {});
+    cartOrder.loadExisting({ orderId: effectiveOrderId, force: true }).catch(() => {});
   }, [effectiveOrderId, cartOrder]);
+
+  const branchId = Number(data?.branch?.id || data?.branch_id || 0);
+
+  useEffect(() => {
+    if (!branchId || !tableId) return;
+
+    const currentTableId = Number(tableId);
+    const channelName = `branch.${branchId}.tables`;
+    const channel = echo.channel(channelName);
+
+    const onTableUpdated = async (event) => {
+      const eventTableId = Number(event?.table_id || 0);
+      if (!eventTableId || eventTableId !== currentTableId) return;
+
+      if (realtimeBusyRef.current) return;
+      realtimeBusyRef.current = true;
+
+      try {
+        await load({ silent: true }).catch(() => {});
+
+        const incomingOrderId = Number(event?.order_id || 0);
+        const activeOrderId = Number(cartOrder?.activeOrder?.id || 0);
+        const targetOrderId =
+          incomingOrderId || activeOrderId || Number(effectiveOrderId || 0);
+
+        if (targetOrderId) {
+          await cartOrder.loadExisting({ orderId: targetOrderId, force: true }).catch(() => {});
+        } else {
+          await cartOrder.loadExisting({ force: true }).catch(() => {});
+        }
+      } finally {
+        realtimeBusyRef.current = false;
+      }
+    };
+
+    channel.listen(".table.grid.updated", onTableUpdated);
+
+    return () => {
+      echo.leave(channelName);
+    };
+  }, [branchId, tableId, cartOrder, effectiveOrderId]);
 
   const canSelect = true;
   const canAppend = cartOrder.canAppend;
@@ -320,6 +366,7 @@ export default function StaffMenuEntryPage() {
         }
         badges={[
           { tone: "dark", label: "🧑‍🍳 Staff" },
+          { tone: "dark", label: "⚡ Tiempo real", title: "Este flujo se sincroniza por WebSocket" },
           ...(canAppend ? [{ tone: "ok", label: "Orden abierta", title: "Orden abierta: puedes agregar productos" }] : []),
           ...(hasOld
             ? [{ tone: "default", label: `Historial: ${cartOrder.oldItems.length}`, title: "Items ya enviados" }]

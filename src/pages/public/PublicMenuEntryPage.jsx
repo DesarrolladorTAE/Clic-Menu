@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+
+import echo from "../../realtime/echo";
 
 import {
   callWaiterByTable,
@@ -36,6 +38,8 @@ import CompositeProductModal from "../../components/menu/shared/CompositeProduct
 import ProductExtrasModal from "../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../components/menu/shared/MenuCartPanel";
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
 
@@ -57,6 +61,7 @@ export default function PublicMenuEntryPage() {
     setWebChannelId,
     callLocked,
     setCallLocked,
+    setLoading,
   } = usePublicMenuLoader({ token });
 
   const composite = useCompositeDrafts();
@@ -109,6 +114,23 @@ export default function PublicMenuEntryPage() {
   });
 
   useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        if (mounted) setLoading(true);
+        await load();
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (!isWeb) return;
     cartOrder.resetOnChannelChange?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +150,14 @@ export default function PublicMenuEntryPage() {
   const [billToast, setBillToast] = useState("");
 
   const lastLoadedOrderIdRef = useRef(null);
+
+  const sessionRealtimeRunningRef = useRef(false);
+  const sessionRealtimeQueuedRef = useRef(false);
+  const sessionRealtimeEventRef = useRef(null);
+
+  const orderRealtimeRunningRef = useRef(false);
+  const orderRealtimeQueuedRef = useRef(false);
+  const orderRealtimeEventRef = useRef(null);
 
   useEffect(() => {
     const sessionOrderId = Number(qr?.session?.order_id || 0);
@@ -149,7 +179,225 @@ export default function PublicMenuEntryPage() {
 
   useEffect(() => {
     cartOrder.syncOrderStatusFromSession?.(qr.sessionOrderStatus)?.catch?.(() => {});
-  }, [qr.sessionOrderStatus, cartOrder]);
+  }, [qr.sessionOrderStatus, cartOrder.syncOrderStatusFromSession]);
+
+  const publicSessionChannelId = useMemo(() => {
+    return Number(
+      qr?.session?.session_id ||
+        qr?.takeover?.session_id ||
+        qr?.sessionBusy?.session_id ||
+        0,
+    );
+  }, [qr?.session?.session_id, qr?.takeover?.session_id, qr?.sessionBusy?.session_id]);
+
+  const publicOrderChannelId = useMemo(() => {
+    return Number(
+      cartOrder?.activeOrder?.id ||
+        cartOrder?.pendingOrder?.id ||
+        qr?.session?.order_id ||
+        qr?.takeover?.order_id ||
+        0,
+    );
+  }, [
+    cartOrder?.activeOrder?.id,
+    cartOrder?.pendingOrder?.id,
+    qr?.session?.order_id,
+    qr?.takeover?.order_id,
+  ]);
+
+  const refreshOrderWithRetry = async (orderId, tries = 3) => {
+    for (let i = 0; i < tries; i += 1) {
+      const res = await cartOrder.refreshOrder?.(orderId).catch(() => null);
+      if (res?.order || res?.items) return res;
+      if (i < tries - 1) await sleep(220);
+    }
+    return null;
+  };
+
+  const getBestKnownOrderId = () => {
+    return Number(
+      cartOrder?.currentOrderId ||
+        cartOrder?.activeOrder?.id ||
+        cartOrder?.pendingOrder?.id ||
+        qr?.session?.order_id ||
+        qr?.takeover?.order_id ||
+        lastLoadedOrderIdRef.current ||
+        0,
+    );
+  };
+
+  const refreshOrderAndMenuFromAnySource = async (incomingOrderId = 0) => {
+    let resolvedOrderId = Number(incomingOrderId || 0);
+
+    const sessionRes = await qr
+      .refreshSession?.({ allowScanFallback: true })
+      .catch(() => null);
+
+    resolvedOrderId = Number(
+      resolvedOrderId ||
+        sessionRes?.session?.order_id ||
+        qr?.session?.order_id ||
+        qr?.takeover?.order_id ||
+        cartOrder?.currentOrderId ||
+        0,
+    );
+
+    if (resolvedOrderId) {
+      lastLoadedOrderIdRef.current = resolvedOrderId;
+      await refreshOrderWithRetry(resolvedOrderId, 5);
+    }
+
+    await load({ silent: true }).catch(() => {});
+
+    return resolvedOrderId;
+  };
+
+
+  useEffect(() => {
+    if (!publicSessionChannelId) return;
+
+    const channelName = `public.session.${publicSessionChannelId}`;
+    const channel = echo.channel(channelName);
+
+    const processSessionRealtime = async () => {
+      if (sessionRealtimeRunningRef.current) {
+        sessionRealtimeQueuedRef.current = true;
+        return;
+      }
+
+      sessionRealtimeRunningRef.current = true;
+
+      try {
+        const event = sessionRealtimeEventRef.current || {};
+        sessionRealtimeEventRef.current = null;
+
+        const reason = String(event?.reason || "").toLowerCase();
+
+        if (reason === "waiter_call_attended") {
+          setCallLocked(true);
+        }
+
+        if (
+          [
+            "waiter_call_rejected",
+            "waiter_attention_finished",
+            "session_released",
+            "session_closed_after_payment",
+          ].includes(reason)
+        ) {
+          setCallLocked(false);
+        }
+
+        let incomingOrderId = Number(event?.order_id || 0);
+
+        if (!incomingOrderId) {
+          incomingOrderId = getBestKnownOrderId();
+        }
+
+        if (incomingOrderId) {
+          cartOrder.applyRealtimeOrderReason?.(reason, incomingOrderId);
+        }
+
+        const resolvedOrderId = await refreshOrderAndMenuFromAnySource(incomingOrderId);
+
+        if (resolvedOrderId) {
+          cartOrder.applyRealtimeOrderReason?.(reason, resolvedOrderId);
+          await refreshOrderWithRetry(resolvedOrderId, 5);
+        }
+
+        await load({ silent: true }).catch(() => {});
+      } finally {
+        sessionRealtimeRunningRef.current = false;
+
+        if (sessionRealtimeQueuedRef.current || sessionRealtimeEventRef.current) {
+          sessionRealtimeQueuedRef.current = false;
+          processSessionRealtime();
+        }
+      }
+    };
+
+    const onSessionUpdated = (event) => {
+      sessionRealtimeEventRef.current = event || {};
+      processSessionRealtime();
+    };
+
+    channel.listen(".public.session.updated", onSessionUpdated);
+
+    return () => {
+      echo.leave(channelName);
+    };
+  }, [
+    publicSessionChannelId,
+    load,
+    qr?.refreshSession,
+    qr?.session?.order_id,
+    qr?.takeover?.order_id,
+    cartOrder?.currentOrderId,
+    cartOrder?.activeOrder?.id,
+    cartOrder?.pendingOrder?.id,
+    cartOrder?.applyRealtimeOrderReason,
+    cartOrder?.refreshOrder,
+    setCallLocked,
+  ]);
+
+  useEffect(() => {
+    if (!publicOrderChannelId) return;
+
+    const channelName = `public.order.${publicOrderChannelId}`;
+    const channel = echo.channel(channelName);
+
+    const processOrderRealtime = async () => {
+      if (orderRealtimeRunningRef.current) {
+        orderRealtimeQueuedRef.current = true;
+        return;
+      }
+
+      orderRealtimeRunningRef.current = true;
+
+      try {
+        const event = orderRealtimeEventRef.current || {};
+        orderRealtimeEventRef.current = null;
+
+        const orderId = Number(
+          event?.order_id || publicOrderChannelId || getBestKnownOrderId() || 0,
+        );
+        if (!orderId) return;
+
+        const reason = String(event?.reason || "").toLowerCase();
+
+        cartOrder.applyRealtimeOrderReason?.(reason, orderId);
+
+        lastLoadedOrderIdRef.current = orderId;
+        await refreshOrderWithRetry(orderId, 5);
+
+        await load({ silent: true }).catch(() => {});
+      } finally {
+        orderRealtimeRunningRef.current = false;
+
+        if (orderRealtimeQueuedRef.current || orderRealtimeEventRef.current) {
+          orderRealtimeQueuedRef.current = false;
+          processOrderRealtime();
+        }
+      }
+    };
+
+    const onOrderUpdated = (event) => {
+      orderRealtimeEventRef.current = event || {};
+      processOrderRealtime();
+    };
+
+    channel.listen(".public.order.updated", onOrderUpdated);
+
+    return () => {
+      echo.leave(channelName);
+    };
+  }, [
+    publicOrderChannelId,
+    cartOrder?.applyRealtimeOrderReason,
+    cartOrder?.refreshOrder,
+    cartOrder?.currentOrderId,
+    load,
+  ]);
 
   const allowBaseSend =
     canSelect &&
@@ -416,8 +664,8 @@ export default function PublicMenuEntryPage() {
     },
     {
       tone: "dark",
-      label: "🔁 Auto",
-      title: "Se actualiza cada 15s si la pestaña está visible",
+      label: "⚡ Tiempo real",
+      title: "Este flujo se sincroniza por WebSocket sin recargar toda la pantalla",
     },
   ];
 
