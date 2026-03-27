@@ -70,7 +70,7 @@ import RestaurantPlans from "../pages/owner/RestaurantPlans";
 import BranchQrCodesPage from "../pages/floor/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 
-
+import TestEventPage from "../realtime/TestEventPage";
 //PRUEBAAAS
 import MyRestaurantsHome from "../pages/restaurant/MyRestaurantsHome";
 
@@ -82,6 +82,7 @@ export default function AppRoutes() {
 
       <Route path="/test-mui" element={<TestMui />} />
       <Route path="/ws-test" element={<WebsocketSmokeTest />} />
+      <Route path="/test-event" element={<TestEventPage />} />
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />
