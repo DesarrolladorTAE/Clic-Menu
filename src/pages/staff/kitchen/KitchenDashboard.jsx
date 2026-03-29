@@ -333,7 +333,7 @@ export default function KitchenDashboard() {
       }
     };
 
-    echo.channel(channelName).listen(".kitchen.kds.updated", handleKitchenUpdated);
+    echo.private(channelName).listen(".kitchen.kds.updated", handleKitchenUpdated);
 
     return () => {
       if (wsRefreshFastRef.current) {

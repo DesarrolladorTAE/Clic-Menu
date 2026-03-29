@@ -112,7 +112,7 @@ export default function StaffMenuEntryPage() {
 
     const currentTableId = Number(tableId);
     const channelName = `branch.${branchId}.tables`;
-    const channel = echo.channel(channelName);
+    const channel = echo.private(channelName);
 
     const onTableUpdated = async (event) => {
       const eventTableId = Number(event?.table_id || 0);

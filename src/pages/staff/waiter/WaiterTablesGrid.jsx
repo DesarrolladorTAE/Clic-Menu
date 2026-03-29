@@ -381,7 +381,7 @@ export default function WaiterTablesGrid() {
       }
     };
 
-    echo.channel(channelName).listen(".table.grid.updated", handleGridUpdated);
+    echo.private(channelName).listen(".table.grid.updated", handleGridUpdated);
 
     return () => {
       if (wsRefreshFastRef.current) {
