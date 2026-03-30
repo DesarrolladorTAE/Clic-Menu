@@ -130,6 +130,79 @@ function recalcOrderDerived(order, includeReady) {
   };
 }
 
+function groupItemModifiers(modifiers) {
+  const arr = Array.isArray(modifiers) ? modifiers : [];
+  const map = new Map();
+
+  arr.forEach((m) => {
+    const groupName = String(m?.group_name_snapshot || "Extras").trim() || "Extras";
+    const itemName = String(m?.name_snapshot || "Modificador").trim() || "Modificador";
+    const qty = Number(m?.quantity || 1);
+
+    if (!map.has(groupName)) {
+      map.set(groupName, []);
+    }
+
+    map.get(groupName).push({
+      id: m?.id || `${groupName}-${itemName}`,
+      name: itemName,
+      quantity: qty > 0 ? qty : 1,
+    });
+  });
+
+  return Array.from(map.entries()).map(([groupName, items]) => ({
+    groupName,
+    items,
+  }));
+}
+
+function modifierLabel(mod) {
+  const qty = Number(mod?.quantity || 1);
+  return qty > 1 ? `${mod?.name} x${qty}` : `${mod?.name}`;
+}
+
+function buildKitchenItemsView(items = []) {
+  const arr = Array.isArray(items) ? items : [];
+  const independent = [];
+  const compositeMap = new Map();
+
+  arr.forEach((item) => {
+    const parentId = Number(item?.parent_order_item_id || 0);
+
+    if (!parentId) {
+      independent.push({
+        type: "single",
+        item,
+      });
+      return;
+    }
+
+    if (!compositeMap.has(parentId)) {
+      compositeMap.set(parentId, {
+        type: "composite",
+        parentId,
+        items: [],
+      });
+    }
+
+    compositeMap.get(parentId).items.push(item);
+  });
+
+  const composites = Array.from(compositeMap.values()).sort((a, b) => a.parentId - b.parentId);
+
+  const combined = [...independent, ...composites];
+
+  combined.sort((a, b) => {
+    const getFirstId = (entry) => {
+      if (entry?.type === "single") return Number(entry?.item?.id || 0);
+      return Number(entry?.items?.[0]?.id || 0);
+    };
+    return getFirstId(a) - getFirstId(b);
+  });
+
+  return combined;
+}
+
 export default function KitchenDashboard() {
   const nav = useNavigate();
   const { clearStaff, exitSmart } = useStaffAuth();
@@ -268,7 +341,6 @@ export default function KitchenDashboard() {
     };
   }, [loadContext, loadOrders]);
 
-  // Fallback: respaldo, no protagonista.
   useEffect(() => {
     const startPolling = () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -308,12 +380,10 @@ export default function KitchenDashboard() {
       if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
       if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
 
-      // Primer refresh rápido
       wsRefreshFastRef.current = setTimeout(() => {
         loadOrders({ silent: true });
       }, 120);
 
-      // Segundo refresh de confirmación
       wsRefreshSlowRef.current = setTimeout(() => {
         loadOrders({ silent: true });
       }, 900);
@@ -561,6 +631,7 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
   const canNotifyReady = !!order?.actions?.can_notify_ready;
   const readyNoticeSent = !!order?.ready_notice_sent;
   const hasVisibleItems = items.length > 0;
+  const groupedView = useMemo(() => buildKitchenItemsView(items), [items]);
 
   const elapsed = formatElapsed(order?.created_at);
 
@@ -595,16 +666,31 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
 
       <div style={ticketBody}>
         {hasVisibleItems ? (
-          items.map((it) => (
-            <ItemRow
-              key={it.id}
-              item={it}
-              onStart={onStart}
-              onReady={onReady}
-              busy={busy}
-              itemBusyState={busyItemIds?.[it.id] || null}
-            />
-          ))
+          groupedView.map((entry, idx) => {
+            if (entry?.type === "single") {
+              return (
+                <ItemRow
+                  key={`single-${entry?.item?.id || idx}`}
+                  item={entry.item}
+                  onStart={onStart}
+                  onReady={onReady}
+                  busy={busy}
+                  itemBusyState={busyItemIds?.[entry?.item?.id] || null}
+                />
+              );
+            }
+
+            return (
+              <CompositeGroupCard
+                key={`composite-${entry?.parentId || idx}`}
+                group={entry}
+                onStart={onStart}
+                onReady={onReady}
+                busy={busy}
+                busyItemIds={busyItemIds}
+              />
+            );
+          })
         ) : readyNoticeSent ? (
           <div style={emptyItemsBox}>
             <div style={emptyItemsTitle}>Esperando confirmación del mesero</div>
@@ -659,7 +745,38 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
   );
 }
 
-function ItemRow({ item, onStart, onReady, busy, itemBusyState }) {
+function CompositeGroupCard({ group, onStart, onReady, busy, busyItemIds }) {
+  const items = Array.isArray(group?.items) ? group.items : [];
+  if (!items.length) return null;
+
+  return (
+    <div style={compositeGroupWrap}>
+      <div style={compositeGroupHeader}>
+        <div style={compositeGroupTitle}>Producto compuesto</div>
+        <div style={compositeGroupSub}>
+          Agrupado por padre #{group?.parentId || "—"}
+        </div>
+      </div>
+
+      <div style={compositeGroupBody}>
+        {items.map((item) => (
+          <div key={item.id} style={compositeChildRow}>
+            <ItemRow
+              item={item}
+              onStart={onStart}
+              onReady={onReady}
+              busy={busy}
+              itemBusyState={busyItemIds?.[item.id] || null}
+              compact
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ItemRow({ item, onStart, onReady, busy, itemBusyState, compact = false }) {
   const st = String(item?.kitchen_status || "");
   const canStart = st === "queued";
   const canReady = st === "in_progress";
@@ -670,9 +787,16 @@ function ItemRow({ item, onStart, onReady, busy, itemBusyState }) {
 
   const notes = prettyNotes(item?.notes);
   const itemStatusEs = tItemStatus(st);
+  const groupedModifiers = groupItemModifiers(item?.modifiers);
 
   return (
-    <div style={ticketItemRow}>
+    <div
+      style={{
+        ...ticketItemRow,
+        borderTop: compact ? "none" : ticketItemRow.borderTop,
+        padding: compact ? "6px 0" : ticketItemRow.padding,
+      }}
+    >
       <div style={ticketLeft}>
         <div style={ticketItemTop}>
           <span style={qtyDot}>{item?.quantity ?? 1}</span>
@@ -707,13 +831,25 @@ function ItemRow({ item, onStart, onReady, busy, itemBusyState }) {
           </div>
         </div>
 
-        {Array.isArray(item?.modifiers) && item.modifiers.length ? (
-          <div style={ticketModifiers}>
-            {item.modifiers.map((m, idx) => (
-              <span key={idx} style={chipModifier}>
-                {String(m?.name || m || "").trim() || "—"}
-              </span>
-            ))}
+        {groupedModifiers.length ? (
+          <div style={ticketModifiersBlock}>
+            <div style={ticketModifiersTitle}>Modificadores</div>
+
+            <div style={ticketModifierGroups}>
+              {groupedModifiers.map((group) => (
+                <div key={group.groupName} style={ticketModifierGroupCard}>
+                  <div style={ticketModifierGroupName}>{group.groupName}</div>
+
+                  <div style={ticketModifiers}>
+                    {group.items.map((m) => (
+                      <span key={m.id} style={chipModifier}>
+                        {modifierLabel(m)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
@@ -1029,8 +1165,41 @@ const metaDot = {
   opacity: 0.8,
 };
 
+const ticketModifiersBlock = {
+  marginTop: 10,
+  display: "grid",
+  gap: 8,
+};
+
+const ticketModifiersTitle = {
+  fontSize: 11,
+  fontWeight: 1000,
+  letterSpacing: 0.2,
+  color: "#92400e",
+  textTransform: "uppercase",
+};
+
+const ticketModifierGroups = {
+  display: "grid",
+  gap: 8,
+};
+
+const ticketModifierGroupCard = {
+  display: "grid",
+  gap: 6,
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid #fde68a",
+  background: "#fffbeb",
+};
+
+const ticketModifierGroupName = {
+  fontSize: 11,
+  fontWeight: 1000,
+  color: "#92400e",
+};
+
 const ticketModifiers = {
-  marginTop: 8,
   display: "flex",
   gap: 6,
   flexWrap: "wrap",
@@ -1041,9 +1210,49 @@ const chipModifier = {
   fontWeight: 900,
   padding: "3px 8px",
   borderRadius: 999,
-  border: "1px solid #fde68a",
-  background: "#fffbeb",
+  border: "1px solid #fcd34d",
+  background: "#fff",
   color: "#92400e",
+};
+
+const compositeGroupWrap = {
+  marginTop: 10,
+  border: "1px solid rgba(249, 168, 37, 0.35)",
+  borderRadius: 14,
+  background: "rgba(255, 247, 237, 0.75)",
+  overflow: "hidden",
+};
+
+const compositeGroupHeader = {
+  padding: "10px 12px",
+  borderBottom: "1px solid rgba(249, 168, 37, 0.22)",
+  background: "rgba(254, 243, 199, 0.7)",
+};
+
+const compositeGroupTitle = {
+  fontSize: 12,
+  fontWeight: 1000,
+  color: "#9a3412",
+  textTransform: "uppercase",
+  letterSpacing: 0.25,
+};
+
+const compositeGroupSub = {
+  marginTop: 4,
+  fontSize: 11,
+  color: "#92400e",
+  opacity: 0.8,
+};
+
+const compositeGroupBody = {
+  padding: "4px 12px 10px",
+  display: "grid",
+  gap: 8,
+};
+
+const compositeChildRow = {
+  borderTop: "1px dashed rgba(249, 168, 37, 0.22)",
+  paddingTop: 8,
 };
 
 const ticketRight = {

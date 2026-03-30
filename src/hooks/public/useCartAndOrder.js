@@ -1,4 +1,3 @@
-// src/hooks/public/useCartAndOrder.js
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendPublicOrderItems,
@@ -8,6 +7,7 @@ import {
 import {
   buildCartKey,
   normalizeCompositeComponentsForKey,
+  normalizeModifierGroupsForKey,
   safeNum,
 } from "./publicMenu.utils";
 
@@ -22,12 +22,38 @@ function normalizeItemsForApi(cart) {
       notes: it.notes ? String(it.notes).slice(0, 500) : null,
     };
 
-    if (Array.isArray(it.components) && it.components.length > 0) {
-      out.components = normalizeCompositeComponentsForKey(it.components).map((c) => ({
-        component_product_id: Number(c.component_product_id),
-        variant_id: c.variant_id ? Number(c.variant_id) : null,
-        quantity: c.quantity == null ? null : Number(c.quantity),
+    const parentModifiers = normalizeModifierGroupsForKey(it?.modifiers || []);
+    if (parentModifiers.length > 0) {
+      out.modifiers = parentModifiers.map((g) => ({
+        ...g,
+        options: g.options.map((o) => ({
+          modifier_option_id: Number(o.modifier_option_id),
+          quantity: Number(o.quantity || 1),
+        })),
       }));
+    }
+
+    if (Array.isArray(it.components) && it.components.length > 0) {
+      out.components = normalizeCompositeComponentsForKey(it.components).map((c) => {
+        const componentPayload = {
+          component_product_id: Number(c.component_product_id),
+          variant_id: c.variant_id ? Number(c.variant_id) : null,
+          quantity: c.quantity == null ? null : Number(c.quantity),
+        };
+
+        const componentModifiers = normalizeModifierGroupsForKey(c?.modifiers || []);
+        if (componentModifiers.length > 0) {
+          componentPayload.modifiers = componentModifiers.map((g) => ({
+            ...g,
+            options: g.options.map((o) => ({
+              modifier_option_id: Number(o.modifier_option_id),
+              quantity: Number(o.quantity || 1),
+            })),
+          }));
+        }
+
+        return componentPayload;
+      });
     }
 
     return out;
@@ -123,6 +149,9 @@ export function useCartAndOrder({
           components: nextItem.components ?? next[idx].components ?? [],
           components_detail:
             nextItem.components_detail ?? next[idx].components_detail ?? [],
+          modifiers: nextItem.modifiers ?? next[idx].modifiers ?? [],
+          modifier_groups_display:
+            nextItem.modifier_groups_display ?? next[idx].modifier_groups_display ?? [],
         };
         return next;
       }
@@ -131,14 +160,21 @@ export function useCartAndOrder({
     });
   }
 
-  function addToCartFromProduct(p, componentsOverride = [], componentsDetailOverride = []) {
+  function addToCartFromProduct(
+    p,
+    componentsOverride = [],
+    componentsDetailOverride = [],
+    modifiersOverride = [],
+    modifierGroupsDisplayOverride = [],
+  ) {
     if (String(activeOrder?.status || "").toLowerCase() === "paying") return;
 
     const pid = Number(p?.id);
     if (!pid) return;
 
     const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
-    const key = buildCartKey(pid, null, normalizedComponents);
+    const normalizedModifiers = normalizeModifierGroupsForKey(modifiersOverride);
+    const key = buildCartKey(pid, null, normalizedComponents, normalizedModifiers);
     const isComposite = String(p?.product_type || "simple") === "composite";
 
     upsertCartItem({
@@ -157,10 +193,21 @@ export function useCartAndOrder({
           ? componentsDetailOverride
           : []
         : [],
+      modifiers: normalizedModifiers,
+      modifier_groups_display: Array.isArray(modifierGroupsDisplayOverride)
+        ? modifierGroupsDisplayOverride
+        : [],
     });
   }
 
-  function addToCartFromVariant(p, v, componentsOverride = [], componentsDetailOverride = []) {
+  function addToCartFromVariant(
+    p,
+    v,
+    componentsOverride = [],
+    componentsDetailOverride = [],
+    modifiersOverride = [],
+    modifierGroupsDisplayOverride = [],
+  ) {
     if (String(activeOrder?.status || "").toLowerCase() === "paying") return;
 
     const pid = Number(p?.id);
@@ -168,7 +215,8 @@ export function useCartAndOrder({
     if (!pid || !vid) return;
 
     const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
-    const key = buildCartKey(pid, vid, normalizedComponents);
+    const normalizedModifiers = normalizeModifierGroupsForKey(modifiersOverride);
+    const key = buildCartKey(pid, vid, normalizedComponents, normalizedModifiers);
     const isComposite = String(p?.product_type || "simple") === "composite";
 
     upsertCartItem({
@@ -186,6 +234,10 @@ export function useCartAndOrder({
         ? Array.isArray(componentsDetailOverride)
           ? componentsDetailOverride
           : []
+        : [],
+      modifiers: normalizedModifiers,
+      modifier_groups_display: Array.isArray(modifierGroupsDisplayOverride)
+        ? modifierGroupsDisplayOverride
         : [],
     });
   }

@@ -102,6 +102,110 @@ export function safeHash(obj) {
   }
 }
 
+export function makeComponentModifierKey(componentProductId, componentVariantId = null) {
+  return `${Number(componentProductId || 0)}:${componentVariantId ? Number(componentVariantId) : 0}`;
+}
+
+export function getModifierSelectionCount(group, selectedMap = {}) {
+  const mode = String(group?.selection_mode || "").toLowerCase();
+  const values = Object.values(selectedMap || {}).map((v) => Number(v || 0)).filter((v) => v > 0);
+
+  if (!values.length) return 0;
+
+  if (mode === "quantity") {
+    return values.reduce((acc, n) => acc + n, 0);
+  }
+
+  return values.length;
+}
+
+export function normalizeModifierGroupsForKey(groups) {
+  const arr = Array.isArray(groups) ? groups : [];
+
+  return arr
+    .map((g) => ({
+      modifier_group_id: Number(g?.modifier_group_id || g?.id || 0),
+      applies_to_level: String(g?.applies_to_level || "order_item"),
+      component_product_id: g?.component_product_id ? Number(g.component_product_id) : null,
+      component_variant_id: g?.component_variant_id ? Number(g.component_variant_id) : null,
+      options: (Array.isArray(g?.options) ? g.options : [])
+        .map((o) => ({
+          modifier_option_id: Number(o?.modifier_option_id || o?.id || 0),
+          quantity: Number(o?.quantity || 1),
+        }))
+        .filter((o) => o.modifier_option_id > 0 && o.quantity > 0)
+        .sort((a, b) => a.modifier_option_id - b.modifier_option_id),
+    }))
+    .filter((g) => g.modifier_group_id > 0 && g.options.length > 0)
+    .sort((a, b) => {
+      if (a.applies_to_level !== b.applies_to_level) {
+        return String(a.applies_to_level).localeCompare(String(b.applies_to_level));
+      }
+      if (safeNum(a.component_product_id, 0) !== safeNum(b.component_product_id, 0)) {
+        return safeNum(a.component_product_id, 0) - safeNum(b.component_product_id, 0);
+      }
+      if (safeNum(a.component_variant_id, 0) !== safeNum(b.component_variant_id, 0)) {
+        return safeNum(a.component_variant_id, 0) - safeNum(b.component_variant_id, 0);
+      }
+      return a.modifier_group_id - b.modifier_group_id;
+    });
+}
+
+export function buildModifierDisplayGroupsFromApiGroups(groups) {
+  const arr = Array.isArray(groups) ? groups : [];
+  const map = {};
+
+  arr.forEach((group) => {
+    const groupName = String(group?.group_name_snapshot || group?.name || "Extras");
+    const appliesToLevel = String(group?.applies_to_level || "order_item");
+    const componentProductId = group?.component_product_id ? Number(group.component_product_id) : null;
+    const componentVariantId = group?.component_variant_id ? Number(group.component_variant_id) : null;
+
+    const key = [
+      groupName,
+      appliesToLevel,
+      componentProductId || 0,
+      componentVariantId || 0,
+    ].join("|");
+
+    if (!map[key]) {
+      map[key] = {
+        group_name: groupName,
+        applies_to_level: appliesToLevel,
+        component_product_id: componentProductId,
+        component_variant_id: componentVariantId,
+        context_label: group?.context_label || null,
+        context_source: group?.context_source || null,
+        group_total: 0,
+        options: [],
+      };
+    }
+
+    const opts = Array.isArray(group?.options) ? group.options : [];
+    opts.forEach((opt) => {
+      const totalPrice = Number(opt?.total_price || 0);
+
+      map[key].options.push({
+        id: Number(opt?.id || 0),
+        modifier_group_id: Number(opt?.modifier_group_id || group?.modifier_group_id || group?.id || 0),
+        modifier_option_id: Number(opt?.modifier_option_id || opt?.id || 0),
+        name: String(opt?.name || opt?.name_snapshot || "Extra"),
+        quantity: Number(opt?.quantity || 1),
+        unit_price: Number(opt?.unit_price || 0),
+        total_price: totalPrice,
+        affects_total: !!opt?.affects_total,
+      });
+
+      map[key].group_total = Number(map[key].group_total || 0) + totalPrice;
+    });
+  });
+
+  return Object.values(map).map((g) => ({
+    ...g,
+    group_total: Math.round(Number(g.group_total || 0) * 100) / 100,
+  }));
+}
+
 export function normalizeCompositeComponentsForKey(components) {
   const arr = Array.isArray(components) ? components : [];
   return arr
@@ -112,21 +216,37 @@ export function normalizeCompositeComponentsForKey(components) {
         c?.quantity == null || c?.quantity === ""
           ? null
           : Number(c.quantity),
+      modifiers: normalizeModifierGroupsForKey(c?.modifiers || []),
     }))
     .filter((c) => c.component_product_id > 0)
     .sort((a, b) => {
       if (a.component_product_id !== b.component_product_id) {
         return a.component_product_id - b.component_product_id;
       }
-      return safeNum(a.variant_id, 0) - safeNum(b.variant_id, 0);
+      if (safeNum(a.variant_id, 0) !== safeNum(b.variant_id, 0)) {
+        return safeNum(a.variant_id, 0) - safeNum(b.variant_id, 0);
+      }
+
+      return safeHash(a.modifiers).localeCompare(safeHash(b.modifiers));
     });
 }
 
-export function buildCartKey(productId, variantId, components = []) {
+export function buildCartKey(productId, variantId, components = [], modifiers = []) {
   const base = makeKey(productId, variantId);
-  const normalized = normalizeCompositeComponentsForKey(components);
-  if (!normalized.length) return base;
-  return `${base}:c:${safeHash(normalized)}`;
+  const normalizedComponents = normalizeCompositeComponentsForKey(components);
+  const normalizedModifiers = normalizeModifierGroupsForKey(modifiers);
+
+  const chunks = [base];
+
+  if (normalizedComponents.length) {
+    chunks.push(`c:${safeHash(normalizedComponents)}`);
+  }
+
+  if (normalizedModifiers.length) {
+    chunks.push(`m:${safeHash(normalizedModifiers)}`);
+  }
+
+  return chunks.join(":");
 }
 
 export function formatComponentDetailLabel(detail) {
@@ -169,6 +289,7 @@ export function buildCompositeDetailsFromDraft(product, draftRows = []) {
         is_optional: !!r.is_optional,
         allow_variant: !!r.allow_variant,
         apply_variant_price: !!r.apply_variant_price,
+        modifier_groups_display: [],
       };
     });
 }
@@ -239,8 +360,13 @@ export function hasAnyModifierGroups(product) {
   return false;
 }
 
-export function buildModifierContextSections(product) {
+export function buildModifierContextSections(product, opts = {}) {
   if (!product || typeof product !== "object") return [];
+
+  const {
+    variantId = null,
+    compositeDraft = null,
+  } = opts || {};
 
   const sections = [];
   const title = product?.display_name || product?.name || "Producto";
@@ -257,6 +383,7 @@ export function buildModifierContextSections(product) {
 
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   variants.forEach((variant, idx) => {
+    if (variantId != null && Number(variant?.id) !== Number(variantId)) return;
     if (!hasGroups(variant?.modifier_groups)) return;
 
     sections.push({
@@ -273,6 +400,14 @@ export function buildModifierContextSections(product) {
     ? product.composite.items
     : [];
 
+  const draftMap = Array.isArray(compositeDraft)
+    ? compositeDraft.reduce((acc, row) => {
+        const cid = Number(row?.component_product_id || 0);
+        if (cid > 0) acc[cid] = row;
+        return acc;
+      }, {})
+    : {};
+
   compositeItems.forEach((item, idx) => {
     const itemLabel =
       item?.component_product?.display_name ||
@@ -280,9 +415,16 @@ export function buildModifierContextSections(product) {
       item?.name ||
       `Componente ${idx + 1}`;
 
+    const componentProductId = Number(item?.component_product_id || 0);
+    const draftRow = draftMap[componentProductId] || null;
+
+    if (compositeDraft && draftRow && draftRow.included === false) {
+      return;
+    }
+
     if (hasGroups(item?.modifier_groups)) {
       sections.push({
-        key: `component-${product?.id || "x"}-${item?.component_product_id || idx}`,
+        key: `component-${product?.id || "x"}-${componentProductId || idx}`,
         context_type: "component",
         title: "Extras por componente",
         subtitle: `${title} · ${itemLabel}`,
@@ -298,14 +440,22 @@ export function buildModifierContextSections(product) {
     options.forEach((option, optionIdx) => {
       if (!hasGroups(option?.modifier_groups)) return;
 
+      const optionVariantId = Number(option?.variant_id || 0);
       const optionLabel =
         option?.label ||
         option?.name ||
         option?.variant_name ||
         `Variante ${optionIdx + 1}`;
 
+      if (compositeDraft) {
+        const selectedVariantId = draftRow?.variant_id ? Number(draftRow.variant_id) : null;
+        if (!selectedVariantId || selectedVariantId !== optionVariantId) {
+          return;
+        }
+      }
+
       sections.push({
-        key: `component-variant-${product?.id || "x"}-${item?.component_product_id || idx}-${option?.variant_id || optionIdx}`,
+        key: `component-variant-${product?.id || "x"}-${componentProductId || idx}-${optionVariantId || optionIdx}`,
         context_type: "component_variant",
         title: "Extras por variante del componente",
         subtitle: `${title} · ${itemLabel} · ${optionLabel}`,

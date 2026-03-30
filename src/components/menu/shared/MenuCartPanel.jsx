@@ -19,6 +19,56 @@ function renderNotes(n) {
   return String(n);
 }
 
+function ModifierGroupsBlock({ groups = [], indent = 0 }) {
+  if (!Array.isArray(groups) || groups.length <= 0) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        marginLeft: indent,
+        padding: "8px 10px",
+        borderRadius: 12,
+        background: "#fafafa",
+        border: "1px solid rgba(0,0,0,0.08)",
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
+        Extras
+      </div>
+
+      {groups.map((group, idx) => (
+        <div key={`${group?.group_name || "g"}-${idx}`} style={{ display: "grid", gap: 4 }}>
+          <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.82 }}>
+            {group?.group_name || "Grupo"}
+            {Number(group?.group_total || 0) > 0 ? ` · ${money(group.group_total)}` : ""}
+          </div>
+
+          {(Array.isArray(group?.options) ? group.options : []).map((opt, optIdx) => {
+            const qty = Number(opt?.quantity || 1);
+            const unitPrice = Number(opt?.unit_price || 0);
+            const totalPrice = Number(opt?.total_price || 0);
+
+            return (
+              <div
+                key={`${opt?.modifier_option_id || opt?.id || optIdx}-${optIdx}`}
+                style={{ fontSize: 12, opacity: 0.78 }}
+              >
+                • {opt?.name || "Extra"}
+                {qty > 1 ? ` x${qty}` : ""}
+                {unitPrice > 0 ? ` · ${money(unitPrice)}` : ""}
+                {totalPrice > 0 && qty > 1 ? ` · ${money(totalPrice)}` : ""}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CompositeDetailBlock({ details = [] }) {
   if (!Array.isArray(details) || !details.length) return null;
 
@@ -31,7 +81,7 @@ function CompositeDetailBlock({ details = [] }) {
         background: "#fafafa",
         border: "1px solid rgba(0,0,0,0.08)",
         display: "grid",
-        gap: 6,
+        gap: 8,
       }}
     >
       <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
@@ -41,12 +91,16 @@ function CompositeDetailBlock({ details = [] }) {
       {details.map((d, idx) => (
         <div
           key={`${d?.component_product_id || idx}-${idx}`}
-          style={{ fontSize: 12, opacity: 0.82 }}
+          style={{ fontSize: 12, opacity: 0.82, display: "grid", gap: 4 }}
         >
-          • {formatComponentDetailLabel(d)} · Cantidad:{" "}
-          <strong>{safeNum(d?.quantity, 1)}</strong>
-          {d?.is_optional ? " · Opcional" : ""}
-          {d?.apply_variant_price ? " · Ajusta precio" : ""}
+          <div>
+            • {formatComponentDetailLabel(d)} · Cantidad:{" "}
+            <strong>{safeNum(d?.quantity, 1)}</strong>
+            {d?.is_optional ? " · Opcional" : ""}
+            {d?.apply_variant_price ? " · Ajusta precio" : ""}
+          </div>
+
+          <ModifierGroupsBlock groups={d?.modifier_groups_display || []} indent={14} />
         </div>
       ))}
     </div>
@@ -101,6 +155,8 @@ function OldChildRow({ item }) {
         <div style={{ fontWeight: 800, fontSize: 12, opacity: 0.88 }}>
           ↳ {label}
         </div>
+
+        <ModifierGroupsBlock groups={item?.modifier_groups_display || []} indent={14} />
 
         {item?.notes ? (
           <div
@@ -212,6 +268,7 @@ function OldRow({ item }) {
           ) : null}
         </div>
 
+        <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
         <CompositeDetailBlock details={item?.components_detail || []} />
 
         {item?.notes ? (
@@ -294,6 +351,7 @@ function NewRow({
       >
         <div style={{ fontWeight: 900, fontSize: 13 }}>{label}</div>
 
+        <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
         <CompositeDetailBlock details={item?.components_detail || []} />
       </td>
 

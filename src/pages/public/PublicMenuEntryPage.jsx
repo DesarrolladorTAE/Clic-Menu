@@ -15,6 +15,7 @@ import {
   translateOrderingMode,
   translateStatus,
   translateTableServiceMode,
+  buildModifierContextSections,
 } from "../../hooks/public/publicMenu.utils";
 
 import {
@@ -40,6 +41,66 @@ import MenuCartPanel from "../../components/menu/shared/MenuCartPanel";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function buildComponentModifierKey(componentProductId, variantId = null) {
+  return `${Number(componentProductId || 0)}:${variantId ? Number(variantId) : 0}`;
+}
+
+function applyComponentModifierPayloadToComponents(components = [], componentModifiers = []) {
+  const grouped = {};
+
+  (Array.isArray(componentModifiers) ? componentModifiers : []).forEach((group) => {
+    const key = buildComponentModifierKey(
+      group?.component_product_id,
+      group?.component_variant_id,
+    );
+
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(group);
+  });
+
+  return (Array.isArray(components) ? components : []).map((component) => {
+    const key = buildComponentModifierKey(
+      component?.component_product_id,
+      component?.variant_id,
+    );
+
+    return {
+      ...component,
+      modifiers: grouped[key] || [],
+    };
+  });
+}
+
+function applyComponentDisplayGroupsToDetails(details = [], componentDisplayGroups = []) {
+  const grouped = {};
+
+  (Array.isArray(componentDisplayGroups) ? componentDisplayGroups : []).forEach((group) => {
+    const key = buildComponentModifierKey(
+      group?.component_product_id,
+      group?.component_variant_id,
+    );
+
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(group);
+  });
+
+  return (Array.isArray(details) ? details : []).map((detail) => {
+    const key = buildComponentModifierKey(
+      detail?.component_product_id,
+      detail?.variant_id,
+    );
+
+    return {
+      ...detail,
+      modifier_groups_display: grouped[key] || [],
+    };
+  });
+}
+
+function hasContextualModifiers(product, opts = {}) {
+  return buildModifierContextSections(product, opts).length > 0;
+}
+
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
 
@@ -51,6 +112,14 @@ export default function PublicMenuEntryPage() {
 
   const [extrasModalOpen, setExtrasModalOpen] = useState(false);
   const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
+  const [selectedExtrasVariantId, setSelectedExtrasVariantId] = useState(null);
+  const [selectedExtrasCompositeDraft, setSelectedExtrasCompositeDraft] = useState(null);
+  const [selectedExtrasInitialValue, setSelectedExtrasInitialValue] = useState([]);
+  const [selectedExtrasReadOnly, setSelectedExtrasReadOnly] = useState(false);
+  const [selectedExtrasSubmitKind, setSelectedExtrasSubmitKind] = useState(null);
+  const [selectedExtrasVariantObj, setSelectedExtrasVariantObj] = useState(null);
+  const [pendingCompositeComponents, setPendingCompositeComponents] = useState([]);
+  const [pendingCompositeDetails, setPendingCompositeDetails] = useState([]);
 
   const {
     loading,
@@ -89,6 +158,14 @@ export default function PublicMenuEntryPage() {
       setSelectedCompositeProduct(null);
       setExtrasModalOpen(false);
       setSelectedExtrasProduct(null);
+      setSelectedExtrasVariantId(null);
+      setSelectedExtrasCompositeDraft(null);
+      setSelectedExtrasInitialValue([]);
+      setSelectedExtrasReadOnly(false);
+      setSelectedExtrasSubmitKind(null);
+      setSelectedExtrasVariantObj(null);
+      setPendingCompositeComponents([]);
+      setPendingCompositeDetails([]);
     },
     setCallLocked,
   });
@@ -251,7 +328,6 @@ export default function PublicMenuEntryPage() {
 
     return resolvedOrderId;
   };
-
 
   useEffect(() => {
     if (!publicSessionChannelId) return;
@@ -540,6 +616,68 @@ export default function PublicMenuEntryPage() {
     !!qr.sessionUnavailable ||
     callLocked;
 
+  const resetExtrasFlow = () => {
+    setExtrasModalOpen(false);
+    setSelectedExtrasProduct(null);
+    setSelectedExtrasVariantId(null);
+    setSelectedExtrasCompositeDraft(null);
+    setSelectedExtrasInitialValue([]);
+    setSelectedExtrasReadOnly(false);
+    setSelectedExtrasSubmitKind(null);
+    setSelectedExtrasVariantObj(null);
+    setPendingCompositeComponents([]);
+    setPendingCompositeDetails([]);
+  };
+
+  const openReadOnlyExtrasViewer = (product) => {
+    setSelectedExtrasProduct(product);
+    setSelectedExtrasVariantId(null);
+    setSelectedExtrasCompositeDraft(null);
+    setSelectedExtrasInitialValue([]);
+    setSelectedExtrasReadOnly(true);
+    setSelectedExtrasSubmitKind(null);
+    setSelectedExtrasVariantObj(null);
+    setPendingCompositeComponents([]);
+    setPendingCompositeDetails([]);
+    setExtrasModalOpen(true);
+  };
+
+  const openProductSelectionFlow = (product) => {
+    if (hasContextualModifiers(product)) {
+      setSelectedExtrasProduct(product);
+      setSelectedExtrasVariantId(null);
+      setSelectedExtrasCompositeDraft(null);
+      setSelectedExtrasInitialValue([]);
+      setSelectedExtrasReadOnly(false);
+      setSelectedExtrasSubmitKind("product");
+      setSelectedExtrasVariantObj(null);
+      setPendingCompositeComponents([]);
+      setPendingCompositeDetails([]);
+      setExtrasModalOpen(true);
+      return;
+    }
+
+    cartOrder.addToCartFromProduct(product);
+  };
+
+  const openVariantSelectionFlow = (product, variant) => {
+    if (hasContextualModifiers(product, { variantId: Number(variant?.id || 0) })) {
+      setSelectedExtrasProduct(product);
+      setSelectedExtrasVariantId(Number(variant?.id || 0));
+      setSelectedExtrasCompositeDraft(null);
+      setSelectedExtrasInitialValue([]);
+      setSelectedExtrasReadOnly(false);
+      setSelectedExtrasSubmitKind("variant");
+      setSelectedExtrasVariantObj(variant);
+      setPendingCompositeComponents([]);
+      setPendingCompositeDetails([]);
+      setExtrasModalOpen(true);
+      return;
+    }
+
+    cartOrder.addToCartFromVariant(product, variant);
+  };
+
   const openCompositeConfigurator = (product) => {
     composite.resetDraftForProduct?.(product);
     setSelectedCompositeProduct(product);
@@ -549,19 +687,92 @@ export default function PublicMenuEntryPage() {
   const confirmCompositeSelection = () => {
     if (!selectedCompositeProduct) return;
 
+    const draft =
+      composite.getOrInitCompositeDraft?.(selectedCompositeProduct) || [];
     const components =
       composite.buildSubmitComponentsFromProduct?.(selectedCompositeProduct) || [];
     const details =
       composite.buildDetailsFromProduct?.(selectedCompositeProduct) || [];
+
+    if (
+      hasContextualModifiers(selectedCompositeProduct, {
+        compositeDraft: draft,
+      })
+    ) {
+      setSelectedExtrasProduct(selectedCompositeProduct);
+      setSelectedExtrasVariantId(null);
+      setSelectedExtrasCompositeDraft(draft);
+      setSelectedExtrasInitialValue([]);
+      setSelectedExtrasReadOnly(false);
+      setSelectedExtrasSubmitKind("composite");
+      setSelectedExtrasVariantObj(null);
+      setPendingCompositeComponents(components);
+      setPendingCompositeDetails(details);
+      setCompositeModalOpen(false);
+      setSelectedCompositeProduct(null);
+      setExtrasModalOpen(true);
+      return;
+    }
 
     cartOrder.addToCartFromProduct(selectedCompositeProduct, components, details);
     setCompositeModalOpen(false);
     setSelectedCompositeProduct(null);
   };
 
-  const openExtrasViewer = (product) => {
-    setSelectedExtrasProduct(product);
-    setExtrasModalOpen(true);
+  const handleConfirmExtras = (result) => {
+    if (!selectedExtrasProduct) {
+      resetExtrasFlow();
+      return;
+    }
+
+    const parentModifiers = result?.parentModifiers || [];
+    const parentDisplayGroups = result?.parentDisplayGroups || [];
+    const componentModifiers = result?.componentModifiers || [];
+    const componentDisplayGroups = result?.componentDisplayGroups || [];
+
+    if (selectedExtrasSubmitKind === "variant" && selectedExtrasVariantObj) {
+      cartOrder.addToCartFromVariant(
+        selectedExtrasProduct,
+        selectedExtrasVariantObj,
+        [],
+        [],
+        parentModifiers,
+        parentDisplayGroups,
+      );
+      resetExtrasFlow();
+      return;
+    }
+
+    if (selectedExtrasSubmitKind === "composite") {
+      const nextComponents = applyComponentModifierPayloadToComponents(
+        pendingCompositeComponents,
+        componentModifiers,
+      );
+
+      const nextDetails = applyComponentDisplayGroupsToDetails(
+        pendingCompositeDetails,
+        componentDisplayGroups,
+      );
+
+      cartOrder.addToCartFromProduct(
+        selectedExtrasProduct,
+        nextComponents,
+        nextDetails,
+        parentModifiers,
+        parentDisplayGroups,
+      );
+      resetExtrasFlow();
+      return;
+    }
+
+    cartOrder.addToCartFromProduct(
+      selectedExtrasProduct,
+      [],
+      [],
+      parentModifiers,
+      parentDisplayGroups,
+    );
+    resetExtrasFlow();
   };
 
   if (loading) {
@@ -910,7 +1121,11 @@ export default function PublicMenuEntryPage() {
       <CompositeProductModal
         open={compositeModalOpen}
         product={selectedCompositeProduct}
-        draft={selectedCompositeProduct ? composite.getOrInitCompositeDraft?.(selectedCompositeProduct) || [] : []}
+        draft={
+          selectedCompositeProduct
+            ? composite.getOrInitCompositeDraft?.(selectedCompositeProduct) || []
+            : []
+        }
         onClose={() => {
           setCompositeModalOpen(false);
           setSelectedCompositeProduct(null);
@@ -930,11 +1145,13 @@ export default function PublicMenuEntryPage() {
       <ProductExtrasModal
         open={extrasModalOpen}
         product={selectedExtrasProduct}
-        onClose={() => {
-          setExtrasModalOpen(false);
-          setSelectedExtrasProduct(null);
-        }}
-        onSelectPlaceholder={() => {}}
+        variantId={selectedExtrasVariantId}
+        compositeDraft={selectedExtrasCompositeDraft}
+        initialValue={selectedExtrasInitialValue}
+        readOnly={selectedExtrasReadOnly}
+        onClose={resetExtrasFlow}
+        onConfirm={handleConfirmExtras}
+        confirmLabel={selectedExtrasReadOnly ? "Listo" : "Guardar extras"}
       />
 
       <MenuHeaderCard
@@ -1126,10 +1343,10 @@ export default function PublicMenuEntryPage() {
                     }
                     canSelect={canSelect}
                     showSelectBtn={showSelectBtn}
-                    onAddSimple={(product) => cartOrder.addToCartFromProduct(product)}
-                    onAddVariant={(product, variant) => cartOrder.addToCartFromVariant(product, variant)}
+                    onAddSimple={openProductSelectionFlow}
+                    onAddVariant={openVariantSelectionFlow}
                     onOpenComposite={openCompositeConfigurator}
-                    onOpenExtras={openExtrasViewer}
+                    onOpenExtras={openReadOnlyExtrasViewer}
                   />
                 ))
               ) : (
