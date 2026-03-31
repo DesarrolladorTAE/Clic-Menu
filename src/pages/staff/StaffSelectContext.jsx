@@ -12,7 +12,6 @@ function roleLabel(name) {
   return name || "—";
 }
 
-// AQUÍ: mesero manda a /staff/app (tu dashboard)
 function routeByRole(roleName) {
   if (roleName === "waiter") return "/staff/app";
   if (roleName === "cashier") return "/staff/cashier";
@@ -29,6 +28,8 @@ export default function StaffSelectContext() {
   const [busy, setBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [err, setErr] = useState("");
+
+  const forceSelection = !!location.state?.forceSelection;
 
   const from = useMemo(() => {
     const fromState = location.state?.from;
@@ -60,20 +61,17 @@ export default function StaffSelectContext() {
   }, [contexts]);
 
   useEffect(() => {
-    // Si ya hay contexto activo, re-dirige según rol
-    if (activeContext?.role?.name) {
+    if (!forceSelection && activeContext?.role?.name) {
       nav(routeByRole(activeContext.role.name), { replace: true });
       return;
     }
 
-    // Si no hay contexts en memoria, regresamos a login
     if (!Array.isArray(contexts) || contexts.length === 0) {
       nav("/staff/login", { replace: true, state: { from } });
       return;
     }
 
-    // Si solo hay 1, auto-seleccionamos
-    if (contexts.length === 1) {
+    if (!forceSelection && contexts.length === 1) {
       const only = contexts[0];
       (async () => {
         setBusy(true);
@@ -121,7 +119,9 @@ export default function StaffSelectContext() {
       const handled = handleFormApiError(e, setError, {
         onMessage: (m) => setErr(m),
       });
-      if (!handled) setErr(e?.response?.data?.message || "No se pudo seleccionar el contexto.");
+      if (!handled) {
+        setErr(e?.response?.data?.message || "No se pudo seleccionar el contexto.");
+      }
     } finally {
       setBusy(false);
     }
@@ -166,7 +166,9 @@ export default function StaffSelectContext() {
               </option>
             ))}
           </select>
-          {errors.contextKey?.message && <div style={errText}>{errors.contextKey.message}</div>}
+          {errors.contextKey?.message && (
+            <div style={errText}>{errors.contextKey.message}</div>
+          )}
         </div>
 
         <button disabled={busy || loggingOut} style={btnPrimary} type="submit">

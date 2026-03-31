@@ -15,13 +15,21 @@ import Login from "../pages/auth/Login";
 import StaffLogin from "../pages/staff/StaffLogin";
 import StaffSelectContext from "../pages/staff/StaffSelectContext";
 import StaffDashboard from "../pages/staff/waiter/StaffDashboard"; 
-import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
-import StaffMenuEntryPage from "../pages/staff/waiter/StaffMenuEntryPage";
 
+import StaffMenuEntryPage from "../pages/staff/waiter/StaffMenuEntryPage";
+import CashRegistersPage from "../pages/staff/CashRegistersPage";
+
+
+//Mesero
+import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
+
+//Cocina
 import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 
 
-import CashRegistersPage from "../pages/staff/CashRegistersPage";
+//Cajeros
+import CashierHomePage from "../pages/staff/casher/CashierHomePage";
+
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -105,6 +113,10 @@ export default function AppRoutes() {
 
         {/* Cocina */}
         <Route path="/staff/kitchen" element={<KitchenDashboard />} />
+        
+
+        {/* Cajero */}
+        <Route path="/staff/cashier" element={<CashierHomePage />} />
 
       </Route>
 
