@@ -373,7 +373,7 @@ export default function CashRegistersPage() {
 
             <InstructionRow
               step="3"
-              text="Si una caja tiene sesión abierta, el backend impedirá eliminarla para proteger el flujo de cobro."
+              text="Si una caja tiene sesión abierta, no se puede eliminar para proteger el flujo de cobro."
             />
           </Stack>
         </Paper>
