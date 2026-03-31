@@ -16,6 +16,7 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
+import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import TuneIcon from "@mui/icons-material/Tune";
 
 const DRAWER_WIDTH = 240;
@@ -83,6 +84,11 @@ export default function RestaurantOperationSidebar({
             key: "tables",
             label: "Mesas",
             icon: <TableRestaurantIcon />,
+          },
+          {
+            key: "cash-registers",
+            label: "Cajas",
+            icon: <PointOfSaleIcon />,
           },
         ],
       },

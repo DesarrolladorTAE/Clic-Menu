@@ -20,6 +20,9 @@ import StaffMenuEntryPage from "../pages/staff/waiter/StaffMenuEntryPage";
 
 import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 
+
+import CashRegistersPage from "../pages/staff/CashRegistersPage";
+
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
 import StaffPage from "../pages/staff/RestaurantStaffPage";
@@ -150,6 +153,9 @@ export default function AppRoutes() {
           <Route path="modifiers/catalogs/variants" element={<VariantModifierCatalogPage />} />
           <Route path="modifiers/catalogs/components" element={<CompositeComponentModifierCatalogPage />} />
           <Route path="modifiers/catalogs/component-variants" element={<CompositeComponentVariantModifierCatalogPage />} />
+
+
+          <Route path="cash-registers" element={<CashRegistersPage />} />
 
         </Route>
 
