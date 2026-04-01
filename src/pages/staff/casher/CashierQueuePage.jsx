@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, unstable_useBlocker as useBlocker } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -156,22 +156,6 @@ export default function CashierQueuePage() {
     pageSize: PAGE_SIZE,
     mode: "frontend",
   });
-
-  // 🔒 BLOQUEO TOTAL DE NAVEGACIÓN
-  const blocker = useBlocker(mySales.length > 0);
-
-  useEffect(() => {
-    if (blocker.state === "blocked") {
-      showAlert({
-        severity: "warning",
-        title: "Ventas tomadas",
-        message:
-          "No puedes salir del tablero mientras tengas ventas tomadas.",
-      });
-
-      blocker.reset();
-    }
-  }, [blocker]);
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {
