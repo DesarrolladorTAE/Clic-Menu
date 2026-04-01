@@ -29,7 +29,8 @@ import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 
 //Cajeros
 import CashierHomePage from "../pages/staff/casher/CashierHomePage";
-
+import CashierQueuePage from "../pages/staff/casher/CashierQueuePage";
+import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -117,7 +118,9 @@ export default function AppRoutes() {
 
         {/* Cajero */}
         <Route path="/staff/cashier" element={<CashierHomePage />} />
-
+        <Route path="/staff/cashier/queue" element={<CashierQueuePage />} />
+        <Route path="/staff/cashier/sales/:saleId" element={<CashierSaleDetailPage />} />
+      
       </Route>
 
       {/* OWNER PROTECTED */}
