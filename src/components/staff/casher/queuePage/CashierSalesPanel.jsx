@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
-import PaginationFooter from "../../common/PaginationFooter";
+import PaginationFooter from "../../../common/PaginationFooter";
 import CashierSaleCard from "./CashierSaleCard";
 
 export default function CashierSalesPanel({

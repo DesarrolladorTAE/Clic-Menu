@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, unstable_useBlocker as useBlocker } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -18,9 +18,9 @@ import {
   takeCashierSale,
 } from "../../../services/staff/casher/cashierQueue.service";
 
-import CashierQueueHeroCard from "../../../components/staff/casher/CashierQueueHeroCard";
-import CashierQueueTabs from "../../../components/staff/casher/CashierQueueTabs";
-import CashierSalesPanel from "../../../components/staff/casher/CashierSalesPanel";
+import CashierQueueHeroCard from "../../../components/staff/casher/queuePage/CashierQueueHeroCard";
+import CashierQueueTabs from "../../../components/staff/casher/queuePage/CashierQueueTabs";
+import CashierSalesPanel from "../../../components/staff/casher/queuePage/CashierSalesPanel";
 
 const PAGE_SIZE = 5;
 
@@ -119,14 +119,15 @@ export default function CashierQueuePage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cashSession = queueData?.cash_session || null;
+
   const availableSales = useMemo(
     () => (Array.isArray(queueData?.available_sales) ? queueData.available_sales : []),
     [queueData]
   );
+
   const mySales = useMemo(
     () => (Array.isArray(queueData?.my_sales) ? queueData.my_sales : []),
     [queueData]
@@ -155,6 +156,54 @@ export default function CashierQueuePage() {
     pageSize: PAGE_SIZE,
     mode: "frontend",
   });
+
+  // 🔒 BLOQUEO TOTAL DE NAVEGACIÓN
+  const blocker = useBlocker(mySales.length > 0);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      showAlert({
+        severity: "warning",
+        title: "Ventas tomadas",
+        message:
+          "No puedes salir del tablero mientras tengas ventas tomadas.",
+      });
+
+      blocker.reset();
+    }
+  }, [blocker]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (mySales.length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    const handlePopState = () => {
+      if (mySales.length > 0) {
+        showAlert({
+          severity: "warning",
+          title: "Ventas tomadas",
+          message:
+            "Aún tienes ventas tomadas. No puedes salir hasta cobrarlas o liberarlas.",
+        });
+
+        window.history.pushState(null, "", window.location.href);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+
+    window.history.pushState(null, "", window.location.href);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [mySales]);
 
   const moveTakenSaleToMine = (saleRow) => {
     if (!saleRow?.sale_id) return;
@@ -210,10 +259,7 @@ export default function CashierQueuePage() {
       const code = pickCode(e);
       const msg = pickErr(e, "No se pudo tomar la venta.");
 
-      if (
-        code === "SALE_NOT_AVAILABLE" ||
-        code === "SALE_ALREADY_TAKEN"
-      ) {
+      if (code === "SALE_NOT_AVAILABLE" || code === "SALE_ALREADY_TAKEN") {
         showAlert({
           severity: "warning",
           message: msg,
@@ -242,14 +288,15 @@ export default function CashierQueuePage() {
     if (mySales.length > 0) {
       showAlert({
         severity: "warning",
-        title: "Ventas activas",
-        message: "No puedes salir si tienes ventas tomadas. Termina de cobrarlas primero."
+        title: "Ventas tomadas",
+        message:
+          "Aún tienes ventas tomadas en tu tablero. Debes cobrarlas o liberarlas antes de salir.",
       });
       return;
     }
+
     nav("/staff/cashier");
   };
-
 
   if (loading) {
     return (

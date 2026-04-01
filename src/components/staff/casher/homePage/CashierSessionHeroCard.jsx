@@ -21,6 +21,7 @@ export default function CashierSessionHeroCard({
   onExit,
   exitLabel = "Regresar",
   closing = false,
+  showExitButton = true, // 👈 nueva prop
 }) {
   const hasSession = !!currentSession?.id;
   const isLogout = exitLabel === "Cerrar sesión";
@@ -85,20 +86,24 @@ export default function CashierSessionHeroCard({
                 }}
               />
 
-              <Button
-                variant="outlined"
-                color="inherit"
-                onClick={onExit}
-                startIcon={isLogout ? <LogoutRoundedIcon /> : <ArrowBackRoundedIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 170 },
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                {exitLabel}
-              </Button>
+              {showExitButton && (
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={onExit}
+                  startIcon={
+                    isLogout ? <LogoutRoundedIcon /> : <ArrowBackRoundedIcon />
+                  }
+                  sx={{
+                    minWidth: { xs: "100%", sm: 170 },
+                    height: 44,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {exitLabel}
+                </Button>
+              )}
             </Stack>
           </Stack>
 

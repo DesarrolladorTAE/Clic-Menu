@@ -20,10 +20,10 @@ import {
   payCashierSale,
 } from "../../../services/staff/casher/cashierPayment.service";
 
-import CashierSaleDetailHeroCard from "../../../components/staff/casher/CashierSaleDetailHeroCard";
-import CashierOrderItemsCard from "../../../components/staff/casher/CashierOrderItemsCard";
-import CashierSaleSummaryCard from "../../../components/staff/casher/CashierSaleSummaryCard";
-import CashierPaymentFormCard from "../../../components/staff/casher/CashierPaymentFormCard";
+import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
+import CashierOrderItemsCard from "../../../components/staff/casher/saleDetailPage/CashierOrderItemsCard";
+import CashierSaleSummaryCard from "../../../components/staff/casher/saleDetailPage/CashierSaleSummaryCard";
+import CashierPaymentFormCard from "../../../components/staff/casher/saleDetailPage/CashierPaymentFormCard";
 
 export default function CashierSaleDetailPage() {
   const nav = useNavigate();

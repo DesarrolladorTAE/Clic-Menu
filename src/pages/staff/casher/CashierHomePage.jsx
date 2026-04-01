@@ -21,9 +21,9 @@ import {
   closeCashierSession,
 } from "../../../services/staff/casher/cashierSession.service";
 
-import CashierSessionHeroCard from "../../../components/staff/casher/CashierSessionHeroCard";
-import CashRegisterCard from "../../../components/staff/casher/CashRegisterCard";
-import OpenCashSessionModal from "../../../components/staff/casher/OpenCashSessionModal";
+import CashierSessionHeroCard from "../../../components/staff/casher/homePage/CashierSessionHeroCard";
+import CashRegisterCard from "../../../components/staff/casher/homePage/CashRegisterCard";
+import OpenCashSessionModal from "../../../components/staff/casher/homePage/OpenCashSessionModal";
 
 const PAGE_SIZE = 5;
 
@@ -78,6 +78,11 @@ export default function CashierHomePage() {
     if (reason === "clickaway") return;
     setAlertState((prev) => ({ ...prev, open: false }));
   };
+
+  const pickErr = (e, fallback) =>
+    e?.response?.data?.message || e?.message || fallback;
+
+  const pickCode = (e) => e?.response?.data?.code;
 
   const load = async ({ silent = false } = {}) => {
     try {
@@ -165,13 +170,19 @@ export default function CashierHomePage() {
 
     try {
       const res = await openCashierSession(payload);
+      const code = res?.code;
+
       setCurrentSession(res?.data || null);
       setOpenModal(false);
       setSelectedRegister(null);
 
       showAlert({
         severity: "success",
-        message: res?.message || "Caja abierta correctamente.",
+        title: code === "EXISTING_OPEN_CASH_SESSION" ? "Caja recuperada" : "Listo",
+        message:
+          code === "EXISTING_OPEN_CASH_SESSION"
+            ? "Se recuperó tu caja abierta anterior. Puedes continuar con tu tablero de cobro."
+            : (res?.message || "Caja abierta correctamente."),
       });
 
       nav("/staff/cashier/queue", { replace: true });
@@ -200,6 +211,19 @@ export default function CashierHomePage() {
         message: res?.message || "Caja cerrada correctamente.",
       });
     } catch (e) {
+      const code = pickCode(e);
+
+      if (code === "CASH_SESSION_HAS_TAKEN_SALES") {
+        showAlert({
+          severity: "warning",
+          title: "Ventas tomadas",
+          message:
+            e?.response?.data?.message ||
+            "Aún tienes ventas tomadas. Debes cobrarlas o liberarlas antes de cerrar la caja.",
+        });
+        return;
+      }
+
       showAlert({
         severity: "warning",
         message:
@@ -215,9 +239,7 @@ export default function CashierHomePage() {
     nav("/staff/cashier/queue");
   };
 
-  const handleExit = async () => {
-    if (leaving) return;
-
+  const doRealExit = async () => {
     if (hasMultipleContexts) {
       nav("/staff/select-context", {
         replace: true,
@@ -229,14 +251,64 @@ export default function CashierHomePage() {
       return;
     }
 
-    setLeaving(true);
-
     try {
       await logout?.();
     } catch {
       clearStaff?.();
     } finally {
       nav("/staff/login", { replace: true });
+    }
+  };
+
+  const handleExit = async () => {
+    if (leaving || closing) return;
+
+    setLeaving(true);
+
+    try {
+      /**
+       * Si hay caja abierta, intentamos cerrarla primero.
+       * Si backend detecta ventas tomadas, NO dejamos salir.
+       */
+      if (currentSession?.id) {
+        try {
+          await closeCashierSession({});
+
+          setCurrentSession(null);
+
+          showAlert({
+            severity: "success",
+            title: "Caja cerrada",
+            message: "La caja se cerró correctamente antes de salir.",
+          });
+        } catch (e) {
+          const code = pickCode(e);
+
+          if (code === "CASH_SESSION_HAS_TAKEN_SALES") {
+            showAlert({
+              severity: "warning",
+              title: "Ventas tomadas",
+              message:
+                e?.response?.data?.message ||
+                "Aún tienes ventas tomadas. No puedes salir hasta cobrarlas o liberarlas.",
+            });
+            return;
+          }
+
+          showAlert({
+            severity: "error",
+            title: "No se pudo salir",
+            message: pickErr(
+              e,
+              "No se pudo cerrar la caja antes de salir."
+            ),
+          });
+          return;
+        }
+      }
+
+      await doRealExit();
+    } finally {
       setLeaving(false);
     }
   };
@@ -271,7 +343,8 @@ export default function CashierHomePage() {
           onGoQueue={handleGoQueue}
           onExit={handleExit}
           exitLabel={exitLabel}
-          closing={closing}
+          closing={closing || leaving}
+          showExitButton={!currentSession} //  solo se muestra si NO hay caja abierta
         />
 
         {!currentSession ? (
