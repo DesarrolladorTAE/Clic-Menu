@@ -1,3 +1,4 @@
+// Tarjeta detalles del producto
 import React from "react";
 import {
   Box,
@@ -53,16 +54,23 @@ export default function CashierOrderItemsCard({
                 <Chip label={`${itemsSummary.items_count} ítems`} size="small" />
               ) : null}
 
-              {typeof itemsSummary?.modifiers_count === "number" ? (
+              {typeof itemsSummary?.parent_items_count === "number" ? (
                 <Chip
-                  label={`${itemsSummary.modifiers_count} modificadores`}
+                  label={`${itemsSummary.parent_items_count} principales`}
                   size="small"
                 />
               ) : null}
 
-              {typeof itemsSummary?.total_quantity === "number" ? (
+              {typeof itemsSummary?.children_items_count === "number" ? (
                 <Chip
-                  label={`${itemsSummary.total_quantity} unidades`}
+                  label={`${itemsSummary.children_items_count} componentes`}
+                  size="small"
+                />
+              ) : null}
+
+              {typeof itemsSummary?.modifiers_count === "number" ? (
+                <Chip
+                  label={`${itemsSummary.modifiers_count} modificadores`}
                   size="small"
                 />
               ) : null}
@@ -120,10 +128,18 @@ export default function CashierOrderItemsCard({
 
 function OrderItemBlock({ item, level = 0 }) {
   const children = Array.isArray(item?.children) ? item.children : [];
-  const modifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
+  const modifierGroups = Array.isArray(item?.modifier_groups_display)
+    ? item.modifier_groups_display
+    : [];
+  const rawModifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
+
   const quantity = Number(item?.quantity ?? item?.qty ?? 1);
   const unitPrice = Number(item?.unit_price ?? item?.price ?? 0);
-  const total = Number(item?.total ?? quantity * unitPrice);
+  const total = Number(item?.line_total ?? item?.total ?? quantity * unitPrice);
+
+  const itemName = resolveItemName(item);
+  const itemTypeLabel = resolveItemTypeLabel(item, level);
+  const noteText = formatNotes(item?.notes);
 
   return (
     <Box sx={{ pl: level > 0 ? 2.5 : 0 }}>
@@ -134,19 +150,34 @@ function OrderItemBlock({ item, level = 0 }) {
           spacing={1}
         >
           <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                fontSize: level === 0 ? 16 : 14,
-                fontWeight: 800,
-                color: "text.primary",
-                lineHeight: 1.3,
-                wordBreak: "break-word",
-              }}
-            >
-              {quantity} × {item?.name || "Producto"}
-            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography
+                sx={{
+                  fontSize: level === 0 ? 16 : 14,
+                  fontWeight: 800,
+                  color: "text.primary",
+                  lineHeight: 1.3,
+                  wordBreak: "break-word",
+                }}
+              >
+                {quantity} × {itemName}
+              </Typography>
 
-            {item?.notes ? (
+              {itemTypeLabel ? (
+                <Chip
+                  label={itemTypeLabel}
+                  size="small"
+                  sx={{
+                    height: 24,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    bgcolor: level > 0 ? "rgba(255,152,0,0.10)" : "#F5F5F5",
+                  }}
+                />
+              ) : null}
+            </Stack>
+
+            {noteText ? (
               <Typography
                 sx={{
                   mt: 0.5,
@@ -155,7 +186,7 @@ function OrderItemBlock({ item, level = 0 }) {
                   wordBreak: "break-word",
                 }}
               >
-                Nota: {item.notes}
+                Nota: {noteText}
               </Typography>
             ) : null}
           </Box>
@@ -183,15 +214,28 @@ function OrderItemBlock({ item, level = 0 }) {
           </Box>
         </Stack>
 
-        {modifiers.length > 0 ? (
+        {modifierGroups.length > 0 ? (
+          <Stack spacing={0.75}>
+            {modifierGroups.map((group, idx) => (
+              <ModifierGroupBlock
+                key={`${group?.group_name || "grupo"}-${idx}`}
+                group={group}
+              />
+            ))}
+          </Stack>
+        ) : rawModifiers.length > 0 ? (
           <Stack spacing={0.5}>
-            {modifiers.map((mod, idx) => {
+            {rawModifiers.map((mod, idx) => {
               const modQty = Number(mod?.quantity ?? 1);
-              const modPrice = Number(mod?.price ?? mod?.unit_price ?? 0);
+              const modPrice = Number(
+                mod?.total_price ?? mod?.price ?? mod?.unit_price ?? 0
+              );
+              const modName =
+                mod?.name_snapshot || mod?.name || "Modificador";
 
               return (
                 <Box
-                  key={mod?.id || `${mod?.name || "mod"}-${idx}`}
+                  key={mod?.id || `${modName}-${idx}`}
                   sx={{
                     borderRadius: 1,
                     px: 1.25,
@@ -206,7 +250,7 @@ function OrderItemBlock({ item, level = 0 }) {
                       wordBreak: "break-word",
                     }}
                   >
-                    + {modQty} × {mod?.name || "Modificador"}{" "}
+                    + {modQty} × {modName}{" "}
                     {modPrice ? `(${formatCurrency(modPrice)})` : ""}
                   </Typography>
                 </Box>
@@ -219,7 +263,7 @@ function OrderItemBlock({ item, level = 0 }) {
           <Stack spacing={0.5}>
             {children.map((child, idx) => (
               <OrderItemBlock
-                key={child?.id || `${child?.name || "child"}-${idx}`}
+                key={child?.id || `${resolveItemName(child)}-${idx}`}
                 item={child}
                 level={level + 1}
               />
@@ -229,6 +273,118 @@ function OrderItemBlock({ item, level = 0 }) {
       </Stack>
     </Box>
   );
+}
+
+function ModifierGroupBlock({ group }) {
+  const options = Array.isArray(group?.options) ? group.options : [];
+  const contextLabel = group?.context_label;
+  const groupName = group?.group_name || "Extras";
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 1,
+        px: 1.25,
+        py: 1,
+        bgcolor: "rgba(255, 152, 0, 0.06)",
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: "text.secondary",
+          textTransform: "uppercase",
+          letterSpacing: 0.2,
+          wordBreak: "break-word",
+        }}
+      >
+        {groupName}
+        {contextLabel ? ` · ${contextLabel}` : ""}
+      </Typography>
+
+      <Stack spacing={0.35} sx={{ mt: 0.6 }}>
+        {options.map((option, idx) => {
+          const qty = Number(option?.quantity ?? 1);
+          const totalPrice = Number(option?.total_price ?? 0);
+          const name = option?.name || "Modificador";
+
+          return (
+            <Typography
+              key={option?.id || `${name}-${idx}`}
+              sx={{
+                fontSize: 13,
+                color: "text.primary",
+                wordBreak: "break-word",
+              }}
+            >
+              + {qty} × {name}{" "}
+              {totalPrice ? `(${formatCurrency(totalPrice)})` : ""}
+            </Typography>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
+
+function resolveItemName(item) {
+  const displayName =
+    typeof item?.display_name === "string" ? item.display_name.trim() : "";
+  const productName =
+    typeof item?.product_name === "string" ? item.product_name.trim() : "";
+  const variantName =
+    typeof item?.variant_name === "string" ? item.variant_name.trim() : "";
+
+  if (displayName) return displayName;
+  if (productName && variantName) return `${productName} · ${variantName}`;
+  if (productName) return productName;
+  if (variantName) return variantName;
+  return "Producto";
+}
+
+function resolveItemTypeLabel(item, level) {
+  if (item?.is_composite_parent) return "Compuesto";
+  if (item?.item_kind === "composite_child") return "Componente";
+  if (level > 0) return "Componente";
+  if (item?.variant_name) return "Variante";
+  return null;
+}
+
+function formatNotes(notes) {
+  if (!notes) return "";
+
+  if (typeof notes === "string") {
+    return notes.trim();
+  }
+
+  if (Array.isArray(notes)) {
+    return notes
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (entry && typeof entry === "object") {
+          return Object.values(entry)
+            .filter(Boolean)
+            .join(" ");
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (typeof notes === "object") {
+    return Object.entries(notes)
+      .map(([key, value]) => {
+        if (value === null || value === undefined || value === "") return null;
+        if (typeof value === "object") return `${key}: ${JSON.stringify(value)}`;
+        return `${key}: ${value}`;
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return String(notes);
 }
 
 function formatCurrency(value) {

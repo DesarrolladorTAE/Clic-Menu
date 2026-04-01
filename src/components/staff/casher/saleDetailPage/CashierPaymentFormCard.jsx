@@ -1,3 +1,4 @@
+//Tarjetita Pagos
 import React from "react";
 import {
   Box,
@@ -28,7 +29,10 @@ export default function CashierPaymentFormCard({
   paying = false,
   hasPreview = false,
   onPay,
+  disabled = false,
 }) {
+  const hasMaxPayments = payments.length >= 3;
+
   return (
     <Card
       sx={{
@@ -72,6 +76,7 @@ export default function CashierPaymentFormCard({
             <Button
               variant="outlined"
               onClick={onAddPayment}
+              disabled={disabled || hasMaxPayments || previewing || paying}
               startIcon={<AddRoundedIcon />}
               sx={{
                 minWidth: { xs: "100%", sm: 180 },
@@ -80,17 +85,19 @@ export default function CashierPaymentFormCard({
                 fontWeight: 800,
               }}
             >
-              Agregar pago
+              {hasMaxPayments ? "Máximo 3 pagos" : "Agregar pago"}
             </Button>
           </Stack>
 
           <Box>
             <Typography sx={fieldLabelSx}>Propina</Typography>
             <TextField
+              fullWidth
               value={tip}
               onChange={(e) => onTipChange(e.target.value)}
               inputProps={{ inputMode: "decimal" }}
               placeholder="0.00"
+              disabled={disabled || previewing || paying}
             />
           </Box>
 
@@ -99,6 +106,11 @@ export default function CashierPaymentFormCard({
               const method = methods.find(
                 (m) => Number(m.id) === Number(payment.payment_method_id)
               );
+
+              const usedMethodIds = payments
+                .filter((row) => row.localId !== payment.localId)
+                .map((row) => Number(row.payment_method_id || 0))
+                .filter(Boolean);
 
               return (
                 <Box
@@ -130,7 +142,7 @@ export default function CashierPaymentFormCard({
 
                       <IconButton
                         onClick={() => onRemovePayment(payment.localId)}
-                        disabled={payments.length <= 1}
+                        disabled={payments.length <= 1 || disabled || previewing || paying}
                         sx={{
                           width: 40,
                           height: 40,
@@ -156,16 +168,37 @@ export default function CashierPaymentFormCard({
                         input={
                           <TextField
                             select
+                            fullWidth
                             value={payment.payment_method_id}
                             onChange={(e) =>
-                              onPaymentChange(payment.localId, "payment_method_id", e.target.value)
+                              onPaymentChange(
+                                payment.localId,
+                                "payment_method_id",
+                                e.target.value
+                              )
                             }
+                            disabled={disabled || previewing || paying}
                           >
-                            {methods.map((methodRow) => (
-                              <MenuItem key={methodRow.id} value={String(methodRow.id)}>
-                                {methodRow.name}
-                              </MenuItem>
-                            ))}
+                            <MenuItem value="">Selecciona un método</MenuItem>
+
+                            {methods.map((methodRow) => {
+                              const isUsedByOther = usedMethodIds.includes(
+                                Number(methodRow.id)
+                              );
+                              const isSelected =
+                                Number(payment.payment_method_id) ===
+                                Number(methodRow.id);
+
+                              return (
+                                <MenuItem
+                                  key={methodRow.id}
+                                  value={String(methodRow.id)}
+                                  disabled={isUsedByOther && !isSelected}
+                                >
+                                  {methodRow.name}
+                                </MenuItem>
+                              );
+                            })}
                           </TextField>
                         }
                       />
@@ -174,12 +207,14 @@ export default function CashierPaymentFormCard({
                         label="Monto *"
                         input={
                           <TextField
+                            fullWidth
                             value={payment.amount}
                             onChange={(e) =>
                               onPaymentChange(payment.localId, "amount", e.target.value)
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder="0.00"
+                            disabled={disabled || previewing || paying}
                           />
                         }
                       />
@@ -190,12 +225,20 @@ export default function CashierPaymentFormCard({
                         label={`Referencia${method?.requires_reference ? " *" : ""}`}
                         input={
                           <TextField
+                            fullWidth
                             value={payment.reference}
                             onChange={(e) =>
                               onPaymentChange(payment.localId, "reference", e.target.value)
                             }
-                            placeholder="Opcional"
-                            disabled={!method?.requires_reference}
+                            placeholder={
+                              method?.requires_reference ? "Requerida" : "No aplica"
+                            }
+                            disabled={
+                              disabled ||
+                              previewing ||
+                              paying ||
+                              !method?.requires_reference
+                            }
                           />
                         }
                       />
@@ -204,13 +247,27 @@ export default function CashierPaymentFormCard({
                         label={`Últimos 4 dígitos${method?.requires_last4 ? " *" : ""}`}
                         input={
                           <TextField
+                            fullWidth
                             value={payment.last4}
                             onChange={(e) =>
-                              onPaymentChange(payment.localId, "last4", e.target.value)
+                              onPaymentChange(
+                                payment.localId,
+                                "last4",
+                                String(e.target.value || "")
+                                  .replace(/\D/g, "")
+                                  .slice(0, 4)
+                              )
                             }
                             inputProps={{ inputMode: "numeric", maxLength: 4 }}
-                            placeholder="0000"
-                            disabled={!method?.requires_last4}
+                            placeholder={
+                              method?.requires_last4 ? "0000" : "No aplica"
+                            }
+                            disabled={
+                              disabled ||
+                              previewing ||
+                              paying ||
+                              !method?.requires_last4
+                            }
                           />
                         }
                       />
@@ -221,13 +278,21 @@ export default function CashierPaymentFormCard({
                         label={`Recibido${method?.requires_received_amount ? " *" : ""}`}
                         input={
                           <TextField
+                            fullWidth
                             value={payment.received}
                             onChange={(e) =>
                               onPaymentChange(payment.localId, "received", e.target.value)
                             }
                             inputProps={{ inputMode: "decimal" }}
-                            placeholder="0.00"
-                            disabled={!method?.requires_received_amount}
+                            placeholder={
+                              method?.requires_received_amount ? "0.00" : "No aplica"
+                            }
+                            disabled={
+                              disabled ||
+                              previewing ||
+                              paying ||
+                              !method?.requires_received_amount
+                            }
                           />
                         }
                       />
@@ -236,7 +301,10 @@ export default function CashierPaymentFormCard({
                         label="Cambio estimado"
                         input={
                           <TextField
-                            value={formatCurrency(calculateEstimatedChange(payment, method))}
+                            fullWidth
+                            value={formatCurrency(
+                              calculateEstimatedChange(payment, method)
+                            )}
                             disabled
                           />
                         }
@@ -248,6 +316,26 @@ export default function CashierPaymentFormCard({
             })}
           </Stack>
 
+          <Box
+            sx={{
+              border: "1px dashed",
+              borderColor: "divider",
+              borderRadius: 1,
+              p: 1.5,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 13,
+                color: "text.secondary",
+                lineHeight: 1.55,
+              }}
+            >
+              Máximo 3 métodos de pago por venta. No se puede repetir el mismo
+              método en la misma operación.
+            </Typography>
+          </Box>
+
           <Stack
             direction={{ xs: "column", sm: "row" }}
             spacing={1.5}
@@ -256,7 +344,7 @@ export default function CashierPaymentFormCard({
             <Button
               variant="outlined"
               onClick={onPreview}
-              disabled={previewing || paying}
+              disabled={disabled || previewing || paying}
               startIcon={<VisibilityRoundedIcon />}
               sx={{
                 minWidth: { xs: "100%", sm: 180 },
@@ -271,7 +359,7 @@ export default function CashierPaymentFormCard({
             <Button
               variant="contained"
               onClick={onPay}
-              disabled={!hasPreview || previewing || paying}
+              disabled={disabled || !hasPreview || previewing || paying}
               startIcon={<PaymentsRoundedIcon />}
               sx={{
                 minWidth: { xs: "100%", sm: 180 },

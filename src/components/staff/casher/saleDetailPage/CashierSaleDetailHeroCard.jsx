@@ -1,3 +1,4 @@
+//Tarjeta de Encabezado
 import React from "react";
 import {
   Box,
@@ -12,11 +13,16 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import AddTaskRoundedIcon from "@mui/icons-material/AddTaskRounded";
 
 export default function CashierSaleDetailHeroCard({
   sale,
   cashSession,
   onBack,
+  canOperate = false,
+  canTake = false,
+  taking = false,
+  onTake,
 }) {
   const order = sale?.order || null;
   const table = sale?.table || null;
@@ -60,25 +66,63 @@ export default function CashierSaleDetailHeroCard({
                   maxWidth: 820,
                 }}
               >
-                Revisa el detalle de la orden, agrega los pagos, valida la vista
-                previa y confirma el cobro cuando todo esté correcto.
+                Revisa el detalle de la orden, aplica descuentos si corresponde,
+                selecciona impuestos, valida la vista previa y confirma el cobro.
               </Typography>
             </Box>
 
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={onBack}
-              startIcon={<ArrowBackRoundedIcon />}
-              sx={{
-                minWidth: { xs: "100%", md: 170 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.25}
+              sx={{ width: { xs: "100%", md: "auto" } }}
             >
-              Volver al tablero
-            </Button>
+              {canTake ? (
+                <Button
+                  variant="contained"
+                  onClick={onTake}
+                  disabled={taking}
+                  startIcon={<AddTaskRoundedIcon />}
+                  sx={{
+                    minWidth: { xs: "100%", md: 180 },
+                    height: 44,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {taking ? "Tomando…" : "Tomar venta"}
+                </Button>
+              ) : null}
+
+              <Button
+                variant="outlined"
+                color="inherit"
+                onClick={onBack}
+                startIcon={<ArrowBackRoundedIcon />}
+                sx={{
+                  minWidth: { xs: "100%", md: 170 },
+                  height: 44,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                Volver al tablero
+              </Button>
+            </Stack>
+          </Stack>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip
+              label={canOperate ? "Lista para cobro" : canTake ? "Solo consulta" : "No operable"}
+              size="small"
+              sx={{
+                fontWeight: 800,
+                bgcolor: canOperate ? "#E7F8EB" : "#FFF4D9",
+                color: canOperate ? "#0A7A2F" : "#8A6D3B",
+              }}
+            />
+
+            <Chip label={`Estado venta: ${sale?.status || "—"}`} size="small" />
+            <Chip label={`Estado orden: ${order?.status || "—"}`} size="small" />
           </Stack>
 
           <Box
@@ -122,18 +166,12 @@ export default function CashierSaleDetailHeroCard({
           </Box>
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip
-              label={`Subtotal ${formatCurrency(sale?.subtotal)}`}
-              size="small"
-            />
+            <Chip label={`Subtotal ${formatCurrency(sale?.subtotal)}`} size="small" />
             <Chip
               label={`Descuento ${formatCurrency(sale?.discount_total)}`}
               size="small"
             />
-            <Chip
-              label={`Propina ${formatCurrency(sale?.tip)}`}
-              size="small"
-            />
+            <Chip label={`Propina ${formatCurrency(sale?.tip)}`} size="small" />
             <Chip
               label={`Total ${formatCurrency(sale?.total)}`}
               size="small"
@@ -144,6 +182,29 @@ export default function CashierSaleDetailHeroCard({
               }}
             />
           </Stack>
+
+          {!canOperate ? (
+            <Box
+              sx={{
+                border: "1px dashed",
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 1.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: "text.secondary",
+                  lineHeight: 1.55,
+                }}
+              >
+                Esta venta aún no puede cobrarse desde esta pantalla. Debe estar
+                tomada por tu caja y la orden debe estar en estado{" "}
+                <strong>paying</strong>.
+              </Typography>
+            </Box>
+          ) : null}
         </Stack>
       </CardContent>
     </Card>

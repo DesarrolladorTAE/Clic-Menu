@@ -1,3 +1,5 @@
+//Tarjetita Resumen de Cobro
+
 import React from "react";
 import {
   Box,
@@ -12,15 +14,16 @@ export default function CashierSaleSummaryCard({
   sale,
   liveTip = 0,
   preview = null,
+  selectedTaxOption = null,
 }) {
   const subtotal = Number(sale?.subtotal || 0);
   const discount = Number(sale?.discount_total || 0);
   const tip = Number(liveTip || 0);
 
-  const liveTotal = subtotal - discount + tip;
-  const finalTotal = Number(preview?.final_total ?? liveTotal);
-  const totalChange = Number(preview?.total_change ?? 0);
-  const sumPayments = Number(preview?.sum_payments ?? 0);
+  const estimatedTotal = subtotal - discount + tip;
+  const validatedTotal = Number(preview?.final_total || 0);
+  const totalChange = Number(preview?.total_change || 0);
+  const sumPayments = Number(preview?.sum_payments || 0);
 
   return (
     <Card
@@ -47,28 +50,56 @@ export default function CashierSaleSummaryCard({
           <Stack spacing={1}>
             <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
             <SummaryRow label="Descuento" value={formatCurrency(discount)} />
-            <SummaryRow label="Propina" value={formatCurrency(tip)} />
+            <SummaryRow label="Propina capturada" value={formatCurrency(tip)} />
           </Stack>
 
           <Divider />
 
-          <Stack spacing={1}>
-            <SummaryRow
-              label="Total final"
-              value={formatCurrency(finalTotal)}
-              strong
-            />
-
-            <SummaryRow
-              label="Suma de pagos"
-              value={formatCurrency(sumPayments)}
-            />
-
-            <SummaryRow
-              label="Cambio"
-              value={formatCurrency(totalChange)}
-            />
-          </Stack>
+          {!preview ? (
+            <Stack spacing={1}>
+              <SummaryRow
+                label="Total estimado"
+                value={formatCurrency(estimatedTotal)}
+                strong
+              />
+              <SummaryRow
+                label="Impuesto seleccionado"
+                value={selectedTaxOption?.name || "Pendiente"}
+              />
+            </Stack>
+          ) : (
+            <Stack spacing={1}>
+              <SummaryRow
+                label="Subtotal gravable"
+                value={formatCurrency(preview?.taxable_amount ?? 0)}
+              />
+              <SummaryRow
+                label="Tasa"
+                value={preview?.tax_option?.name || selectedTaxOption?.name || "—"}
+              />
+              <SummaryRow
+                label="Base"
+                value={formatCurrency(preview?.tax?.tax_base ?? 0)}
+              />
+              <SummaryRow
+                label="Impuesto"
+                value={formatCurrency(preview?.tax?.tax_total ?? 0)}
+              />
+              <SummaryRow
+                label="Total validado"
+                value={formatCurrency(validatedTotal)}
+                strong
+              />
+              <SummaryRow
+                label="Suma de pagos"
+                value={formatCurrency(sumPayments)}
+              />
+              <SummaryRow
+                label="Cambio"
+                value={formatCurrency(totalChange)}
+              />
+            </Stack>
+          )}
 
           {preview ? (
             <Box
@@ -98,8 +129,8 @@ export default function CashierSaleSummaryCard({
                   lineHeight: 1.5,
                 }}
               >
-                La suma de pagos coincide con el total y la venta está lista para
-                cobrarse.
+                Ya se validó el impuesto, el total, la suma de pagos y el
+                cambio.
               </Typography>
             </Box>
           ) : (
@@ -118,8 +149,8 @@ export default function CashierSaleSummaryCard({
                   lineHeight: 1.5,
                 }}
               >
-                Agrega los pagos y genera una vista previa para validar el cobro
-                antes de confirmar.
+                El total mostrado aquí todavía es estimado. Genera la vista
+                previa para validar el cobro real antes de confirmarlo.
               </Typography>
             </Box>
           )}

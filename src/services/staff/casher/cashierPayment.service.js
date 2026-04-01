@@ -14,6 +14,14 @@ export async function fetchCashierPaymentMethods() {
   return res?.data;
 }
 
+export async function fetchCashierTaxOptions() {
+  const res = await staffApi.get("/staff/cashier/consumption-tax-options", {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
+  return res?.data;
+}
+
 export async function previewCashierSalePayment(saleId, payload) {
   const res = await staffApi.post(
     `/staff/cashier/sales/${saleId}/preview-payment`,
