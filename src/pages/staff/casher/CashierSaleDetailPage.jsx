@@ -30,12 +30,30 @@ import {
   removeCashierSaleItemDiscount,
 } from "../../../services/staff/casher/cashierDiscount.service";
 
+import {
+  fetchCashierSaleAdjustments,
+  cancelCashierSaleItems,
+  cancelCashierSaleOrder,
+} from "../../../services/staff/casher/cashierAdjustment.service";
+
+import {
+  searchCashierCustomers,
+  createCashierCustomer,
+  fetchCashierSaleCustomerData,
+  saveCashierSaleContactData,
+  removeCashierSaleContactData,
+  attachCashierSaleCustomer,
+  detachCashierSaleCustomer,
+} from "../../../services/staff/casher/cashierCustomer.service";
+
 import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
 import CashierOrderItemsCard from "../../../components/staff/casher/saleDetailPage/CashierOrderItemsCard";
 import CashierSaleSummaryCard from "../../../components/staff/casher/saleDetailPage/CashierSaleSummaryCard";
 import CashierPaymentFormCard from "../../../components/staff/casher/saleDetailPage/CashierPaymentFormCard";
 import CashierTaxSelectorCard from "../../../components/staff/casher/saleDetailPage/CashierTaxSelectorCard";
 import CashierDiscountCard from "../../../components/staff/casher/saleDetailPage/CashierDiscountCard";
+import CashierAdjustmentCard from "../../../components/staff/casher/saleDetailPage/CashierAdjustmentCard";
+import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage/CashierCustomerCard";
 
 export default function CashierSaleDetailPage() {
   const nav = useNavigate();
@@ -48,6 +66,8 @@ export default function CashierSaleDetailPage() {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [taxOptions, setTaxOptions] = useState([]);
   const [discountSummary, setDiscountSummary] = useState(null);
+  const [adjustmentSummary, setAdjustmentSummary] = useState(null);
+  const [customerSummary, setCustomerSummary] = useState(null);
 
   const [taxOptionCode, setTaxOptionCode] = useState("");
   const [tip, setTip] = useState("0");
@@ -61,13 +81,45 @@ export default function CashierSaleDetailPage() {
 
   const [itemDiscountDrafts, setItemDiscountDrafts] = useState([]);
 
+  const [partialCancelForm, setPartialCancelForm] = useState({
+    reason: "",
+  });
+  const [partialCancelDrafts, setPartialCancelDrafts] = useState([]);
+
+  const [contactForm, setContactForm] = useState({
+    phone: "",
+    email: "",
+  });
+
+  const [searchCustomerForm, setSearchCustomerForm] = useState({
+    phone: "",
+    email: "",
+  });
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+
+  const [createCustomerForm, setCreateCustomerForm] = useState({
+    name_alias: "",
+    phone: "",
+    email: "",
+    razon_social: "",
+    rfc: "",
+    regimen: "",
+    postal_code: "",
+  });
+
+  const [cancelOrderReason, setCancelOrderReason] = useState("");
+
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [paying, setPaying] = useState(false);
   const [discountBusy, setDiscountBusy] = useState(false);
+  const [adjustmentBusy, setAdjustmentBusy] = useState(false);
+  const [customerBusy, setCustomerBusy] = useState(false);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
 
   const localIdRef = useRef(1);
   const draftIdRef = useRef(1);
+  const cancelDraftIdRef = useRef(1);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -118,6 +170,7 @@ export default function CashierSaleDetailPage() {
     e?.response?.data?.message || e?.message || fallback;
 
   const pickCode = (e) => e?.response?.data?.code;
+  const pickData = (e) => e?.response?.data?.data || null;
 
   const createEmptyPayment = (methodId = "") => ({
     localId: `p-${localIdRef.current++}`,
@@ -136,6 +189,12 @@ export default function CashierSaleDetailPage() {
     reason: "",
   });
 
+  const createEmptyPartialCancelDraft = () => ({
+    localId: `c-${cancelDraftIdRef.current++}`,
+    orderItemId: "",
+    quantity: "",
+  });
+
   const deriveCanOperate = (loadedDetail) => {
     const loadedSale = loadedDetail?.sale || null;
     const loadedSession = loadedDetail?.cash_session || null;
@@ -149,12 +208,26 @@ export default function CashierSaleDetailPage() {
     );
   };
 
+  const deriveCanManageCustomer = (loadedDetail) => {
+    const loadedSale = loadedDetail?.sale || null;
+    const loadedSession = loadedDetail?.cash_session || null;
+
+    const status = String(loadedSale?.status || "");
+    const owned =
+      Number(loadedSale?.cash_session_id || 0) ===
+      Number(loadedSession?.id || 0);
+
+    return owned && ["taken", "paid"].includes(status);
+  };
+
   const canOperate = useMemo(() => deriveCanOperate(detailData), [detailData]);
+  const canManageCustomer = useMemo(
+    () => deriveCanManageCustomer(detailData),
+    [detailData]
+  );
 
   const canTake = useMemo(() => {
-    return (
-      String(sale?.status || "") === "pending" && !sale?.cash_session_id
-    );
+    return String(sale?.status || "") === "pending" && !sale?.cash_session_id;
   }, [sale]);
 
   const selectedTaxOption = useMemo(() => {
@@ -226,12 +299,36 @@ export default function CashierSaleDetailPage() {
     ]);
   };
 
+  const syncCustomerFormsFromSummary = (summaryData) => {
+    const contactData = summaryData?.contact_data || null;
+
+    setContactForm({
+      phone: contactData?.phone || "",
+      email: contactData?.email || "",
+    });
+
+    setSearchCustomerForm({
+      phone: contactData?.phone || "",
+      email: contactData?.email || "",
+    });
+
+    setCreateCustomerForm({
+      name_alias: "",
+      phone: contactData?.phone || "",
+      email: contactData?.email || "",
+      razon_social: "",
+      rfc: "",
+      regimen: "",
+      postal_code: "",
+    });
+  };
+
   const loadDiscountSummaryIfNeeded = async (loadedDetail) => {
     const shouldLoad = deriveCanOperate(loadedDetail);
 
     if (!shouldLoad) {
       setDiscountSummary(null);
-      return;
+      return null;
     }
 
     try {
@@ -240,8 +337,56 @@ export default function CashierSaleDetailPage() {
       );
       setDiscountSummary(res?.data || null);
       syncSaleFromDiscountSummary(res?.data || null);
+      return res?.data || null;
     } catch {
       setDiscountSummary(null);
+      return null;
+    }
+  };
+
+  const loadAdjustmentSummaryIfNeeded = async (loadedDetail) => {
+    const shouldLoad = deriveCanOperate(loadedDetail);
+
+    if (!shouldLoad) {
+      setAdjustmentSummary(null);
+      return null;
+    }
+
+    try {
+      const res = await fetchCashierSaleAdjustments(loadedDetail?.sale?.sale_id);
+      setAdjustmentSummary(res?.data || null);
+      return res?.data || null;
+    } catch {
+      setAdjustmentSummary(null);
+      return null;
+    }
+  };
+
+  const loadCustomerSummaryIfNeeded = async (loadedDetail, resetForms = false) => {
+    const shouldLoad = deriveCanManageCustomer(loadedDetail);
+
+    if (!shouldLoad) {
+      setCustomerSummary(null);
+      if (resetForms) {
+        syncCustomerFormsFromSummary(null);
+        setCustomerSearchResults([]);
+      }
+      return null;
+    }
+
+    try {
+      const res = await fetchCashierSaleCustomerData(loadedDetail?.sale?.sale_id);
+      setCustomerSummary(res?.data || null);
+
+      if (resetForms) {
+        syncCustomerFormsFromSummary(res?.data || null);
+        setCustomerSearchResults([]);
+      }
+
+      return res?.data || null;
+    } catch {
+      setCustomerSummary(null);
+      return null;
     }
   };
 
@@ -275,6 +420,10 @@ export default function CashierSaleDetailPage() {
           reason: "",
         });
         setItemDiscountDrafts([]);
+        setPartialCancelForm({ reason: "" });
+        setPartialCancelDrafts([]);
+        setCancelOrderReason("");
+        setPreview(null);
       }
 
       const nextTaxCode = buildDefaultTaxCode(
@@ -284,7 +433,11 @@ export default function CashierSaleDetailPage() {
 
       setTaxOptionCode((prev) => (preserveForm && prev ? prev : nextTaxCode));
 
-      await loadDiscountSummaryIfNeeded(loadedDetail);
+      await Promise.all([
+        loadDiscountSummaryIfNeeded(loadedDetail),
+        loadAdjustmentSummaryIfNeeded(loadedDetail),
+        loadCustomerSummaryIfNeeded(loadedDetail, !preserveForm),
+      ]);
     } catch (e) {
       const st = e?.response?.status;
       const code = pickCode(e);
@@ -438,6 +591,56 @@ export default function CashierSaleDetailPage() {
         };
       })
     );
+  };
+
+  const handlePartialFormChange = (field, value) => {
+    setPartialCancelForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleAddPartialDraft = () => {
+    setPartialCancelDrafts((prev) => [...prev, createEmptyPartialCancelDraft()]);
+  };
+
+  const handleRemovePartialDraft = (localId) => {
+    setPartialCancelDrafts((prev) =>
+      prev.filter((draft) => draft.localId !== localId)
+    );
+  };
+
+  const handlePartialDraftChange = (localId, field, value) => {
+    setPartialCancelDrafts((prev) =>
+      prev.map((draft) => {
+        if (draft.localId !== localId) return draft;
+        return {
+          ...draft,
+          [field]: value,
+        };
+      })
+    );
+  };
+
+  const handleContactFormChange = (field, value) => {
+    setContactForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSearchCustomerFormChange = (field, value) => {
+    setSearchCustomerForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleCreateCustomerFormChange = (field, value) => {
+    setCreateCustomerForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const normalizedPayload = useMemo(() => {
@@ -775,6 +978,355 @@ export default function CashierSaleDetailPage() {
     }
   };
 
+  const handleSubmitPartialCancel = async () => {
+    if (!canOperate) {
+      showAlert({
+        severity: "warning",
+        message: "La orden debe estar en caja antes de aplicar cancelaciones.",
+      });
+      return;
+    }
+
+    if (!partialCancelForm?.reason?.trim()) {
+      showAlert({
+        severity: "warning",
+        message: "Debes indicar el motivo de la cancelación parcial.",
+      });
+      return;
+    }
+
+    if (!partialCancelDrafts.length) {
+      showAlert({
+        severity: "warning",
+        message: "Debes agregar al menos un ítem a cancelar.",
+      });
+      return;
+    }
+
+    const items = partialCancelDrafts.map((draft) => ({
+      order_item_id: Number(draft.orderItemId || 0),
+      quantity: Number(draft.quantity || 0),
+    }));
+
+    const hasInvalidItem = items.some(
+      (row) => !row.order_item_id || !row.quantity
+    );
+
+    if (hasInvalidItem) {
+      showAlert({
+        severity: "warning",
+        message: "Completa el ítem y la cantidad en todos los renglones.",
+      });
+      return;
+    }
+
+    try {
+      setAdjustmentBusy(true);
+
+      const res = await cancelCashierSaleItems(sale.sale_id, {
+        reason: partialCancelForm.reason.trim(),
+        items,
+      });
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Ajuste parcial aplicado correctamente.",
+      });
+
+      setPartialCancelForm({ reason: "" });
+      setPartialCancelDrafts([]);
+      setPreview(null);
+
+      await load({ preserveForm: false });
+    } catch (e) {
+      const code = pickCode(e);
+
+      if (code === "PARTIAL_ADJUSTMENT_WOULD_ZERO_ORDER") {
+        showAlert({
+          severity: "warning",
+          message:
+            pickErr(
+              e,
+              "La cancelación parcial dejaría la orden en cero. Usa cancelación total."
+            ) || "",
+        });
+        return;
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo aplicar la cancelación parcial."),
+      });
+    } finally {
+      setAdjustmentBusy(false);
+    }
+  };
+
+  const handleSubmitCancelOrder = async () => {
+    if (!canOperate) {
+      showAlert({
+        severity: "warning",
+        message: "La orden debe estar en caja antes de cancelarla.",
+      });
+      return;
+    }
+
+    if (!cancelOrderReason.trim()) {
+      showAlert({
+        severity: "warning",
+        message: "Debes indicar el motivo de la cancelación total.",
+      });
+      return;
+    }
+
+    try {
+      setAdjustmentBusy(true);
+
+      const res = await cancelCashierSaleOrder(sale.sale_id, {
+        reason: cancelOrderReason.trim(),
+      });
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Orden cancelada correctamente.",
+      });
+
+      setTimeout(() => {
+        nav("/staff/cashier/queue", { replace: true });
+      }, 500);
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo cancelar la orden."),
+      });
+    } finally {
+      setAdjustmentBusy(false);
+    }
+  };
+
+  const handleSaveContact = async () => {
+    if (!canManageCustomer) {
+      showAlert({
+        severity: "warning",
+        message: "La venta debe estar tomada por tu caja para operar datos de cliente.",
+      });
+      return;
+    }
+
+    try {
+      setCustomerBusy(true);
+
+      const res = await saveCashierSaleContactData(sale.sale_id, {
+        phone: contactForm.phone?.trim() || null,
+        email: contactForm.email?.trim() || null,
+      });
+
+      setCustomerSummary(res?.data || null);
+      syncCustomerFormsFromSummary(res?.data || null);
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Contacto simple guardado correctamente.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo guardar el contacto simple."),
+      });
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const handleRemoveContact = async () => {
+    try {
+      setCustomerBusy(true);
+
+      const res = await removeCashierSaleContactData(sale.sale_id);
+      setCustomerSummary(res?.data || null);
+      syncCustomerFormsFromSummary(res?.data || null);
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Contacto simple eliminado correctamente.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo eliminar el contacto simple."),
+      });
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const handleSearchCustomers = async () => {
+    const phone = searchCustomerForm?.phone?.trim() || "";
+    const email = searchCustomerForm?.email?.trim() || "";
+
+    if (!phone && !email) {
+      showAlert({
+        severity: "warning",
+        message: "Debes escribir al menos teléfono o correo para buscar.",
+      });
+      return;
+    }
+
+    try {
+      setSearchingCustomers(true);
+
+      const res = await searchCashierCustomers({
+        phone: phone || undefined,
+        email: email || undefined,
+      });
+
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      setCustomerSearchResults(rows);
+
+      if (!rows.length) {
+        showAlert({
+          severity: "info",
+          message: "No se encontraron clientes con esos datos.",
+        });
+        return;
+      }
+
+      showAlert({
+        severity: "success",
+        message: "Búsqueda de clientes completada.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo buscar el cliente."),
+      });
+    } finally {
+      setSearchingCustomers(false);
+    }
+  };
+
+  const handleAttachCustomer = async (customerId) => {
+    try {
+      setCustomerBusy(true);
+
+      const res = await attachCashierSaleCustomer(sale.sale_id, {
+        customer_id: Number(customerId),
+      });
+
+      setCustomerSummary(res?.data || null);
+      syncCustomerFormsFromSummary(res?.data || null);
+      setCustomerSearchResults([]);
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Cliente asociado correctamente a la venta.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo asociar el cliente a la venta."),
+      });
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const handleDetachCustomer = async () => {
+    try {
+      setCustomerBusy(true);
+
+      const res = await detachCashierSaleCustomer(sale.sale_id);
+      setCustomerSummary(res?.data || null);
+      syncCustomerFormsFromSummary(res?.data || null);
+
+      showAlert({
+        severity: "success",
+        message: res?.message || "Cliente desvinculado correctamente.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo desvincular el cliente."),
+      });
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
+  const handleCreateAndAttachCustomer = async () => {
+    try {
+      setCustomerBusy(true);
+
+      const createPayload = {
+        name_alias: createCustomerForm?.name_alias?.trim() || null,
+        phone: createCustomerForm?.phone?.trim() || null,
+        email: createCustomerForm?.email?.trim() || null,
+        razon_social: createCustomerForm?.razon_social?.trim() || null,
+        rfc: createCustomerForm?.rfc?.trim() || null,
+        regimen: createCustomerForm?.regimen || null,
+        postal_code: createCustomerForm?.postal_code?.trim() || null,
+      };
+
+      const created = await createCashierCustomer(createPayload);
+      const createdCustomerId = Number(created?.data?.id || 0);
+
+      if (!createdCustomerId) {
+        throw new Error("No se obtuvo el id del cliente creado.");
+      }
+
+      const attached = await attachCashierSaleCustomer(sale.sale_id, {
+        customer_id: createdCustomerId,
+      });
+
+      setCustomerSummary(attached?.data || null);
+      syncCustomerFormsFromSummary(attached?.data || null);
+      setCustomerSearchResults([]);
+
+      showAlert({
+        severity: "success",
+        message: "Cliente creado y asociado correctamente a la venta.",
+      });
+    } catch (e) {
+      const code = pickCode(e);
+      const data = pickData(e);
+
+      if (code === "CUSTOMER_ALREADY_EXISTS" && Number(data?.customer_id || 0)) {
+        try {
+          const attached = await attachCashierSaleCustomer(sale.sale_id, {
+            customer_id: Number(data.customer_id),
+          });
+
+          setCustomerSummary(attached?.data || null);
+          syncCustomerFormsFromSummary(attached?.data || null);
+          setCustomerSearchResults([]);
+
+          showAlert({
+            severity: "success",
+            message:
+              "El cliente ya existía y se asoció correctamente a la venta.",
+          });
+          return;
+        } catch (attachError) {
+          showAlert({
+            severity: "error",
+            message: pickErr(
+              attachError,
+              "El cliente ya existía, pero no se pudo asociar a la venta."
+            ),
+          });
+          return;
+        }
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo crear y asociar el cliente."),
+      });
+    } finally {
+      setCustomerBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -826,6 +1378,24 @@ export default function CashierSaleDetailPage() {
               itemsSummary={itemsSummary}
             />
 
+            <CashierAdjustmentCard
+              sale={sale}
+              itemsFlat={itemsFlat}
+              summary={adjustmentSummary}
+              partialForm={partialCancelForm}
+              onPartialFormChange={handlePartialFormChange}
+              partialDrafts={partialCancelDrafts}
+              onAddPartialDraft={handleAddPartialDraft}
+              onRemovePartialDraft={handleRemovePartialDraft}
+              onPartialDraftChange={handlePartialDraftChange}
+              onSubmitPartial={handleSubmitPartialCancel}
+              cancelOrderReason={cancelOrderReason}
+              onCancelOrderReasonChange={setCancelOrderReason}
+              onSubmitCancelOrder={handleSubmitCancelOrder}
+              busy={adjustmentBusy}
+              disabled={!canOperate || previewing || paying}
+            />
+
             <CashierDiscountCard
               sale={sale}
               itemsFlat={itemsFlat}
@@ -851,6 +1421,26 @@ export default function CashierSaleDetailPage() {
               liveTip={Number(tip || 0)}
               preview={preview}
               selectedTaxOption={selectedTaxOption}
+            />
+
+            <CashierCustomerCard
+              summary={customerSummary}
+              contactForm={contactForm}
+              onContactFormChange={handleContactFormChange}
+              onSaveContact={handleSaveContact}
+              onRemoveContact={handleRemoveContact}
+              searchForm={searchCustomerForm}
+              onSearchFormChange={handleSearchCustomerFormChange}
+              onSearch={handleSearchCustomers}
+              searchResults={customerSearchResults}
+              onAttachCustomer={handleAttachCustomer}
+              createForm={createCustomerForm}
+              onCreateFormChange={handleCreateCustomerFormChange}
+              onCreateAndAttach={handleCreateAndAttachCustomer}
+              onDetachCustomer={handleDetachCustomer}
+              searching={searchingCustomers}
+              busy={customerBusy}
+              disabled={!canManageCustomer || previewing || paying}
             />
 
             <CashierTaxSelectorCard
