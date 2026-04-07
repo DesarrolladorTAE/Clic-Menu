@@ -27,6 +27,8 @@ export default function RestaurantOperationLayout() {
     currentKey = "modifiers";
   } else if (pathname.includes("/staff")) {
     currentKey = "staff";
+  } else if (pathname.includes("/warehouses")) {
+    currentKey = "warehouses";
   } else if (pathname.includes("/ingredients")) {
     currentKey = "ingredients";
   } else if (pathname.includes("/menu")) {
@@ -55,6 +57,10 @@ export default function RestaurantOperationLayout() {
         nav(`${base}/ingredients`, { state: { restaurantName } });
         break;
 
+      case "warehouses":
+        nav(`${base}/warehouses`, { state: { restaurantName } });
+        break;
+
       case "menu":
         nav(`${base}/menu`, { state: { restaurantName } });
         break;
@@ -70,7 +76,7 @@ export default function RestaurantOperationLayout() {
       case "tables":
         nav(`${base}/tables`, { state: { restaurantName } });
         break;
-      
+
       case "cash-registers":
         nav(`${base}/cash-registers`, { state: { restaurantName } });
         break;

@@ -72,6 +72,9 @@ import ChannelProductsConfigPage from "../pages/sales_channels/ChannelsProductsC
 //Inventario
 import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
+import WarehousesPage from "../pages/inventory/warehouses/WarehousesPage";
+
+
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
@@ -150,11 +153,13 @@ export default function AppRoutes() {
           <Route index element={<Navigate to="staff" replace />} />
           <Route path="staff" element={<StaffPage />} />
 
+          <Route path="ingredients" element={<IngredientsPage />} />
+          <Route path="ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
+          <Route path="warehouses" element={<WarehousesPage />} />
+
           <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
           <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
 
-          <Route path="ingredients" element={<IngredientsPage />} />
-          <Route path="ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
 
           <Route path="menu" element={<MenuManager />} />
           <Route path="menu/products" element={<ProductsPage />} />

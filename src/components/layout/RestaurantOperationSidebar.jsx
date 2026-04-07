@@ -1,7 +1,16 @@
 import React, { useMemo, useState } from "react";
 import {
-  Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip,
-  Typography, useMediaQuery,
+  Box,
+  Divider,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -13,6 +22,7 @@ import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import GroupIcon from "@mui/icons-material/Group";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
+import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
@@ -48,17 +58,27 @@ export default function RestaurantOperationSidebar({
         ],
       },
       {
+        label: "Inventario",
+        items: [
+          {
+            key: "ingredients",
+            label: "Ingredientes",
+            icon: <Inventory2Icon />,
+          },
+          {
+            key: "warehouses",
+            label: "Almacenes",
+            icon: <WarehouseOutlinedIcon />,
+          },
+        ],
+      },
+      {
         label: "Menú",
         items: [
           {
             key: "branch-sales-channels",
             label: "Canales de venta por sucursal",
             icon: <CampaignIcon />,
-          },
-          {
-            key: "ingredients",
-            label: "Ingredientes",
-            icon: <Inventory2Icon />,
           },
           {
             key: "menu",
@@ -121,7 +141,6 @@ export default function RestaurantOperationSidebar({
         color: "#fff",
       }}
     >
-      {/* Header / Logo */}
       <Box
         sx={{
           minHeight: 84,
@@ -202,7 +221,6 @@ export default function RestaurantOperationSidebar({
 
       <Divider sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
-      {/* Items */}
       <Box sx={{ flex: 1, overflowY: "auto" }}>
         {menuSections.map((section) => (
           <Box key={section.label}>
@@ -288,7 +306,6 @@ export default function RestaurantOperationSidebar({
 
       <Divider sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
-      {/* Footer */}
       <Box
         sx={{
           p: 2,
