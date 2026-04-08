@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   Box,
+  Button,
   Card,
   Chip,
   FormControlLabel,
@@ -35,6 +36,10 @@ export default function WarehousesListPanel({
   onEdit,
   onToggleStatus,
   onToggleDefault,
+  onGoIngredientStocks,
+  onGoIngredientMovements,
+  onGoProductStocks,
+  onGoProductMovements,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -115,7 +120,7 @@ export default function WarehousesListPanel({
                     border: "1px solid",
                     borderColor: "divider",
                     backgroundColor: "#fff",
-                    minHeight: 280,
+                    minHeight: 420,
                     display: "flex",
                   }}
                 >
@@ -217,6 +222,42 @@ export default function WarehousesListPanel({
                         </Box>
                       </Stack>
 
+                      <Stack spacing={1}>
+                        <Button
+                          onClick={() => onGoIngredientStocks(row)}
+                          variant="contained"
+                          sx={actionButtonSx}
+                        >
+                          Stock ingredientes
+                        </Button>
+
+                        <Button
+                          onClick={() => onGoIngredientMovements(row)}
+                          variant="outlined"
+                          sx={actionButtonSx}
+                        >
+                          Mov. ingredientes
+                        </Button>
+
+                        <Button
+                          onClick={() => onGoProductStocks(row)}
+                          variant="contained"
+                          color="secondary"
+                          sx={actionButtonSx}
+                        >
+                          Stock productos
+                        </Button>
+
+                        <Button
+                          onClick={() => onGoProductMovements(row)}
+                          variant="outlined"
+                          color="secondary"
+                          sx={actionButtonSx}
+                        >
+                          Mov. productos
+                        </Button>
+                      </Stack>
+
                       <Box sx={{ flexGrow: 1 }} />
 
                       <Stack
@@ -262,11 +303,12 @@ export default function WarehousesListPanel({
                       },
                     }}
                   >
-                    <TableCell sx={{ width: "28%" }}>Nombre</TableCell>
-                    <TableCell sx={{ width: "12%" }}>Clave</TableCell>
-                    <TableCell sx={{ width: "18%" }}>Activo</TableCell>
-                    <TableCell sx={{ width: "18%" }}>Default</TableCell>
-                    <TableCell sx={{ width: "16%" }}>Notas</TableCell>
+                    <TableCell sx={{ width: "20%" }}>Nombre</TableCell>
+                    <TableCell sx={{ width: "10%" }}>Clave</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Activo</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Default</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Notas</TableCell>
+                    <TableCell sx={{ width: "20%" }}>Inventario</TableCell>
                     <TableCell align="right" sx={{ width: "8%" }}>
                       Acciones
                     </TableCell>
@@ -372,6 +414,52 @@ export default function WarehousesListPanel({
                         }}
                       >
                         {row.notes?.trim() || "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Button
+                              onClick={() => onGoIngredientStocks(row)}
+                              variant="contained"
+                              size="small"
+                              sx={tableActionButtonSx}
+                            >
+                              Stock ingredientes
+                            </Button>
+
+                            <Button
+                              onClick={() => onGoIngredientMovements(row)}
+                              variant="outlined"
+                              size="small"
+                              sx={tableActionButtonSx}
+                            >
+                              Mov. ingredientes
+                            </Button>
+                          </Stack>
+
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Button
+                              onClick={() => onGoProductStocks(row)}
+                              variant="contained"
+                              color="secondary"
+                              size="small"
+                              sx={tableActionButtonSx}
+                            >
+                              Stock productos
+                            </Button>
+
+                            <Button
+                              onClick={() => onGoProductMovements(row)}
+                              variant="outlined"
+                              color="secondary"
+                              size="small"
+                              sx={tableActionButtonSx}
+                            >
+                              Mov. productos
+                            </Button>
+                          </Stack>
+                        </Stack>
                       </TableCell>
 
                       <TableCell align="right">
@@ -514,4 +602,21 @@ const inactiveChipSx = {
   fontWeight: 800,
   bgcolor: "rgba(242, 100, 42, 0.12)",
   color: "error.main",
+};
+
+const actionButtonSx = {
+  width: "100%",
+  height: 40,
+  borderRadius: 2,
+  fontSize: 12,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};
+
+const tableActionButtonSx = {
+  height: 34,
+  borderRadius: 2,
+  fontSize: 11,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
 };

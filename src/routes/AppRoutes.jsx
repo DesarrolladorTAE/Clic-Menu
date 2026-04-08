@@ -74,6 +74,10 @@ import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
 import WarehousesPage from "../pages/inventory/warehouses/WarehousesPage";
 
+import IngredientInventoryStockPage from "../pages/inventory/ingredients/inventoryStock/IngredientInventoryStockPage";
+import ProductInventoryStockPage from "../pages/inventory/products/inventoryStock/ProductInventoryStockPage";
+import IngredientInventoryMovementPage from "../pages/inventory/ingredients/inventoryMovement/IngredientInventoryMovementPage";
+import ProductInventoryMovementPage from "../pages/inventory/products/inventoryMovement/ProductInventoryMovementPage";
 
 
 //Piso
@@ -156,6 +160,14 @@ export default function AppRoutes() {
           <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
           <Route path="warehouses" element={<WarehousesPage />} />
+
+          <Route path="warehouses/:warehouseId/ingredient-stocks" element={<IngredientInventoryStockPage />} />
+          <Route path="warehouses/:warehouseId/product-stocks" element={<ProductInventoryStockPage />}/>
+          <Route path="warehouses/:warehouseId/ingredient-movements" element={<IngredientInventoryMovementPage />}/>
+          <Route path="warehouses/:warehouseId/product-movements" element={<ProductInventoryMovementPage />}/>
+
+
+
 
           <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
           <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />

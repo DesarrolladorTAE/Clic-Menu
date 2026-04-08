@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import PageContainer from "../../../components/common/PageContainer";
 import AppAlert from "../../../components/common/AppAlert";
@@ -21,6 +21,7 @@ import {
 } from "../../../services/inventory/warehouses/warehouses.service";
 
 export default function WarehousesPage() {
+  const navigate = useNavigate();
   const { restaurantId } = useParams();
 
   const [loading, setLoading] = useState(true);
@@ -367,6 +368,30 @@ export default function WarehousesPage() {
     }
   };
 
+  const handleGoIngredientStocks = (row) => {
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/ingredient-stocks`
+    );
+  };
+
+  const handleGoIngredientMovements = (row) => {
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/ingredient-movements`
+    );
+  };
+
+  const handleGoProductStocks = (row) => {
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/product-stocks`
+    );
+  };
+
+  const handleGoProductMovements = (row) => {
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/product-movements`
+    );
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -415,6 +440,10 @@ export default function WarehousesPage() {
           onEdit={openEdit}
           onToggleStatus={handleToggleStatus}
           onToggleDefault={handleToggleDefault}
+          onGoIngredientStocks={handleGoIngredientStocks}
+          onGoIngredientMovements={handleGoIngredientMovements}
+          onGoProductStocks={handleGoProductStocks}
+          onGoProductMovements={handleGoProductMovements}
         />
       </Stack>
 
