@@ -203,6 +203,142 @@ function buildKitchenItemsView(items = []) {
   return combined;
 }
 
+function buildConsumptionUi(result) {
+  const inventory = result?.data?.inventory_consumption || null;
+  const baseMessage = String(result?.message || "Ítem enviado a preparación.").trim();
+
+  if (!inventory) {
+    return {
+      toast: baseMessage,
+      badge: null,
+    };
+  }
+
+  const warehouseText = inventory?.warehouse_id
+    ? `almacén #${inventory.warehouse_id}`
+    : "almacén efectivo";
+
+  const already = !!inventory?.already;
+  const type = String(inventory?.consumption_type || "").trim();
+
+  if (already) {
+    return {
+      toast: `${baseMessage} El consumo de inventario ya existía previamente.`,
+      badge: {
+        kind: "already",
+        text: "Consumo ya existía",
+      },
+    };
+  }
+
+  if (type === "ingredients") {
+    const ingredientMovements = Array.isArray(inventory?.ingredient_movements)
+      ? inventory.ingredient_movements
+      : [];
+
+    const ingredientCount = ingredientMovements.length;
+
+    return {
+      toast:
+        ingredientCount > 0
+          ? `${baseMessage} Se descontaron ${ingredientCount} ingrediente(s) del ${warehouseText}.`
+          : `${baseMessage} Se aplicó consumo por ingredientes en el ${warehouseText}.`,
+      badge: {
+        kind: "applied",
+        text: "Consumo aplicado",
+      },
+    };
+  }
+
+  if (type === "product") {
+    const productMovement = inventory?.product_movement || null;
+    const qty = Math.abs(Number(productMovement?.quantity || 0));
+
+    return {
+      toast:
+        qty > 0
+          ? `${baseMessage} Se descontó ${qty} unidad(es) del producto en el ${warehouseText}.`
+          : `${baseMessage} Se aplicó consumo de producto directo en el ${warehouseText}.`,
+      badge: {
+        kind: "applied",
+        text: "Consumo aplicado",
+      },
+    };
+  }
+
+  if (type === "none") {
+    return {
+      toast: `${baseMessage} Este producto no consume inventario.`,
+      badge: {
+        kind: "neutral",
+        text: "Sin consumo",
+      },
+    };
+  }
+
+  if (type === "composite_parent_skipped") {
+    return {
+      toast: `${baseMessage} El padre compuesto no consume inventario directamente.`,
+      badge: {
+        kind: "neutral",
+        text: "Consumo omitido",
+      },
+    };
+  }
+
+  return {
+    toast: baseMessage,
+    badge: null,
+  };
+}
+
+function buildKitchenInventoryError(e) {
+  const responseData = e?.response?.data || {};
+  const code = String(responseData?.code || responseData?.inventory?.code || "").trim();
+  const fallbackMessage = String(
+    responseData?.message || "No se pudo iniciar el ítem."
+  ).trim();
+
+  const map = {
+    EFFECTIVE_WAREHOUSE_NOT_FOUND:
+      "No se pudo iniciar porque no hay un almacén efectivo activo para este pedido.",
+    RECIPE_INGREDIENT_NOT_FOUND:
+      "No se pudo iniciar porque falta un ingrediente de la receta.",
+    RECIPE_INGREDIENT_NOT_STOCK_ITEM:
+      "No se pudo iniciar porque uno de los ingredientes no es inventariable.",
+    RECIPE_INGREDIENT_INACTIVE:
+      "No se pudo iniciar porque uno de los ingredientes está inactivo.",
+    PRODUCT_NOT_FOUND_FOR_ORDER_ITEM:
+      "No se pudo iniciar porque no se encontró el producto del ítem.",
+    PRODUCT_INACTIVE_FOR_ORDER_ITEM:
+      "No se pudo iniciar porque el producto está inactivo.",
+    PRODUCT_TYPE_NOT_SUPPORTED_FOR_DIRECT_CONSUMPTION:
+      "No se pudo iniciar porque ese tipo de producto no soporta consumo directo desde cocina.",
+    MISSING_RECIPE_FOR_ORDER_ITEM:
+      "No se pudo iniciar porque el producto no tiene receta activa para consumir inventario.",
+    INGREDIENT_NOT_STOCK_ITEM:
+      "No se pudo iniciar porque el ingrediente no es inventariable.",
+    INGREDIENT_INACTIVE:
+      "No se pudo iniciar porque el ingrediente está inactivo.",
+    PRODUCT_NOT_DIRECT_STOCK:
+      "No se pudo descontar producto directo porque el producto no usa stock directo.",
+    PRODUCT_INACTIVE:
+      "No se pudo descontar producto directo porque el producto está inactivo.",
+    INSUFFICIENT_STOCK:
+      "No se pudo iniciar porque no hay existencia suficiente.",
+    STOCK_NOT_FOUND:
+      "No se pudo iniciar porque no existe registro de stock para este ítem.",
+    INVALID_TRANSITION:
+      fallbackMessage,
+    ALREADY_READY:
+      fallbackMessage,
+    ALREADY_PICKED_UP:
+      fallbackMessage,
+  };
+
+  return map[code] || fallbackMessage;
+}
+
 export default function KitchenDashboard() {
   const nav = useNavigate();
   const { clearStaff, exitSmart } = useStaffAuth();
@@ -217,6 +353,7 @@ export default function KitchenDashboard() {
   const [orders, setOrders] = useState([]);
   const [notifyingOrderId, setNotifyingOrderId] = useState(null);
   const [busyItemIds, setBusyItemIds] = useState({});
+  const [itemConsumptionState, setItemConsumptionState] = useState({});
 
   const pollRef = useRef(null);
   const abortRef = useRef(false);
@@ -228,6 +365,22 @@ export default function KitchenDashboard() {
       const next = { ...prev };
       if (!value) delete next[itemId];
       else next[itemId] = value;
+      return next;
+    });
+  };
+
+  const setConsumptionBadge = (itemId, badge) => {
+    if (!itemId) return;
+
+    setItemConsumptionState((prev) => {
+      const next = { ...prev };
+
+      if (!badge) {
+        delete next[itemId];
+        return next;
+      }
+
+      next[itemId] = badge;
       return next;
     });
   };
@@ -470,11 +623,15 @@ export default function KitchenDashboard() {
     });
 
     try {
-      await startKitchenItem(id);
-      setOkMsg("Ítem enviado a preparación.");
+      const res = await startKitchenItem(id);
+      const consumptionUi = buildConsumptionUi(res);
+
+      setOkMsg(consumptionUi.toast || "Ítem enviado a preparación.");
+      setConsumptionBadge(id, consumptionUi.badge || null);
     } catch (e) {
       await loadOrders({ silent: true });
-      setErr(e?.response?.data?.message || "No se pudo iniciar el ítem.");
+      setErr(buildKitchenInventoryError(e));
+      setConsumptionBadge(id, null);
     } finally {
       setItemBusy(id, null);
     }
@@ -612,6 +769,7 @@ export default function KitchenDashboard() {
                   busy={refreshing}
                   notifying={notifyingOrderId === o.id}
                   busyItemIds={busyItemIds}
+                  itemConsumptionState={itemConsumptionState}
                 />
               ))}
             </div>
@@ -622,7 +780,16 @@ export default function KitchenDashboard() {
   );
 }
 
-function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, busyItemIds }) {
+function OrderCard({
+  order,
+  onStart,
+  onReady,
+  onNotifyReady,
+  busy,
+  notifying,
+  busyItemIds,
+  itemConsumptionState,
+}) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const createdAt = formatWhen(order?.created_at);
 
@@ -676,6 +843,7 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
                   onReady={onReady}
                   busy={busy}
                   itemBusyState={busyItemIds?.[entry?.item?.id] || null}
+                  consumptionState={itemConsumptionState?.[entry?.item?.id] || null}
                 />
               );
             }
@@ -688,6 +856,7 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
                 onReady={onReady}
                 busy={busy}
                 busyItemIds={busyItemIds}
+                itemConsumptionState={itemConsumptionState}
               />
             );
           })
@@ -745,7 +914,14 @@ function OrderCard({ order, onStart, onReady, onNotifyReady, busy, notifying, bu
   );
 }
 
-function CompositeGroupCard({ group, onStart, onReady, busy, busyItemIds }) {
+function CompositeGroupCard({
+  group,
+  onStart,
+  onReady,
+  busy,
+  busyItemIds,
+  itemConsumptionState,
+}) {
   const items = Array.isArray(group?.items) ? group.items : [];
   if (!items.length) return null;
 
@@ -767,6 +943,7 @@ function CompositeGroupCard({ group, onStart, onReady, busy, busyItemIds }) {
               onReady={onReady}
               busy={busy}
               itemBusyState={busyItemIds?.[item.id] || null}
+              consumptionState={itemConsumptionState?.[item.id] || null}
               compact
             />
           </div>
@@ -776,7 +953,15 @@ function CompositeGroupCard({ group, onStart, onReady, busy, busyItemIds }) {
   );
 }
 
-function ItemRow({ item, onStart, onReady, busy, itemBusyState, compact = false }) {
+function ItemRow({
+  item,
+  onStart,
+  onReady,
+  busy,
+  itemBusyState,
+  consumptionState,
+  compact = false,
+}) {
   const st = String(item?.kitchen_status || "");
   const canStart = st === "queued";
   const canReady = st === "in_progress";
@@ -828,6 +1013,22 @@ function ItemRow({ item, onStart, onReady, busy, itemBusyState, compact = false 
                 </span>
               ) : null}
             </div>
+
+            {consumptionState?.text ? (
+              <div style={consumptionRow}>
+                <span
+                  style={
+                    consumptionState?.kind === "already"
+                      ? consumptionBadgeAlready
+                      : consumptionState?.kind === "neutral"
+                      ? consumptionBadgeNeutral
+                      : consumptionBadgeApplied
+                  }
+                >
+                  {consumptionState.text}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1163,6 +1364,50 @@ const ticketItemMeta = {
 
 const metaDot = {
   opacity: 0.8,
+};
+
+const consumptionRow = {
+  marginTop: 8,
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const consumptionBadgeApplied = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid #bbf7d0",
+  background: "#ecfdf5",
+  color: "#166534",
+  fontWeight: 950,
+  fontSize: 11,
+};
+
+const consumptionBadgeAlready = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontWeight: 950,
+  fontSize: 11,
+};
+
+const consumptionBadgeNeutral = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid #e5e7eb",
+  background: "#f9fafb",
+  color: "#374151",
+  fontWeight: 950,
+  fontSize: 11,
 };
 
 const ticketModifiersBlock = {

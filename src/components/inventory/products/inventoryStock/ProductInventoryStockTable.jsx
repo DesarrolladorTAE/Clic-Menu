@@ -1,11 +1,39 @@
 import {
-  Box, Button, Card, Chip,FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody,
-  TableCell, TableContainer,  TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+  Box,
+  Button,
+  Card,
+  Chip,
+  FormControlLabel,
+  IconButton,
+  Paper,
+  Stack,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PaginationFooter from "../../../common/PaginationFooter";
 import InventoryStockEmptyState from "../../shared/stock/InventoryStockEmptyState";
+
+function money(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+
+  return n.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+}
 
 export default function ProductInventoryStockTable({
   rows,
@@ -78,7 +106,7 @@ export default function ProductInventoryStockTable({
                       border: "1px solid",
                       borderColor: "divider",
                       backgroundColor: "#fff",
-                      minHeight: 280,
+                      minHeight: 360,
                       display: "flex",
                     }}
                   >
@@ -140,8 +168,22 @@ export default function ProductInventoryStockTable({
                           />
                         </Stack>
 
-                        <InfoBlock label="Existencia actual" value={String(row.on_hand)} />
-                        <InfoBlock label="Categoría" value={product.category_name || "—"} />
+                        <InfoBlock
+                          label="Existencia actual"
+                          value={String(row.on_hand)}
+                        />
+                        <InfoBlock
+                          label="Categoría"
+                          value={product.category_name || "—"}
+                        />
+                        <InfoBlock
+                          label="Último costo"
+                          value={money(product.last_cost)}
+                        />
+                        <InfoBlock
+                          label="Costo promedio"
+                          value={money(product.avg_cost)}
+                        />
 
                         <Box
                           sx={{
@@ -200,12 +242,14 @@ export default function ProductInventoryStockTable({
                       },
                     }}
                   >
-                    <TableCell sx={{ width: "28%" }}>Producto</TableCell>
-                    <TableCell sx={{ width: "18%" }}>Categoría</TableCell>
-                    <TableCell sx={{ width: "12%" }}>Stock</TableCell>
-                    <TableCell sx={{ width: "14%" }}>Ámbito</TableCell>
-                    <TableCell sx={{ width: "16%" }}>Activo</TableCell>
-                    <TableCell align="right" sx={{ width: "12%" }}>
+                    <TableCell sx={{ width: "22%" }}>Producto</TableCell>
+                    <TableCell sx={{ width: "16%" }}>Categoría</TableCell>
+                    <TableCell sx={{ width: "10%" }}>Stock</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Último costo</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Promedio</TableCell>
+                    <TableCell sx={{ width: "10%" }}>Ámbito</TableCell>
+                    <TableCell sx={{ width: "14%" }}>Activo</TableCell>
+                    <TableCell align="right" sx={{ width: "10%" }}>
                       Acciones
                     </TableCell>
                   </TableRow>
@@ -231,13 +275,23 @@ export default function ProductInventoryStockTable({
                           },
                         }}
                       >
-                        <TableCell sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>
+                        <TableCell
+                          sx={{
+                            whiteSpace: "normal",
+                            wordBreak: "break-word",
+                          }}
+                        >
                           <Typography sx={{ fontWeight: 800 }}>
                             {product.name || "Producto"}
                           </Typography>
                         </TableCell>
 
-                        <TableCell sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>
+                        <TableCell
+                          sx={{
+                            whiteSpace: "normal",
+                            wordBreak: "break-word",
+                          }}
+                        >
                           {product.category_name || "—"}
                         </TableCell>
 
@@ -246,6 +300,10 @@ export default function ProductInventoryStockTable({
                             {row.on_hand}
                           </Typography>
                         </TableCell>
+
+                        <TableCell>{money(product.last_cost)}</TableCell>
+
+                        <TableCell>{money(product.avg_cost)}</TableCell>
 
                         <TableCell>
                           {product.is_global ? "Global" : "Sucursal"}
