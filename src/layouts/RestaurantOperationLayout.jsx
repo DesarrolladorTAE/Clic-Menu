@@ -15,14 +15,14 @@ export default function RestaurantOperationLayout() {
 
   const isBranchSalesChannelsSection =
     pathname.includes("/branch-sales-channels") ||
-    (
-      pathname.includes("/operation/branches/") &&
+    (pathname.includes("/operation/branches/") &&
       pathname.includes("/sales-channels/") &&
-      pathname.includes("/products")
-    );
+      pathname.includes("/products"));
 
   if (isBranchSalesChannelsSection) {
     currentKey = "branch-sales-channels";
+  } else if (pathname.includes("/purchases")) {
+    currentKey = "purchases";
   } else if (pathname.includes("/modifiers")) {
     currentKey = "modifiers";
   } else if (pathname.includes("/staff")) {
@@ -59,6 +59,10 @@ export default function RestaurantOperationLayout() {
 
       case "warehouses":
         nav(`${base}/warehouses`, { state: { restaurantName } });
+        break;
+
+      case "purchases":
+        nav(`${base}/purchases`, { state: { restaurantName } });
         break;
 
       case "menu":

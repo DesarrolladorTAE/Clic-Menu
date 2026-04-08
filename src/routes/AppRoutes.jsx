@@ -80,6 +80,9 @@ import IngredientInventoryMovementPage from "../pages/inventory/ingredients/inve
 import ProductInventoryMovementPage from "../pages/inventory/products/inventoryMovement/ProductInventoryMovementPage";
 
 
+import PurchasesPage from "../pages/inventory/purchases/PurchasesPage";
+import PurchaseDetailPage from "../pages/inventory/purchases/PurchaseDetailPage";
+
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 
@@ -166,6 +169,8 @@ export default function AppRoutes() {
           <Route path="warehouses/:warehouseId/ingredient-movements" element={<IngredientInventoryMovementPage />}/>
           <Route path="warehouses/:warehouseId/product-movements" element={<ProductInventoryMovementPage />}/>
 
+          <Route path="purchases" element={<PurchasesPage />} />
+          <Route path="purchases/:purchaseId" element={<PurchaseDetailPage />} />
 
 
 

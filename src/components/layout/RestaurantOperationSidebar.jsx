@@ -1,16 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  Box,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -23,6 +13,7 @@ import GroupIcon from "@mui/icons-material/Group";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
+import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
@@ -69,6 +60,11 @@ export default function RestaurantOperationSidebar({
             key: "warehouses",
             label: "Almacenes",
             icon: <WarehouseOutlinedIcon />,
+          },
+          {
+            key: "purchases",
+            label: "Compras",
+            icon: <ShoppingCartOutlinedIcon />,
           },
         ],
       },
