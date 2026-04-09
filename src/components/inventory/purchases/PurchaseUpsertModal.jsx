@@ -28,6 +28,8 @@ export default function PurchaseUpsertModal({
   editing,
   branches = [],
   suppliers = [],
+  warehouses = [],
+  inventoryMode = "branch",
   onSave,
 }) {
   const theme = useTheme();
@@ -37,6 +39,7 @@ export default function PurchaseUpsertModal({
 
   const [saving, setSaving] = useState(false);
   const [branchId, setBranchId] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -52,6 +55,26 @@ export default function PurchaseUpsertModal({
     () => (isEdit ? "Editar compra" : "Nueva compra"),
     [isEdit]
   );
+
+  const filteredWarehouses = useMemo(() => {
+    const activeWarehouses = Array.isArray(warehouses)
+      ? warehouses.filter((item) => item?.status === "active")
+      : [];
+
+    if (inventoryMode === "global") {
+      return activeWarehouses.filter(
+        (item) => item?.scope === "global" && item?.branch_id == null
+      );
+    }
+
+    if (!branchId) return [];
+
+    return activeWarehouses.filter(
+      (item) =>
+        item?.scope === "branch" &&
+        String(item?.branch_id || "") === String(branchId)
+    );
+  }, [warehouses, inventoryMode, branchId]);
 
   const showAlert = ({
     severity = "error",
@@ -76,18 +99,38 @@ export default function PurchaseUpsertModal({
 
     if (isEdit) {
       setBranchId(editing?.branch_id ? String(editing.branch_id) : "");
+      setWarehouseId(editing?.warehouse_id ? String(editing.warehouse_id) : "");
       setSupplierId(editing?.supplier_id ? String(editing.supplier_id) : "");
       setPurchaseDate(editing?.purchase_date || "");
       setNotes(editing?.notes || "");
     } else {
       setBranchId("");
+      setWarehouseId("");
       setSupplierId("");
       setPurchaseDate(new Date().toISOString().slice(0, 10));
       setNotes("");
     }
   }, [open, isEdit, editing]);
 
-  const canSave = !!branchId && !!purchaseDate;
+  useEffect(() => {
+    if (!open) return;
+
+    if (!warehouseId) return;
+
+    const existsInFiltered = filteredWarehouses.some(
+      (item) => String(item.id) === String(warehouseId)
+    );
+
+    if (!existsInFiltered) {
+      setWarehouseId("");
+    }
+  }, [filteredWarehouses, warehouseId, open]);
+
+  const canSave = !!branchId && !!warehouseId && !!purchaseDate;
+
+  const handleBranchChange = (value) => {
+    setBranchId(value);
+  };
 
   const handleSave = async () => {
     if (!branchId) {
@@ -95,6 +138,15 @@ export default function PurchaseUpsertModal({
         severity: "warning",
         title: "Nota",
         message: "Selecciona una sucursal.",
+      });
+      return;
+    }
+
+    if (!warehouseId) {
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "Selecciona un almacén destino.",
       });
       return;
     }
@@ -113,6 +165,7 @@ export default function PurchaseUpsertModal({
     try {
       await onSave({
         branch_id: Number(branchId),
+        warehouse_id: Number(warehouseId),
         supplier_id: supplierId ? Number(supplierId) : null,
         purchase_date: purchaseDate,
         notes: notes.trim() || null,
@@ -235,7 +288,7 @@ export default function PurchaseUpsertModal({
                       <FormControl fullWidth>
                         <Select
                           value={branchId}
-                          onChange={(e) => setBranchId(e.target.value)}
+                          onChange={(e) => handleBranchChange(e.target.value)}
                           displayEmpty
                           IconComponent={KeyboardArrowDownIcon}
                         >
@@ -249,6 +302,46 @@ export default function PurchaseUpsertModal({
                       </FormControl>
                     </FieldBlock>
 
+                    <FieldBlock label="Almacén *">
+                      <FormControl fullWidth>
+                        <Select
+                          value={warehouseId}
+                          onChange={(e) => setWarehouseId(e.target.value)}
+                          displayEmpty
+                          IconComponent={KeyboardArrowDownIcon}
+                        >
+                          <MenuItem value="">
+                            {branchId
+                              ? "Selecciona un almacén"
+                              : "Primero selecciona una sucursal"}
+                          </MenuItem>
+
+                          {filteredWarehouses.map((warehouse) => (
+                            <MenuItem
+                              key={warehouse.id}
+                              value={String(warehouse.id)}
+                            >
+                              {warehouse.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          fontSize: 12,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {inventoryMode === "global"
+                          ? "Se muestran almacenes globales activos del restaurante."
+                          : "Se muestran almacenes activos de la sucursal seleccionada."}
+                      </Typography>
+                    </FieldBlock>
+                  </Stack>
+
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock label="Proveedor">
                       <FormControl fullWidth>
                         <Select
@@ -269,16 +362,16 @@ export default function PurchaseUpsertModal({
                         </Select>
                       </FormControl>
                     </FieldBlock>
-                  </Stack>
 
-                  <FieldBlock label="Fecha de compra *">
-                    <TextField
-                      type="date"
-                      value={purchaseDate}
-                      onChange={(e) => setPurchaseDate(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </FieldBlock>
+                    <FieldBlock label="Fecha de compra *">
+                      <TextField
+                        type="date"
+                        value={purchaseDate}
+                        onChange={(e) => setPurchaseDate(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                      />
+                    </FieldBlock>
+                  </Stack>
 
                   <FieldBlock label="Notas">
                     <TextField

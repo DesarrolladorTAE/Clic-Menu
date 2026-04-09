@@ -35,8 +35,23 @@ export async function getPurchase(restaurantId, purchaseId) {
   return data;
 }
 
+export async function getPurchaseWarehouses(restaurantId) {
+  const { data } = await api.get(`/restaurants/${restaurantId}/warehouses`, {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return {
+    inventory_mode: data?.inventory_mode || "branch",
+    data: Array.isArray(data?.data) ? data.data : [],
+  };
+}
+
 export async function createPurchase(restaurantId, payload) {
-  const { data } = await api.post(`/restaurants/${restaurantId}/purchases`, payload);
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/purchases`,
+    payload
+  );
   return data;
 }
 

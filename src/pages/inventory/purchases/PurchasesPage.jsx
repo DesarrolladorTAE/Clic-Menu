@@ -17,6 +17,7 @@ import {
   createPurchase,
   updatePurchase,
   deletePurchase,
+  getPurchaseWarehouses,
 } from "../../../services/inventory/purchases/purchases.service";
 import { getBranchesByRestaurant } from "../../../services/restaurant/branch.service";
 import { getSuppliers } from "../../../services/inventory/suppliers/suppliers.service";
@@ -31,6 +32,8 @@ export default function PurchasesPage() {
   const [rows, setRows] = useState([]);
   const [branches, setBranches] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [inventoryMode, setInventoryMode] = useState("branch");
 
   const [status, setStatus] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -68,19 +71,23 @@ export default function PurchasesPage() {
     setLoading(true);
 
     try {
-      const [purchasesRes, branchesRes, suppliersRes] = await Promise.all([
-        getPurchases(restaurantId, {
-          status,
-          branch_id: branchId,
-          supplier_id: supplierId,
-        }),
-        getBranchesByRestaurant(restaurantId),
-        getSuppliers(restaurantId),
-      ]);
+      const [purchasesRes, branchesRes, suppliersRes, warehousesRes] =
+        await Promise.all([
+          getPurchases(restaurantId, {
+            status,
+            branch_id: branchId,
+            supplier_id: supplierId,
+          }),
+          getBranchesByRestaurant(restaurantId),
+          getSuppliers(restaurantId),
+          getPurchaseWarehouses(restaurantId),
+        ]);
 
       setRows(Array.isArray(purchasesRes?.data) ? purchasesRes.data : []);
       setBranches(Array.isArray(branchesRes) ? branchesRes : []);
       setSuppliers(Array.isArray(suppliersRes?.data) ? suppliersRes.data : []);
+      setWarehouses(Array.isArray(warehousesRes?.data) ? warehousesRes.data : []);
+      setInventoryMode(warehousesRes?.inventory_mode || "branch");
     } catch (e) {
       showAlert({
         severity: "error",
@@ -258,6 +265,8 @@ export default function PurchasesPage() {
         editing={editingPurchase}
         branches={branches}
         suppliers={suppliers}
+        warehouses={warehouses}
+        inventoryMode={inventoryMode}
         onSave={handleSavePurchase}
       />
 
