@@ -5,7 +5,10 @@ import {
   getPublicOrder,
 } from "../../services/public/publicMenu.service";
 import {
+  buildAvailabilityErrorMessage,
   buildCartKey,
+  extractApiErrorInfo,
+  isAvailabilityErrorCode,
   normalizeCompositeComponentsForKey,
   normalizeModifierGroupsForKey,
   safeNum,
@@ -106,9 +109,7 @@ export function useCartAndOrder({
       lastOrderIdRef.current = oid;
     }
 
-    if (!o) {
-      return;
-    }
+    if (!o) return;
 
     if (isActiveOrderStatus(status)) {
       setPendingOrder(null);
@@ -122,9 +123,12 @@ export function useCartAndOrder({
         status: status || "pending",
       });
 
-      if (status === "pending") {
-        setActiveOrder(null);
-      } else if (status === "rejected" || status === "expired" || status === "cancelled") {
+      if (
+        status === "pending" ||
+        status === "rejected" ||
+        status === "expired" ||
+        status === "cancelled"
+      ) {
         setActiveOrder(null);
       }
 
@@ -369,31 +373,51 @@ export function useCartAndOrder({
     async (name) => {
       const items = normalizeItemsForApi(cart);
 
-      const res = await createPublicOrder({
-        token: String(token || ""),
-        customer_name: name,
-        items,
-      });
+      try {
+        const res = await createPublicOrder({
+          token: String(token || ""),
+          customer_name: name,
+          items,
+        });
 
-      if (res?.ok) {
-        const orderId = res?.data?.order_id || res?.data?.id || res?.order_id || null;
+        if (res?.ok) {
+          const orderId = res?.data?.order_id || res?.data?.id || res?.order_id || null;
 
-        if (orderId) {
-          setPendingOrder({ id: Number(orderId), status: "pending" });
-          lastOrderIdRef.current = Number(orderId);
-        } else {
-          setPendingOrder({ id: null, status: "pending" });
+          if (orderId) {
+            setPendingOrder({ id: Number(orderId), status: "pending" });
+            lastOrderIdRef.current = Number(orderId);
+          } else {
+            setPendingOrder({ id: null, status: "pending" });
+          }
+
+          setCart([]);
+          setCustomerName("");
+          setSendOpen(false);
+          setSendToast("✅ Comanda enviada. En espera de aprobación.");
+          return { ok: true, orderId };
         }
 
-        setCart([]);
-        setCustomerName("");
-        setSendOpen(false);
-        setSendToast("✅ Comanda enviada. En espera de aprobación.");
-        return { ok: true, orderId };
-      }
+        setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
+        return { ok: false };
+      } catch (e) {
+        const apiError = extractApiErrorInfo(e);
 
-      setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
-      return { ok: false };
+        if (isAvailabilityErrorCode(apiError.code)) {
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        const msg =
+          apiError?.message ||
+          "No se pudo crear la comanda.";
+
+        setSendToast(`⚠️ ${msg}`);
+        return { ok: false };
+      }
     },
     [cart, token],
   );
@@ -402,21 +426,41 @@ export function useCartAndOrder({
     async (orderId) => {
       const items = normalizeItemsForApi(cart);
 
-      const res = await appendPublicOrderItems({
-        orderId: Number(orderId),
-        token: String(token || ""),
-        items,
-      });
+      try {
+        const res = await appendPublicOrderItems({
+          orderId: Number(orderId),
+          token: String(token || ""),
+          items,
+        });
 
-      if (res?.ok) {
-        setCart([]);
-        setSendToast("✅ Productos agregados a la orden.");
-        await refreshOrder(orderId);
-        return { ok: true };
+        if (res?.ok) {
+          setCart([]);
+          setSendToast("✅ Productos agregados a la orden.");
+          await refreshOrder(orderId);
+          return { ok: true };
+        }
+
+        setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
+        return { ok: false };
+      } catch (e) {
+        const apiError = extractApiErrorInfo(e);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        const msg =
+          apiError?.message ||
+          "No se pudieron agregar productos.";
+
+        setSendToast(`⚠️ ${msg}`);
+        return { ok: false };
       }
-
-      setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
-      return { ok: false };
     },
     [cart, token, refreshOrder],
   );
@@ -447,14 +491,6 @@ export function useCartAndOrder({
       setSendToast("");
       try {
         await appendToOpenOrder(activeOrder.id);
-        setTimeout(() => setSendToast(""), 4500);
-      } catch (e) {
-        const msg =
-          e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.message ||
-          "No se pudo agregar productos.";
-        setSendToast(`⚠️ ${msg}`);
         setTimeout(() => setSendToast(""), 6500);
       } finally {
         setSending(false);
@@ -486,14 +522,6 @@ export function useCartAndOrder({
 
     try {
       await createFirstOrder(name);
-      setTimeout(() => setSendToast(""), 4500);
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
-        "No se pudo crear la comanda.";
-      setSendToast(`⚠️ ${msg}`);
       setTimeout(() => setSendToast(""), 6500);
     } finally {
       setSending(false);

@@ -1067,7 +1067,9 @@ export default function PublicMenuEntryPage() {
         }
       >
         <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 13, opacity: 0.85 }}>Escribe tu nombre para identificar la comanda.</div>
+          <div style={{ fontSize: 13, opacity: 0.85 }}>
+            Escribe tu nombre para identificar la comanda.
+          </div>
 
           <input
             value={cartOrder.customerName}

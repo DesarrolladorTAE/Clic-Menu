@@ -6,7 +6,11 @@ import {
   getOrderById,
 } from "../../services/staff/waiter/staffOrders.service";
 import {
+  buildAvailabilityErrorMessage,
   buildCartKey,
+  extractApiErrorInfo,
+  isAvailabilityErrorCode,
+  isWarehouseSelectionErrorCode,
   normalizeCompositeComponentsForKey,
   normalizeModifierGroupsForKey,
   safeNum,
@@ -71,6 +75,9 @@ export function useStaffCartAndOrder({ tableId }) {
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [oldItems, setOldItems] = useState([]);
+
+  const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
+  const [warehouseSelectionContext, setWarehouseSelectionContext] = useState(null);
 
   const lastLoadedRef = useRef({ tableId: null, orderId: null });
 
@@ -233,6 +240,12 @@ export function useStaffCartAndOrder({ tableId }) {
     !!activeOrder?.id &&
     ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
+  const closeWarehouseDialog = useCallback(() => {
+    if (sending) return;
+    setWarehouseDialogOpen(false);
+    setWarehouseSelectionContext(null);
+  }, [sending]);
+
   const loadExisting = useCallback(
     async ({ orderId, force = false } = {}) => {
       const tid = Number(tableId || 0);
@@ -283,7 +296,7 @@ export function useStaffCartAndOrder({ tableId }) {
   );
 
   const createFirstOrder = useCallback(
-    async (name) => {
+    async (name, preferredWarehouseId = null) => {
       const tid = Number(tableId || 0);
       if (!tid) {
         setSendToast("⚠️ Mesa inválida.");
@@ -291,30 +304,73 @@ export function useStaffCartAndOrder({ tableId }) {
       }
 
       const items = normalizeItemsForApi(cart);
-      const res = await createWaiterOrder(tid, {
-        customer_name: name,
-        items,
-      });
 
-      if (res?.ok) {
-        const orderId = res?.data?.order_id || res?.data?.id || null;
+      try {
+        const payload = {
+          customer_name: name,
+          items,
+          ...(preferredWarehouseId ? { preferred_warehouse_id: Number(preferredWarehouseId) } : {}),
+        };
 
-        setCart([]);
-        setCustomerName("");
-        setSendOpen(false);
-        setSendToast("✅ Comanda creada.");
+        const res = await createWaiterOrder(tid, payload);
 
-        if (orderId) {
-          await loadExisting({ orderId, force: true });
-        } else {
-          await loadExisting({ force: true });
+        if (res?.ok) {
+          const orderId = res?.data?.order_id || res?.data?.id || null;
+
+          setCart([]);
+          setCustomerName("");
+          setSendOpen(false);
+          setWarehouseDialogOpen(false);
+          setWarehouseSelectionContext(null);
+
+          if (res?.data?.preferred_warehouse_auto_selected) {
+            setSendToast("✅ Comanda creada. El almacén se resolvió automáticamente.");
+          } else {
+            setSendToast("✅ Comanda creada.");
+          }
+
+          if (orderId) {
+            await loadExisting({ orderId, force: true });
+          } else {
+            await loadExisting({ force: true });
+          }
+
+          return { ok: true, orderId };
         }
 
-        return { ok: true, orderId };
-      }
+        setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
+        return { ok: false };
+      } catch (e) {
+        const apiError = extractApiErrorInfo(e);
 
-      setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
-      return { ok: false };
+        if (isWarehouseSelectionErrorCode(apiError.code)) {
+          setWarehouseSelectionContext(apiError.data || null);
+          setWarehouseDialogOpen(true);
+          setSendOpen(false);
+          setSendToast(`⚠️ ${apiError.message}`);
+          return {
+            ok: false,
+            requiresWarehouseSelection: true,
+            data: apiError.data || null,
+          };
+        }
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        const msg =
+          apiError?.message ||
+          "No se pudo crear la comanda.";
+
+        setSendToast(`⚠️ ${msg}`);
+        return { ok: false };
+      }
     },
     [tableId, cart, loadExisting],
   );
@@ -322,19 +378,67 @@ export function useStaffCartAndOrder({ tableId }) {
   const appendToOpenOrder = useCallback(
     async (orderId) => {
       const items = normalizeItemsForApi(cart);
-      const res = await appendWaiterOrderItems(Number(orderId), { items });
 
-      if (res?.ok) {
-        setCart([]);
-        setSendToast("✅ Productos agregados a la orden.");
-        await loadExisting({ orderId, force: true });
-        return { ok: true };
+      try {
+        const res = await appendWaiterOrderItems(Number(orderId), { items });
+
+        if (res?.ok) {
+          setCart([]);
+          setSendToast("✅ Productos agregados a la orden.");
+          await loadExisting({ orderId, force: true });
+          return { ok: true };
+        }
+
+        setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
+        return { ok: false };
+      } catch (e) {
+        const apiError = extractApiErrorInfo(e);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        const msg =
+          apiError?.message ||
+          "No se pudieron agregar productos.";
+
+        setSendToast(`⚠️ ${msg}`);
+        return { ok: false };
       }
-
-      setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
-      return { ok: false };
     },
     [cart, loadExisting],
+  );
+
+  const confirmWarehouseSelection = useCallback(
+    async (warehouseId) => {
+      const name = String(customerName || "").trim();
+
+      if (!name) {
+        setSendToast("⚠️ Escribe el nombre del cliente para crear la comanda.");
+        return;
+      }
+
+      if (!warehouseId) {
+        setSendToast("⚠️ Debes seleccionar un almacén.");
+        return;
+      }
+
+      if (sending) return;
+
+      setSending(true);
+      try {
+        await createFirstOrder(name, Number(warehouseId));
+        setTimeout(() => setSendToast(""), 6500);
+      } finally {
+        setSending(false);
+      }
+    },
+    [customerName, sending, createFirstOrder],
   );
 
   async function submitOrderOrAppend() {
@@ -351,14 +455,6 @@ export function useStaffCartAndOrder({ tableId }) {
       setSendToast("");
       try {
         await appendToOpenOrder(activeOrder.id);
-        setTimeout(() => setSendToast(""), 4500);
-      } catch (e) {
-        const msg =
-          e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.message ||
-          "No se pudo agregar productos.";
-        setSendToast(`⚠️ ${msg}`);
         setTimeout(() => setSendToast(""), 6500);
       } finally {
         setSending(false);
@@ -377,14 +473,6 @@ export function useStaffCartAndOrder({ tableId }) {
     setSendToast("");
     try {
       await createFirstOrder(name);
-      setTimeout(() => setSendToast(""), 4500);
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
-        "No se pudo crear la comanda.";
-      setSendToast(`⚠️ ${msg}`);
       setTimeout(() => setSendToast(""), 6500);
     } finally {
       setSending(false);
@@ -398,6 +486,8 @@ export function useStaffCartAndOrder({ tableId }) {
     setSendToast("");
     setActiveOrder(null);
     setOldItems([]);
+    setWarehouseDialogOpen(false);
+    setWarehouseSelectionContext(null);
     lastLoadedRef.current = { tableId: null, orderId: null };
   }
 
@@ -427,6 +517,11 @@ export function useStaffCartAndOrder({ tableId }) {
     activeOrder,
     oldItems,
     canAppend,
+
+    warehouseDialogOpen,
+    warehouseSelectionContext,
+    closeWarehouseDialog,
+    confirmWarehouseSelection,
 
     loadExisting,
     submitOrderOrAppend,

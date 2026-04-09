@@ -1,4 +1,3 @@
-// src/services/staff/kitchen/kitchenKds.service.js
 import staffApi from "../../staffApi";
 
 /**
@@ -19,7 +18,7 @@ export async function fetchKitchenKdsOrders(params = {}) {
   const res = await staffApi.get(`/staff/kitchen/kds/orders`, {
     params: {
       ...params,
-      _t: Date.now(), // rompe caché
+      _t: Date.now(),
     },
     headers: NO_CACHE_HEADERS,
   });
@@ -27,10 +26,10 @@ export async function fetchKitchenKdsOrders(params = {}) {
   return res?.data;
 }
 
-export async function startKitchenItem(itemId) {
+export async function startKitchenItem(itemId, payload = {}) {
   const res = await staffApi.post(
     `/staff/kitchen/kds/order-items/${itemId}/start`,
-    {},
+    payload,
     { headers: NO_CACHE_HEADERS }
   );
   return res?.data;

@@ -18,6 +18,7 @@ import MenuProductCard from "../../../components/menu/shared/MenuProductCard";
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
+import WaiterWarehouseCreateDialog from "../../../components/menu/shared/WaiterWarehouseCreateDialog";
 
 function buildComponentModifierKey(componentProductId, variantId = null) {
   return `${Number(componentProductId || 0)}:${variantId ? Number(variantId) : 0}`;
@@ -485,7 +486,10 @@ export default function StaffMenuEntryPage() {
         <div style={{ display: "grid", gap: 10 }}>
           {!canAppend ? (
             <>
-              <div style={{ fontSize: 13, opacity: 0.85 }}>Escribe el nombre del cliente.</div>
+              <div style={{ fontSize: 13, opacity: 0.85 }}>
+                Escribe el nombre del cliente. Si la comanda requiere selección de almacén,
+                aparecerá el siguiente paso automáticamente.
+              </div>
               <input
                 value={cartOrder.customerName}
                 onChange={(e) => cartOrder.setCustomerName(e.target.value)}
@@ -534,6 +538,15 @@ export default function StaffMenuEntryPage() {
           ) : null}
         </div>
       </Modal>
+
+      <WaiterWarehouseCreateDialog
+        open={cartOrder.warehouseDialogOpen}
+        loading={cartOrder.sending}
+        customerName={cartOrder.customerName}
+        selection={cartOrder.warehouseSelectionContext}
+        onClose={cartOrder.closeWarehouseDialog}
+        onConfirm={cartOrder.confirmWarehouseSelection}
+      />
 
       <CompositeProductModal
         open={compositeModalOpen}

@@ -468,3 +468,151 @@ export function buildModifierContextSections(product, opts = {}) {
 
   return sections;
 }
+
+/* =========================
+   Availability helpers
+========================= */
+
+export function getAvailabilityData(source) {
+  if (!source) return null;
+  if (source?.availability && typeof source.availability === "object") {
+    return source.availability;
+  }
+  if (source?.status && Object.prototype.hasOwnProperty.call(source, "max_available_qty")) {
+    return source;
+  }
+  return null;
+}
+
+export function translateAvailabilityStatus(status) {
+  const v = String(status || "").toLowerCase();
+
+  const map = {
+    available: "Disponible",
+    out_of_stock: "Agotado",
+    insufficient_stock: "Stock insuficiente",
+    recipe_missing: "Receta faltante",
+    inventory_blocked: "Bloqueado por inventario",
+  };
+
+  return map[v] || (status ? String(status) : "Sin disponibilidad");
+}
+
+export function getAvailabilityTone(status) {
+  const v = String(status || "").toLowerCase();
+
+  if (v === "available") return "ok";
+  if (v === "insufficient_stock") return "warn";
+  if (v === "recipe_missing") return "warn";
+  if (v === "inventory_blocked") return "danger";
+  if (v === "out_of_stock") return "danger";
+
+  return "default";
+}
+
+export function isAvailabilityBlocked(availability) {
+  const a = getAvailabilityData(availability);
+  if (!a) return false;
+
+  const status = String(a?.status || "").toLowerCase();
+  const maxAvailableQty = Number(a?.max_available_qty || 0);
+
+  if (status === "available" && maxAvailableQty > 0) {
+    return false;
+  }
+
+  return true;
+}
+
+export function formatAvailabilityCaption(availability) {
+  const a = getAvailabilityData(availability);
+  if (!a) return "";
+
+  const status = String(a?.status || "").toLowerCase();
+  const reason = String(a?.reason || "").trim();
+  const maxQty = Number(a?.max_available_qty || 0);
+
+  if (status === "available") {
+    if (maxQty > 0) {
+      return `Máx. disponible: ${maxQty}`;
+    }
+    return "Disponible";
+  }
+
+  if (reason) return reason;
+
+  return translateAvailabilityStatus(status);
+}
+
+export function formatAvailabilityShortLabel(availability) {
+  const a = getAvailabilityData(availability);
+  if (!a) return "";
+
+  const status = String(a?.status || "").toLowerCase();
+  const maxQty = Number(a?.max_available_qty || 0);
+
+  if (status === "available") {
+    return maxQty > 0 ? `Disponible · ${maxQty}` : "Disponible";
+  }
+
+  return translateAvailabilityStatus(status);
+}
+
+export function extractApiErrorInfo(error) {
+  const response = error?.response || null;
+  const data = response?.data || null;
+
+  return {
+    status: Number(response?.status || 0),
+    code: data?.code || null,
+    message:
+      data?.message ||
+      data?.error ||
+      error?.message ||
+      "Ocurrió un error inesperado.",
+    data: data?.data || null,
+    raw: data,
+  };
+}
+
+export function isAvailabilityErrorCode(code) {
+  return String(code || "").toUpperCase() === "INSUFFICIENT_PRODUCT_AVAILABILITY";
+}
+
+export function isWarehouseSelectionErrorCode(code) {
+  const v = String(code || "").toUpperCase();
+  return (
+    v === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" ||
+    v === "INVALID_SELECTED_WAREHOUSE"
+  );
+}
+
+export function buildAvailabilityErrorMessage(errorInfo) {
+  const info = errorInfo?.data ? errorInfo : extractApiErrorInfo(errorInfo);
+  const baseMessage = String(info?.message || "No hay disponibilidad suficiente.");
+  const data = info?.data || {};
+  const maxQty = Number(data?.max_available_qty || 0);
+
+  if (maxQty > 0) {
+    return `${baseMessage}\nMáximo disponible: ${maxQty}.`;
+  }
+
+  return baseMessage;
+}
+
+export function getInitialWarehouseSelectionId(selection) {
+  if (!selection || typeof selection !== "object") return "";
+
+  const autoId = Number(selection?.auto_selected_warehouse_id || 0);
+  if (autoId > 0) return String(autoId);
+
+  const selectable = Array.isArray(selection?.selectable_warehouses)
+    ? selection.selectable_warehouses
+    : [];
+
+  if (selectable.length === 1) {
+    return String(selectable[0]?.id || "");
+  }
+
+  return "";
+}

@@ -5,9 +5,95 @@ import {
   ProductThumb,
 } from "../../../pages/public/publicMenu.ui";
 import {
+  formatAvailabilityCaption,
+  formatAvailabilityShortLabel,
+  getAvailabilityData,
+  getAvailabilityTone,
   hasAnyModifierGroups,
+  isAvailabilityBlocked,
   money,
 } from "../../../hooks/public/publicMenu.utils";
+
+function AvailabilityPill({ availability }) {
+  const a = getAvailabilityData(availability);
+  if (!a) return null;
+
+  const tone = getAvailabilityTone(a?.status);
+
+  const palette = {
+    ok: {
+      bg: "rgba(16, 185, 129, 0.12)",
+      bd: "rgba(16, 185, 129, 0.25)",
+      fg: "#047857",
+    },
+    warn: {
+      bg: "rgba(245, 158, 11, 0.12)",
+      bd: "rgba(245, 158, 11, 0.25)",
+      fg: "#B45309",
+    },
+    danger: {
+      bg: "rgba(239, 68, 68, 0.10)",
+      bd: "rgba(239, 68, 68, 0.24)",
+      fg: "#B91C1C",
+    },
+    default: {
+      bg: "rgba(0,0,0,0.05)",
+      bd: "rgba(0,0,0,0.10)",
+      fg: "#374151",
+    },
+  };
+
+  const ui = palette[tone] || palette.default;
+
+  return (
+    <div
+      title={formatAvailabilityCaption(a)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 10px",
+        borderRadius: 999,
+        border: `1px solid ${ui.bd}`,
+        background: ui.bg,
+        color: ui.fg,
+        fontSize: 11,
+        fontWeight: 900,
+        lineHeight: 1.1,
+        maxWidth: "100%",
+      }}
+    >
+      {formatAvailabilityShortLabel(a)}
+    </div>
+  );
+}
+
+function AvailabilityNotice({ availability }) {
+  const a = getAvailabilityData(availability);
+  if (!a) return null;
+
+  const caption = formatAvailabilityCaption(a);
+  if (!caption) return null;
+
+  const blocked = isAvailabilityBlocked(a);
+
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        padding: "8px 10px",
+        borderRadius: 12,
+        border: blocked
+          ? "1px solid rgba(239, 68, 68, 0.20)"
+          : "1px solid rgba(16, 185, 129, 0.18)",
+        background: blocked ? "#fff5f5" : "#f0fdf4",
+        color: blocked ? "#B91C1C" : "#047857",
+      }}
+    >
+      {caption}
+    </div>
+  );
+}
 
 export default function MenuProductCard({
   product,
@@ -31,6 +117,9 @@ export default function MenuProductCard({
     : [];
   const hasComposite = isComposite && compositeItems.length > 0;
   const hasExtras = hasAnyModifierGroups(product);
+
+  const productAvailability = getAvailabilityData(product?.availability);
+  const productBlocked = canSelect && isAvailabilityBlocked(productAvailability);
 
   return (
     <div
@@ -64,8 +153,19 @@ export default function MenuProductCard({
           </div>
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.72 }}>
-          Categoría: <strong>{categoryName}</strong>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: 12, opacity: 0.72 }}>
+            Categoría: <strong>{categoryName}</strong>
+          </div>
+
+          <AvailabilityPill availability={productAvailability} />
         </div>
 
         {isComposite ? (
@@ -73,6 +173,8 @@ export default function MenuProductCard({
             Tipo: <strong>Compuesto</strong>
           </div>
         ) : null}
+
+        <AvailabilityNotice availability={productAvailability} />
 
         {hasComposite ? (
           <div
@@ -108,24 +210,33 @@ export default function MenuProductCard({
         <div style={{ display: "grid", gap: 8 }}>
           {showSelectBtn ? (
             <PillButton
-              tone="default"
+              tone={productBlocked ? "danger" : "default"}
               onClick={() => {
+                if (productBlocked || !canSelect) return;
+
                 if (isComposite && hasComposite) {
                   onOpenComposite?.(product);
                   return;
                 }
+
                 onAddSimple?.(product);
               }}
               title={
                 !canSelect
                   ? "Solo lectura"
+                  : productBlocked
+                  ? formatAvailabilityCaption(productAvailability) || "No disponible"
                   : isComposite
                   ? "Configurar producto compuesto"
                   : "Agregar a comanda"
               }
-              disabled={!canSelect}
+              disabled={!canSelect || productBlocked}
             >
-              {isComposite ? "⚙️ Configurar" : "➕ Seleccionar"}
+              {productBlocked
+                ? "🚫 No disponible"
+                : isComposite
+                ? "⚙️ Configurar"
+                : "➕ Seleccionar"}
             </PillButton>
           ) : null}
 
@@ -171,6 +282,9 @@ export default function MenuProductCard({
                     Array.isArray(v?.modifier_groups) &&
                     v.modifier_groups.length > 0;
 
+                  const variantAvailability = getAvailabilityData(v?.availability);
+                  const variantBlocked = canSelect && isAvailabilityBlocked(variantAvailability);
+
                   return (
                     <div
                       key={vid}
@@ -188,11 +302,27 @@ export default function MenuProductCard({
                           display: "flex",
                           justifyContent: "space-between",
                           gap: 10,
+                          alignItems: "start",
                         }}
                       >
-                        <div style={{ fontWeight: 850, fontSize: 13, minWidth: 0 }}>
-                          {v.name || v.display_name || `Variante ${idx + 1}`}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 850, fontSize: 13 }}>
+                            {v.name || v.display_name || `Variante ${idx + 1}`}
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: 6,
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                            }}
+                          >
+                            <AvailabilityPill availability={variantAvailability} />
+                          </div>
                         </div>
+
                         <div
                           style={{
                             fontWeight: 950,
@@ -204,6 +334,8 @@ export default function MenuProductCard({
                         </div>
                       </div>
 
+                      <AvailabilityNotice availability={variantAvailability} />
+
                       {variantHasExtras ? (
                         <div style={{ fontSize: 12, opacity: 0.75, color: "#9a4a00" }}>
                           Esta variante tiene extras disponibles.
@@ -212,12 +344,21 @@ export default function MenuProductCard({
 
                       {showSelectBtn ? (
                         <PillButton
-                          tone="default"
-                          onClick={() => onAddVariant?.(product, v)}
-                          title={!canSelect ? "Solo lectura" : "Agregar variante a comanda"}
-                          disabled={!canSelect}
+                          tone={variantBlocked ? "danger" : "default"}
+                          onClick={() => {
+                            if (!canSelect || variantBlocked) return;
+                            onAddVariant?.(product, v);
+                          }}
+                          title={
+                            !canSelect
+                              ? "Solo lectura"
+                              : variantBlocked
+                              ? formatAvailabilityCaption(variantAvailability) || "No disponible"
+                              : "Agregar variante a comanda"
+                          }
+                          disabled={!canSelect || variantBlocked}
                         >
-                          ➕ Seleccionar variante
+                          {variantBlocked ? "🚫 No disponible" : "➕ Seleccionar variante"}
                         </PillButton>
                       ) : null}
                     </div>

@@ -19,6 +19,45 @@ function renderNotes(n) {
   return String(n);
 }
 
+function getToastStyles(sendToast = "") {
+  const msg = String(sendToast || "");
+
+  if (msg.includes("✅")) {
+    return {
+      border: "1px solid rgba(16, 185, 129, 0.28)",
+      background: "#f0fdf4",
+      color: "#047857",
+    };
+  }
+
+  if (
+    msg.toLowerCase().includes("disponibilidad") ||
+    msg.toLowerCase().includes("solo hay disponibilidad") ||
+    msg.toLowerCase().includes("stock") ||
+    msg.toLowerCase().includes("inventario")
+  ) {
+    return {
+      border: "1px solid rgba(239, 68, 68, 0.24)",
+      background: "#fff5f5",
+      color: "#B91C1C",
+    };
+  }
+
+  if (msg.includes("⚠️")) {
+    return {
+      border: "1px solid rgba(245, 158, 11, 0.26)",
+      background: "#fff7ed",
+      color: "#B45309",
+    };
+  }
+
+  return {
+    border: "1px solid rgba(0,0,0,0.10)",
+    background: "#fff",
+    color: "#111827",
+  };
+}
+
 function ModifierGroupsBlock({ groups = [], indent = 0 }) {
   if (!Array.isArray(groups) || groups.length <= 0) return null;
 
@@ -516,6 +555,7 @@ export default function MenuCartPanel({
   const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
+  const toastStyles = getToastStyles(sendToast);
 
   if (!hasOld && !hasNew) return null;
 
@@ -825,10 +865,11 @@ export default function MenuCartPanel({
         <div
           style={{
             marginTop: 10,
-            border: "1px solid rgba(0,0,0,0.10)",
+            border: toastStyles.border,
             borderRadius: 14,
             padding: 10,
-            background: "#fff",
+            background: toastStyles.background,
+            color: toastStyles.color,
             fontSize: 13,
             fontWeight: 850,
             whiteSpace: "pre-line",
