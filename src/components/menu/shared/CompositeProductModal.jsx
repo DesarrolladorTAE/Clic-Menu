@@ -186,6 +186,9 @@ export default function CompositeProductModal({
           const variants = Array.isArray(c.variants) ? c.variants : [];
           const canPickVariant = !!c.allow_variant && variants.length > 0;
           const included = c.included !== false;
+          const selectedVariant = c.variant_id
+            ? variants.find((v) => Number(v.id) === Number(c.variant_id))
+            : null;
 
           return (
             <div
@@ -324,28 +327,18 @@ export default function CompositeProductModal({
                       alignItems: "center",
                     }}
                   >
-                    {c.variant_id
-                      ? (() => {
-                          const selected = variants.find(
-                            (v) => Number(v.id) === Number(c.variant_id),
-                          );
-                          return selected ? <AvailabilityChip source={selected} /> : null;
-                        })()
-                      : c.default_option ? (
-                          <AvailabilityChip source={c.default_option} />
-                        ) : null}
+                    {selectedVariant ? (
+                      <AvailabilityChip source={selectedVariant} />
+                    ) : c.default_option ? (
+                      <AvailabilityChip source={c.default_option} />
+                    ) : null}
                   </div>
 
-                  {c.variant_id
-                    ? (() => {
-                        const selected = variants.find(
-                          (v) => Number(v.id) === Number(c.variant_id),
-                        );
-                        return selected ? <AvailabilityNotice source={selected} /> : null;
-                      })()
-                    : c.default_option
-                    ? <AvailabilityNotice source={c.default_option} />
-                    : null}
+                  {selectedVariant ? (
+                    <AvailabilityNotice source={selectedVariant} />
+                  ) : c.default_option ? (
+                    <AvailabilityNotice source={c.default_option} />
+                  ) : null}
 
                   <div style={{ fontSize: 12, opacity: 0.72 }}>
                     {c.apply_variant_price
