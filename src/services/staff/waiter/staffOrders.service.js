@@ -48,9 +48,17 @@ export async function createWaiterOrder(tableId, payload) {
   const res = await staffApi.post(
     `/staff/waiter/tables/${tableId}/orders`,
     payload,
-    { headers: NO_CACHE_HEADERS }
+    {
+      headers: NO_CACHE_HEADERS,
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || status === 409 || status === 422,
+    }
   );
-  return res?.data;
+
+  return {
+    ...res?.data,
+    __httpStatus: res?.status,
+  };
 }
 
 export async function getCurrentTableOrder(tableId) {

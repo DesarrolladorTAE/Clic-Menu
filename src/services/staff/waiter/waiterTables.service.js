@@ -60,13 +60,24 @@ export async function markTablePaid(tableId) {
   return res?.data;
 }
 
-export async function acceptCustomerOrder(orderId) {
+export async function acceptCustomerOrder(orderId, payload = {}) {
+  const body =
+    payload && typeof payload === "object" ? payload : {};
+
   const res = await staffApi.post(
     `/staff/waiter/orders/${orderId}/accept`,
-    {},
-    { headers: NO_CACHE_HEADERS }
+    body,
+    {
+      headers: NO_CACHE_HEADERS,
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || status === 409 || status === 422,
+    }
   );
-  return res?.data;
+
+  return {
+    ...res?.data,
+    __httpStatus: res?.status,
+  };
 }
 
 export async function rejectCustomerOrder(orderId) {

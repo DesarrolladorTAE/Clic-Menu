@@ -309,7 +309,9 @@ export function useStaffCartAndOrder({ tableId }) {
         const payload = {
           customer_name: name,
           items,
-          ...(preferredWarehouseId ? { preferred_warehouse_id: Number(preferredWarehouseId) } : {}),
+          ...(preferredWarehouseId
+            ? { preferred_warehouse_id: Number(preferredWarehouseId) }
+            : {}),
         };
 
         const res = await createWaiterOrder(tid, payload);
@@ -338,6 +340,34 @@ export function useStaffCartAndOrder({ tableId }) {
           return { ok: true, orderId };
         }
 
+        if (isWarehouseSelectionErrorCode(res?.code)) {
+          setWarehouseSelectionContext(res?.data || null);
+          setWarehouseDialogOpen(true);
+          setSendOpen(false);
+          setSendToast(`⚠️ ${res?.message || "Debes seleccionar un almacén."}`);
+
+          return {
+            ok: false,
+            requiresWarehouseSelection: true,
+            data: res?.data || null,
+          };
+        }
+
+        if (isAvailabilityErrorCode(res?.code)) {
+          const apiError = {
+            code: res?.code,
+            message: res?.message,
+            data: res?.data,
+          };
+
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+          return {
+            ok: false,
+            availabilityError: true,
+            data: res?.data || null,
+          };
+        }
+
         setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
         return { ok: false };
       } catch (e) {
@@ -364,10 +394,7 @@ export function useStaffCartAndOrder({ tableId }) {
           };
         }
 
-        const msg =
-          apiError?.message ||
-          "No se pudo crear la comanda.";
-
+        const msg = apiError?.message || "No se pudo crear la comanda.";
         setSendToast(`⚠️ ${msg}`);
         return { ok: false };
       }

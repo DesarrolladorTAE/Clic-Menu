@@ -22,7 +22,6 @@ import KitchenWarehouseSelectorDialog from "../../../components/staff/kitchen/Ki
 import {
   buildConsumptionUi,
   buildKitchenInventoryError,
-  extractWarehouseResolutionError,
   grid,
   note,
   recalcOrderDerived,
@@ -82,6 +81,29 @@ export default function KitchenDashboard() {
     });
   };
 
+  const isContextConflict = (eOrRes) => {
+    const status = Number(
+      eOrRes?.response?.status ||
+        eOrRes?.__httpStatus ||
+        eOrRes?.status ||
+        0
+    );
+
+    const message = String(
+      eOrRes?.response?.data?.message ||
+        eOrRes?.message ||
+        ""
+    ).toLowerCase();
+
+    if (status !== 409) return false;
+
+    return (
+      message.includes("no hay un turno activo") ||
+      message.includes("selecciona sucursal") ||
+      message.includes("sucursal sin configuración operativa")
+    );
+  };
+
   const loadContext = useCallback(async () => {
     setErr("");
     try {
@@ -99,15 +121,18 @@ export default function KitchenDashboard() {
       return true;
     } catch (e) {
       const status = e?.response?.status;
-      if (status === 409) {
-        nav("/staff/select-context", { replace: true });
-        return false;
-      }
+
       if (status === 401) {
         clearStaff();
         nav("/staff/login", { replace: true });
         return false;
       }
+
+      if (isContextConflict(e)) {
+        nav("/staff/select-context", { replace: true });
+        return false;
+      }
+
       setErr(e?.response?.data?.message || "No se pudo cargar el contexto.");
       return false;
     }
@@ -131,14 +156,14 @@ export default function KitchenDashboard() {
       } catch (e) {
         const status = e?.response?.status;
 
-        if (status === 409) {
-          nav("/staff/select-context", { replace: true });
-          return;
-        }
-
         if (status === 401) {
           clearStaff();
           nav("/staff/login", { replace: true });
+          return;
+        }
+
+        if (isContextConflict(e)) {
+          nav("/staff/select-context", { replace: true });
           return;
         }
 
@@ -349,36 +374,61 @@ export default function KitchenDashboard() {
         selectedWarehouseId ? { selected_warehouse_id: selectedWarehouseId } : {}
       );
 
-      const consumptionUi = buildConsumptionUi(res);
+      if (res?.ok) {
+        const consumptionUi = buildConsumptionUi(res);
+        setOkMsg(consumptionUi.toast || "Ítem enviado a preparación.");
+        setConsumptionBadge(id, consumptionUi.badge || null);
 
-      setOkMsg(consumptionUi.toast || "Ítem enviado a preparación.");
-      setConsumptionBadge(id, consumptionUi.badge || null);
+        if (
+          warehouseDialogState.open &&
+          Number(warehouseDialogState.item?.id) === Number(id)
+        ) {
+          closeWarehouseDialog();
+        }
 
-      if (warehouseDialogState.open && Number(warehouseDialogState.item?.id) === Number(id)) {
-        closeWarehouseDialog();
+        return;
       }
-    } catch (e) {
+
       await loadOrders({ silent: true });
       setConsumptionBadge(id, null);
 
-      const warehouseError = extractWarehouseResolutionError(e);
+      if (
+        res?.code === "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM" &&
+        res?.inventory?.data
+      ) {
+        openWarehouseDialog(item, res.inventory.data);
+        return;
+      }
 
-      if (warehouseError?.code === "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM") {
-        openWarehouseDialog(item, warehouseError.data || null);
-      } else if (warehouseError?.code === "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM") {
+      if (
+        res?.code === "INVALID_SELECTED_WAREHOUSE_FOR_ITEM" &&
+        res?.inventory?.data
+      ) {
+        openWarehouseDialog(item, res.inventory.data);
         setErr(
-          warehouseError?.message ||
-            "No hay opciones de almacén para resolver este ítem."
-        );
-      } else if (warehouseError?.code === "INVALID_SELECTED_WAREHOUSE_FOR_ITEM") {
-        openWarehouseDialog(item, warehouseError.data || null);
-        setErr(
-          warehouseError?.message ||
+          res?.message ||
             "El almacén seleccionado ya no puede surtir este ítem."
         );
-      } else {
-        setErr(buildKitchenInventoryError(e));
+        return;
       }
+
+      if (res?.code === "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM") {
+        setErr(
+          res?.message ||
+            "No hay opciones de almacén para resolver este ítem."
+        );
+        return;
+      }
+
+      setErr(
+        buildKitchenInventoryError({
+          response: { data: res },
+        })
+      );
+    } catch (e) {
+      await loadOrders({ silent: true });
+      setConsumptionBadge(id, null);
+      setErr(buildKitchenInventoryError(e));
     } finally {
       setItemBusy(id, null);
     }

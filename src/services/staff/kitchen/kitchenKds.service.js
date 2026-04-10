@@ -30,9 +30,17 @@ export async function startKitchenItem(itemId, payload = {}) {
   const res = await staffApi.post(
     `/staff/kitchen/kds/order-items/${itemId}/start`,
     payload,
-    { headers: NO_CACHE_HEADERS }
+    {
+      headers: NO_CACHE_HEADERS,
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || status === 409 || status === 422,
+    }
   );
-  return res?.data;
+
+  return {
+    ...res?.data,
+    __httpStatus: res?.status,
+  };
 }
 
 export async function readyKitchenItem(itemId) {

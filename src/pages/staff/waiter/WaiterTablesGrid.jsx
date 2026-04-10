@@ -44,6 +44,7 @@ import WaiterTablesHeader from "../../../components/staff/waiter/WaiterTablesHea
 import WaiterZoneTabs from "../../../components/staff/waiter/WaiterZoneTabs";
 import WaiterTablesBoard from "../../../components/staff/waiter/WaiterTablesBoard";
 import WaiterNoticesDrawer from "../../../components/staff/waiter/WaiterNoticesDrawer";
+import WaiterWarehouseSelectionDialog from "../../../components/staff/waiter/WaiterWarehouseSelectionDialog";
 
 const PAGE_SIZE = 8;
 
@@ -68,6 +69,16 @@ export default function WaiterTablesGrid() {
 
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [zoneTab, setZoneTab] = useState("all");
+
+  const [warehouseDialog, setWarehouseDialog] = useState({
+    open: false,
+    loading: false,
+    tableId: null,
+    tableName: "",
+    orderId: null,
+    context: null,
+    selectedWarehouseId: "",
+  });
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -110,6 +121,54 @@ export default function WaiterTablesGrid() {
     e?.response?.data?.message || e?.message || fallback;
 
   const pickCode = (e) => e?.response?.data?.code;
+  const pickData = (e) => e?.response?.data?.data || null;
+
+  const isContextConflict = (e) => {
+    const status = Number(e?.response?.status || 0);
+    const message = String(
+      e?.response?.data?.message || e?.message || ""
+    ).toLowerCase();
+
+    if (status !== 409) return false;
+
+    return (
+      message.includes("no hay un turno activo") ||
+      message.includes("selecciona sucursal") ||
+      message.includes("sucursal sin configuración operativa")
+    );
+  };
+
+  const openWarehouseDialog = ({ table, orderId, context }) => {
+    const selectable = Array.isArray(context?.selectable_warehouses)
+      ? context.selectable_warehouses
+      : [];
+
+    const preselected =
+      context?.auto_selected_warehouse_id ||
+      (selectable.length === 1 ? Number(selectable[0]?.id || 0) : "");
+
+    setWarehouseDialog({
+      open: true,
+      loading: false,
+      tableId: table?.id || null,
+      tableName: table?.name || "",
+      orderId: orderId || null,
+      context: context || null,
+      selectedWarehouseId: preselected || "",
+    });
+  };
+
+  const closeWarehouseDialog = () => {
+    setWarehouseDialog({
+      open: false,
+      loading: false,
+      tableId: null,
+      tableName: "",
+      orderId: null,
+      context: null,
+      selectedWarehouseId: "",
+    });
+  };
 
   const load = async ({ silent = false } = {}) => {
     if (!silent) setBusy(true);
@@ -130,21 +189,18 @@ export default function WaiterTablesGrid() {
     } catch (e) {
       const st = e?.response?.status;
 
-      if (st === 409) {
-        nav("/staff/select-branch", { replace: true });
-        return;
-      }
-
       if (st === 401) {
         clearStaff?.();
         nav("/staff/login", { replace: true });
         return;
       }
 
-      showAlert(
-        pickErr(e, "No se pudieron cargar las mesas."),
-        "error"
-      );
+      if (isContextConflict(e)) {
+        nav("/staff/select-context", { replace: true });
+        return;
+      }
+
+      showAlert(pickErr(e, "No se pudieron cargar las mesas."), "error");
     } finally {
       setBusy(false);
       setRefreshing(false);
@@ -448,19 +504,123 @@ export default function WaiterTablesGrid() {
       return;
     }
 
-    if (typeof acceptCustomerOrder !== "function") {
+    try {
+      const res = await acceptCustomerOrder(orderId);
+
+      if (res?.ok) {
+        showAlert(res?.message || `Comanda #${orderId}: aceptada.`, "success");
+        await load({ silent: true });
+        return;
+      }
+
+      if (
+        res?.code === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" &&
+        res?.data?.ok
+      ) {
+        openWarehouseDialog({
+          table,
+          orderId,
+          context: res.data,
+        });
+        return;
+      }
+
+      if (
+        res?.code === "INVALID_SELECTED_WAREHOUSE" &&
+        res?.data?.ok
+      ) {
+        openWarehouseDialog({
+          table,
+          orderId,
+          context: res.data,
+        });
+
+        showAlert(
+          "El almacén seleccionado ya no es válido. Elige otro para continuar.",
+          "warning"
+        );
+        return;
+      }
+
       showAlert(
-        "acceptCustomerOrder no está disponible en waiterTables.service.js",
+        res?.message || "No se pudo aceptar la comanda.",
         "error"
       );
+    } catch (e) {
+      showAlert(pickErr(e, "No se pudo aceptar la comanda."), "error");
+    }
+  };
+
+ const confirmAcceptWithWarehouse = async () => {
+    const orderId = warehouseDialog?.orderId;
+    const preferredWarehouseId = Number(
+      warehouseDialog?.selectedWarehouseId || 0
+    );
+
+    if (!orderId || !preferredWarehouseId) {
+      showAlert("Debes seleccionar un almacén preferido.", "warning");
       return;
     }
 
+    setWarehouseDialog((prev) => ({
+      ...prev,
+      loading: true,
+    }));
+
     try {
-      await acceptCustomerOrder(orderId);
-      showAlert(`Comanda #${orderId}: aceptada.`, "success");
-      await load({ silent: true });
+      const res = await acceptCustomerOrder(orderId, {
+        preferred_warehouse_id: preferredWarehouseId,
+      });
+
+      if (res?.ok) {
+        closeWarehouseDialog();
+        showAlert(res?.message || `Comanda #${orderId}: aceptada.`, "success");
+        await load({ silent: true });
+        return;
+      }
+
+      if (
+        (res?.code === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" ||
+          res?.code === "INVALID_SELECTED_WAREHOUSE") &&
+        res?.data?.ok
+      ) {
+        const selectable = Array.isArray(res?.data?.selectable_warehouses)
+          ? res.data.selectable_warehouses
+          : [];
+
+        setWarehouseDialog((prev) => ({
+          ...prev,
+          loading: false,
+          context: res.data,
+          selectedWarehouseId:
+            res?.data?.auto_selected_warehouse_id ||
+            (selectable.length === 1
+              ? Number(selectable[0]?.id || 0)
+              : prev.selectedWarehouseId),
+        }));
+
+        showAlert(
+          res?.message || "Debes seleccionar un almacén válido.",
+          "warning"
+        );
+        return;
+      }
+
+      setWarehouseDialog((prev) => ({
+        ...prev,
+        loading: false,
+      }));
+
+      showAlert(
+        res?.message || "No se pudo aceptar la comanda.",
+        "error"
+      );
     } catch (e) {
+      setWarehouseDialog((prev) => ({
+        ...prev,
+        loading: false,
+      }));
+
       showAlert(pickErr(e, "No se pudo aceptar la comanda."), "error");
     }
   };
@@ -471,14 +631,6 @@ export default function WaiterTablesGrid() {
 
     if (!orderId) {
       showAlert("No hay comanda pendiente para rechazar.", "warning");
-      return;
-    }
-
-    if (typeof rejectCustomerOrder !== "function") {
-      showAlert(
-        "rejectCustomerOrder no está disponible en waiterTables.service.js",
-        "error"
-      );
       return;
     }
 
@@ -819,6 +971,23 @@ export default function WaiterTablesGrid() {
         onReadReadyNotification={doReadReadyNotification}
         onReadBillRequest={doReadBillRequest}
         floatingIcon={NotificationsNoneRoundedIcon}
+      />
+
+      <WaiterWarehouseSelectionDialog
+        open={warehouseDialog.open}
+        loading={warehouseDialog.loading}
+        orderId={warehouseDialog.orderId}
+        tableName={warehouseDialog.tableName}
+        context={warehouseDialog.context}
+        selectedWarehouseId={warehouseDialog.selectedWarehouseId}
+        onChange={(value) =>
+          setWarehouseDialog((prev) => ({
+            ...prev,
+            selectedWarehouseId: value,
+          }))
+        }
+        onClose={closeWarehouseDialog}
+        onConfirm={confirmAcceptWithWarehouse}
       />
 
       <AppAlert
