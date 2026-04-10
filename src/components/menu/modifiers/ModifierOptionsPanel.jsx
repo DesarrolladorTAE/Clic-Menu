@@ -24,6 +24,7 @@ import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 
 import {
   createModifierOption,
@@ -36,11 +37,14 @@ import usePagination from "../../../hooks/usePagination";
 import PaginationFooter from "../../../components/common/PaginationFooter";
 
 import ModifierOptionUpsertModal from "./ModifierOptionUpsertModal";
+import ModifierOptionConsumptionModal from "./ModifierOptionConsumptionModal";
 
 const PAGE_SIZE = 5;
 
 export default function ModifierOptionsPanel({
   restaurantId,
+  requiresBranch = false,
+  effectiveBranchId = null,
   groups,
   options,
   getGroupLabel,
@@ -52,6 +56,9 @@ export default function ModifierOptionsPanel({
   const [savingMap, setSavingMap] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+
+  const [consumptionModalOpen, setConsumptionModalOpen] = useState(false);
+  const [consumptionEditing, setConsumptionEditing] = useState(null);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -160,6 +167,11 @@ export default function ModifierOptionsPanel({
     setModalOpen(true);
   };
 
+  const openConsumption = (row) => {
+    setConsumptionEditing(row);
+    setConsumptionModalOpen(true);
+  };
+
   const onToggleStatus = async (row) => {
     const optionId = row?.id;
     if (!optionId || isSaving(optionId)) return;
@@ -206,11 +218,7 @@ export default function ModifierOptionsPanel({
     if (!ok) return;
 
     try {
-      await deleteModifierOption(
-        restaurantId,
-        row.modifier_group_id,
-        row.id
-      );
+      await deleteModifierOption(restaurantId, row.modifier_group_id, row.id);
 
       await onReload();
 
@@ -437,6 +445,15 @@ export default function ModifierOptionsPanel({
                                 }
                                 size="small"
                               />
+                              <Chip
+                                label={
+                                  o.track_inventory
+                                    ? "Controla inventario"
+                                    : "Sin inventario"
+                                }
+                                size="small"
+                                color={o.track_inventory ? "warning" : "default"}
+                              />
                             </Stack>
 
                             <Box>
@@ -473,6 +490,15 @@ export default function ModifierOptionsPanel({
                               />
 
                               <Stack direction="row" spacing={1}>
+                                <Tooltip title="Consumo">
+                                  <IconButton
+                                    onClick={() => openConsumption(o)}
+                                    sx={iconConsumptionSx}
+                                  >
+                                    <ScienceOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+
                                 <Tooltip title="Editar">
                                   <IconButton
                                     onClick={() => openEdit(o)}
@@ -501,7 +527,7 @@ export default function ModifierOptionsPanel({
               </Stack>
             ) : (
               <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                <Table sx={{ minWidth: 1100 }}>
+                <Table sx={{ minWidth: 1280 }}>
                   <TableHead>
                     <TableRow
                       sx={{
@@ -521,6 +547,7 @@ export default function ModifierOptionsPanel({
                       <TableCell>Precio</TableCell>
                       <TableCell>Cantidad máx.</TableCell>
                       <TableCell>Orden</TableCell>
+                      <TableCell>Inventario</TableCell>
                       <TableCell align="center">Estado</TableCell>
                       <TableCell align="right">Acciones</TableCell>
                     </TableRow>
@@ -539,7 +566,7 @@ export default function ModifierOptionsPanel({
                           {groupChanged && (
                             <TableRow>
                               <TableCell
-                                colSpan={8}
+                                colSpan={9}
                                 sx={{
                                   bgcolor: "#FFF7ED",
                                   color: "primary.main",
@@ -597,6 +624,18 @@ export default function ModifierOptionsPanel({
 
                             <TableCell>{o.sort_order ?? 0}</TableCell>
 
+                            <TableCell>
+                              <Chip
+                                label={
+                                  o.track_inventory
+                                    ? "Controla inventario"
+                                    : "Sin inventario"
+                                }
+                                size="small"
+                                color={o.track_inventory ? "warning" : "default"}
+                              />
+                            </TableCell>
+
                             <TableCell align="center">
                               <FormControlLabel
                                 sx={{ m: 0 }}
@@ -624,6 +663,15 @@ export default function ModifierOptionsPanel({
                                 alignItems="center"
                                 flexWrap="nowrap"
                               >
+                                <Tooltip title="Consumo">
+                                  <IconButton
+                                    onClick={() => openConsumption(o)}
+                                    sx={iconConsumptionSx}
+                                  >
+                                    <ScienceOutlinedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+
                                 <Tooltip title="Editar">
                                   <IconButton
                                     onClick={() => openEdit(o)}
@@ -685,6 +733,22 @@ export default function ModifierOptionsPanel({
         }}
       />
 
+      <ModifierOptionConsumptionModal
+        open={consumptionModalOpen}
+        onClose={() => {
+          setConsumptionModalOpen(false);
+          setConsumptionEditing(null);
+        }}
+        restaurantId={restaurantId}
+        option={consumptionEditing}
+        groupLabel={getGroupLabel(consumptionEditing?.modifier_group_id)}
+        requiresBranch={requiresBranch}
+        effectiveBranchId={effectiveBranchId}
+        onSaved={async () => {
+          await onReload();
+        }}
+      />
+
       <AppAlert
         open={alertState.open}
         onClose={closeAlert}
@@ -716,6 +780,17 @@ const mobileValueSx = {
   fontSize: 14,
   color: "text.primary",
   wordBreak: "break-word",
+};
+
+const iconConsumptionSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#1E5AA8",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#184B8B",
+  },
 };
 
 const iconEditSx = {

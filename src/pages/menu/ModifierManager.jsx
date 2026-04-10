@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Box, Button, CircularProgress, MenuItem, Paper, Stack,
-  TextField, Typography,
+  Box,
+  Button,
+  CircularProgress,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -20,13 +26,8 @@ import ModifierCatalogsDialog from "../../components/menu/modifiers/catalogs/Mod
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 
-import {
-  getModifierGroups,
-} from "../../services/menu/modifiers/modifierGroups.service";
-
-import {
-  getAllModifierOptions,
-} from "../../services/menu/modifiers/modifierOptions.service";
+import { getModifierGroups } from "../../services/menu/modifiers/modifierGroups.service";
+import { getAllModifierOptions } from "../../services/menu/modifiers/modifierOptions.service";
 
 export default function ModifierManager() {
   const nav = useNavigate();
@@ -178,7 +179,6 @@ export default function ModifierManager() {
 
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId]);
 
   useEffect(() => {
@@ -199,7 +199,6 @@ export default function ModifierManager() {
         });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requiresBranch, effectiveBranchId, restaurantId]);
 
   const handleSelectCatalog = (catalogKey) => {
@@ -223,7 +222,6 @@ export default function ModifierManager() {
           `/owner/restaurants/${restaurantId}/operation/modifiers/catalogs/components`
         );
         break;
-
 
       case "component-variants":
         nav(
