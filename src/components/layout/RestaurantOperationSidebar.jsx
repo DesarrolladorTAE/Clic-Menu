@@ -1,6 +1,16 @@
 import React, { useMemo, useState } from "react";
 import {
-  Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery,
+  Box,
+  Divider,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -19,6 +29,7 @@ import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import TuneIcon from "@mui/icons-material/Tune";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
 const DRAWER_WIDTH = 240;
 const DRAWER_COLLAPSED = 78;
@@ -105,6 +116,11 @@ export default function RestaurantOperationSidebar({
             key: "cash-registers",
             label: "Cajas",
             icon: <PointOfSaleIcon />,
+          },
+          {
+            key: "ticket-settings",
+            label: "Tickets",
+            icon: <ReceiptLongIcon />,
           },
         ],
       },
