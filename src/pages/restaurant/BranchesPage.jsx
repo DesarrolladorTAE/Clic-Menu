@@ -1,14 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, IconButton,
-  Stack, Tooltip, Typography,
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import StarIcon from "@mui/icons-material/Star";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
 import {
   getBranchesByRestaurant,
@@ -63,6 +74,11 @@ function getBranchStatusConfig(status) {
 function formatHour(value) {
   if (!value) return "--:--";
   return String(value).slice(0, 5);
+}
+
+function resolveBranchLogo(branch) {
+  const logo = branch?.active_logo || branch?.activeLogo || null;
+  return logo?.public_url || null;
 }
 
 export default function BranchesPage() {
@@ -160,7 +176,6 @@ export default function BranchesPage() {
     setErr("");
     setSuccessMsg("");
 
-    // feedback visual inmediato
     setMainBranchId(branch.id);
     setSaving(true);
 
@@ -344,6 +359,7 @@ export default function BranchesPage() {
               {items.map((branch) => {
                 const isMain = Number(mainBranchId) === Number(branch.id);
                 const status = getBranchStatusConfig(branch.status);
+                const logoUrl = resolveBranchLogo(branch);
 
                 return (
                   <Card
@@ -369,17 +385,62 @@ export default function BranchesPage() {
                           alignItems="flex-start"
                           gap={1.5}
                         >
-                          <Typography
-                            sx={{
-                              fontSize: { xs: 28, md: 22 },
-                              fontWeight: 800,
-                              color: "text.primary",
-                              lineHeight: 1.1,
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {branch.name || "Sucursal sin nombre"}
-                          </Typography>
+                          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+                            <Avatar
+                              src={logoUrl || undefined}
+                              variant="rounded"
+                              imgProps={{
+                                style: {
+                                  objectFit: "contain",
+                                  objectPosition: "center",
+                                  padding: "6px",
+                                  width: "100%",
+                                  height: "100%",
+                                },
+                              }}
+                              sx={{
+                                width: 52,
+                                height: 52,
+                                borderRadius: 1.5,
+                                bgcolor: "#F4F1F4",
+                                color: "text.secondary",
+                                flexShrink: 0,
+                                overflow: "hidden",
+                                "& img": {
+                                  objectFit: "contain",
+                                  objectPosition: "center",
+                                  padding: "6px",
+                                  backgroundColor: "#F4F1F4",
+                                },
+                              }}
+                            >
+                              {!logoUrl && <StorefrontOutlinedIcon />}
+                            </Avatar>
+
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography
+                                sx={{
+                                  fontSize: { xs: 28, md: 22 },
+                                  fontWeight: 800,
+                                  color: "text.primary",
+                                  lineHeight: 1.1,
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {branch.name || "Sucursal sin nombre"}
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  mt: 0.4,
+                                  fontSize: 12,
+                                  color: "text.secondary",
+                                }}
+                              >
+                                {logoUrl ? "Logo configurado" : "Sin logo"}
+                              </Typography>
+                            </Box>
+                          </Stack>
 
                           <Chip
                             label={status.label}

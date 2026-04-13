@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  Alert, Box, Button, Dialog, DialogContent, DialogTitle, FormControl, IconButton, MenuItem,
-  Select, Stack, TextField, Typography, useMediaQuery,
+  Alert, Box, Button, Dialog, DialogContent, DialogTitle, FormControl, IconButton, MenuItem, Select, Stack, TextField,
+  Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -10,8 +10,18 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 
-import { createBranch, getBranch, updateBranch } from "../../services/restaurant/branch.service";
+import {
+  createBranch,
+  deleteActiveBranchLogo,
+  getBranch,
+  getBranchLogo,
+  updateBranch,
+  uploadBranchLogo,
+} from "../../services/restaurant/branch.service";
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
 export default function BranchUpsertModal({
@@ -30,6 +40,11 @@ export default function BranchUpsertModal({
   const [saving, setSaving] = useState(false);
   const [serverMsg, setServerMsg] = useState("");
 
+  const [currentLogo, setCurrentLogo] = useState(null);
+  const [selectedLogoFile, setSelectedLogoFile] = useState(null);
+  const [selectedLogoPreview, setSelectedLogoPreview] = useState("");
+  const [logoRemoving, setLogoRemoving] = useState(false);
+
   const title = useMemo(
     () => (isEdit ? "Editar sucursal" : "Crear sucursal"),
     [isEdit]
@@ -41,6 +56,7 @@ export default function BranchUpsertModal({
     handleSubmit,
     reset,
     setError,
+    clearErrors,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -55,10 +71,28 @@ export default function BranchUpsertModal({
   });
 
   useEffect(() => {
+    if (!selectedLogoFile) {
+      setSelectedLogoPreview("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(selectedLogoFile);
+    setSelectedLogoPreview(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [selectedLogoFile]);
+
+  useEffect(() => {
     if (!open) return;
 
     const loadBranch = async () => {
       setServerMsg("");
+      setCurrentLogo(null);
+      setSelectedLogoFile(null);
+      setSelectedLogoPreview("");
+      clearErrors();
 
       if (!isEdit) {
         reset({
@@ -74,7 +108,11 @@ export default function BranchUpsertModal({
 
       setLoading(true);
       try {
-        const res = await getBranch(restaurantId, editing.id);
+        const [res, logo] = await Promise.all([
+          getBranch(restaurantId, editing.id),
+          getBranchLogo(restaurantId, editing.id),
+        ]);
+
         const b = res?.data ?? res;
 
         reset({
@@ -85,6 +123,8 @@ export default function BranchUpsertModal({
           close_time: (b?.close_time ?? "").slice(0, 5),
           status: b?.status ?? "active",
         });
+
+        setCurrentLogo(logo ?? null);
       } catch (e) {
         const redirected = handleRestaurantApiError(e, nav, restaurantId);
         if (!redirected) {
@@ -96,7 +136,7 @@ export default function BranchUpsertModal({
     };
 
     loadBranch();
-  }, [open, isEdit, editing, restaurantId, reset, nav]);
+  }, [open, isEdit, editing, restaurantId, reset, nav, clearErrors]);
 
   const mapBackendErrors = (e) => {
     const data = e?.response?.data;
@@ -114,15 +154,84 @@ export default function BranchUpsertModal({
     setServerMsg(data?.message || "No se pudo guardar la sucursal.");
   };
 
+  const handleSelectLogo = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const validMime = [
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+      "image/webp",
+    ].includes(file.type);
+
+    if (!validMime) {
+      setServerMsg("El archivo seleccionado debe ser PNG, JPG, JPEG o WEBP.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setServerMsg("El logo no debe exceder 2 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setServerMsg("");
+    setSelectedLogoFile(file);
+    event.target.value = "";
+  };
+
+  const clearSelectedLogo = () => {
+    setSelectedLogoFile(null);
+    setSelectedLogoPreview("");
+  };
+
+  const handleDeleteCurrentLogo = async () => {
+    if (!isEdit || !editing?.id || !currentLogo?.id) return;
+
+    const ok = window.confirm("¿Eliminar el logo activo de esta sucursal?");
+    if (!ok) return;
+
+    setServerMsg("");
+    setLogoRemoving(true);
+
+    try {
+      await deleteActiveBranchLogo(restaurantId, editing.id);
+      setCurrentLogo(null);
+    } catch (e) {
+      const redirected = handleRestaurantApiError(e, nav, restaurantId);
+      if (!redirected) {
+        setServerMsg(
+          e?.response?.data?.message || "No se pudo eliminar el logo activo."
+        );
+      }
+    } finally {
+      setLogoRemoving(false);
+    }
+  };
+
   const onSubmit = async (values) => {
     setServerMsg("");
     setSaving(true);
 
     try {
+      let branchId = editing?.id;
+
       if (isEdit) {
-        await updateBranch(restaurantId, editing.id, values);
+        const res = await updateBranch(restaurantId, editing.id, values);
+        branchId = res?.branch?.id ?? editing.id;
       } else {
-        await createBranch(restaurantId, values);
+        const res = await createBranch(restaurantId, values);
+        branchId = res?.branch?.id;
+      }
+
+      if (selectedLogoFile && branchId) {
+        const uploaded = await uploadBranchLogo(restaurantId, branchId, selectedLogoFile);
+        setCurrentLogo(uploaded ?? null);
+        setSelectedLogoFile(null);
+        setSelectedLogoPreview("");
       }
 
       onSaved?.();
@@ -140,6 +249,8 @@ export default function BranchUpsertModal({
       setSaving(false);
     }
   };
+
+  const previewUrl = selectedLogoPreview || currentLogo?.public_url || "";
 
   return (
     <Dialog
@@ -334,6 +445,155 @@ export default function BranchUpsertModal({
                     />
                   </Stack>
 
+                  <Box
+                    sx={{
+                      mt: 1,
+                      p: 2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      bgcolor: "background.default",
+                    }}
+                  >
+                    <Stack spacing={1.5}>
+                      <Typography
+                        sx={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        Logo de sucursal
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          color: "text.secondary",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Este logo quedará ligado a la sucursal y después se usará para tickets. Puedes cargarlo ahora y reemplazarlo cuando quieras.
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          width: "100%",
+                          minHeight: 180,
+                          borderRadius: 1,
+                          border: "1px dashed",
+                          borderColor: "divider",
+                          bgcolor: "#F6F4F6",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {previewUrl ? (
+                          <Box
+                            component="img"
+                            src={previewUrl}
+                            alt="Logo sucursal"
+                            sx={{
+                              width: "100%",
+                              maxHeight: 240,
+                              objectFit: "contain",
+                              display: "block",
+                            }}
+                          />
+                        ) : (
+                          <Stack spacing={1} alignItems="center" sx={{ px: 2, py: 4 }}>
+                            <ImageOutlinedIcon sx={{ fontSize: 42, color: "text.secondary" }} />
+                            <Typography
+                              sx={{
+                                fontSize: 13,
+                                color: "text.secondary",
+                                textAlign: "center",
+                              }}
+                            >
+                              No hay logo cargado todavía
+                            </Typography>
+                          </Stack>
+                        )}
+                      </Box>
+
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.25}
+                        alignItems={{ xs: "stretch", sm: "center" }}
+                      >
+                        <Button
+                          component="label"
+                          variant="outlined"
+                          startIcon={<CloudUploadOutlinedIcon />}
+                          disabled={saving || logoRemoving}
+                          sx={{
+                            minWidth: { xs: "100%", sm: 190 },
+                            height: 42,
+                            borderRadius: 2,
+                          }}
+                        >
+                          {selectedLogoFile || currentLogo ? "Reemplazar logo" : "Subir logo"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            hidden
+                            onChange={handleSelectLogo}
+                          />
+                        </Button>
+
+                        {selectedLogoFile && (
+                          <Button
+                            type="button"
+                            variant="text"
+                            onClick={clearSelectedLogo}
+                            disabled={saving}
+                            sx={{
+                              minWidth: { xs: "100%", sm: 140 },
+                              height: 42,
+                              borderRadius: 2,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Quitar selección
+                          </Button>
+                        )}
+
+                        {!selectedLogoFile && currentLogo && (
+                          <Button
+                            type="button"
+                            color="error"
+                            variant="text"
+                            startIcon={<DeleteOutlineIcon />}
+                            onClick={handleDeleteCurrentLogo}
+                            disabled={saving || logoRemoving}
+                            sx={{
+                              minWidth: { xs: "100%", sm: 170 },
+                              height: 42,
+                              borderRadius: 2,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {logoRemoving ? "Eliminando..." : "Eliminar logo"}
+                          </Button>
+                        )}
+                      </Stack>
+
+                      {selectedLogoFile && (
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "text.secondary",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          Archivo seleccionado: <strong>{selectedLogoFile.name}</strong>
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Box>
+
                   <Stack
                     direction={{ xs: "column-reverse", sm: "row" }}
                     justifyContent="space-between"
@@ -357,7 +617,7 @@ export default function BranchUpsertModal({
                     <Button
                       type="submit"
                       variant="contained"
-                      disabled={saving}
+                      disabled={saving || logoRemoving}
                       startIcon={isEdit ? <SaveIcon /> : <AddIcon />}
                       sx={{
                         minWidth: { xs: "100%", sm: 180 },
