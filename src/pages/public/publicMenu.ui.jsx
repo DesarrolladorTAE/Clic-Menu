@@ -1,6 +1,5 @@
 // src/pages/public/publicMenu.ui.jsx
 // Componentes UI puros (no conocen servicios ni lógica de negocio)
-// Objetivo: sacar del Page todo lo visual reusable sin tocar el diseño.
 
 import React, { useEffect, useState } from "react";
 
@@ -326,9 +325,23 @@ export function FullOverlay({ open, tone = "default", title, message, actions })
 }
 
 /**
- * Modal simple para pedir nombre y mandar la orden
+ * Modal reutilizable con header/footer fijos y body scrolleable.
+ * Mantiene compatibilidad con el uso actual.
  */
-export function Modal({ open, title, children, onClose, actions }) {
+export function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  actions,
+  width = "min(760px, 95vw)",
+  maxHeight = "min(88vh, 920px)",
+  bodyPadding = 14,
+  contentStyle = {},
+  bodyStyle = {},
+  footerStyle = {},
+  closeOnBackdrop = true,
+}) {
   if (!open) return null;
 
   return (
@@ -343,38 +356,60 @@ export function Modal({ open, title, children, onClose, actions }) {
         padding: 16,
       }}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
+        if (e.target === e.currentTarget && closeOnBackdrop) onClose?.();
       }}
     >
       <div
         style={{
-          width: "min(640px, 95vw)",
-          background: "#fff",
+          width,
+          maxWidth: "100%",
+          maxHeight,
+          background: "#FBF8F8",
           borderRadius: 18,
           border: "1px solid rgba(0,0,0,0.12)",
           boxShadow: "0 18px 60px rgba(0,0,0,0.25)",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          ...contentStyle,
         }}
       >
         <div
           style={{
-            padding: 14,
+            padding: "14px 14px 12px 14px",
             display: "flex",
             justifyContent: "space-between",
             gap: 10,
             alignItems: "center",
+            background: "#111111",
+            color: "#fff",
+            flexShrink: 0,
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <div style={{ fontWeight: 950 }}>{title}</div>
+          <div
+            style={{
+              fontWeight: 950,
+              fontSize: 16,
+              lineHeight: 1.2,
+              minWidth: 0,
+              wordBreak: "break-word",
+            }}
+          >
+            {title}
+          </div>
+
           <button
             onClick={onClose}
             style={{
               cursor: "pointer",
-              border: "1px solid rgba(0,0,0,0.12)",
-              background: "#fff",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
               borderRadius: 10,
               padding: "6px 10px",
               fontWeight: 900,
+              flexShrink: 0,
             }}
             title="Cerrar"
           >
@@ -382,7 +417,18 @@ export function Modal({ open, title, children, onClose, actions }) {
           </button>
         </div>
 
-        <div style={{ padding: 14, paddingTop: 0 }}>{children}</div>
+        <div
+          style={{
+            padding: bodyPadding,
+            background: "#F3F1F1",
+            overflowY: "auto",
+            overflowX: "hidden",
+            flex: 1,
+            ...bodyStyle,
+          }}
+        >
+          {children}
+        </div>
 
         {actions ? (
           <div
@@ -393,6 +439,9 @@ export function Modal({ open, title, children, onClose, actions }) {
               justifyContent: "flex-end",
               gap: 10,
               flexWrap: "wrap",
+              background: "#fff",
+              flexShrink: 0,
+              ...footerStyle,
             }}
           >
             {actions}

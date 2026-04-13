@@ -9,6 +9,8 @@ import {
   formatModifierGroupMeta,
   money,
 } from "../../../hooks/public/publicMenu.utils";
+import usePagination from "../../../hooks/usePagination";
+import PaginationFooter from "../../common/PaginationFooter";
 
 function makeGroupSelectionKey(section, group) {
   const componentProductId = Number(section?.component?.component_product_id || 0);
@@ -152,6 +154,10 @@ function normalizeSelectionForResult(preparedSections, selectionMap) {
             track_inventory: !!opt?.track_inventory,
             is_default: !!opt?.is_default,
             max_quantity_per_selection: Number(opt?.max_quantity_per_selection || 1),
+            availability: opt?.availability || null,
+            is_available:
+              typeof opt?.is_available === "boolean" ? opt.is_available : true,
+            availability_label: opt?.availability_label || null,
           },
         };
       })
@@ -241,6 +247,102 @@ function validatePreparedSections(preparedSections, selectionMap) {
   return errors;
 }
 
+function getAvailabilityUi(option) {
+  const availability = option?.availability || null;
+  const status = String(
+    option?.availability_label ||
+      availability?.status ||
+      "disponible"
+  ).toLowerCase();
+
+  const maxQty = availability?.max_available_qty;
+  const reason = availability?.reason || null;
+  const isAvailable =
+    typeof option?.is_available === "boolean" ? option.is_available : true;
+
+  const map = {
+    disponible: {
+      label: "Disponible",
+      bg: "#e8f7ee",
+      color: "#18794e",
+      border: "rgba(24,121,78,0.18)",
+    },
+    available: {
+      label: "Disponible",
+      bg: "#e8f7ee",
+      color: "#18794e",
+      border: "rgba(24,121,78,0.18)",
+    },
+    agotado: {
+      label: "Agotado",
+      bg: "#fdecec",
+      color: "#b42318",
+      border: "rgba(180,35,24,0.18)",
+    },
+    out_of_stock: {
+      label: "Agotado",
+      bg: "#fdecec",
+      color: "#b42318",
+      border: "rgba(180,35,24,0.18)",
+    },
+    stock_insuficiente: {
+      label: "Stock insuficiente",
+      bg: "#fff4e5",
+      color: "#b26a00",
+      border: "rgba(178,106,0,0.18)",
+    },
+    insufficient_stock: {
+      label: "Stock insuficiente",
+      bg: "#fff4e5",
+      color: "#b26a00",
+      border: "rgba(178,106,0,0.18)",
+    },
+    sin_receta: {
+      label: "Sin receta",
+      bg: "#f3e8ff",
+      color: "#7c3aed",
+      border: "rgba(124,58,237,0.18)",
+    },
+    recipe_missing: {
+      label: "Sin receta",
+      bg: "#f3e8ff",
+      color: "#7c3aed",
+      border: "rgba(124,58,237,0.18)",
+    },
+    bloqueado: {
+      label: "Bloqueado",
+      bg: "#eef2ff",
+      color: "#4338ca",
+      border: "rgba(67,56,202,0.18)",
+    },
+    inventory_blocked: {
+      label: "Bloqueado",
+      bg: "#eef2ff",
+      color: "#4338ca",
+      border: "rgba(67,56,202,0.18)",
+    },
+  };
+
+  const current = map[status] || map.disponible;
+
+  return {
+    isAvailable,
+    label: current.label,
+    bg: current.bg,
+    color: current.color,
+    border: current.border,
+    maxQty,
+    reason,
+  };
+}
+
+function formatMaxQty(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return null;
+  if (Math.floor(num) === num) return String(num);
+  return String(num);
+}
+
 function OptionRow({
   group,
   option,
@@ -254,16 +356,19 @@ function OptionRow({
   const affectsPrice = !!option?.affects_total;
   const price = Number(option?.price || 0);
   const maxPerSelection = Number(option?.max_quantity_per_selection || 1);
+  const availabilityUi = getAvailabilityUi(option);
+  const disabledByAvailability = !availabilityUi.isAvailable;
 
   return (
     <div
       style={{
         display: "grid",
-        gap: 8,
-        padding: "10px 12px",
-        borderRadius: 12,
+        gap: 10,
+        padding: "12px",
+        borderRadius: 14,
         border: "1px solid rgba(0,0,0,0.08)",
         background: selectedQty > 0 ? "#fff7ed" : "#fff",
+        opacity: disabledByAvailability && selectedQty <= 0 ? 0.78 : 1,
       }}
     >
       <div
@@ -275,22 +380,97 @@ function OptionRow({
           flexWrap: "wrap",
         }}
       >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 900, fontSize: 13 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontWeight: 900,
+              fontSize: 14,
+              color: "#3F3A52",
+              lineHeight: 1.25,
+            }}
+          >
             {option?.name || "Opción"}
           </div>
 
           {option?.description ? (
-            <div style={{ fontSize: 12, opacity: 0.76, marginTop: 2 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "#6E6A6A",
+                marginTop: 4,
+                lineHeight: 1.45,
+              }}
+            >
               {option.description}
             </div>
           ) : null}
 
-          <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6E6A6A",
+              marginTop: 6,
+              lineHeight: 1.45,
+            }}
+          >
             {affectsPrice ? `Ajuste: ${money(price)}` : "Sin ajuste al total"}
             {maxPerSelection > 1 ? ` · Máx. por selección: ${maxPerSelection}` : ""}
             {option?.is_default ? " · Sugerido por defecto" : ""}
           </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+              marginTop: 8,
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "4px 10px",
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 900,
+                background: availabilityUi.bg,
+                color: availabilityUi.color,
+                border: `1px solid ${availabilityUi.border}`,
+              }}
+            >
+              {availabilityUi.label}
+            </span>
+
+            {availabilityUi.maxQty !== null &&
+            availabilityUi.maxQty !== undefined &&
+            Number(availabilityUi.maxQty) > 0 ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: "#6E6A6A",
+                }}
+              >
+                Máx. disponible: {formatMaxQty(availabilityUi.maxQty)}
+              </span>
+            ) : null}
+          </div>
+
+          {availabilityUi.reason ? (
+            <div
+              style={{
+                fontSize: 12,
+                marginTop: 8,
+                color: disabledByAvailability ? "#b42318" : "#6E6A6A",
+                fontWeight: disabledByAvailability ? 700 : 500,
+                lineHeight: 1.45,
+              }}
+            >
+              {availabilityUi.reason}
+            </div>
+          ) : null}
         </div>
 
         {readOnly ? (
@@ -298,15 +478,28 @@ function OptionRow({
             style={{
               fontSize: 12,
               fontWeight: 900,
-              opacity: 0.72,
+              color: "#6E6A6A",
               alignSelf: "center",
             }}
           >
             {selectedQty > 0 ? `Seleccionado (${selectedQty})` : "Solo vista"}
           </div>
         ) : selectedQty > 0 ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              minWidth: 132,
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                gap: 8,
+                alignItems: "center",
+                justifyContent: "flex-end",
+              }}
+            >
               <PillButton
                 tone="default"
                 onClick={() => onDecrementQty?.(group, option)}
@@ -316,14 +509,23 @@ function OptionRow({
                 −
               </PillButton>
 
-              <div style={{ minWidth: 28, textAlign: "center", fontWeight: 900 }}>
+              <div
+                style={{
+                  minWidth: 28,
+                  textAlign: "center",
+                  fontWeight: 900,
+                  color: "#3F3A52",
+                }}
+              >
                 {selectedQty}
               </div>
 
               <PillButton
                 tone="soft"
                 onClick={() => onIncrementQty?.(group, option)}
-                disabled={selectedQty >= maxPerSelection}
+                disabled={
+                  selectedQty >= maxPerSelection || disabledByAvailability
+                }
                 title="Sumar"
               >
                 +
@@ -342,11 +544,16 @@ function OptionRow({
           </div>
         ) : (
           <PillButton
-            tone="soft"
+            tone={disabledByAvailability ? "default" : "soft"}
             onClick={() => onSelectOption?.(group, option)}
-            title="Seleccionar"
+            disabled={disabledByAvailability}
+            title={
+              disabledByAvailability
+                ? "Esta opción no está disponible"
+                : "Seleccionar"
+            }
           >
-            Seleccionar
+            {disabledByAvailability ? "No disponible" : "Seleccionar"}
           </PillButton>
         )}
       </div>
@@ -364,36 +571,67 @@ function GroupCard({
   onRemoveOption,
 }) {
   const options = Array.isArray(group?.options) ? group.options : [];
-  const distinctCount = countDistinctSelectedOptions(selectedMap?.[group.__selection_key] || {});
+  const distinctCount = countDistinctSelectedOptions(
+    selectedMap?.[group.__selection_key] || {}
+  );
 
   return (
     <div
       style={{
         display: "grid",
-        gap: 10,
-        padding: "12px",
+        gap: 12,
+        padding: "14px",
         borderRadius: 14,
-        border: "1px solid rgba(0,0,0,0.10)",
-        background: "#fff",
+        border: "1px solid #D9D3D3",
+        background: "#FBF8F8",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
       }}
     >
       <div>
-        <div style={{ fontWeight: 950, fontSize: 14 }}>
+        <div
+          style={{
+            fontWeight: 900,
+            fontSize: 15,
+            color: "#3F3A52",
+            lineHeight: 1.2,
+          }}
+        >
           {group?.name || "Grupo de extras"}
         </div>
 
         {group?.description ? (
-          <div style={{ fontSize: 12, opacity: 0.78, marginTop: 3 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6E6A6A",
+              marginTop: 4,
+              lineHeight: 1.45,
+            }}
+          >
             {group.description}
           </div>
         ) : null}
 
-        <div style={{ fontSize: 12, opacity: 0.74, marginTop: 5 }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: "#6E6A6A",
+            marginTop: 6,
+            lineHeight: 1.45,
+          }}
+        >
           {formatModifierGroupMeta(group)}
         </div>
 
         {!readOnly ? (
-          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6E6A6A",
+              marginTop: 6,
+              fontWeight: 700,
+            }}
+          >
             Opciones elegidas: {distinctCount}
           </div>
         ) : null}
@@ -425,10 +663,10 @@ function GroupCard({
         <div
           style={{
             fontSize: 12,
-            opacity: 0.7,
-            padding: "10px 12px",
+            color: "#6E6A6A",
+            padding: "12px",
             borderRadius: 12,
-            background: "#fafafa",
+            background: "#fff",
             border: "1px dashed rgba(0,0,0,0.12)",
           }}
         >
@@ -449,6 +687,7 @@ export default function ProductExtrasModal({
   onClose,
   onConfirm,
   confirmLabel = "Continuar",
+  selectionScope = "all",
 }) {
   const sections = useMemo(() => {
     return buildPreparedSections(
@@ -456,9 +695,21 @@ export default function ProductExtrasModal({
       buildModifierContextSections(product, {
         variantId,
         compositeDraft,
+        selectionScope,
       }),
     );
-  }, [product, variantId, compositeDraft]);
+  }, [product, variantId, compositeDraft, selectionScope]);
+
+  const flatGroups = useMemo(() => {
+    return sections.flatMap((section) =>
+      (Array.isArray(section?.groups) ? section.groups : []).map((group) => ({
+        sectionKey: section?.key || "section",
+        sectionTitle: section?.title || "Extras",
+        sectionSubtitle: section?.subtitle || "",
+        group,
+      })),
+    );
+  }, [sections]);
 
   const [selectionMap, setSelectionMap] = useState({});
   const [errorMsg, setErrorMsg] = useState("");
@@ -468,6 +719,41 @@ export default function ProductExtrasModal({
     setSelectionMap(buildInitialSelectionMap(initialValue, sections));
     setErrorMsg("");
   }, [open, initialValue, sections]);
+
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: flatGroups,
+    initialPage: 1,
+    pageSize: 5,
+    mode: "frontend",
+  });
+
+  const paginatedGroupsBySection = useMemo(() => {
+    const grouped = {};
+    paginatedItems.forEach((item) => {
+      if (!grouped[item.sectionKey]) {
+        grouped[item.sectionKey] = {
+          sectionKey: item.sectionKey,
+          sectionTitle: item.sectionTitle,
+          sectionSubtitle: item.sectionSubtitle,
+          items: [],
+        };
+      }
+      grouped[item.sectionKey].items.push(item.group);
+    });
+
+    return Object.values(grouped);
+  }, [paginatedItems]);
 
   if (!product) return null;
 
@@ -484,6 +770,10 @@ export default function ProductExtrasModal({
     const optionId = Number(option?.id || 0);
     const current = { ...(selectionMap?.[group.__selection_key] || {}) };
     const mode = String(group?.selection_mode || "").toLowerCase();
+    const optionAvailable =
+      typeof option?.is_available === "boolean" ? option.is_available : true;
+
+    if (!optionAvailable) return;
 
     if (mode === "single") {
       updateGroupMap(group, { [optionId]: 1 });
@@ -504,6 +794,10 @@ export default function ProductExtrasModal({
       group?.max_select == null || group?.max_select === ""
         ? null
         : Number(group.max_select);
+    const optionAvailable =
+      typeof option?.is_available === "boolean" ? option.is_available : true;
+
+    if (!optionAvailable) return;
 
     if (!current[optionId]) {
       if (mode === "single") {
@@ -552,6 +846,27 @@ export default function ProductExtrasModal({
       return;
     }
 
+    for (const section of sections) {
+      for (const group of Array.isArray(section?.groups) ? section.groups : []) {
+        const selected = selectionMap?.[group.__selection_key] || {};
+        const options = Array.isArray(group?.options) ? group.options : [];
+
+        for (const option of options) {
+          const optionId = Number(option?.id || 0);
+          const qty = Number(selected?.[optionId] || 0);
+          const optionAvailable =
+            typeof option?.is_available === "boolean" ? option.is_available : true;
+
+          if (qty > 0 && !optionAvailable) {
+            setErrorMsg(
+              `La opción "${option?.name || "Extra"}" ya no está disponible.`
+            );
+            return;
+          }
+        }
+      }
+    }
+
     const errors = validatePreparedSections(sections, selectionMap);
     if (errors.length > 0) {
       setErrorMsg(errors[0]);
@@ -592,6 +907,9 @@ export default function ProductExtrasModal({
       open={open}
       title={`Extras: ${title}`}
       onClose={onClose}
+      width="min(920px, 96vw)"
+      maxHeight="min(88vh, 920px)"
+      bodyPadding={16}
       actions={
         <>
           <PillButton tone="default" onClick={onClose} title="Cerrar">
@@ -608,20 +926,84 @@ export default function ProductExtrasModal({
         </>
       }
     >
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ fontSize: 13, opacity: 0.82 }}>
-          Aquí se muestran los extras disponibles según su contexto real:
-          producto, variante, componente o variante del componente.
-        </div>
+      <div style={{ display: "grid", gap: 14 }}>
+        <div
+          style={{
+            border: "1px solid #D9D3D3",
+            borderRadius: 14,
+            background: "#FBF8F8",
+            padding: 14,
+            display: "grid",
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 900,
+              color: "#3F3A52",
+            }}
+          >
+            Configuración de modificadores
+          </div>
 
-        <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.78 }}>
-          Opciones distintas seleccionadas: {totalDistinctSelected} · Cantidad total: {totalUnitsSelected}
+          <div
+            style={{
+              fontSize: 13,
+              color: "#6E6A6A",
+              lineHeight: 1.55,
+            }}
+          >
+            Aquí se muestran los extras disponibles según su contexto real:
+            producto, variante, componente o variante del componente.
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: "1px solid rgba(0,0,0,0.10)",
+                background: "#fff",
+                color: "#3F3A52",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              Opciones distintas: {totalDistinctSelected}
+            </span>
+
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: "1px solid rgba(0,0,0,0.10)",
+                background: "#fff",
+                color: "#3F3A52",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              Cantidad total: {totalUnitsSelected}
+            </span>
+          </div>
         </div>
 
         {errorMsg ? (
           <div
             style={{
-              border: "1px solid rgba(255,0,0,0.18)",
+              border: "1px solid rgba(242,100,42,0.28)",
               background: "#ffecec",
               color: "#a10000",
               borderRadius: 14,
@@ -634,53 +1016,94 @@ export default function ProductExtrasModal({
           </div>
         ) : null}
 
-        {sections.length > 0 ? (
-          sections.map((section) => (
+        {total > 0 ? (
+          <>
+            <div style={{ display: "grid", gap: 12 }}>
+              {paginatedGroupsBySection.map((section) => (
+                <div
+                  key={section.sectionKey}
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                    padding: "14px",
+                    borderRadius: 14,
+                    border: "1px solid #D9D3D3",
+                    background: "#fff",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 15,
+                        color: "#3F3A52",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {section.sectionTitle}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#6E6A6A",
+                        marginTop: 4,
+                      }}
+                    >
+                      {section.sectionSubtitle}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {section.items.map((group) => (
+                      <GroupCard
+                        key={group.__selection_key}
+                        group={group}
+                        readOnly={readOnly}
+                        selectedMap={selectionMap}
+                        onSelectOption={handleSelectOption}
+                        onIncrementQty={handleIncrementQty}
+                        onDecrementQty={handleDecrementQty}
+                        onRemoveOption={handleRemoveOption}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div
-              key={section.key}
               style={{
-                display: "grid",
-                gap: 10,
-                padding: "12px",
-                borderRadius: 16,
-                border: "1px solid rgba(0,0,0,0.10)",
-                background: "#fafafa",
+                border: "1px solid #D9D3D3",
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "#fff",
               }}
             >
-              <div>
-                <div style={{ fontWeight: 950, fontSize: 14 }}>
-                  {section.title}
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.76, marginTop: 2 }}>
-                  {section.subtitle}
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 10 }}>
-                {(section.groups || []).map((group) => (
-                  <GroupCard
-                    key={group.__selection_key}
-                    group={group}
-                    readOnly={readOnly}
-                    selectedMap={selectionMap}
-                    onSelectOption={handleSelectOption}
-                    onIncrementQty={handleIncrementQty}
-                    onDecrementQty={handleDecrementQty}
-                    onRemoveOption={handleRemoveOption}
-                  />
-                ))}
-              </div>
+              <PaginationFooter
+                page={page}
+                totalPages={totalPages}
+                startItem={startItem}
+                endItem={endItem}
+                total={total}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={prevPage}
+                onNext={nextPage}
+                itemLabel="grupos"
+              />
             </div>
-          ))
+          </>
         ) : (
           <div
             style={{
               fontSize: 13,
-              opacity: 0.78,
-              padding: "12px",
+              color: "#6E6A6A",
+              padding: "16px",
               borderRadius: 14,
               border: "1px dashed rgba(0,0,0,0.12)",
-              background: "#fafafa",
+              background: "#FBF8F8",
             }}
           >
             Este producto no tiene extras visibles para este contexto.

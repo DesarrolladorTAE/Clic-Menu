@@ -108,6 +108,7 @@ export default function StaffMenuEntryPage() {
   const [selectedExtrasReadOnly, setSelectedExtrasReadOnly] = useState(false);
   const [selectedExtrasSubmitKind, setSelectedExtrasSubmitKind] = useState(null);
   const [selectedExtrasVariantObj, setSelectedExtrasVariantObj] = useState(null);
+  const [selectedExtrasSelectionScope, setSelectedExtrasSelectionScope] = useState("all");
   const [pendingCompositeComponents, setPendingCompositeComponents] = useState([]);
   const [pendingCompositeDetails, setPendingCompositeDetails] = useState([]);
 
@@ -230,6 +231,7 @@ export default function StaffMenuEntryPage() {
     setSelectedExtrasReadOnly(false);
     setSelectedExtrasSubmitKind(null);
     setSelectedExtrasVariantObj(null);
+    setSelectedExtrasSelectionScope("all");
     setPendingCompositeComponents([]);
     setPendingCompositeDetails([]);
   };
@@ -242,13 +244,14 @@ export default function StaffMenuEntryPage() {
     setSelectedExtrasReadOnly(true);
     setSelectedExtrasSubmitKind(null);
     setSelectedExtrasVariantObj(null);
+    setSelectedExtrasSelectionScope("all");
     setPendingCompositeComponents([]);
     setPendingCompositeDetails([]);
     setExtrasModalOpen(true);
   };
 
   const openProductSelectionFlow = (product) => {
-    if (hasContextualModifiers(product)) {
+    if (hasContextualModifiers(product, { selectionScope: "product_only" })) {
       setSelectedExtrasProduct(product);
       setSelectedExtrasVariantId(null);
       setSelectedExtrasCompositeDraft(null);
@@ -256,6 +259,7 @@ export default function StaffMenuEntryPage() {
       setSelectedExtrasReadOnly(false);
       setSelectedExtrasSubmitKind("product");
       setSelectedExtrasVariantObj(null);
+      setSelectedExtrasSelectionScope("product_only");
       setPendingCompositeComponents([]);
       setPendingCompositeDetails([]);
       setExtrasModalOpen(true);
@@ -266,7 +270,12 @@ export default function StaffMenuEntryPage() {
   };
 
   const openVariantSelectionFlow = (product, variant) => {
-    if (hasContextualModifiers(product, { variantId: Number(variant?.id || 0) })) {
+    if (
+      hasContextualModifiers(product, {
+        variantId: Number(variant?.id || 0),
+        selectionScope: "variant_only",
+      })
+    ) {
       setSelectedExtrasProduct(product);
       setSelectedExtrasVariantId(Number(variant?.id || 0));
       setSelectedExtrasCompositeDraft(null);
@@ -274,6 +283,7 @@ export default function StaffMenuEntryPage() {
       setSelectedExtrasReadOnly(false);
       setSelectedExtrasSubmitKind("variant");
       setSelectedExtrasVariantObj(variant);
+      setSelectedExtrasSelectionScope("variant_only");
       setPendingCompositeComponents([]);
       setPendingCompositeDetails([]);
       setExtrasModalOpen(true);
@@ -301,6 +311,7 @@ export default function StaffMenuEntryPage() {
     if (
       hasContextualModifiers(selectedCompositeProduct, {
         compositeDraft: draft,
+        selectionScope: "composite_only",
       })
     ) {
       setSelectedExtrasProduct(selectedCompositeProduct);
@@ -310,6 +321,7 @@ export default function StaffMenuEntryPage() {
       setSelectedExtrasReadOnly(false);
       setSelectedExtrasSubmitKind("composite");
       setSelectedExtrasVariantObj(null);
+      setSelectedExtrasSelectionScope("composite_only");
       setPendingCompositeComponents(components);
       setPendingCompositeDetails(details);
       setCompositeModalOpen(false);
@@ -582,6 +594,7 @@ export default function StaffMenuEntryPage() {
         onClose={resetExtrasFlow}
         onConfirm={handleConfirmExtras}
         confirmLabel={selectedExtrasReadOnly ? "Listo" : "Guardar extras"}
+        selectionScope={selectedExtrasSelectionScope}
       />
 
       <MenuHeaderCard

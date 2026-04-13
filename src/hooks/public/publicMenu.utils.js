@@ -360,18 +360,39 @@ export function hasAnyModifierGroups(product) {
   return false;
 }
 
+/**
+ * selectionScope:
+ * - "all": vista general, muestra todo
+ * - "product_only": solo grupos base del producto
+ * - "variant_only": solo grupos de la variante elegida
+ * - "composite_only": conserva el flujo contextual de compuestos
+ */
 export function buildModifierContextSections(product, opts = {}) {
   if (!product || typeof product !== "object") return [];
 
   const {
     variantId = null,
     compositeDraft = null,
+    selectionScope = "all",
   } = opts || {};
 
   const sections = [];
   const title = product?.display_name || product?.name || "Producto";
 
-  if (hasGroups(product?.modifier_groups)) {
+  const includeProductBase =
+    selectionScope === "all" ||
+    selectionScope === "product_only" ||
+    selectionScope === "composite_only";
+
+  const includeVariantGroups =
+    selectionScope === "all" ||
+    selectionScope === "variant_only";
+
+  const includeCompositeGroups =
+    selectionScope === "all" ||
+    selectionScope === "composite_only";
+
+  if (includeProductBase && hasGroups(product?.modifier_groups)) {
     sections.push({
       key: `product-${product.id || "x"}`,
       context_type: "product",
@@ -382,19 +403,25 @@ export function buildModifierContextSections(product, opts = {}) {
   }
 
   const variants = Array.isArray(product?.variants) ? product.variants : [];
-  variants.forEach((variant, idx) => {
-    if (variantId != null && Number(variant?.id) !== Number(variantId)) return;
-    if (!hasGroups(variant?.modifier_groups)) return;
+  if (includeVariantGroups) {
+    variants.forEach((variant, idx) => {
+      if (variantId != null && Number(variant?.id) !== Number(variantId)) return;
+      if (!hasGroups(variant?.modifier_groups)) return;
 
-    sections.push({
-      key: `variant-${variant?.id || idx}`,
-      context_type: "variant",
-      title: "Extras por variante",
-      subtitle: `${title} · ${variant?.name || `Variante ${idx + 1}`}`,
-      groups: variant.modifier_groups,
-      variant,
+      sections.push({
+        key: `variant-${variant?.id || idx}`,
+        context_type: "variant",
+        title: "Extras por variante",
+        subtitle: `${title} · ${variant?.name || `Variante ${idx + 1}`}`,
+        groups: variant.modifier_groups,
+        variant,
+      });
     });
-  });
+  }
+
+  if (!includeCompositeGroups) {
+    return sections;
+  }
 
   const compositeItems = Array.isArray(product?.composite?.items)
     ? product.composite.items
