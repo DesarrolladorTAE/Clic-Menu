@@ -91,7 +91,7 @@ import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 
-import BranchQrCodesPage from "../pages/floor/BranchQrCodesPage";
+import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 
 import TestEventPage from "../realtime/TestEventPage";
@@ -194,6 +194,8 @@ export default function AppRoutes() {
           <Route path="modifiers/catalogs/component-variants" element={<CompositeComponentVariantModifierCatalogPage />} />
 
           <Route path="tables" element={<BranchFloorPlanPage />} />
+          <Route path="tables/qr-codes" element={<BranchQrCodesPage />} />
+
           <Route path="cash-registers" element={<CashRegistersPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />
 
@@ -219,7 +221,7 @@ export default function AppRoutes() {
 
       
 
-        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/qr-codes" element={<BranchQrCodesPage />} />
+       
       </Route>
 
       {/* DEFAULT */}

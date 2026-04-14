@@ -630,9 +630,11 @@ export default function BranchFloorPlanPage() {
       return;
     }
 
-    navigate(
-      `/owner/restaurants/${restaurantId}/branches/${selectedBranchId}/qr-codes`
-    );
+    navigate(`/owner/restaurants/${restaurantId}/operation/tables/qr-codes`, {
+      state: {
+        branchId: selectedBranchId,
+      },
+    });
   };
 
   const openAssignWaiter = async (zone) => {
