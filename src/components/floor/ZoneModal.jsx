@@ -3,66 +3,95 @@ import { useForm } from "react-hook-form";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import { createZone, updateZone } from "../../services/floor/zones.service";
 
-// UI simple (sin librerías extra)
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.35)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 99999,
-  padding: 16,
-};
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
-const modalStyle = {
-  width: "100%",
-  maxWidth: 520,
-  background: "#fff",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.12)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.25)",
-  overflow: "hidden",
-};
-
-const headerStyle = {
-  padding: "14px 16px",
-  borderBottom: "1px solid rgba(0,0,0,0.08)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-};
-
-const bodyStyle = { padding: 16 };
-
-const footerStyle = {
-  padding: "12px 16px",
-  borderTop: "1px solid rgba(0,0,0,0.08)",
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-};
+import CloseIcon from "@mui/icons-material/Close";
+import SaveIcon from "@mui/icons-material/Save";
 
 function FieldError({ message }) {
   if (!message) return null;
+
   return (
-    <div style={{ marginTop: 6, color: "#a10000", fontSize: 12, fontWeight: 700 }}>
+    <Typography
+      sx={{
+        mt: 0.75,
+        fontSize: 12,
+        color: "error.main",
+        fontWeight: 700,
+        lineHeight: 1.4,
+      }}
+    >
       {message}
-    </div>
+    </Typography>
+  );
+}
+
+function HelperNote({ children }) {
+  if (!children) return null;
+
+  return (
+    <Typography
+      sx={{
+        mt: 0.75,
+        fontSize: 12,
+        color: "text.secondary",
+        lineHeight: 1.45,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function FieldBlock({ label, input, help, error }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help ? <HelperNote>{help}</HelperNote> : null}
+      <FieldError message={error} />
+    </Box>
   );
 }
 
 export default function ZoneModal({
   open,
-  mode = "create", // create | edit
+  mode = "create",
   restaurantId,
   branchId,
-  initialData = null, // {id, name} cuando edit
+  initialData = null,
   onClose,
   onSaved,
-  showToast, // opcional
+  showToast,
 }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [saving, setSaving] = useState(false);
 
   const defaultValues = useMemo(
@@ -99,7 +128,13 @@ export default function ZoneModal({
           ? await createZone(restaurantId, branchId, payload)
           : await updateZone(restaurantId, branchId, initialData.id, payload);
 
-      if (showToast) showToast(mode === "create" ? "Zona creada." : "Zona actualizada.", "success");
+      if (showToast) {
+        showToast(
+          mode === "create" ? "Zona creada." : "Zona actualizada.",
+          "success"
+        );
+      }
+
       if (onSaved) onSaved(saved);
       onClose();
     } catch (e) {
@@ -118,67 +153,154 @@ export default function ZoneModal({
   };
 
   return (
-    <div style={overlayStyle} onMouseDown={onClose} role="dialog" aria-modal="true">
-      <div style={modalStyle} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Las zonas son áreas físicas (ej. Terraza, Balcón).
-            </div>
-          </div>
-
-          <button onClick={onClose} style={{ cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div style={bodyStyle}>
-            <div>
-              <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>
-                Nombre de la zona
-              </div>
-
-              <input
-                {...register("name")}
-                placeholder='Ej. "Terraza"'
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(0,0,0,0.18)",
-                  outline: "none",
-                }}
-              />
-
-              <FieldError message={errors?.name?.message} />
-            </div>
-
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-              Nota: no se permiten nombres duplicados por sucursal.
-            </div>
-          </div>
-
-          <div style={footerStyle}>
-            <button type="button" onClick={onClose} style={{ cursor: "pointer" }}>
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                cursor: saving ? "not-allowed" : "pointer",
-                padding: "10px 14px",
-                fontWeight: 900,
+    <Dialog
+      open={open}
+      onClose={saving ? undefined : onClose}
+      fullWidth
+      maxWidth="sm"
+      fullScreen={isMobile}
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          bgcolor: "#111111",
+          color: "#fff",
+        }}
+      >
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: { xs: 20, sm: 24 },
+                lineHeight: 1.2,
+                color: "#fff",
               }}
             >
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              Las zonas representan áreas físicas como terraza, balcón o salón principal.
+            </Typography>
+          </Box>
+
+          <IconButton
+            onClick={onClose}
+            disabled={saving}
+            sx={{
+              color: "#fff",
+              bgcolor: "rgba(255,255,255,0.08)",
+              borderRadius: 1,
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.16)",
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent
+        sx={{
+          p: { xs: 2, sm: 3 },
+          bgcolor: "background.default",
+        }}
+      >
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card
+            sx={{
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Stack spacing={2.5}>
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: { xs: 18, sm: 20 },
+                    color: "text.primary",
+                  }}
+                >
+                  Datos de la zona
+                </Typography>
+
+                <FieldBlock
+                  label="Nombre de la zona"
+                  input={
+                    <TextField
+                      fullWidth
+                      {...register("name")}
+                      placeholder='Ej. "Terraza"'
+                    />
+                  }
+                  help="No se permiten nombres duplicados dentro de la misma sucursal."
+                  error={errors?.name?.message}
+                />
+
+                <Stack
+                  direction={{ xs: "column-reverse", sm: "row" }}
+                  justifyContent="flex-end"
+                  spacing={1.5}
+                  pt={1}
+                >
+                  <Button
+                    type="button"
+                    onClick={onClose}
+                    disabled={saving}
+                    variant="outlined"
+                    sx={{
+                      minWidth: { xs: "100%", sm: 150 },
+                      height: 44,
+                      borderRadius: 2,
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {saving ? "Guardando…" : "Guardar"}
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

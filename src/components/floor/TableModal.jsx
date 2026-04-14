@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import {
   createTable,
@@ -7,59 +7,96 @@ import {
   getAvailableWaiters,
 } from "../../services/floor/tables.service";
 
-// UI simple
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.35)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 99999,
-  padding: 16,
-};
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
-const modalStyle = {
-  width: "100%",
-  maxWidth: 560,
-  background: "#fff",
-  borderRadius: 14,
-  border: "1px solid rgba(0,0,0,0.12)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.25)",
-  overflow: "hidden",
-};
-
-const headerStyle = {
-  padding: "14px 16px",
-  borderBottom: "1px solid rgba(0,0,0,0.08)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-};
-
-const bodyStyle = { padding: 16 };
-const footerStyle = {
-  padding: "12px 16px",
-  borderTop: "1px solid rgba(0,0,0,0.08)",
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-};
-
-const subtleNoteStyle = {
-  marginTop: 10,
-  fontSize: 12,
-  opacity: 0.75,
-  lineHeight: 1.35,
-};
+import CloseIcon from "@mui/icons-material/Close";
+import SaveIcon from "@mui/icons-material/Save";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 function FieldError({ message }) {
   if (!message) return null;
+
   return (
-    <div style={{ marginTop: 6, color: "#a10000", fontSize: 12, fontWeight: 700 }}>
+    <Typography
+      sx={{
+        mt: 0.75,
+        fontSize: 12,
+        color: "error.main",
+        fontWeight: 700,
+        lineHeight: 1.4,
+      }}
+    >
       {message}
-    </div>
+    </Typography>
+  );
+}
+
+function HelperNote({ children }) {
+  if (!children) return null;
+
+  return (
+    <Typography
+      sx={{
+        mt: 0.75,
+        fontSize: 12,
+        color: "text.secondary",
+        lineHeight: 1.45,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function FieldBlock({ label, input, help, error }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help ? <HelperNote>{help}</HelperNote> : null}
+      <FieldError message={error} />
+    </Box>
+  );
+}
+
+function SectionTitle({ title }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 15,
+        fontWeight: 800,
+        color: "primary.main",
+        pt: 0.5,
+      }}
+    >
+      {title}
+    </Typography>
   );
 }
 
@@ -77,7 +114,9 @@ function makeRange(min, max) {
 
 function waiterLabel(w) {
   if (!w) return "";
-  const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(Boolean);
+  const parts = [w.name, w.last_name_paternal, w.last_name_maternal].filter(
+    Boolean
+  );
   const full = parts.join(" ").trim();
   const phone = w.phone ? ` · ${w.phone}` : "";
   return `${full}${phone}`.trim();
@@ -85,26 +124,32 @@ function waiterLabel(w) {
 
 export default function TableModal({
   open,
-  mode = "create", // create | edit
+  mode = "create",
   restaurantId,
   branchId,
-  zones = [], // [{id, name, assigned_waiter_id?}]
-  settings = null, // {min_seats, max_seats, table_service_mode, assignment_strategy}
-  initialData = null, // edit: {id, zone_id, name, seats, status, assigned_waiter_id, zone?}
+  zones = [],
+  settings = null,
+  initialData = null,
   onClose,
   onSaved,
   showToast,
 }) {
-  const [saving, setSaving] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  // ---- Meseros disponibles
+  const [saving, setSaving] = useState(false);
   const [waitersLoading, setWaitersLoading] = useState(false);
   const [waiters, setWaiters] = useState([]);
 
-  const isAssignedWaiterMode = String(settings?.table_service_mode || "") === "assigned_waiter";
-  const assignmentStrategy = String(settings?.assignment_strategy || "table_only"); // table_only | zone
-  const isZoneStrategy = isAssignedWaiterMode && assignmentStrategy === "zone";
-  const isTableOnlyStrategy = isAssignedWaiterMode && assignmentStrategy === "table_only";
+  const isAssignedWaiterMode =
+    String(settings?.table_service_mode || "") === "assigned_waiter";
+  const assignmentStrategy = String(
+    settings?.assignment_strategy || "table_only"
+  );
+  const isZoneStrategy =
+    isAssignedWaiterMode && assignmentStrategy === "zone";
+  const isTableOnlyStrategy =
+    isAssignedWaiterMode && assignmentStrategy === "table_only";
 
   const minSeats = Number(settings?.min_seats ?? 1);
   const maxSeats = Number(settings?.max_seats ?? 6);
@@ -116,23 +161,29 @@ export default function TableModal({
   }, [minSeats, maxSeats]);
 
   const defaultValues = useMemo(() => {
-    const firstZoneId = zones?.[0]?.id ?? "";
-    const initialZoneId = initialData?.zone_id ?? initialData?.zone?.id ?? firstZoneId;
+    const firstZoneId = zones?.[0]?.id ? String(zones[0].id) : "";
+    const initialZoneId =
+      initialData?.zone_id != null
+        ? String(initialData.zone_id)
+        : initialData?.zone?.id != null
+        ? String(initialData.zone.id)
+        : firstZoneId;
 
     const safeMin = seatOptions[0] ?? 1;
     const safeMax = seatOptions[seatOptions.length - 1] ?? 6;
 
     const initialSeats = Number(initialData?.seats);
     const seatsInRange =
-      Number.isFinite(initialSeats) && initialSeats >= safeMin && initialSeats <= safeMax
-        ? initialSeats
-        : safeMin;
+      Number.isFinite(initialSeats) &&
+      initialSeats >= safeMin &&
+      initialSeats <= safeMax
+        ? String(initialSeats)
+        : String(safeMin);
 
     const initialAssignedWaiterId =
-      typeof initialData?.assigned_waiter_id === "number"
-        ? initialData.assigned_waiter_id
-        : initialData?.assigned_waiter_id
-        ? Number(initialData.assigned_waiter_id)
+      initialData?.assigned_waiter_id != null &&
+      initialData?.assigned_waiter_id !== ""
+        ? String(initialData.assigned_waiter_id)
         : "";
 
     return {
@@ -140,11 +191,12 @@ export default function TableModal({
       name: initialData?.name ?? "",
       seats: seatsInRange,
       status: initialData?.status ?? "available",
-      assigned_waiter_id: initialAssignedWaiterId ?? "",
+      assigned_waiter_id: initialAssignedWaiterId,
     };
   }, [initialData, zones, seatOptions]);
 
   const {
+    control,
     register,
     handleSubmit,
     setError,
@@ -155,6 +207,7 @@ export default function TableModal({
   } = useForm({ defaultValues });
 
   const selectedZoneId = watch("zone_id");
+  const currentSeats = watch("seats");
 
   const selectedZone = useMemo(() => {
     const zid = String(selectedZoneId ?? "");
@@ -162,13 +215,18 @@ export default function TableModal({
   }, [zones, selectedZoneId]);
 
   const zoneWaiterId = useMemo(() => {
-    const id = selectedZone?.assigned_waiter_id ?? initialData?.zone?.assigned_waiter_id ?? null;
+    const id =
+      selectedZone?.assigned_waiter_id ??
+      initialData?.zone?.assigned_waiter_id ??
+      null;
     return id ? Number(id) : null;
   }, [selectedZone, initialData]);
 
   const zoneWaiterLabel = useMemo(() => {
     if (!zoneWaiterId) return "Sin mesero asignado en esta zona";
-    const found = (waiters || []).find((w) => Number(w.id) === Number(zoneWaiterId));
+    const found = (waiters || []).find(
+      (w) => Number(w.id) === Number(zoneWaiterId)
+    );
     return found ? waiterLabel(found) : `Mesero #${zoneWaiterId}`;
   }, [zoneWaiterId, waiters]);
 
@@ -177,19 +235,23 @@ export default function TableModal({
 
     reset(defaultValues);
 
-    // Si no aplica el modo, limpia el campo para evitar mandar basura
     if (!isAssignedWaiterMode) {
       setValue("assigned_waiter_id", "");
       setWaiters([]);
     }
 
-    // Si es estrategia por zona, aseguramos que el select no “se quede” con algo raro
     if (isZoneStrategy) {
       setValue("assigned_waiter_id", "");
     }
-  }, [open, reset, defaultValues, isAssignedWaiterMode, isZoneStrategy, setValue]);
+  }, [
+    open,
+    reset,
+    defaultValues,
+    isAssignedWaiterMode,
+    isZoneStrategy,
+    setValue,
+  ]);
 
-  // Cargar meseros al abrir (si aplica el modo, aunque sea por zona, para mostrar label bonito)
   useEffect(() => {
     if (!open) return;
     if (!isAssignedWaiterMode) return;
@@ -203,7 +265,10 @@ export default function TableModal({
         if (!alive) return;
         setWaiters(Array.isArray(list) ? list : []);
       } catch (e) {
-        const msg = e?.response?.data?.message || e?.message || "No se pudieron cargar los meseros";
+        const msg =
+          e?.response?.data?.message ||
+          e?.message ||
+          "No se pudieron cargar los meseros";
         if (showToast) showToast(msg, "error");
       } finally {
         if (alive) setWaitersLoading(false);
@@ -229,18 +294,16 @@ export default function TableModal({
         status: form.status || "available",
       };
 
-      // Reglas de payload:
-      // - Si NO está en modo assigned_waiter => mandamos null (backend limpia si aplica)
-      // - Si assigned_waiter + strategy table_only => mandamos assigned_waiter_id (puede ser null)
-      // - Si assigned_waiter + strategy zone => NO mandar la key assigned_waiter_id (update truena si viene)
       if (!isAssignedWaiterMode) {
         payload.assigned_waiter_id = null;
       } else if (isTableOnlyStrategy) {
         const raw = form.assigned_waiter_id;
         payload.assigned_waiter_id =
-          raw === "" || raw === null || typeof raw === "undefined" ? null : Number(raw);
+          raw === "" || raw === null || typeof raw === "undefined"
+            ? null
+            : Number(raw);
       } else if (isZoneStrategy) {
-        // NO enviar assigned_waiter_id
+        // no enviar assigned_waiter_id
       }
 
       const saved =
@@ -248,8 +311,12 @@ export default function TableModal({
           ? await createTable(restaurantId, branchId, payload)
           : await updateTable(restaurantId, branchId, initialData.id, payload);
 
-      if (showToast)
-        showToast(mode === "create" ? "Mesa creada." : "Mesa actualizada.", "success");
+      if (showToast) {
+        showToast(
+          mode === "create" ? "Mesa creada." : "Mesa actualizada.",
+          "success"
+        );
+      }
 
       if (onSaved) onSaved(saved);
       onClose();
@@ -259,7 +326,8 @@ export default function TableModal({
       });
 
       if (!handled) {
-        const msg = e?.response?.data?.message || e?.message || "No se pudo guardar";
+        const msg =
+          e?.response?.data?.message || e?.message || "No se pudo guardar";
         if (showToast) showToast(msg, "error");
         else alert(msg);
       }
@@ -268,214 +336,370 @@ export default function TableModal({
     }
   };
 
-  const currentSeats = watch("seats");
-
   return (
-    <div style={overlayStyle} onMouseDown={onClose} role="dialog" aria-modal="true">
-      <div style={modalStyle} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Define zona, nombre, asientos, estado y (si aplica) mesero asignado.
-            </div>
-          </div>
-
-          <button onClick={onClose} style={{ cursor: "pointer" }}>
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div style={bodyStyle}>
-            <div style={{ display: "grid", gap: 14 }}>
-              {/* Zona */}
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Zona</div>
-                <select
-                  {...register("zone_id")}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.18)",
-                  }}
-                >
-                  {zones.map((z) => (
-                    <option key={z.id} value={z.id}>
-                      {z.name}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors?.zone_id?.message} />
-              </div>
-
-              {/* Nombre */}
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Nombre</div>
-                <input
-                  {...register("name")}
-                  placeholder='Ej. "M01"'
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.18)",
-                    outline: "none",
-                  }}
-                />
-                <FieldError message={errors?.name?.message} />
-              </div>
-
-              {/* Asientos */}
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Asientos</div>
-                <select
-                  {...register("seats")}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.18)",
-                  }}
-                >
-                  {seatOptions.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors?.seats?.message} />
-                <div style={subtleNoteStyle}>
-                  Rango permitido por sucursal: <strong>{minSeats}</strong> a{" "}
-                  <strong>{maxSeats}</strong>. Seleccionado:{" "}
-                  <strong>{Number(currentSeats)}</strong>.
-                </div>
-              </div>
-
-              {/* Estatus */}
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 6 }}>Estatus</div>
-                <select
-                  {...register("status")}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.18)",
-                  }}
-                >
-                  {STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={errors?.status?.message} />
-              </div>
-
-              {/* Mesero asignado */}
-              {isAssignedWaiterMode && (
-                <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 2 }}>
-                        Mesero asignado
-                      </div>
-                      <div style={{ fontSize: 12, opacity: 0.75 }}>
-                        {isZoneStrategy ? (
-                          <>
-                            Estrategia: <strong>Zona</strong> (solo lectura).
-                          </>
-                        ) : (
-                          <>
-                            Estrategia: <strong>Mesa</strong> (editable).
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      {waitersLoading ? "Cargando..." : `${waiters.length} disponibles`}
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 10 }}>
-                    {/* Strategy ZONE: mostrar read-only */}
-                    {isZoneStrategy ? (
-                      <div>
-                        <div
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "1px solid rgba(0,0,0,0.18)",
-                            background: "#f8fafc",
-                            fontWeight: 900,
-                          }}
-                          title="Mesero heredado por zona"
-                        >
-                          {zoneWaiterLabel}
-                        </div>
-
-                        <div style={subtleNoteStyle}>
-                          En modo <strong>Mesero por zona</strong> no puedes asignar mesero desde la mesa.
-                          Debes hacerlo en la zona con <strong>Asignar mesero</strong>.
-                        </div>
-                      </div>
-                    ) : (
-                      /* Strategy TABLE: selector editable */
-                      <div>
-                        <select
-                          {...register("assigned_waiter_id")}
-                          style={{
-                            width: "100%",
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "1px solid rgba(0,0,0,0.18)",
-                          }}
-                          disabled={waitersLoading || !isTableOnlyStrategy}
-                        >
-                          <option value="">Sin mesero asignado</option>
-                          {waiters.map((w) => (
-                            <option key={w.id} value={w.id}>
-                              {waiterLabel(w)}
-                            </option>
-                          ))}
-                        </select>
-
-                        <FieldError message={errors?.assigned_waiter_id?.message} />
-
-                        <div style={subtleNoteStyle}>
-                          Si el modo es <strong>Mesero asignado</strong>, puedes asignar uno aquí.
-                          Si el modo cambia a <strong>Libre</strong>, el sistema lo ignorará.
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={footerStyle}>
-            <button type="button" onClick={onClose} style={{ cursor: "pointer" }}>
-              Cancelar
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                cursor: saving ? "not-allowed" : "pointer",
-                padding: "10px 14px",
-                fontWeight: 900,
+    <Dialog
+      open={open}
+      onClose={saving ? undefined : onClose}
+      fullWidth
+      maxWidth="sm"
+      fullScreen={isMobile}
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: { xs: 0, sm: 1 },
+            overflow: "hidden",
+            backgroundColor: "background.paper",
+          },
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          bgcolor: "#111111",
+          color: "#fff",
+        }}
+      >
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: { xs: 20, sm: 24 },
+                lineHeight: 1.2,
+                color: "#fff",
               }}
             >
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                color: "rgba(255,255,255,0.82)",
+              }}
+            >
+              Define zona, nombre, asientos, estado y, si aplica, el mesero asignado.
+            </Typography>
+          </Box>
+
+          <IconButton
+            onClick={onClose}
+            disabled={saving}
+            sx={{
+              color: "#fff",
+              bgcolor: "rgba(255,255,255,0.08)",
+              borderRadius: 1,
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.16)",
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent
+        sx={{
+          p: { xs: 2, sm: 3 },
+          bgcolor: "background.default",
+        }}
+      >
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <Card
+            sx={{
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Stack spacing={2.5}>
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: { xs: 18, sm: 20 },
+                    color: "text.primary",
+                  }}
+                >
+                  Datos de la mesa
+                </Typography>
+
+                <SectionTitle title="Información principal" />
+
+                <FieldBlock
+                  label="Zona"
+                  input={
+                    <Controller
+                      name="zone_id"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          select
+                          fullWidth
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          SelectProps={{
+                            IconComponent: KeyboardArrowDownIcon,
+                          }}
+                        >
+                          {zones.map((z) => (
+                            <MenuItem key={z.id} value={String(z.id)}>
+                              {z.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  }
+                  error={errors?.zone_id?.message}
+                />
+
+                <FieldBlock
+                  label="Nombre"
+                  input={
+                    <TextField
+                      fullWidth
+                      {...register("name")}
+                      placeholder='Ej. "M01"'
+                    />
+                  }
+                  error={errors?.name?.message}
+                />
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <FieldBlock
+                    label="Asientos"
+                    input={
+                      <Controller
+                        name="seats"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            select
+                            fullWidth
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            SelectProps={{
+                              IconComponent: KeyboardArrowDownIcon,
+                            }}
+                          >
+                            {seatOptions.map((n) => (
+                              <MenuItem key={n} value={String(n)}>
+                                {n}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        )}
+                      />
+                    }
+                    help={
+                      <>
+                        Rango permitido por sucursal:{" "}
+                        <strong>{minSeats}</strong> a <strong>{maxSeats}</strong>.
+                        Seleccionado: <strong>{Number(currentSeats)}</strong>.
+                      </>
+                    }
+                    error={errors?.seats?.message}
+                  />
+
+                  <FieldBlock
+                    label="Estatus"
+                    input={
+                      <Controller
+                        name="status"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            select
+                            fullWidth
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            SelectProps={{
+                              IconComponent: KeyboardArrowDownIcon,
+                            }}
+                          >
+                            {STATUS_OPTIONS.map((o) => (
+                              <MenuItem key={o.value} value={o.value}>
+                                {o.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        )}
+                      />
+                    }
+                    error={errors?.status?.message}
+                  />
+                </Stack>
+
+                {isAssignedWaiterMode ? (
+                  <>
+                    <SectionTitle title="Mesero asignado" />
+
+                    <Box
+                      sx={{
+                        p: 1.75,
+                        borderRadius: 1,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        backgroundColor: "background.default",
+                      }}
+                    >
+                      <Stack spacing={1.5}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", sm: "center" }}
+                          spacing={1}
+                        >
+                          <Box>
+                            <Typography
+                              sx={{
+                                fontSize: 14,
+                                fontWeight: 800,
+                                color: "text.primary",
+                              }}
+                            >
+                              Asignación de personal
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.5,
+                                fontSize: 12,
+                                color: "text.secondary",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {isZoneStrategy ? (
+                                <>
+                                  Estrategia: <strong>Zona</strong> (solo lectura).
+                                </>
+                              ) : (
+                                <>
+                                  Estrategia: <strong>Mesa</strong> (editable).
+                                </>
+                              )}
+                            </Typography>
+                          </Box>
+
+                          <Typography
+                            sx={{
+                              fontSize: 12,
+                              color: "text.secondary",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {waitersLoading
+                              ? "Cargando..."
+                              : `${waiters.length} disponibles`}
+                          </Typography>
+                        </Stack>
+
+                        {isZoneStrategy ? (
+                          <Box>
+                            <TextField
+                              fullWidth
+                              value={zoneWaiterLabel}
+                              disabled
+                            />
+
+                            <HelperNote>
+                              En modo <strong>Mesero por zona</strong> no puedes
+                              asignar mesero desde la mesa. Debes hacerlo en la zona
+                              con <strong> Asignar mesero</strong>.
+                            </HelperNote>
+                          </Box>
+                        ) : (
+                          <FieldBlock
+                            label="Mesero"
+                            input={
+                              <Controller
+                                name="assigned_waiter_id"
+                                control={control}
+                                render={({ field }) => (
+                                  <TextField
+                                    select
+                                    fullWidth
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    disabled={waitersLoading || !isTableOnlyStrategy}
+                                    SelectProps={{
+                                      IconComponent: KeyboardArrowDownIcon,
+                                    }}
+                                  >
+                                    <MenuItem value="">Sin mesero asignado</MenuItem>
+                                    {waiters.map((w) => (
+                                      <MenuItem key={w.id} value={String(w.id)}>
+                                        {waiterLabel(w)}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                )}
+                              />
+                            }
+                            help={
+                              <>
+                                Si el modo es <strong>Mesero asignado</strong>,
+                                puedes asignarlo aquí. Si el modo cambia a{" "}
+                                <strong>Libre</strong>, el sistema lo ignorará.
+                              </>
+                            }
+                            error={errors?.assigned_waiter_id?.message}
+                          />
+                        )}
+                      </Stack>
+                    </Box>
+                  </>
+                ) : null}
+
+                <Stack
+                  direction={{ xs: "column-reverse", sm: "row" }}
+                  justifyContent="flex-end"
+                  spacing={1.5}
+                  pt={1}
+                >
+                  <Button
+                    type="button"
+                    onClick={onClose}
+                    disabled={saving}
+                    variant="outlined"
+                    sx={{
+                      minWidth: { xs: "100%", sm: 150 },
+                      height: 44,
+                      borderRadius: 2,
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {saving ? "Guardando…" : "Guardar"}
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

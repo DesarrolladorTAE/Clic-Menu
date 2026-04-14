@@ -193,7 +193,7 @@ export default function AppRoutes() {
           <Route path="modifiers/catalogs/components" element={<CompositeComponentModifierCatalogPage />} />
           <Route path="modifiers/catalogs/component-variants" element={<CompositeComponentVariantModifierCatalogPage />} />
 
-
+          <Route path="tables" element={<BranchFloorPlanPage />} />
           <Route path="cash-registers" element={<CashRegistersPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />
 
@@ -217,7 +217,7 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
 
-        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/tables" element={<BranchFloorPlanPage />} />
+      
 
         <Route path="/owner/restaurants/:restaurantId/branches/:branchId/qr-codes" element={<BranchQrCodesPage />} />
       </Route>
