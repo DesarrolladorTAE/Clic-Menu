@@ -39,3 +39,23 @@ export async function payCashierSale(saleId, payload) {
   );
   return res?.data;
 }
+
+/**
+ * Helper para extraer de forma segura la info del ticket
+ * cuando el backend responde al cobrar.
+ */
+export function extractTicketFromPayResponse(response) {
+  return response?.data?.ticket ?? null;
+}
+
+/**
+ * Helper para extraer advertencias de ticket
+ * cuando la venta sí se cobró pero el ticket falló o no existe.
+ */
+export function extractTicketWarningFromPayResponse(response) {
+  return {
+    ticketWarning: Boolean(response?.data?.ticket_warning),
+    ticketErrorCode: response?.data?.ticket_error_code ?? null,
+    ticketErrorMessage: response?.data?.ticket_error_message ?? null,
+  };
+}

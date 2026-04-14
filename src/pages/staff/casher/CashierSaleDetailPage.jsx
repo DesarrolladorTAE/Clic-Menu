@@ -1,3 +1,4 @@
+// src/pages/staff/casher/CashierSaleDetailPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -20,6 +21,8 @@ import {
   fetchCashierTaxOptions,
   previewCashierSalePayment,
   payCashierSale,
+  extractTicketFromPayResponse,
+  extractTicketWarningFromPayResponse,
 } from "../../../services/staff/casher/cashierPayment.service";
 
 import {
@@ -46,6 +49,14 @@ import {
   detachCashierSaleCustomer,
 } from "../../../services/staff/casher/cashierCustomer.service";
 
+import {
+  fetchCashierTicketById,
+  openCashierTicketHtmlInNewTab,
+  printCashierTicketFromHtml,
+  saveCashierTicketPdf,
+  openCashierTicketWindow,
+} from "../../../services/staff/casher/cashierTicket.service";
+
 import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
 import CashierOrderItemsCard from "../../../components/staff/casher/saleDetailPage/CashierOrderItemsCard";
 import CashierSaleSummaryCard from "../../../components/staff/casher/saleDetailPage/CashierSaleSummaryCard";
@@ -54,6 +65,7 @@ import CashierTaxSelectorCard from "../../../components/staff/casher/saleDetailP
 import CashierDiscountCard from "../../../components/staff/casher/saleDetailPage/CashierDiscountCard";
 import CashierAdjustmentCard from "../../../components/staff/casher/saleDetailPage/CashierAdjustmentCard";
 import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage/CashierCustomerCard";
+import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
 
 export default function CashierSaleDetailPage() {
   const nav = useNavigate();
@@ -116,6 +128,18 @@ export default function CashierSaleDetailPage() {
   const [adjustmentBusy, setAdjustmentBusy] = useState(false);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
+
+  const [postPaymentOpen, setPostPaymentOpen] = useState(false);
+  const [postPaymentTicket, setPostPaymentTicket] = useState(null);
+  const [postPaymentTicketWarning, setPostPaymentTicketWarning] = useState(false);
+  const [postPaymentTicketErrorCode, setPostPaymentTicketErrorCode] = useState(null);
+  const [postPaymentTicketErrorMessage, setPostPaymentTicketErrorMessage] = useState(null);
+
+  const [ticketBusy, setTicketBusy] = useState({
+    view: false,
+    print: false,
+    download: false,
+  });
 
   const localIdRef = useRef(1);
   const draftIdRef = useRef(1);
@@ -758,6 +782,117 @@ export default function CashierSaleDetailPage() {
     }
   };
 
+  const setTicketBusyKey = (key, value) => {
+    setTicketBusy((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handleClosePostPayment = () => {
+    setPostPaymentOpen(false);
+  };
+
+  const handleContinueToQueue = () => {
+    setPostPaymentOpen(false);
+    nav("/staff/cashier/queue", { replace: true });
+  };
+
+  const ensureLatestTicket = async () => {
+    const currentTicketId = Number(postPaymentTicket?.id || 0);
+
+    if (!currentTicketId) {
+      throw new Error("No hay ticket disponible para consultar.");
+    }
+
+    const res = await fetchCashierTicketById(currentTicketId);
+    return res?.data || postPaymentTicket;
+  };
+
+  const handleViewTicket = async () => {
+    const ticketWindow = openCashierTicketWindow("Cargando ticket…");
+
+    if (!ticketWindow) {
+      showAlert({
+        severity: "error",
+        message: "El navegador bloqueó la apertura de la vista del ticket.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("view", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await openCashierTicketHtmlInNewTab(latestTicket.id, ticketWindow);
+    } catch (e) {
+      try {
+        if (!ticketWindow.closed) {
+          ticketWindow.close();
+        }
+      } catch (error) {
+        console.error(error);
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo abrir la vista del ticket."),
+      });
+    } finally {
+      setTicketBusyKey("view", false);
+    }
+  };
+
+  const handlePrintTicket = async () => {
+    const printWindow = openCashierTicketWindow("Preparando impresión…");
+
+    if (!printWindow) {
+      showAlert({
+        severity: "error",
+        message: "El navegador bloqueó la ventana de impresión.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("print", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await printCashierTicketFromHtml(latestTicket.id, printWindow);
+    } catch (e) {
+      try {
+        if (!printWindow.closed) {
+          printWindow.close();
+        }
+      } catch (error) {
+        console.error(error);
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo imprimir el ticket."),
+      });
+    } finally {
+      setTicketBusyKey("print", false);
+    }
+  };
+
+  const handleDownloadTicket = async () => {
+    try {
+      setTicketBusyKey("download", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await saveCashierTicketPdf(latestTicket.id);
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo descargar el PDF del ticket."),
+      });
+    } finally {
+      setTicketBusyKey("download", false);
+    }
+  };
+
   const handlePay = async () => {
     if (!preview) {
       showAlert({
@@ -771,15 +906,58 @@ export default function CashierSaleDetailPage() {
       setPaying(true);
 
       const res = await payCashierSale(sale.sale_id, normalizedPayload);
+      const paidSaleData = res?.data?.sale || null;
+      const paidOrderData = res?.data?.order || null;
+      const paidTableData = res?.data?.table || null;
+      const ticketFromPay = extractTicketFromPayResponse(res);
+      const ticketWarningData = extractTicketWarningFromPayResponse(res);
+
+      if (paidSaleData) {
+        setDetailData((prev) => {
+          if (!prev?.sale) return prev;
+
+          return {
+            ...prev,
+            sale: {
+              ...prev.sale,
+              status: paidSaleData.status ?? prev.sale.status,
+              subtotal: paidSaleData.subtotal ?? prev.sale.subtotal,
+              discount_total:
+                paidSaleData.discount_total ?? prev.sale.discount_total,
+              tip: paidSaleData.tip ?? prev.sale.tip,
+              total: paidSaleData.total ?? prev.sale.total,
+              tax_kind: paidSaleData.tax_kind ?? prev.sale.tax_kind,
+              tax_rate: paidSaleData.tax_rate ?? prev.sale.tax_rate,
+              tax_base: paidSaleData.tax_base ?? prev.sale.tax_base,
+              tax_total: paidSaleData.tax_total ?? prev.sale.tax_total,
+              paid_at: paidSaleData.paid_at ?? prev.sale.paid_at,
+              order: {
+                ...(prev.sale.order || {}),
+                ...(paidOrderData || {}),
+              },
+              table: {
+                ...(prev.sale.table || {}),
+                ...(paidTableData || {}),
+              },
+            },
+            cash_session: prev.cash_session,
+          };
+        });
+      }
+
+      setPostPaymentTicket(ticketFromPay || null);
+      setPostPaymentTicketWarning(ticketWarningData.ticketWarning);
+      setPostPaymentTicketErrorCode(ticketWarningData.ticketErrorCode);
+      setPostPaymentTicketErrorMessage(ticketWarningData.ticketErrorMessage);
+
+      setPreview(null);
 
       showAlert({
         severity: "success",
         message: res?.message || "Venta cobrada correctamente.",
       });
 
-      setTimeout(() => {
-        nav("/staff/cashier/queue", { replace: true });
-      }, 450);
+      setPostPaymentOpen(true);
     } catch (e) {
       const code = pickCode(e);
 
@@ -1393,7 +1571,7 @@ export default function CashierSaleDetailPage() {
               onCancelOrderReasonChange={setCancelOrderReason}
               onSubmitCancelOrder={handleSubmitCancelOrder}
               busy={adjustmentBusy}
-              disabled={!canOperate || previewing || paying}
+              disabled={!canOperate || previewing || paying || postPaymentOpen}
             />
 
             <CashierDiscountCard
@@ -1411,7 +1589,7 @@ export default function CashierSaleDetailPage() {
               onApplyItemDraft={handleApplyItemDraft}
               onRemoveItem={handleRemoveItemDiscount}
               busy={discountBusy}
-              disabled={!canOperate || previewing || paying}
+              disabled={!canOperate || previewing || paying || postPaymentOpen}
             />
           </Stack>
 
@@ -1440,7 +1618,7 @@ export default function CashierSaleDetailPage() {
               onDetachCustomer={handleDetachCustomer}
               searching={searchingCustomers}
               busy={customerBusy}
-              disabled={!canManageCustomer || previewing || paying}
+              disabled={!canManageCustomer || previewing || paying || postPaymentOpen}
             />
 
             <CashierTaxSelectorCard
@@ -1450,7 +1628,7 @@ export default function CashierSaleDetailPage() {
                 setTaxOptionCode(nextValue);
                 setPreview(null);
               }}
-              disabled={!canOperate || previewing || paying}
+              disabled={!canOperate || previewing || paying || postPaymentOpen}
             />
 
             <CashierPaymentFormCard
@@ -1466,11 +1644,30 @@ export default function CashierSaleDetailPage() {
               paying={paying}
               hasPreview={!!preview}
               onPay={handlePay}
-              disabled={!canOperate}
+              disabled={!canOperate || postPaymentOpen}
             />
           </Stack>
         </Box>
       </Stack>
+
+      <CashierPostPaymentTicketModal
+        open={postPaymentOpen}
+        onClose={handleClosePostPayment}
+        onContinue={handleContinueToQueue}
+        onViewTicket={handleViewTicket}
+        onPrintTicket={handlePrintTicket}
+        onDownloadTicket={handleDownloadTicket}
+        busyView={ticketBusy.view}
+        busyPrint={ticketBusy.print}
+        busyDownload={ticketBusy.download}
+        ticket={postPaymentTicket}
+        sale={detailData?.sale || null}
+        order={detailData?.sale?.order || null}
+        table={detailData?.sale?.table || null}
+        ticketWarning={postPaymentTicketWarning}
+        ticketErrorCode={postPaymentTicketErrorCode}
+        ticketErrorMessage={postPaymentTicketErrorMessage}
+      />
 
       <AppAlert
         open={alertState.open}
