@@ -186,6 +186,7 @@ export default function AppRoutes() {
           <Route path="menu/products/:productId/recipes" element={<ProductRecipesPage />} />
           <Route path="menu/products/:productId/components" element={<ProductCompositionPage />} />
 
+          <Route path="catalog" element={<BranchCatalogPage />} /> 
 
           <Route path="modifiers" element={<ModifierManager />} />
           <Route path="modifiers/catalogs/products" element={<ProductModifierCatalogPage />} />
@@ -213,15 +214,6 @@ export default function AppRoutes() {
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
 
-        
-        
-
-
-        <Route path="/owner/restaurants/:restaurantId/branches/:branchId/catalog" element={<BranchCatalogPage />} />
-
-      
-
-       
       </Route>
 
       {/* DEFAULT */}
