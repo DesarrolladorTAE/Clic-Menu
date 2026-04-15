@@ -202,17 +202,8 @@ export default function AppRoutes() {
 
         </Route>
 
-
-        <Route
-          path="/owner/restaurants/:restaurantId/branches/:branchId/sales-channels/:salesChannelId/products"
-          element={<ChannelProductsConfigPage />}
-        />
         <Route path="/owner/restaurants" element={<MyRestaurants />} />
-
-
-
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
-
 
       </Route>
 
