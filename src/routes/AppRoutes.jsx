@@ -84,6 +84,7 @@ import PurchasesPage from "../pages/inventory/purchases/PurchasesPage";
 import PurchaseDetailPage from "../pages/inventory/purchases/PurchaseDetailPage";
 
 import TicketSettingsPage from "../pages/operation/ticket/TicketSettingsPage";
+import CustomerLoyaltySettingsPage from "../pages/operation/loyalty/CustomerLoyaltySettingsPage";
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
@@ -199,6 +200,8 @@ export default function AppRoutes() {
 
           <Route path="cash-registers" element={<CashRegistersPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />
+          <Route path="customer-loyalty-settings" element={<CustomerLoyaltySettingsPage />} />
+
 
         </Route>
 

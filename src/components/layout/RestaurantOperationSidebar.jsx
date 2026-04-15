@@ -30,6 +30,7 @@ import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import TuneIcon from "@mui/icons-material/Tune";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import StarsOutlinedIcon from "@mui/icons-material/StarsOutlined";
 
 const DRAWER_WIDTH = 240;
 const DRAWER_COLLAPSED = 78;
@@ -121,6 +122,11 @@ export default function RestaurantOperationSidebar({
             key: "ticket-settings",
             label: "Tickets",
             icon: <ReceiptLongIcon />,
+          },
+          {
+            key: "customer-loyalty-settings",
+            label: "Puntos",
+            icon: <StarsOutlinedIcon />,
           },
         ],
       },

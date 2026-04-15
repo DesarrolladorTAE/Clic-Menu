@@ -41,6 +41,8 @@ export default function RestaurantOperationLayout() {
     currentKey = "cash-registers";
   } else if (pathname.includes("/ticket-settings")) {
     currentKey = "ticket-settings";
+  } else if (pathname.includes("/customer-loyalty-settings")) {
+    currentKey = "customer-loyalty-settings";
   }
 
   const handleNavigate = (key) => {
@@ -89,6 +91,10 @@ export default function RestaurantOperationLayout() {
 
       case "ticket-settings":
         nav(`${base}/ticket-settings`, { state: { restaurantName } });
+        break;
+
+      case "customer-loyalty-settings":
+        nav(`${base}/customer-loyalty-settings`, { state: { restaurantName } });
         break;
 
       default:
