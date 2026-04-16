@@ -31,6 +31,8 @@ import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 import CashierHomePage from "../pages/staff/casher/CashierHomePage";
 import CashierQueuePage from "../pages/staff/casher/CashierQueuePage";
 import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
+import CashierRefundsHistoryPage from "../pages/staff/casher/refunds/CashierRefundsHistoryPage";
+import CashierRefundSaleDetailPage from "../pages/staff/casher/refunds/CashierRefundSaleDetailPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -133,6 +135,8 @@ export default function AppRoutes() {
         <Route path="/staff/cashier" element={<CashierHomePage />} />
         <Route path="/staff/cashier/queue" element={<CashierQueuePage />} />
         <Route path="/staff/cashier/sales/:saleId" element={<CashierSaleDetailPage />} />
+        <Route path="/staff/cashier/refunds" element={<CashierRefundsHistoryPage />} />
+        <Route path="/staff/cashier/refunds/:saleId" element={<CashierRefundSaleDetailPage />} />
       
       </Route>
 

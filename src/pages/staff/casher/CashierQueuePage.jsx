@@ -124,7 +124,8 @@ export default function CashierQueuePage() {
   const cashSession = queueData?.cash_session || null;
 
   const availableSales = useMemo(
-    () => (Array.isArray(queueData?.available_sales) ? queueData.available_sales : []),
+    () =>
+      Array.isArray(queueData?.available_sales) ? queueData.available_sales : [],
     [queueData]
   );
 
@@ -282,6 +283,18 @@ export default function CashierQueuePage() {
     nav("/staff/cashier");
   };
 
+  const handleGoHistory = () => {
+    nav("/staff/cashier/refunds");
+  };
+
+  const handleGoCustomers = () => {
+    showAlert({
+      severity: "info",
+      title: "Próximamente",
+      message: "La vista de clientes aún no está disponible.",
+    });
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -313,6 +326,8 @@ export default function CashierQueuePage() {
           myTotal={myTotal}
           syncing={refreshing}
           onBack={handleBackWithCheck}
+          onGoHistory={handleGoHistory}
+          onGoCustomers={handleGoCustomers}
         />
 
         <CashierQueueTabs
