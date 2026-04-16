@@ -1,17 +1,27 @@
-//Tarjetita de clientes
-import React from "react";
+import React, { useMemo } from "react";
 import {
-  Box, Button, Card, CardContent, Chip, Divider, MenuItem, Stack, TextField, Typography,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 import PersonSearchRoundedIcon from "@mui/icons-material/PersonSearchRounded";
-import PersonAddAltRoundedIcon from "@mui/icons-material/PersonAddAltRounded";
-import PersonRemoveRoundedIcon from "@mui/icons-material/PersonRemoveRounded";
-import ContactPhoneRoundedIcon from "@mui/icons-material/ContactPhoneRounded";
+import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
+import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
+import PhoneRoundedIcon from "@mui/icons-material/PhoneRounded";
+import EmailRoundedIcon from "@mui/icons-material/EmailRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import LoyaltyRoundedIcon from "@mui/icons-material/LoyaltyRounded";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import BadgeRoundedIcon from "@mui/icons-material/BadgeRounded";
 
 export default function CashierCustomerCard({
-  summary = null,
+  summary,
   contactForm,
   onContactFormChange,
   onSaveContact,
@@ -29,9 +39,37 @@ export default function CashierCustomerCard({
   busy = false,
   disabled = false,
 }) {
-  const sale = summary?.sale || null;
-  const contactData = summary?.contact_data || null;
   const customer = summary?.customer || null;
+  const contactData = summary?.contact_data || null;
+  const hasFormalCustomer = Boolean(customer?.customer_id || customer?.id);
+  const hasSimpleContact = Boolean(contactData?.phone || contactData?.email);
+
+  const helperConfig = useMemo(() => {
+    if (hasFormalCustomer) {
+      return {
+        severity: "success",
+        title: "Cliente formal asociado",
+        message:
+          "Cliente formal asociado. Si el programa de puntos está activo, la venta podrá generar puntos automáticamente al cobrarse.",
+      };
+    }
+
+    if (hasSimpleContact) {
+      return {
+        severity: "info",
+        title: "Contacto simple guardado",
+        message:
+          "El contacto simple sirve para seguimiento, pero no genera puntos. Para historial y beneficios, asocia un cliente formal.",
+      };
+    }
+
+    return {
+      severity: "warning",
+      title: "Sin cliente formal asociado",
+      message:
+        "Sin cliente formal asociado. La venta podrá cobrarse, pero no generará puntos.",
+    };
+  }, [hasFormalCustomer, hasSimpleContact]);
 
   return (
     <Card
@@ -53,7 +91,7 @@ export default function CashierCustomerCard({
                 color: "text.primary",
               }}
             >
-              Cliente y contacto
+              Cliente
             </Typography>
 
             <Typography
@@ -61,43 +99,46 @@ export default function CashierCustomerCard({
                 mt: 0.5,
                 fontSize: 14,
                 color: "text.secondary",
-                lineHeight: 1.5,
+                lineHeight: 1.55,
               }}
             >
-              Guarda contacto simple para ticket digital futuro o asocia un
-              cliente formal para historial y beneficios.
+              Guarda contacto simple o asocia un cliente formal a la venta para
+              aprovechar historial y beneficios futuros.
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip label={`Venta #${sale?.id || "—"}`} size="small" />
-            <Chip label={`Estado: ${sale?.status || "—"}`} size="small" />
-            <Chip
-              label={
-                customer
-                  ? "Cliente formal asociado"
-                  : contactData
-                  ? "Contacto simple guardado"
-                  : "Sin datos"
-              }
-              size="small"
+          <Alert
+            severity={helperConfig.severity}
+            sx={{
+              borderRadius: 1,
+              alignItems: "flex-start",
+              "& .MuiAlert-message": {
+                width: "100%",
+              },
+            }}
+          >
+            <Typography
               sx={{
+                fontSize: 14,
                 fontWeight: 800,
-                bgcolor: customer
-                  ? "#E7F8EB"
-                  : contactData
-                  ? "#FFF4D9"
-                  : "#F5F5F5",
-                color: customer
-                  ? "#0A7A2F"
-                  : contactData
-                  ? "#8A6D3B"
-                  : "text.primary",
+                lineHeight: 1.2,
               }}
-            />
-          </Stack>
+            >
+              {helperConfig.title}
+            </Typography>
 
-          {customer ? (
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                lineHeight: 1.55,
+              }}
+            >
+              {helperConfig.message}
+            </Typography>
+          </Alert>
+
+          {hasFormalCustomer ? (
             <Box
               sx={{
                 border: "1px solid",
@@ -108,82 +149,79 @@ export default function CashierCustomerCard({
               }}
             >
               <Stack spacing={1.25}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <LoyaltyRoundedIcon color="primary" />
-                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                    Cliente formal asociado
-                  </Typography>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <BadgeRoundedIcon color="primary" />
+                    <Typography
+                      sx={{
+                        fontSize: 18,
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      Cliente formal asociado
+                    </Typography>
+                  </Stack>
+
+                  <Chip
+                    label="Asociado"
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "#E7F8EB",
+                      color: "#0A7A2F",
+                    }}
+                  />
                 </Stack>
 
-                <InfoRow label="Nombre" value={customer?.name_alias || "—"} />
-                <InfoRow label="Teléfono" value={customer?.phone || "—"} />
-                <InfoRow label="Correo" value={customer?.email || "—"} />
-                <InfoRow label="RFC" value={customer?.rfc || "—"} />
-                <InfoRow
-                  label="Razón social"
-                  value={customer?.razon_social || "—"}
-                />
+                <Stack spacing={0.75}>
+                  <InfoRow
+                    label="Nombre"
+                    value={customer?.name_alias || "Sin nombre"}
+                  />
+                  <InfoRow
+                    label="Teléfono"
+                    value={customer?.phone || "—"}
+                    icon={<PhoneRoundedIcon fontSize="inherit" />}
+                  />
+                  <InfoRow
+                    label="Correo"
+                    value={customer?.email || "—"}
+                    icon={<EmailRoundedIcon fontSize="inherit" />}
+                  />
+                </Stack>
 
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={onDetachCustomer}
-                  disabled={busy || disabled}
-                  startIcon={<PersonRemoveRoundedIcon />}
-                  sx={{
-                    alignSelf: "flex-end",
-                    minWidth: { xs: "100%", sm: 220 },
-                    height: 42,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  sx={{ pt: 0.5 }}
                 >
-                  Desvincular cliente
-                </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteOutlineRoundedIcon />}
+                    onClick={onDetachCustomer}
+                    disabled={disabled || busy}
+                    sx={{
+                      flex: 1,
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Desvincular cliente
+                  </Button>
+                </Stack>
               </Stack>
             </Box>
           ) : null}
 
-          {contactData ? (
-            <Box
-              sx={{
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1,
-                backgroundColor: "#FCFCFC",
-                p: 2,
-              }}
-            >
-              <Stack spacing={1.25}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <ContactPhoneRoundedIcon color="primary" />
-                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                    Contacto simple guardado
-                  </Typography>
-                </Stack>
-
-                <InfoRow label="Teléfono" value={contactData?.phone || "—"} />
-                <InfoRow label="Correo" value={contactData?.email || "—"} />
-
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={onRemoveContact}
-                  disabled={busy || disabled}
-                  startIcon={<DeleteOutlineRoundedIcon />}
-                  sx={{
-                    alignSelf: "flex-end",
-                    minWidth: { xs: "100%", sm: 220 },
-                    height: 42,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
-                >
-                  Quitar contacto simple
-                </Button>
-              </Stack>
-            </Box>
-          ) : null}
+          <Divider />
 
           <Box
             sx={{
@@ -194,9 +232,29 @@ export default function CashierCustomerCard({
               p: 2,
             }}
           >
-            <Stack spacing={1.5}>
-              <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                Guardar contacto simple
+            <Stack spacing={1.75}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <SaveRoundedIcon color="primary" />
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  Contacto simple
+                </Typography>
+              </Stack>
+
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: "text.secondary",
+                  lineHeight: 1.55,
+                }}
+              >
+                Sirve para seguimiento y ticket digital futuro, pero no genera
+                puntos ni historial formal.
               </Typography>
 
               <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -209,8 +267,8 @@ export default function CashierCustomerCard({
                       onChange={(e) =>
                         onContactFormChange?.("phone", e.target.value)
                       }
-                      placeholder="7442188925"
-                      disabled={busy || disabled || !!customer}
+                      placeholder="Ej. 7441234567"
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -225,7 +283,103 @@ export default function CashierCustomerCard({
                         onContactFormChange?.("email", e.target.value)
                       }
                       placeholder="cliente@correo.com"
-                      disabled={busy || disabled || !!customer}
+                      disabled={disabled || busy}
+                    />
+                  }
+                />
+              </Stack>
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                sx={{ width: "100%" }}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<SaveRoundedIcon />}
+                  onClick={onSaveContact}
+                  disabled={disabled || busy}
+                  sx={{
+                    flex: 1,
+                    height: 42,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  Guardar contacto
+                </Button>
+
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlineRoundedIcon />}
+                  onClick={onRemoveContact}
+                  disabled={disabled || busy || !hasSimpleContact}
+                  sx={{
+                    flex: 1,
+                    height: 42,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  Quitar contacto
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Box
+            sx={{
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              backgroundColor: "#FCFCFC",
+              p: 2,
+            }}
+          >
+            <Stack spacing={1.75}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <PersonSearchRoundedIcon color="primary" />
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  Buscar cliente formal
+                </Typography>
+              </Stack>
+
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                <FieldBlock
+                  label="Teléfono"
+                  input={
+                    <TextField
+                      fullWidth
+                      value={searchForm?.phone || ""}
+                      onChange={(e) =>
+                        onSearchFormChange?.("phone", e.target.value)
+                      }
+                      placeholder="Busca por teléfono"
+                      disabled={disabled || busy || searching}
+                    />
+                  }
+                />
+
+                <FieldBlock
+                  label="Correo"
+                  input={
+                    <TextField
+                      fullWidth
+                      value={searchForm?.email || ""}
+                      onChange={(e) =>
+                        onSearchFormChange?.("email", e.target.value)
+                      }
+                      placeholder="Busca por correo"
+                      disabled={disabled || busy || searching}
                     />
                   }
                 />
@@ -233,9 +387,9 @@ export default function CashierCustomerCard({
 
               <Button
                 variant="contained"
-                onClick={onSaveContact}
-                disabled={busy || disabled || !!customer}
-                startIcon={<ContactPhoneRoundedIcon />}
+                startIcon={<PersonSearchRoundedIcon />}
+                onClick={onSearch}
+                disabled={disabled || busy || searching}
                 sx={{
                   alignSelf: "flex-end",
                   minWidth: { xs: "100%", sm: 220 },
@@ -244,14 +398,70 @@ export default function CashierCustomerCard({
                   fontWeight: 800,
                 }}
               >
-                Guardar contacto
+                {searching ? "Buscando…" : "Buscar cliente"}
               </Button>
 
-              {customer ? (
-                <HelperBox>
-                  La venta ya tiene un cliente formal asociado. Quita esa
-                  asociación si quieres volver a usar contacto simple.
-                </HelperBox>
+              {Array.isArray(searchResults) && searchResults.length > 0 ? (
+                <Stack spacing={1.25}>
+                  {searchResults.map((row) => (
+                    <Box
+                      key={row.id}
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        backgroundColor: "#fff",
+                        p: 1.5,
+                      }}
+                    >
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1.5}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            sx={{
+                              fontSize: 15,
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
+                          >
+                            {row?.name_alias || "Cliente sin nombre"}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.35,
+                              fontSize: 13,
+                              color: "text.secondary",
+                              lineHeight: 1.55,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {row?.phone || "Sin teléfono"} · {row?.email || "Sin correo"}
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          variant="outlined"
+                          startIcon={<LinkRoundedIcon />}
+                          onClick={() => onAttachCustomer?.(row.id)}
+                          disabled={disabled || busy}
+                          sx={{
+                            minWidth: { xs: "100%", sm: 180 },
+                            height: 40,
+                            borderRadius: 2,
+                            fontWeight: 800,
+                          }}
+                        >
+                          Asociar cliente
+                        </Button>
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
               ) : null}
             </Stack>
           </Box>
@@ -267,152 +477,33 @@ export default function CashierCustomerCard({
               p: 2,
             }}
           >
-            <Stack spacing={1.5}>
+            <Stack spacing={1.75}>
               <Stack direction="row" spacing={1} alignItems="center">
-                <PersonSearchRoundedIcon color="primary" />
-                <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                  Buscar cliente existente
-                </Typography>
-              </Stack>
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                <FieldBlock
-                  label="Teléfono"
-                  input={
-                    <TextField
-                      fullWidth
-                      value={searchForm?.phone || ""}
-                      onChange={(e) =>
-                        onSearchFormChange?.("phone", e.target.value)
-                      }
-                      placeholder="7442188925"
-                      disabled={busy || disabled}
-                    />
-                  }
-                />
-
-                <FieldBlock
-                  label="Correo"
-                  input={
-                    <TextField
-                      fullWidth
-                      value={searchForm?.email || ""}
-                      onChange={(e) =>
-                        onSearchFormChange?.("email", e.target.value)
-                      }
-                      placeholder="cliente@correo.com"
-                      disabled={busy || disabled}
-                    />
-                  }
-                />
-              </Stack>
-
-              <Button
-                variant="outlined"
-                onClick={onSearch}
-                disabled={busy || disabled || searching}
-                startIcon={<PersonSearchRoundedIcon />}
-                sx={{
-                  alignSelf: "flex-end",
-                  minWidth: { xs: "100%", sm: 220 },
-                  height: 42,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                {searching ? "Buscando…" : "Buscar cliente"}
-              </Button>
-
-              {searchResults.length > 0 ? (
-                <Stack spacing={1.25}>
-                  {searchResults.map((row) => (
-                    <Box
-                      key={row.id}
-                      sx={{
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 1,
-                        backgroundColor: "#fff",
-                        p: 1.5,
-                      }}
-                    >
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        justifyContent="space-between"
-                        spacing={1.25}
-                      >
-                        <Box>
-                          <Typography
-                            sx={{
-                              fontSize: 15,
-                              fontWeight: 800,
-                              color: "text.primary",
-                            }}
-                          >
-                            {row.name_alias || "Cliente sin nombre"}
-                          </Typography>
-
-                          <Typography
-                            sx={{ mt: 0.35, fontSize: 13, color: "text.secondary" }}
-                          >
-                            Tel: {row.phone || "—"} · Correo: {row.email || "—"}
-                          </Typography>
-
-                          <Typography
-                            sx={{ mt: 0.35, fontSize: 13, color: "text.secondary" }}
-                          >
-                            RFC: {row.rfc || "—"} · Régimen: {row.regimen || "—"}
-                          </Typography>
-                        </Box>
-
-                        <Button
-                          variant="contained"
-                          onClick={() => onAttachCustomer?.(row.id)}
-                          disabled={busy || disabled}
-                          sx={{
-                            minWidth: { xs: "100%", sm: 180 },
-                            height: 40,
-                            borderRadius: 2,
-                            fontWeight: 800,
-                          }}
-                        >
-                          Asociar cliente
-                        </Button>
-                      </Stack>
-                    </Box>
-                  ))}
-                </Stack>
-              ) : (
-                <HelperBox>
-                  Busca por teléfono o correo. Si no existe, puedes crearlo y
-                  asociarlo abajo.
-                </HelperBox>
-              )}
-            </Stack>
-          </Box>
-
-          <Divider />
-
-          <Box
-            sx={{
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 1,
-              backgroundColor: "#FCFCFC",
-              p: 2,
-            }}
-          >
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <PersonAddAltRoundedIcon color="primary" />
-                <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                <PersonAddRoundedIcon color="primary" />
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
                   Crear y asociar cliente
                 </Typography>
               </Stack>
 
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: "text.secondary",
+                  lineHeight: 1.55,
+                }}
+              >
+                Crea el cliente formal y vincúlalo inmediatamente a esta venta.
+              </Typography>
+
               <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                 <FieldBlock
-                  label="Nombre / alias"
+                  label="Alias / nombre"
                   input={
                     <TextField
                       fullWidth
@@ -420,8 +511,8 @@ export default function CashierCustomerCard({
                       onChange={(e) =>
                         onCreateFormChange?.("name_alias", e.target.value)
                       }
-                      placeholder="Juan Pérez"
-                      disabled={busy || disabled}
+                      placeholder="Nombre del cliente"
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -435,8 +526,8 @@ export default function CashierCustomerCard({
                       onChange={(e) =>
                         onCreateFormChange?.("phone", e.target.value)
                       }
-                      placeholder="7442188925"
-                      disabled={busy || disabled}
+                      placeholder="7441234567"
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -453,7 +544,7 @@ export default function CashierCustomerCard({
                         onCreateFormChange?.("email", e.target.value)
                       }
                       placeholder="cliente@correo.com"
-                      disabled={busy || disabled}
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -468,7 +559,7 @@ export default function CashierCustomerCard({
                         onCreateFormChange?.("razon_social", e.target.value)
                       }
                       placeholder="Opcional"
-                      disabled={busy || disabled}
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -482,10 +573,10 @@ export default function CashierCustomerCard({
                       fullWidth
                       value={createForm?.rfc || ""}
                       onChange={(e) =>
-                        onCreateFormChange?.("rfc", e.target.value.toUpperCase())
+                        onCreateFormChange?.("rfc", e.target.value)
                       }
                       placeholder="Opcional"
-                      disabled={busy || disabled}
+                      disabled={disabled || busy}
                     />
                   }
                 />
@@ -494,23 +585,14 @@ export default function CashierCustomerCard({
                   label="Régimen"
                   input={
                     <TextField
-                      select
                       fullWidth
                       value={createForm?.regimen || ""}
                       onChange={(e) =>
                         onCreateFormChange?.("regimen", e.target.value)
                       }
-                      disabled={busy || disabled}
-                    >
-                      <MenuItem value="">Selecciona</MenuItem>
-                      <MenuItem value="601">601</MenuItem>
-                      <MenuItem value="603">603</MenuItem>
-                      <MenuItem value="605">605</MenuItem>
-                      <MenuItem value="606">606</MenuItem>
-                      <MenuItem value="612">612</MenuItem>
-                      <MenuItem value="621">621</MenuItem>
-                      <MenuItem value="626">626</MenuItem>
-                    </TextField>
+                      placeholder="Opcional"
+                      disabled={disabled || busy}
+                    />
                   }
                 />
               </Stack>
@@ -524,26 +606,26 @@ export default function CashierCustomerCard({
                     onChange={(e) =>
                       onCreateFormChange?.("postal_code", e.target.value)
                     }
-                    placeholder="39300"
-                    disabled={busy || disabled}
+                    placeholder="Opcional"
+                    disabled={disabled || busy}
                   />
                 }
               />
 
               <Button
                 variant="contained"
+                startIcon={<PersonAddRoundedIcon />}
                 onClick={onCreateAndAttach}
-                disabled={busy || disabled}
-                startIcon={<PersonAddAltRoundedIcon />}
+                disabled={disabled || busy}
                 sx={{
                   alignSelf: "flex-end",
-                  minWidth: { xs: "100%", sm: 240 },
+                  minWidth: { xs: "100%", sm: 250 },
                   height: 42,
                   borderRadius: 2,
                   fontWeight: 800,
                 }}
               >
-                Crear y asociar cliente
+                Crear y asociar
               </Button>
             </Stack>
           </Box>
@@ -562,39 +644,46 @@ function FieldBlock({ label, input }) {
   );
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({ label, value, icon = null }) {
   return (
-    <Stack direction="row" justifyContent="space-between" spacing={1}>
-      <Typography sx={{ fontSize: 14, color: "text.secondary", fontWeight: 700 }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 14, color: "text.primary", fontWeight: 800 }}>
-        {value}
-      </Typography>
-    </Stack>
-  );
-}
+    <Stack direction="row" justifyContent="space-between" spacing={1.5}>
+      <Stack direction="row" spacing={0.75} alignItems="center">
+        {icon ? (
+          <Box
+            sx={{
+              display: "grid",
+              placeItems: "center",
+              color: "text.secondary",
+              fontSize: 15,
+            }}
+          >
+            {icon}
+          </Box>
+        ) : null}
 
-function HelperBox({ children }) {
-  return (
-    <Box
-      sx={{
-        border: "1px dashed",
-        borderColor: "divider",
-        borderRadius: 1,
-        p: 1.5,
-      }}
-    >
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: "text.secondary",
+          }}
+        >
+          {label}
+        </Typography>
+      </Stack>
+
       <Typography
         sx={{
           fontSize: 13,
-          color: "text.secondary",
-          lineHeight: 1.55,
+          fontWeight: 800,
+          color: "text.primary",
+          textAlign: "right",
+          wordBreak: "break-word",
         }}
       >
-        {children}
+        {value || "—"}
       </Typography>
-    </Box>
+    </Stack>
   );
 }
 

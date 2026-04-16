@@ -288,11 +288,7 @@ export default function CashierQueuePage() {
   };
 
   const handleGoCustomers = () => {
-    showAlert({
-      severity: "info",
-      title: "Próximamente",
-      message: "La vista de clientes aún no está disponible.",
-    });
+    nav("/staff/cashier/customers");
   };
 
   if (loading) {
