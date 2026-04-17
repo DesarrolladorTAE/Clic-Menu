@@ -73,6 +73,12 @@ function isPendingLikeStatus(status) {
   );
 }
 
+function toSafeInt(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.trunc(num);
+}
+
 export function useCartAndOrder({
   token,
   canSelect,
@@ -85,6 +91,9 @@ export function useCartAndOrder({
   const [cart, setCart] = useState([]);
   const [sendOpen, setSendOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
+  const [partySize, setPartySize] = useState("");
+  const [adultCount, setAdultCount] = useState("");
+  const [childCount, setChildCount] = useState("");
   const [sending, setSending] = useState(false);
   const [sendToast, setSendToast] = useState("");
 
@@ -370,13 +379,16 @@ export function useCartAndOrder({
   );
 
   const createFirstOrder = useCallback(
-    async (name) => {
+    async (name, occupancyPayload) => {
       const items = normalizeItemsForApi(cart);
 
       try {
         const res = await createPublicOrder({
           token: String(token || ""),
           customer_name: name,
+          party_size: occupancyPayload.party_size,
+          adult_count: occupancyPayload.adult_count,
+          child_count: occupancyPayload.child_count,
           items,
         });
 
@@ -392,6 +404,9 @@ export function useCartAndOrder({
 
           setCart([]);
           setCustomerName("");
+          setPartySize("");
+          setAdultCount("");
+          setChildCount("");
           setSendOpen(false);
           setSendToast("✅ Comanda enviada. En espera de aprobación.");
           return { ok: true, orderId };
@@ -409,6 +424,19 @@ export function useCartAndOrder({
             availabilityError: true,
             data: apiError.data || null,
           };
+        }
+
+        const validationErrors = apiError?.errors || e?.response?.data?.errors || null;
+        if (validationErrors && typeof validationErrors === "object") {
+          const firstKey = Object.keys(validationErrors)[0];
+          const firstMessage = Array.isArray(validationErrors[firstKey])
+            ? validationErrors[firstKey][0]
+            : validationErrors[firstKey];
+
+          if (firstMessage) {
+            setSendToast(`⚠️ ${firstMessage}`);
+            return { ok: false };
+          }
         }
 
         const msg =
@@ -517,11 +545,49 @@ export function useCartAndOrder({
       return;
     }
 
+    const party = toSafeInt(partySize);
+    const adults = toSafeInt(adultCount);
+    const children = toSafeInt(childCount);
+
+    if (party < 1) {
+      setSendToast("⚠️ Debe haber al menos una persona en la mesa.");
+      setTimeout(() => setSendToast(""), 4000);
+      return;
+    }
+
+    if (adultCount === "") {
+      setSendToast("⚠️ Captura el número de adultos. Usa 0 si no hay.");
+      setTimeout(() => setSendToast(""), 4000);
+      return;
+    }
+
+    if (childCount === "") {
+      setSendToast("⚠️ Captura el número de niños. Usa 0 si no hay.");
+      setTimeout(() => setSendToast(""), 4000);
+      return;
+    }
+
+    if (adults < 0 || children < 0) {
+      setSendToast("⚠️ Adultos y niños no pueden ser menores a 0.");
+      setTimeout(() => setSendToast(""), 4000);
+      return;
+    }
+
+    if (adults + children !== party) {
+      setSendToast("⚠️ La suma de adultos y niños debe coincidir con el total de personas.");
+      setTimeout(() => setSendToast(""), 4500);
+      return;
+    }
+
     setSending(true);
     setSendToast("");
 
     try {
-      await createFirstOrder(name);
+      await createFirstOrder(name, {
+        party_size: party,
+        adult_count: adults,
+        child_count: children,
+      });
       setTimeout(() => setSendToast(""), 6500);
     } finally {
       setSending(false);
@@ -722,6 +788,9 @@ export function useCartAndOrder({
     setCart([]);
     setSendOpen(false);
     setCustomerName("");
+    setPartySize("");
+    setAdultCount("");
+    setChildCount("");
     setSendToast("");
     setPendingOrder(null);
     setActiveOrder(null);
@@ -747,6 +816,12 @@ export function useCartAndOrder({
     setSendOpen,
     customerName,
     setCustomerName,
+    partySize,
+    setPartySize,
+    adultCount,
+    setAdultCount,
+    childCount,
+    setChildCount,
 
     sending,
     sendToast,

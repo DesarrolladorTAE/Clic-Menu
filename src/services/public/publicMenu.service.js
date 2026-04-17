@@ -117,13 +117,23 @@ export async function callWaiterByTable(tableId) {
  * 5) Orders
  * =========================================================
  */
-export async function createPublicOrder({ token, customer_name, items }) {
+export async function createPublicOrder({
+  token,
+  customer_name,
+  party_size,
+  adult_count,
+  child_count,
+  items,
+}) {
   const device_identifier = getOrCreatePublicDeviceId();
 
   const payload = {
     token: String(token || ""),
     device_identifier,
     customer_name: String(customer_name || "").slice(0, 120),
+    party_size: Number(party_size || 0),
+    adult_count: Number(adult_count || 0),
+    child_count: Number(child_count || 0),
     items: Array.isArray(items) ? items : [],
   };
 

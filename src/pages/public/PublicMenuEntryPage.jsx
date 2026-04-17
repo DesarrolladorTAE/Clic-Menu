@@ -21,7 +21,6 @@ import {
 import {
   Badge,
   FullOverlay,
-  Modal,
   PillButton,
   SkeletonCard,
 } from "./publicMenu.ui";
@@ -38,6 +37,7 @@ import MenuProductCard from "../../components/menu/shared/MenuProductCard";
 import CompositeProductModal from "../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../components/menu/shared/MenuCartPanel";
+import PublicSendOrderModal from "../../components/menu/public/PublicSendOrderModal";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1049,89 +1049,26 @@ export default function PublicMenuEntryPage() {
         }
       />
 
-      <Modal
+      <PublicSendOrderModal
         open={cartOrder.sendOpen}
-        title="Enviar comanda"
-        onClose={() => {
-          if (!cartOrder.sending) cartOrder.setSendOpen(false);
-        }}
-        actions={
-          <>
-            <PillButton tone="default" disabled={cartOrder.sending} onClick={() => cartOrder.setSendOpen(false)} title="Cancelar">
-              Cancelar
-            </PillButton>
-            <PillButton
-              tone="orange"
-              disabled={cartOrder.sending || !allowBaseSend || pending || canAppend}
-              onClick={cartOrder.submitOrderOrAppend}
-              title={
-                canAppend
-                  ? "Esta orden ya está abierta, se agrega directo desde el botón Enviar."
-                  : pending
-                  ? "Ya hay comanda en espera."
-                  : !allowBaseSend
-                  ? "No se puede enviar aún"
-                  : "Mandar comanda"
-              }
-            >
-              {cartOrder.sending ? "⏳ Mandando..." : "📨 Mandar"}
-            </PillButton>
-          </>
-        }
-      >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ fontSize: 13, opacity: 0.85 }}>
-            Escribe tu nombre para identificar la comanda.
-          </div>
-
-          <input
-            value={cartOrder.customerName}
-            onChange={(e) => cartOrder.setCustomerName(e.target.value)}
-            placeholder="Ej: Juan (Mesa 5)"
-            style={{
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.12)",
-              outline: "none",
-              fontWeight: 850,
-            }}
-            maxLength={120}
-            disabled={cartOrder.sending}
-          />
-
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Items: <strong>{cartOrder.cart.length}</strong> · Total aprox:{" "}
-            <strong>
-              {Number(cartOrder.cartTotal || 0).toLocaleString("es-MX", {
-                style: "currency",
-                currency: "MXN",
-              })}
-            </strong>
-          </div>
-
-          {pending ? (
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
-              ⏳ Ya hay una comanda en espera. Espera a que el mesero la apruebe.
-            </div>
-          ) : null}
-
-          {cartOrder.sendToast ? (
-            <div
-              style={{
-                border: "1px solid rgba(0,0,0,0.10)",
-                borderRadius: 14,
-                padding: 10,
-                background: "#fff",
-                fontSize: 13,
-                fontWeight: 850,
-                whiteSpace: "pre-line",
-              }}
-            >
-              {cartOrder.sendToast}
-            </div>
-          ) : null}
-        </div>
-      </Modal>
+        sending={cartOrder.sending}
+        allowBaseSend={allowBaseSend}
+        pending={pending}
+        canAppend={canAppend}
+        customerName={cartOrder.customerName}
+        setCustomerName={cartOrder.setCustomerName}
+        partySize={cartOrder.partySize}
+        setPartySize={cartOrder.setPartySize}
+        adultCount={cartOrder.adultCount}
+        setAdultCount={cartOrder.setAdultCount}
+        childCount={cartOrder.childCount}
+        setChildCount={cartOrder.setChildCount}
+        cartCount={cartOrder.cart.length}
+        cartTotal={cartOrder.cartTotal}
+        sendToast={cartOrder.sendToast}
+        onClose={() => cartOrder.setSendOpen(false)}
+        onSubmit={cartOrder.submitOrderOrAppend}
+      />
 
       <CompositeProductModal
         open={compositeModalOpen}
