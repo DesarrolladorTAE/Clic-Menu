@@ -23,8 +23,7 @@ import {
   updatePurchaseProductItem,
   deletePurchaseProductItem,
 } from "../../../services/inventory/purchases/purchases.service";
-import { getIngredients } from "../../../services/inventory/ingredients/ingredients.service";
-import { getIngredientPresentations } from "../../../services/inventory/ingredients/ingredientPresentations.service";
+import { getPurchasableIngredients } from "../../../services/inventory/ingredients/ingredients.service";
 import { getProducts } from "../../../services/products/products.service";
 
 export default function PurchaseDetailPage() {
@@ -78,7 +77,7 @@ export default function PurchaseDetailPage() {
     try {
       const [purchaseRes, ingredientsRes, productsRes] = await Promise.all([
         getPurchase(restaurantId, purchaseId),
-        getIngredients(restaurantId, { only_active: true, q: "" }),
+        getPurchasableIngredients(restaurantId, { q: "" }),
         getProducts(restaurantId, { include_inactive: true }),
       ]);
 
@@ -121,16 +120,18 @@ export default function PurchaseDetailPage() {
 
   const editable = purchase?.status === "draft";
 
-  const loadPresentationsByIngredient = async (ingredientId) => {
-    try {
-      const res = await getIngredientPresentations(restaurantId, ingredientId, {
-        only_active: true,
-      });
+  const loadPresentationsByIngredient = (ingredientId) => {
+    const selectedIngredient = ingredients.find(
+      (item) => Number(item.id) === Number(ingredientId)
+    );
 
-      setPresentations(Array.isArray(res?.data) ? res.data : []);
-    } catch {
-      setPresentations([]);
-    }
+    const nextPresentations = Array.isArray(selectedIngredient?.presentations)
+      ? selectedIngredient.presentations.filter(
+          (item) => String(item?.status || "active") === "active"
+        )
+      : [];
+
+    setPresentations(nextPresentations);
   };
 
   const handleComplete = async () => {
@@ -163,11 +164,13 @@ export default function PurchaseDetailPage() {
     setIngredientModalOpen(true);
   };
 
-  const openIngredientEdit = async (item) => {
+  const openIngredientEdit = (item) => {
     setEditingIngredientItem(item);
 
     if (item?.ingredient?.id) {
-      await loadPresentationsByIngredient(item.ingredient.id);
+      loadPresentationsByIngredient(item.ingredient.id);
+    } else {
+      setPresentations([]);
     }
 
     setIngredientModalOpen(true);
@@ -183,8 +186,10 @@ export default function PurchaseDetailPage() {
           payload
         );
 
-        const updated = res?.data?.item;
-        const purchaseTotal = res?.data?.purchase_total;
+        const updated =
+          res?.data?.item || res?.data || null;
+        const purchaseTotal =
+          res?.data?.purchase_total ?? res?.purchase_total ?? null;
 
         setPurchase((prev) => ({
           ...prev,
@@ -206,8 +211,10 @@ export default function PurchaseDetailPage() {
           payload
         );
 
-        const created = res?.data?.item;
-        const purchaseTotal = res?.data?.purchase_total;
+        const created =
+          res?.data?.item || res?.data || null;
+        const purchaseTotal =
+          res?.data?.purchase_total ?? res?.purchase_total ?? null;
 
         setPurchase((prev) => ({
           ...prev,
@@ -224,6 +231,7 @@ export default function PurchaseDetailPage() {
 
       setIngredientModalOpen(false);
       setEditingIngredientItem(null);
+      setPresentations([]);
     } catch (e) {
       throw e;
     }
@@ -239,7 +247,8 @@ export default function PurchaseDetailPage() {
 
       setPurchase((prev) => ({
         ...prev,
-        total_amount: res?.purchase_total ?? prev.total_amount,
+        total_amount:
+          res?.data?.purchase_total ?? res?.purchase_total ?? prev.total_amount,
         items: prev.items.filter((x) => x.id !== item.id),
       }));
 
@@ -435,6 +444,7 @@ export default function PurchaseDetailPage() {
         onClose={() => {
           setIngredientModalOpen(false);
           setEditingIngredientItem(null);
+          setPresentations([]);
         }}
         editing={editingIngredientItem}
         ingredients={ingredients}

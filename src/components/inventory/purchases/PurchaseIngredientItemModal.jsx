@@ -76,7 +76,11 @@ export default function PurchaseIngredientItemModal({
     if (!open) return;
 
     if (isEdit) {
-      setIngredientId(editing?.ingredient?.id ? String(editing.ingredient.id) : "");
+      const nextIngredientId = editing?.ingredient?.id
+        ? String(editing.ingredient.id)
+        : "";
+
+      setIngredientId(nextIngredientId);
       setPresentationId(
         editing?.ingredient_presentation_id
           ? String(editing.ingredient_presentation_id)
@@ -85,6 +89,10 @@ export default function PurchaseIngredientItemModal({
       setQuantity(String(editing?.quantity ?? ""));
       setUnitCost(String(editing?.unit_cost ?? ""));
       setNotes(editing?.notes || "");
+
+      if (nextIngredientId) {
+        onIngredientChange?.(Number(nextIngredientId));
+      }
     } else {
       setIngredientId("");
       setPresentationId("");
@@ -92,14 +100,17 @@ export default function PurchaseIngredientItemModal({
       setUnitCost("");
       setNotes("");
     }
-  }, [open, isEdit, editing]);
-
-  useEffect(() => {
-    if (!ingredientId) return;
-    onIngredientChange?.(Number(ingredientId));
-  }, [ingredientId, onIngredientChange]);
+  }, [open, isEdit, editing]); // 👈 quitamos onIngredientChange de deps para evitar bucle por referencia nueva
 
   const canSave = !!presentationId && !!quantity && !!unitCost;
+
+  const handleIngredientSelect = (value) => {
+    setIngredientId(value);
+    setPresentationId("");
+    if (value) {
+      onIngredientChange?.(Number(value));
+    }
+  };
 
   const handleSave = async () => {
     if (!presentationId) {
@@ -181,7 +192,7 @@ export default function PurchaseIngredientItemModal({
                     <FormControl fullWidth>
                       <Select
                         value={ingredientId}
-                        onChange={(e) => setIngredientId(e.target.value)}
+                        onChange={(e) => handleIngredientSelect(e.target.value)}
                         displayEmpty
                         IconComponent={KeyboardArrowDownIcon}
                       >

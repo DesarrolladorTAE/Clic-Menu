@@ -10,6 +10,19 @@ export async function getIngredients(restaurantId, { only_active = false, q = ""
   return data; // { data: [] }
 }
 
+export async function getPurchasableIngredients(
+  restaurantId,
+  { q = "" } = {}
+) {
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/ingredients/purchasable`,
+    {
+      params: { q: q || "" },
+    }
+  );
+  return data; // { data: [] }
+}
+
 /**
  * POST /restaurants/{restaurantId}/ingredients
  */
