@@ -106,6 +106,12 @@ const STATUS_OPTIONS = [
   { value: "reserved", label: "Reservado" },
 ];
 
+const TABLE_SHAPE_OPTIONS = [
+  { value: "square", label: "Cuadrada" },
+  { value: "round", label: "Circular" },
+  { value: "rectangle", label: "Rectangular" },
+];
+
 function makeRange(min, max) {
   const out = [];
   for (let i = min; i <= max; i++) out.push(i);
@@ -186,10 +192,16 @@ export default function TableModal({
         ? String(initialData.assigned_waiter_id)
         : "";
 
+    const initialShape =
+      initialData?.shape && ["square", "round", "rectangle"].includes(initialData.shape)
+        ? initialData.shape
+        : "square";
+
     return {
       zone_id: initialZoneId,
       name: initialData?.name ?? "",
       seats: seatsInRange,
+      shape: initialShape,
       status: initialData?.status ?? "available",
       assigned_waiter_id: initialAssignedWaiterId,
     };
@@ -291,6 +303,7 @@ export default function TableModal({
         zone_id: Number(form.zone_id),
         name: (form.name || "").trim(),
         seats: Number(form.seats),
+        shape: form.shape || "square",
         status: form.status || "available",
       };
 
@@ -386,7 +399,7 @@ export default function TableModal({
                 color: "rgba(255,255,255,0.82)",
               }}
             >
-              Define zona, nombre, asientos, estado y, si aplica, el mesero asignado.
+              Define zona, nombre, asientos, forma, estado y, si aplica, el mesero asignado.
             </Typography>
           </Box>
 
@@ -511,22 +524,22 @@ export default function TableModal({
                   />
 
                   <FieldBlock
-                    label="Estatus"
+                    label="Forma"
                     input={
                       <Controller
-                        name="status"
+                        name="shape"
                         control={control}
                         render={({ field }) => (
                           <TextField
                             select
                             fullWidth
-                            value={field.value ?? ""}
+                            value={field.value ?? "square"}
                             onChange={field.onChange}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
                           >
-                            {STATUS_OPTIONS.map((o) => (
+                            {TABLE_SHAPE_OPTIONS.map((o) => (
                               <MenuItem key={o.value} value={o.value}>
                                 {o.label}
                               </MenuItem>
@@ -535,9 +548,38 @@ export default function TableModal({
                         )}
                       />
                     }
-                    error={errors?.status?.message}
+                    help="Selecciona la forma física de la mesa para distinguirla en el sistema."
+                    error={errors?.shape?.message}
                   />
                 </Stack>
+
+                <FieldBlock
+                  label="Estatus"
+                  input={
+                    <Controller
+                      name="status"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          select
+                          fullWidth
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          SelectProps={{
+                            IconComponent: KeyboardArrowDownIcon,
+                          }}
+                        >
+                          {STATUS_OPTIONS.map((o) => (
+                            <MenuItem key={o.value} value={o.value}>
+                              {o.label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  }
+                  error={errors?.status?.message}
+                />
 
                 {isAssignedWaiterMode ? (
                   <>

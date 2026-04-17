@@ -45,6 +45,7 @@ import WaiterZoneTabs from "../../../components/staff/waiter/WaiterZoneTabs";
 import WaiterTablesBoard from "../../../components/staff/waiter/WaiterTablesBoard";
 import WaiterNoticesDrawer from "../../../components/staff/waiter/WaiterNoticesDrawer";
 import WaiterWarehouseSelectionDialog from "../../../components/staff/waiter/WaiterWarehouseSelectionDialog";
+import WaiterOccupyTableDialog from "../../../components/staff/waiter/WaiterOccupyTableDialog";
 
 const PAGE_SIZE = 8;
 
@@ -78,6 +79,12 @@ export default function WaiterTablesGrid() {
     orderId: null,
     context: null,
     selectedWarehouseId: "",
+  });
+
+  const [occupyDialog, setOccupyDialog] = useState({
+    open: false,
+    loading: false,
+    table: null,
   });
 
   const [alertState, setAlertState] = useState({
@@ -167,6 +174,26 @@ export default function WaiterTablesGrid() {
       orderId: null,
       context: null,
       selectedWarehouseId: "",
+    });
+  };
+
+  const openOccupyDialog = (table) => {
+    if (!table?.id) return;
+
+    setOccupyDialog({
+      open: true,
+      loading: false,
+      table,
+    });
+  };
+
+  const closeOccupyDialog = () => {
+    if (occupyDialog.loading) return;
+
+    setOccupyDialog({
+      open: false,
+      loading: false,
+      table: null,
     });
   };
 
@@ -551,7 +578,7 @@ export default function WaiterTablesGrid() {
     }
   };
 
- const confirmAcceptWithWarehouse = async () => {
+  const confirmAcceptWithWarehouse = async () => {
     const orderId = warehouseDialog?.orderId;
     const preferredWarehouseId = Number(
       warehouseDialog?.selectedWarehouseId || 0
@@ -725,11 +752,24 @@ export default function WaiterTablesGrid() {
   };
 
   const doOccupy = async (table) => {
+    if (!table?.id) return;
+    openOccupyDialog(table);
+  };
+
+  const confirmOccupy = async (payload) => {
+    const table = occupyDialog?.table || null;
     const tableId = table?.id;
+
     if (!tableId) return;
 
+    setOccupyDialog((prev) => ({
+      ...prev,
+      loading: true,
+    }));
+
     try {
-      const res = await occupyTable(tableId);
+      const res = await occupyTable(tableId, payload);
+      closeOccupyDialog();
       showAlert(res?.message || "Mesa marcada como ocupada.", "success");
       await load({ silent: true });
     } catch (e) {
@@ -737,15 +777,34 @@ export default function WaiterTablesGrid() {
       const code = pickCode(e);
       const msg = pickErr(e, "No se pudo marcar como ocupada.");
 
+      setOccupyDialog((prev) => ({
+        ...prev,
+        loading: false,
+      }));
+
       if (st === 403 && code === "NOT_YOURS") {
+        closeOccupyDialog();
         showAlert("No puedes ocupar: esa mesa no es tuya.", "warning");
         await load({ silent: true });
         return;
       }
 
       if (st === 409 && code === "TAKEN") {
+        closeOccupyDialog();
         showAlert("Otro mesero ya tomó esta mesa.", "warning");
         await load({ silent: true });
+        return;
+      }
+
+      if (st === 409 && code === "OCCUPANCY_ALREADY_ACTIVE") {
+        closeOccupyDialog();
+        showAlert("La mesa ya tiene una ocupación activa.", "warning");
+        await load({ silent: true });
+        return;
+      }
+
+      if (st === 422) {
+        showAlert(msg, "warning");
         return;
       }
 
@@ -799,6 +858,11 @@ export default function WaiterTablesGrid() {
             id: tableId,
             name: table?.name || null,
             seats: table?.seats || null,
+            occupancy: table?.occupancy || null,
+            party_size: table?.party_size ?? null,
+            adult_count: table?.adult_count ?? null,
+            child_count: table?.child_count ?? null,
+            remaining_seats: table?.remaining_seats ?? null,
             ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
             table_service_mode:
               table?.table_service_mode || meta?.table_service_mode || null,
@@ -832,6 +896,11 @@ export default function WaiterTablesGrid() {
             id: tableId,
             name: table?.name || null,
             seats: table?.seats || null,
+            occupancy: table?.occupancy || null,
+            party_size: table?.party_size ?? null,
+            adult_count: table?.adult_count ?? null,
+            child_count: table?.child_count ?? null,
+            remaining_seats: table?.remaining_seats ?? null,
             ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
             table_service_mode:
               table?.table_service_mode || meta?.table_service_mode || null,
@@ -953,6 +1022,14 @@ export default function WaiterTablesGrid() {
           </>
         )}
       </Box>
+
+      <WaiterOccupyTableDialog
+        open={occupyDialog.open}
+        loading={occupyDialog.loading}
+        table={occupyDialog.table}
+        onClose={closeOccupyDialog}
+        onConfirm={confirmOccupy}
+      />
 
       <WaiterNoticesDrawer
         open={noticeOpen}

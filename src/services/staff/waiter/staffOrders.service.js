@@ -25,10 +25,10 @@ export async function fetchStaffWaiterMenu() {
   return res?.data;
 }
 
-export async function occupyTable(tableId) {
+export async function occupyTable(tableId, payload = {}) {
   const res = await staffApi.post(
     `/staff/waiter/tables/${tableId}/occupy`,
-    {},
+    payload,
     { headers: NO_CACHE_HEADERS }
   );
   return res?.data;

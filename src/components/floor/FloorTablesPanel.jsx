@@ -11,6 +11,16 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PaginationFooter from "../common/PaginationFooter";
 
+const TABLE_SHAPE_LABELS = {
+  square: "Cuadrada",
+  round: "Circular",
+  rectangle: "Rectangular",
+};
+
+function getTableShapeLabel(shape) {
+  return TABLE_SHAPE_LABELS[String(shape || "").toLowerCase()] || "Cuadrada";
+}
+
 export default function FloorTablesPanel({
   selectedZone,
   zoneFilter,
@@ -133,6 +143,7 @@ export default function FloorTablesPanel({
                 const meta = getStatusMeta(table.status);
                 const waiterText = formatWaiterFromTable(table);
                 const statusLabel = getStatusLabel(table.status);
+                const shapeLabel = getTableShapeLabel(table.shape);
 
                 return (
                   <Card
@@ -201,6 +212,11 @@ export default function FloorTablesPanel({
                         <Box>
                           <Label>Asientos</Label>
                           <Value>{table.seats}</Value>
+                        </Box>
+
+                        <Box>
+                          <Label>Forma</Label>
+                          <Value>{shapeLabel}</Value>
                         </Box>
 
                         <Box>

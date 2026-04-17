@@ -71,6 +71,38 @@ function ActionButton({
   );
 }
 
+function DetailLabel({ children }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 11,
+        fontWeight: 800,
+        color: "text.secondary",
+        textTransform: "uppercase",
+        letterSpacing: 0.3,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function DetailValue({ children, color = "text.primary" }) {
+  return (
+    <Typography
+      sx={{
+        mt: 0.25,
+        fontSize: 14,
+        fontWeight: 700,
+        color,
+        lineHeight: 1.35,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
 export default function WaiterTableCard({
   table,
   meta,
@@ -174,10 +206,29 @@ export default function WaiterTableCard({
     return { bg: "#FFF4D9", color: "#8A6D3B" };
   }, [uiState]);
 
+  const occupancy = table?.occupancy || null;
+  const hasOccupancy =
+    occupancy ||
+    table?.party_size !== null ||
+    table?.party_size !== undefined;
+
+  const partySize = Number(
+    occupancy?.party_size ?? table?.party_size ?? 0
+  );
+  const adultCount = Number(
+    occupancy?.adult_count ?? table?.adult_count ?? 0
+  );
+  const childCount = Number(
+    occupancy?.child_count ?? table?.child_count ?? 0
+  );
+  const remainingSeats = Number(
+    occupancy?.remaining_seats ?? table?.remaining_seats ?? Math.max(0, Number(table?.seats || 0) - partySize)
+  );
+
   return (
     <Card
       sx={{
-        height: { xs: 360, md: 390 },
+        height: { xs: 430, md: 470 },
         display: "flex",
         flexDirection: "column",
         border: "1px solid",
@@ -239,7 +290,7 @@ export default function WaiterTableCard({
           py: 1.5,
           display: "grid",
           gap: 1,
-          minHeight: 86,
+          minHeight: 150,
         }}
       >
         <Stack direction="row" justifyContent="space-between" spacing={1}>
@@ -261,6 +312,58 @@ export default function WaiterTableCard({
             </strong>
           </Typography>
         </Stack>
+
+        {hasOccupancy ? (
+          <Box
+            sx={{
+              backgroundColor: "rgba(255,255,255,0.72)",
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 1,
+              p: 1.5,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 900,
+                color: "text.primary",
+                mb: 1.1,
+              }}
+            >
+              Ocupación actual
+            </Typography>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(4, minmax(0, 1fr))" },
+                gap: 1.25,
+              }}
+            >
+              <Box>
+                <DetailLabel>Total</DetailLabel>
+                <DetailValue>{partySize}</DetailValue>
+              </Box>
+
+              <Box>
+                <DetailLabel>Adultos</DetailLabel>
+                <DetailValue>{adultCount}</DetailValue>
+              </Box>
+
+              <Box>
+                <DetailLabel>Niños</DetailLabel>
+                <DetailValue>{childCount}</DetailValue>
+              </Box>
+
+              <Box>
+                <DetailLabel>Sobran</DetailLabel>
+                <DetailValue color={remainingSeats > 0 ? "success.main" : "text.primary"}>
+                  {remainingSeats}
+                </DetailValue>
+              </Box>
+            </Box>
+          </Box>
+        ) : null}
 
         {shouldShowOrderSummary ? (
           <Box
