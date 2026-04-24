@@ -77,6 +77,7 @@ import IngredientsPage from "../pages/inventory/IngredientsPage";
 import IngredientPresentationsPage from "../pages/inventory/IngredientPresentationsPage";
 import WarehousesPage from "../pages/inventory/warehouses/WarehousesPage";
 
+import InventoryReportPage from "../pages/inventory/warehouses/reports/InventoryReportPage";
 import IngredientInventoryStockPage from "../pages/inventory/ingredients/inventoryStock/IngredientInventoryStockPage";
 import ProductInventoryStockPage from "../pages/inventory/products/inventoryStock/ProductInventoryStockPage";
 import IngredientInventoryMovementPage from "../pages/inventory/ingredients/inventoryMovement/IngredientInventoryMovementPage";
@@ -172,7 +173,8 @@ export default function AppRoutes() {
           <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="ingredients/:ingredientId/presentations" element={<IngredientPresentationsPage />} />
           <Route path="warehouses" element={<WarehousesPage />} />
-
+          
+          <Route path="warehouses/inventory-report" element={<InventoryReportPage />}/>
           <Route path="warehouses/:warehouseId/ingredient-stocks" element={<IngredientInventoryStockPage />} />
           <Route path="warehouses/:warehouseId/product-stocks" element={<ProductInventoryStockPage />}/>
           <Route path="warehouses/:warehouseId/ingredient-movements" element={<IngredientInventoryMovementPage />}/>

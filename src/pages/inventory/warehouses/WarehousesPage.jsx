@@ -8,6 +8,7 @@ import AppAlert from "../../../components/common/AppAlert";
 import WarehousesHeader from "../../../components/inventory/warehouses/WarehousesHeader";
 import WarehouseInstructionsCard from "../../../components/inventory/warehouses/WarehouseInstructionsCard";
 import WarehouseContextCard from "../../../components/inventory/warehouses/WarehouseContextCard";
+import WarehouseInventoryReportCard from "../../../components/inventory/warehouses/WarehouseInventoryReportCard";
 import WarehousesListPanel from "../../../components/inventory/warehouses/WarehousesListPanel";
 import WarehouseUpsertModal from "../../../components/inventory/warehouses/WarehouseUpsertModal";
 
@@ -193,6 +194,22 @@ export default function WarehousesPage() {
   const openEdit = (row) => {
     setEditingWarehouse(row);
     setModalOpen(true);
+  };
+
+  const handleOpenInventoryReport = () => {
+    const params = new URLSearchParams();
+
+    if (requiresBranch && branchId) {
+      params.set("branch_id", String(branchId));
+    }
+
+    const query = params.toString();
+
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/warehouses/inventory-report${
+        query ? `?${query}` : ""
+      }`
+    );
   };
 
   const handleEnsureDefaults = async () => {
@@ -431,6 +448,10 @@ export default function WarehousesPage() {
           branchId={branchId}
           onChangeBranch={setBranchId}
           selectedBranch={selectedBranch}
+        />
+
+        <WarehouseInventoryReportCard
+          onOpenReport={handleOpenInventoryReport}
         />
 
         <WarehousesListPanel
