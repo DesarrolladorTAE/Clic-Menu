@@ -21,6 +21,10 @@ export default function RestaurantOperationLayout() {
 
   if (isBranchSalesChannelsSection) {
     currentKey = "branch-sales-channels";
+  } else if (pathname.includes("/reports/sales")) {
+    currentKey = "sales-report";
+  } else if (pathname.includes("/reports/profit")) {
+    currentKey = "profit-report";
   } else if (pathname.includes("/purchases")) {
     currentKey = "purchases";
   } else if (pathname.includes("/modifiers")) {
@@ -95,6 +99,14 @@ export default function RestaurantOperationLayout() {
 
       case "customer-loyalty-settings":
         nav(`${base}/customer-loyalty-settings`, { state: { restaurantName } });
+        break;
+
+      case "sales-report":
+        nav(`${base}/reports/sales`, { state: { restaurantName } });
+        break;
+
+      case "profit-report":
+        nav(`${base}/reports/profit`, { state: { restaurantName } });
         break;
 
       default:

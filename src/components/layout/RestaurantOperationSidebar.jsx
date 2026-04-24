@@ -31,6 +31,8 @@ import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import TuneIcon from "@mui/icons-material/Tune";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import StarsOutlinedIcon from "@mui/icons-material/StarsOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import TrendingUpOutlinedIcon from "@mui/icons-material/TrendingUpOutlined";
 
 const DRAWER_WIDTH = 240;
 const DRAWER_COLLAPSED = 78;
@@ -127,6 +129,21 @@ export default function RestaurantOperationSidebar({
             key: "customer-loyalty-settings",
             label: "Puntos",
             icon: <StarsOutlinedIcon />,
+          },
+        ],
+      },
+      {
+        label: "Reportes",
+        items: [
+          {
+            key: "sales-report",
+            label: "Ventas",
+            icon: <AssessmentOutlinedIcon />,
+          },
+          {
+            key: "profit-report",
+            label: "Utilidades",
+            icon: <TrendingUpOutlinedIcon />,
           },
         ],
       },

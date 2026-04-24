@@ -93,6 +93,10 @@ import CustomerLoyaltySettingsPage from "../pages/operation/loyalty/CustomerLoya
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 
+//Reportes
+import SalesReportPage from "../pages/reports/sales/SalesReportPage";
+import ProfitReportPage from "../pages/reports/profit/ProfitReportPage";
+
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 
@@ -183,11 +187,8 @@ export default function AppRoutes() {
           <Route path="purchases" element={<PurchasesPage />} />
           <Route path="purchases/:purchaseId" element={<PurchaseDetailPage />} />
 
-
-
           <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
           <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
-
 
           <Route path="menu" element={<MenuManager />} />
           <Route path="menu/products" element={<ProductsPage />} />
@@ -210,6 +211,8 @@ export default function AppRoutes() {
           <Route path="ticket-settings" element={<TicketSettingsPage />} />
           <Route path="customer-loyalty-settings" element={<CustomerLoyaltySettingsPage />} />
 
+          <Route path="reports/sales" element={<SalesReportPage />} />
+          <Route path="reports/profit" element={<ProfitReportPage />} />
 
         </Route>
 
