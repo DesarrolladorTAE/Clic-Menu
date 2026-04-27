@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+// src/components/menu/shared/MenuProductCard.jsx
+import React from "react";
+import { useTheme } from "@mui/material/styles";
 import {
-  Collapse,
+  Badge,
   PillButton,
   ProductThumb,
 } from "../../../pages/public/publicMenu.ui";
 import {
   formatAvailabilityCaption,
-  formatAvailabilityShortLabel,
   getAvailabilityData,
   getAvailabilityTone,
   hasAnyModifierGroups,
@@ -14,62 +15,94 @@ import {
   money,
 } from "../../../hooks/public/publicMenu.utils";
 
-function AvailabilityPill({ availability }) {
-  const a = getAvailabilityData(availability);
-  if (!a) return null;
+function getAvailabilityLabel(availability) {
+  const status = String(availability?.status || "").toLowerCase();
 
-  const tone = getAvailabilityTone(a?.status);
+  if (
+    status.includes("available") ||
+    status.includes("ok") ||
+    status.includes("success") ||
+    status.includes("disponible")
+  ) {
+    return "Disponible";
+  }
 
-  const palette = {
+  if (
+    status.includes("sold") ||
+    status.includes("out") ||
+    status.includes("blocked") ||
+    status.includes("agotado") ||
+    status.includes("unavailable")
+  ) {
+    return "Agotado";
+  }
+
+  return isAvailabilityBlocked(availability) ? "Agotado" : "Disponible";
+}
+
+function getAvailabilityPalette(theme, tone) {
+  const map = {
     ok: {
-      bg: "rgba(16, 185, 129, 0.12)",
-      bd: "rgba(16, 185, 129, 0.25)",
-      fg: "#047857",
+      bg: "rgba(46, 175, 46, 0.10)",
+      bd: "rgba(46, 175, 46, 0.22)",
+      fg: theme.palette.success.main,
     },
     warn: {
-      bg: "rgba(245, 158, 11, 0.12)",
-      bd: "rgba(245, 158, 11, 0.25)",
-      fg: "#B45309",
+      bg: "rgba(255, 152, 0, 0.10)",
+      bd: "rgba(255, 152, 0, 0.24)",
+      fg: theme.palette.primary.dark,
     },
     danger: {
-      bg: "rgba(239, 68, 68, 0.10)",
-      bd: "rgba(239, 68, 68, 0.24)",
-      fg: "#B91C1C",
+      bg: "rgba(63, 58, 82, 0.06)",
+      bd: "rgba(63, 58, 82, 0.14)",
+      fg: theme.palette.text.secondary,
     },
     default: {
-      bg: "rgba(0,0,0,0.05)",
-      bd: "rgba(0,0,0,0.10)",
-      fg: "#374151",
+      bg: "rgba(63, 58, 82, 0.05)",
+      bd: "rgba(63, 58, 82, 0.12)",
+      fg: theme.palette.text.secondary,
     },
   };
 
-  const ui = palette[tone] || palette.default;
+  return map[tone] || map.default;
+}
+
+function AvailabilityPill({ availability }) {
+  const theme = useTheme();
+  const a = getAvailabilityData(availability);
+
+  if (!a) return null;
+
+  const tone = getAvailabilityTone(a?.status);
+  const ui = getAvailabilityPalette(theme, tone);
 
   return (
-    <div
+    <span
       title={formatAvailabilityCaption(a)}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
-        padding: "6px 10px",
+        gap: 5,
+        padding: "4px 9px",
         borderRadius: 999,
         border: `1px solid ${ui.bd}`,
         background: ui.bg,
         color: ui.fg,
-        fontSize: 11,
-        fontWeight: 900,
+        fontSize: 10,
+        fontWeight: 800,
         lineHeight: 1.1,
-        maxWidth: "100%",
+        whiteSpace: "nowrap",
       }}
     >
-      {formatAvailabilityShortLabel(a)}
-    </div>
+      {getAvailabilityLabel(a)}
+    </span>
   );
 }
 
 function AvailabilityNotice({ availability }) {
+  const theme = useTheme();
   const a = getAvailabilityData(availability);
+
   if (!a) return null;
 
   const caption = formatAvailabilityCaption(a);
@@ -80,14 +113,18 @@ function AvailabilityNotice({ availability }) {
   return (
     <div
       style={{
-        fontSize: 12,
-        padding: "8px 10px",
-        borderRadius: 12,
+        fontSize: 11,
+        lineHeight: 1.35,
+        padding: "7px 9px",
+        borderRadius: 8,
         border: blocked
-          ? "1px solid rgba(239, 68, 68, 0.20)"
-          : "1px solid rgba(16, 185, 129, 0.18)",
-        background: blocked ? "#fff5f5" : "#f0fdf4",
-        color: blocked ? "#B91C1C" : "#047857",
+          ? "1px solid rgba(63, 58, 82, 0.14)"
+          : "1px solid rgba(255, 152, 0, 0.22)",
+        background: blocked
+          ? "rgba(63, 58, 82, 0.04)"
+          : "rgba(255, 152, 0, 0.07)",
+        color: blocked ? theme.palette.text.secondary : theme.palette.primary.dark,
+        fontWeight: 700,
       }}
     >
       {caption}
@@ -104,8 +141,9 @@ export default function MenuProductCard({
   onAddVariant,
   onOpenComposite,
   onOpenExtras,
+  onOpenVariants,
 }) {
-  const [variantsOpen, setVariantsOpen] = useState(false);
+  const theme = useTheme();
 
   const title = product?.display_name || product?.name || "Producto";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
@@ -115,260 +153,276 @@ export default function MenuProductCard({
   const compositeItems = Array.isArray(product?.composite?.items)
     ? product.composite.items
     : [];
+
   const hasComposite = isComposite && compositeItems.length > 0;
   const hasExtras = hasAnyModifierGroups(product);
 
   const productAvailability = getAvailabilityData(product?.availability);
   const productBlocked = canSelect && isAvailabilityBlocked(productAvailability);
 
+  const canChooseMain =
+    showSelectBtn &&
+    canSelect &&
+    !productBlocked &&
+    !(isComposite && hasComposite);
+
+  const handleMainAction = () => {
+    if (productBlocked || !canSelect) return;
+
+    if (isComposite && hasComposite) {
+      onOpenComposite?.(product);
+      return;
+    }
+
+    onAddSimple?.(product);
+  };
+
+  const handleOpenVariants = () => {
+    if (!hasVariants) return;
+    onOpenVariants?.(product);
+  };
+
   return (
-    <div
+    <article
       style={{
-        border: "1px solid rgba(0,0,0,0.10)",
-        borderRadius: 18,
-        background: "#fff",
+        position: "relative",
+        border: `1px solid ${
+          productBlocked ? "rgba(255, 152, 0, 0.25)" : theme.palette.divider
+        }`,
+        borderRadius: 10,
+        background: "#FFFFFF",
         overflow: "hidden",
-        boxShadow: "0 10px 26px rgba(0,0,0,0.05)",
+        boxShadow: "0 10px 26px rgba(47,42,61,0.05)",
         display: "grid",
+        gridTemplateRows: "auto 1fr",
+        minHeight: "100%",
+        opacity: productBlocked ? 0.86 : 1,
       }}
     >
-      <div style={{ padding: 10 }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 4,
+          background: productBlocked
+            ? "rgba(63,58,82,0.12)"
+            : "linear-gradient(90deg, #FF9800, #FFB547)",
+        }}
+      />
+
+      <div style={{ padding: "12px 12px 8px", position: "relative" }}>
         <ProductThumb imageUrl={product?.image_url || null} title={title} />
+
+        <div
+          style={{
+            position: "absolute",
+            top: 18,
+            left: 18,
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            maxWidth: "calc(100% - 36px)",
+          }}
+        >
+          {isComposite ? (
+            <Badge tone="dark" title="Producto compuesto">
+              Combo
+            </Badge>
+          ) : hasVariants ? (
+            <Badge tone="default" title="Producto con variantes">
+              {variants.length} opciones
+            </Badge>
+          ) : null}
+        </div>
       </div>
 
-      <div style={{ padding: "0 12px 12px 12px", display: "grid", gap: 8 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            alignItems: "start",
-          }}
-        >
-          <div style={{ fontWeight: 950, fontSize: 14, lineHeight: 1.15 }}>
-            {title}
-          </div>
-          <div style={{ fontWeight: 950, fontSize: 14, whiteSpace: "nowrap" }}>
-            {money(product?.price)}
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.72 }}>
-            Categoría: <strong>{categoryName}</strong>
-          </div>
-
-          <AvailabilityPill availability={productAvailability} />
-        </div>
-
-        {isComposite ? (
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            Tipo: <strong>Compuesto</strong>
-          </div>
-        ) : null}
-
-        <AvailabilityNotice availability={productAvailability} />
-
-        {hasComposite ? (
+      <div
+        style={{
+          padding: "8px 12px 12px",
+          display: "grid",
+          gap: 9,
+          alignContent: "space-between",
+        }}
+      >
+        <div style={{ display: "grid", gap: 7 }}>
           <div
             style={{
-              fontSize: 12,
-              opacity: 0.78,
-              padding: "8px 10px",
-              borderRadius: 12,
-              background: "#fafafa",
-              border: "1px solid rgba(0,0,0,0.08)",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 10,
+              alignItems: "flex-start",
             }}
           >
-            Incluye <strong>{compositeItems.length}</strong> componente(s).
-          </div>
-        ) : null}
+            <div
+              style={{
+                minWidth: 0,
+                fontWeight: 800,
+                fontSize: 13,
+                lineHeight: 1.18,
+                color: theme.palette.text.primary,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+              title={title}
+            >
+              {title}
+            </div>
 
-        {hasExtras ? (
+            <div
+              style={{
+                fontWeight: 900,
+                fontSize: 13,
+                lineHeight: 1,
+                color: theme.palette.primary.main,
+                whiteSpace: "nowrap",
+                paddingTop: 2,
+              }}
+            >
+              {money(product?.price)}
+            </div>
+          </div>
+
           <div
             style={{
-              fontSize: 12,
-              opacity: 0.8,
-              padding: "8px 10px",
-              borderRadius: 12,
-              background: "#fff7ed",
-              border: "1px solid rgba(255,122,0,0.18)",
-              color: "#9a4a00",
+              display: "flex",
+              gap: 6,
+              alignItems: "center",
+              flexWrap: "wrap",
             }}
           >
-            Extras disponibles según contexto.
-          </div>
-        ) : null}
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                maxWidth: "100%",
+                padding: "4px 9px",
+                borderRadius: 999,
+                background: "#FFFFFF",
+                border: `1px solid ${theme.palette.divider}`,
+                color: theme.palette.text.secondary,
+                fontSize: 10,
+                fontWeight: 800,
+                lineHeight: 1.1,
+              }}
+              title={categoryName}
+            >
+              {categoryName}
+            </span>
 
-        <div style={{ display: "grid", gap: 8 }}>
+            <AvailabilityPill availability={productAvailability} />
+          </div>
+
+          <AvailabilityNotice availability={productAvailability} />
+
+          {hasComposite ? (
+            <div
+              style={{
+                fontSize: 10.5,
+                lineHeight: 1.35,
+                padding: "8px 9px",
+                borderRadius: 8,
+                background: "#FFFFFF",
+                border: `1px solid ${theme.palette.divider}`,
+                color: theme.palette.text.secondary,
+                fontWeight: 700,
+              }}
+            >
+              Incluye <strong>{compositeItems.length}</strong> componente(s).
+            </div>
+          ) : null}
+
+          {hasExtras ? (
+            <div
+              style={{
+                fontSize: 10.5,
+                lineHeight: 1.35,
+                padding: "8px 9px",
+                borderRadius: 8,
+                background: "rgba(255, 152, 0, 0.07)",
+                border: "1px solid rgba(255, 152, 0, 0.20)",
+                color: "#A75A00",
+                fontWeight: 750,
+              }}
+            >
+              ✨ Extras disponibles
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ display: "grid", gap: 7 }}>
           {showSelectBtn ? (
             <PillButton
-              tone={productBlocked ? "danger" : "default"}
-              onClick={() => {
-                if (productBlocked || !canSelect) return;
-
-                if (isComposite && hasComposite) {
-                  onOpenComposite?.(product);
-                  return;
-                }
-
-                onAddSimple?.(product);
-              }}
+              tone={productBlocked ? "danger" : "orange"}
+              onClick={handleMainAction}
               title={
                 !canSelect
                   ? "Solo lectura"
                   : productBlocked
                   ? formatAvailabilityCaption(productAvailability) || "No disponible"
-                  : isComposite
+                  : isComposite && hasComposite
                   ? "Configurar producto compuesto"
+                  : hasVariants
+                  ? "Agregar producto base a comanda"
                   : "Agregar a comanda"
               }
               disabled={!canSelect || productBlocked}
             >
               {productBlocked
-                ? "🚫 No disponible"
-                : isComposite
-                ? "⚙️ Configurar"
-                : "➕ Seleccionar"}
+                ? "No disponible"
+                : isComposite && hasComposite
+                ? "Configurar"
+                : "＋ Seleccionar"}
             </PillButton>
           ) : null}
 
-          {hasExtras ? (
-            <PillButton
-              tone="soft"
-              onClick={() => onOpenExtras?.(product)}
-              title="Ver extras disponibles de este producto"
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                hasVariants && hasExtras ? "1fr 1fr" : "1fr",
+              gap: 7,
+            }}
+          >
+            {hasVariants && !isComposite ? (
+              <PillButton
+                tone="default"
+                onClick={handleOpenVariants}
+                title="Ver variantes disponibles"
+                disabled={!onOpenVariants}
+              >
+                Variantes ({variants.length})
+              </PillButton>
+            ) : null}
+
+            {hasExtras ? (
+              <PillButton
+                tone="soft"
+                onClick={() => onOpenExtras?.(product)}
+                title="Ver extras disponibles de este producto"
+              >
+                Extras
+              </PillButton>
+            ) : null}
+          </div>
+
+          {canChooseMain ? (
+            <span
+              style={{
+                fontSize: 10,
+                color: theme.palette.text.secondary,
+                textAlign: "center",
+                fontWeight: 700,
+              }}
             >
-              ✨ Extras
-            </PillButton>
+              Se agregará el producto base a la comanda
+            </span>
           ) : null}
         </div>
-
-        {!isComposite && hasVariants ? (
-          <div style={{ marginTop: 2 }}>
-            <button
-              onClick={() => setVariantsOpen((v) => !v)}
-              style={{
-                cursor: "pointer",
-                width: "100%",
-                borderRadius: 14,
-                border: "1px solid rgba(0,0,0,0.12)",
-                background: "#fafafa",
-                padding: "10px 12px",
-                fontWeight: 950,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-              }}
-              title="Ver variantes"
-            >
-              <span>Variantes ({variants.length})</span>
-              <span style={{ opacity: 0.75 }}>{variantsOpen ? "▲" : "▼"}</span>
-            </button>
-
-            <Collapse open={variantsOpen}>
-              <div style={{ display: "grid", gap: 8 }}>
-                {variants.map((v, idx) => {
-                  const vid = v.id || idx;
-                  const variantHasExtras =
-                    Array.isArray(v?.modifier_groups) &&
-                    v.modifier_groups.length > 0;
-
-                  const variantAvailability = getAvailabilityData(v?.availability);
-                  const variantBlocked = canSelect && isAvailabilityBlocked(variantAvailability);
-
-                  return (
-                    <div
-                      key={vid}
-                      style={{
-                        display: "grid",
-                        gap: 8,
-                        padding: "10px 12px",
-                        borderRadius: 14,
-                        border: "1px solid rgba(0,0,0,0.10)",
-                        background: "#fff",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          alignItems: "start",
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 850, fontSize: 13 }}>
-                            {v.name || v.display_name || `Variante ${idx + 1}`}
-                          </div>
-
-                          <div
-                            style={{
-                              marginTop: 6,
-                              display: "flex",
-                              gap: 8,
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                            }}
-                          >
-                            <AvailabilityPill availability={variantAvailability} />
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            fontWeight: 950,
-                            fontSize: 13,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {money(v.price)}
-                        </div>
-                      </div>
-
-                      <AvailabilityNotice availability={variantAvailability} />
-
-                      {variantHasExtras ? (
-                        <div style={{ fontSize: 12, opacity: 0.75, color: "#9a4a00" }}>
-                          Esta variante tiene extras disponibles.
-                        </div>
-                      ) : null}
-
-                      {showSelectBtn ? (
-                        <PillButton
-                          tone={variantBlocked ? "danger" : "default"}
-                          onClick={() => {
-                            if (!canSelect || variantBlocked) return;
-                            onAddVariant?.(product, v);
-                          }}
-                          title={
-                            !canSelect
-                              ? "Solo lectura"
-                              : variantBlocked
-                              ? formatAvailabilityCaption(variantAvailability) || "No disponible"
-                              : "Agregar variante a comanda"
-                          }
-                          disabled={!canSelect || variantBlocked}
-                        >
-                          {variantBlocked ? "🚫 No disponible" : "➕ Seleccionar variante"}
-                        </PillButton>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </Collapse>
-          </div>
-        ) : null}
       </div>
-    </div>
+    </article>
   );
 }

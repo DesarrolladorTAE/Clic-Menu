@@ -25,6 +25,9 @@ import {
   SkeletonCard,
 } from "./publicMenu.ui";
 
+import usePagination from "../../hooks/usePagination";
+import PaginationFooter from "../../components/common/PaginationFooter";
+
 import { usePublicMenuLoader } from "../../hooks/public/usePublicMenuLoader";
 import { useActiveMenuPayload } from "../../hooks/public/useActiveMenuPayload";
 import { useTableQrSession } from "../../hooks/public/useTableQrSession";
@@ -36,8 +39,12 @@ import MenuHeaderCard from "../../components/menu/shared/MenuHeaderCard";
 import MenuProductCard from "../../components/menu/shared/MenuProductCard";
 import CompositeProductModal from "../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../components/menu/shared/ProductExtrasModal";
+import ProductVariantsModal from "../../components/menu/shared/ProductVariantsModal";
 import MenuCartPanel from "../../components/menu/shared/MenuCartPanel";
+import MenuCartFloatingButton from "../../components/menu/shared/MenuCartFloatingButton";
+import MenuCartDrawer from "../../components/menu/shared/MenuCartDrawer";
 import PublicSendOrderModal from "../../components/menu/public/PublicSendOrderModal";
+import PublicMenuCategoryTabs from "../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -45,18 +52,23 @@ function buildComponentModifierKey(componentProductId, variantId = null) {
   return `${Number(componentProductId || 0)}:${variantId ? Number(variantId) : 0}`;
 }
 
-function applyComponentModifierPayloadToComponents(components = [], componentModifiers = []) {
+function applyComponentModifierPayloadToComponents(
+  components = [],
+  componentModifiers = [],
+) {
   const grouped = {};
 
-  (Array.isArray(componentModifiers) ? componentModifiers : []).forEach((group) => {
-    const key = buildComponentModifierKey(
-      group?.component_product_id,
-      group?.component_variant_id,
-    );
+  (Array.isArray(componentModifiers) ? componentModifiers : []).forEach(
+    (group) => {
+      const key = buildComponentModifierKey(
+        group?.component_product_id,
+        group?.component_variant_id,
+      );
 
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(group);
-  });
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(group);
+    },
+  );
 
   return (Array.isArray(components) ? components : []).map((component) => {
     const key = buildComponentModifierKey(
@@ -71,18 +83,23 @@ function applyComponentModifierPayloadToComponents(components = [], componentMod
   });
 }
 
-function applyComponentDisplayGroupsToDetails(details = [], componentDisplayGroups = []) {
+function applyComponentDisplayGroupsToDetails(
+  details = [],
+  componentDisplayGroups = [],
+) {
   const grouped = {};
 
-  (Array.isArray(componentDisplayGroups) ? componentDisplayGroups : []).forEach((group) => {
-    const key = buildComponentModifierKey(
-      group?.component_product_id,
-      group?.component_variant_id,
-    );
+  (Array.isArray(componentDisplayGroups) ? componentDisplayGroups : []).forEach(
+    (group) => {
+      const key = buildComponentModifierKey(
+        group?.component_product_id,
+        group?.component_variant_id,
+      );
 
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(group);
-  });
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(group);
+    },
+  );
 
   return (Array.isArray(details) ? details : []).map((detail) => {
     const key = buildComponentModifierKey(
@@ -108,18 +125,32 @@ export default function PublicMenuEntryPage() {
   const [q, setQ] = useState("");
 
   const [compositeModalOpen, setCompositeModalOpen] = useState(false);
-  const [selectedCompositeProduct, setSelectedCompositeProduct] = useState(null);
+  const [selectedCompositeProduct, setSelectedCompositeProduct] =
+    useState(null);
+
+  const [variantsModalOpen, setVariantsModalOpen] = useState(false);
+  const [selectedVariantsProduct, setSelectedVariantsProduct] = useState(null);
+
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   const [extrasModalOpen, setExtrasModalOpen] = useState(false);
   const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
   const [selectedExtrasVariantId, setSelectedExtrasVariantId] = useState(null);
-  const [selectedExtrasCompositeDraft, setSelectedExtrasCompositeDraft] = useState(null);
-  const [selectedExtrasInitialValue, setSelectedExtrasInitialValue] = useState([]);
+  const [selectedExtrasCompositeDraft, setSelectedExtrasCompositeDraft] =
+    useState(null);
+  const [selectedExtrasInitialValue, setSelectedExtrasInitialValue] = useState(
+    [],
+  );
   const [selectedExtrasReadOnly, setSelectedExtrasReadOnly] = useState(false);
-  const [selectedExtrasSubmitKind, setSelectedExtrasSubmitKind] = useState(null);
-  const [selectedExtrasVariantObj, setSelectedExtrasVariantObj] = useState(null);
-  const [selectedExtrasSelectionScope, setSelectedExtrasSelectionScope] = useState("all");
-  const [pendingCompositeComponents, setPendingCompositeComponents] = useState([]);
+  const [selectedExtrasSubmitKind, setSelectedExtrasSubmitKind] =
+    useState(null);
+  const [selectedExtrasVariantObj, setSelectedExtrasVariantObj] =
+    useState(null);
+  const [selectedExtrasSelectionScope, setSelectedExtrasSelectionScope] =
+    useState("all");
+  const [pendingCompositeComponents, setPendingCompositeComponents] = useState(
+    [],
+  );
   const [pendingCompositeDetails, setPendingCompositeDetails] = useState([]);
 
   const {
@@ -155,8 +186,15 @@ export default function PublicMenuEntryPage() {
       setCategoryFilter("all");
       setQ("");
       composite.resetCompositeDrafts?.();
+
       setCompositeModalOpen(false);
       setSelectedCompositeProduct(null);
+
+      setVariantsModalOpen(false);
+      setSelectedVariantsProduct(null);
+
+      setCartDrawerOpen(false);
+
       setExtrasModalOpen(false);
       setSelectedExtrasProduct(null);
       setSelectedExtrasVariantId(null);
@@ -215,14 +253,29 @@ export default function PublicMenuEntryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWeb, activeWebChannelId]);
 
+  const { categoryNameById, categoryOptions, filteredProducts } =
+    useMenuProducts({
+      sections,
+      categoryFilter,
+      q,
+    });
+
   const {
-    categoryNameById,
-    categoryOptions,
-    filteredProducts,
-  } = useMenuProducts({
-    sections,
-    categoryFilter,
-    q,
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems: paginatedProducts,
+  } = usePagination({
+    items: filteredProducts,
+    initialPage: 1,
+    pageSize: 8,
+    mode: "frontend",
   });
 
   const [billRequesting, setBillRequesting] = useState(false);
@@ -246,7 +299,12 @@ export default function PublicMenuEntryPage() {
     if (sessionStatus === "expired") return;
 
     if (lastLoadedOrderIdRef.current === sessionOrderId) {
-      if (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0) return;
+      if (
+        Array.isArray(cartOrder.oldItems) &&
+        cartOrder.oldItems.length > 0
+      ) {
+        return;
+      }
     }
 
     lastLoadedOrderIdRef.current = sessionOrderId;
@@ -257,7 +315,9 @@ export default function PublicMenuEntryPage() {
   }, [qr?.session?.order_id, qr?.session?.status, cartOrder]);
 
   useEffect(() => {
-    cartOrder.syncOrderStatusFromSession?.(qr.sessionOrderStatus)?.catch?.(() => {});
+    cartOrder
+      .syncOrderStatusFromSession?.(qr.sessionOrderStatus)
+      ?.catch?.(() => {});
   }, [qr.sessionOrderStatus, cartOrder.syncOrderStatusFromSession]);
 
   const publicSessionChannelId = useMemo(() => {
@@ -267,7 +327,11 @@ export default function PublicMenuEntryPage() {
         qr?.sessionBusy?.session_id ||
         0,
     );
-  }, [qr?.session?.session_id, qr?.takeover?.session_id, qr?.sessionBusy?.session_id]);
+  }, [
+    qr?.session?.session_id,
+    qr?.takeover?.session_id,
+    qr?.sessionBusy?.session_id,
+  ]);
 
   const publicOrderChannelId = useMemo(() => {
     return Number(
@@ -376,7 +440,8 @@ export default function PublicMenuEntryPage() {
           cartOrder.applyRealtimeOrderReason?.(reason, incomingOrderId);
         }
 
-        const resolvedOrderId = await refreshOrderAndMenuFromAnySource(incomingOrderId);
+        const resolvedOrderId =
+          await refreshOrderAndMenuFromAnySource(incomingOrderId);
 
         if (resolvedOrderId) {
           cartOrder.applyRealtimeOrderReason?.(reason, resolvedOrderId);
@@ -387,7 +452,10 @@ export default function PublicMenuEntryPage() {
       } finally {
         sessionRealtimeRunningRef.current = false;
 
-        if (sessionRealtimeQueuedRef.current || sessionRealtimeEventRef.current) {
+        if (
+          sessionRealtimeQueuedRef.current ||
+          sessionRealtimeEventRef.current
+        ) {
           sessionRealtimeQueuedRef.current = false;
           processSessionRealtime();
         }
@@ -488,7 +556,8 @@ export default function PublicMenuEntryPage() {
 
   const hasPending =
     !!cartOrder.pendingOrder?.id &&
-    String(cartOrder.pendingOrder?.status || "pending").toLowerCase() === "pending";
+    String(cartOrder.pendingOrder?.status || "pending").toLowerCase() ===
+      "pending";
 
   const canAppend =
     !!cartOrder.activeOrder?.id &&
@@ -509,6 +578,14 @@ export default function PublicMenuEntryPage() {
   const billRequestStatus = String(billFlow?.request_status || "");
   const showBillButton =
     orderingMode === "customer_assisted" && !!cartOrder.activeOrder?.id;
+
+  const cartDrawerItemCount =
+    Number(cartOrder.cart?.length || 0) +
+    Number(cartOrder.oldItems?.length || 0);
+
+  const hasCartContent =
+    (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
+    (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
 
   const handleRequestBill = async () => {
     const orderId = Number(cartOrder?.activeOrder?.id || 0);
@@ -532,6 +609,7 @@ export default function PublicMenuEntryPage() {
       );
 
       await cartOrder.refreshOrder?.(orderId);
+      setCartDrawerOpen(true);
     } catch (e) {
       const msg =
         e?.response?.data?.message ||
@@ -544,6 +622,8 @@ export default function PublicMenuEntryPage() {
       try {
         await cartOrder.refreshOrder?.(orderId);
       } catch {}
+
+      setCartDrawerOpen(true);
     } finally {
       setBillRequesting(false);
     }
@@ -555,7 +635,9 @@ export default function PublicMenuEntryPage() {
     if (!tableId) return;
 
     if (!qr.sessionActive) {
-      qr.setCallToast("⚠️ La sesión de la mesa no está activa. Escanea de nuevo el QR.");
+      qr.setCallToast(
+        "⚠️ La sesión de la mesa no está activa. Escanea de nuevo el QR.",
+      );
       setTimeout(() => qr.setCallToast(""), 4500);
       return;
     }
@@ -574,9 +656,13 @@ export default function PublicMenuEntryPage() {
       const msg = res?.message || "Listo.";
 
       if (String(msg).toLowerCase().includes("ya registrada")) {
-        qr.setCallToast("✅ Ya estaba registrada la llamada. No hace falta spamear al mesero.");
+        qr.setCallToast(
+          "✅ Ya estaba registrada la llamada. No hace falta spamear al mesero.",
+        );
       } else {
-        qr.setCallToast("✅ Listo. Se registró tu solicitud para llamar al mesero.");
+        qr.setCallToast(
+          "✅ Listo. Se registró tu solicitud para llamar al mesero.",
+        );
       }
 
       setCallLocked(false);
@@ -646,6 +732,16 @@ export default function PublicMenuEntryPage() {
     setExtrasModalOpen(true);
   };
 
+  const openVariantsViewer = (product) => {
+    setSelectedVariantsProduct(product);
+    setVariantsModalOpen(true);
+  };
+
+  const closeVariantsViewer = () => {
+    setVariantsModalOpen(false);
+    setSelectedVariantsProduct(null);
+  };
+
   const openProductSelectionFlow = (product) => {
     if (hasContextualModifiers(product, { selectionScope: "product_only" })) {
       setSelectedExtrasProduct(product);
@@ -663,6 +759,7 @@ export default function PublicMenuEntryPage() {
     }
 
     cartOrder.addToCartFromProduct(product);
+    setCartDrawerOpen(true);
   };
 
   const openVariantSelectionFlow = (product, variant) => {
@@ -687,6 +784,7 @@ export default function PublicMenuEntryPage() {
     }
 
     cartOrder.addToCartFromVariant(product, variant);
+    setCartDrawerOpen(true);
   };
 
   const openCompositeConfigurator = (product) => {
@@ -701,7 +799,8 @@ export default function PublicMenuEntryPage() {
     const draft =
       composite.getOrInitCompositeDraft?.(selectedCompositeProduct) || [];
     const components =
-      composite.buildSubmitComponentsFromProduct?.(selectedCompositeProduct) || [];
+      composite.buildSubmitComponentsFromProduct?.(selectedCompositeProduct) ||
+      [];
     const details =
       composite.buildDetailsFromProduct?.(selectedCompositeProduct) || [];
 
@@ -730,6 +829,7 @@ export default function PublicMenuEntryPage() {
     cartOrder.addToCartFromProduct(selectedCompositeProduct, components, details);
     setCompositeModalOpen(false);
     setSelectedCompositeProduct(null);
+    setCartDrawerOpen(true);
   };
 
   const handleConfirmExtras = (result) => {
@@ -753,6 +853,7 @@ export default function PublicMenuEntryPage() {
         parentDisplayGroups,
       );
       resetExtrasFlow();
+      setCartDrawerOpen(true);
       return;
     }
 
@@ -775,6 +876,7 @@ export default function PublicMenuEntryPage() {
         parentDisplayGroups,
       );
       resetExtrasFlow();
+      setCartDrawerOpen(true);
       return;
     }
 
@@ -786,12 +888,20 @@ export default function PublicMenuEntryPage() {
       parentDisplayGroups,
     );
     resetExtrasFlow();
+    setCartDrawerOpen(true);
   };
 
   if (loading) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <div style={{ fontSize: 18, fontWeight: 950 }}>Cargando menú…</div>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
@@ -801,7 +911,14 @@ export default function PublicMenuEntryPage() {
           <Badge tone="default">Solo lectura</Badge>
         </div>
 
-        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+        <div
+          style={{
+            marginTop: 14,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 12,
+          }}
+        >
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
@@ -823,24 +940,44 @@ export default function PublicMenuEntryPage() {
               isWrongModeMsg
                 ? "rgba(255,0,0,0.25)"
                 : isQrDisabledMsg
-                ? "rgba(255,122,0,0.28)"
-                : "rgba(255,0,0,0.25)"
+                  ? "rgba(255,122,0,0.28)"
+                  : "rgba(255,0,0,0.25)"
             }`,
-            background: isWrongModeMsg ? "#ffe5e5" : isQrDisabledMsg ? "#fff3cd" : "#ffe5e5",
+            background: isWrongModeMsg
+              ? "#ffe5e5"
+              : isQrDisabledMsg
+                ? "#fff3cd"
+                : "#ffe5e5",
             borderRadius: 16,
             padding: 14,
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
-              <div style={{ fontWeight: 950, color: isQrDisabledMsg ? "#8a6d3b" : "#a10000" }}>
+              <div
+                style={{
+                  fontWeight: 950,
+                  color: isQrDisabledMsg ? "#8a6d3b" : "#a10000",
+                }}
+              >
                 {isWrongModeMsg
                   ? "QR inválido"
                   : isQrDisabledMsg
-                  ? "Menú no disponible"
-                  : "No se pudo cargar el menú"}
+                    ? "Menú no disponible"
+                    : "No se pudo cargar el menú"}
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, whiteSpace: "pre-line" }}>{errorMsg}</div>
+              <div
+                style={{ marginTop: 6, fontSize: 13, whiteSpace: "pre-line" }}
+              >
+                {errorMsg}
+              </div>
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
                 Token: <strong>{token}</strong>
               </div>
@@ -860,7 +997,14 @@ export default function PublicMenuEntryPage() {
   if (!data || !activeMenuPayload) {
     return (
       <div style={{ maxWidth: 1200, margin: "18px auto", padding: 16 }}>
-        <div style={{ border: "1px solid rgba(0,0,0,0.12)", background: "#fff", borderRadius: 16, padding: 14 }}>
+        <div
+          style={{
+            border: "1px solid rgba(0,0,0,0.12)",
+            background: "#fff",
+            borderRadius: 16,
+            padding: 14,
+          }}
+        >
           <div style={{ fontWeight: 950 }}>Sin data</div>
           <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
             Esto no debería pasar… pero aquí estamos.
@@ -931,7 +1075,9 @@ export default function PublicMenuEntryPage() {
         maxWidth: 1200,
         margin: "18px auto",
         padding: 16,
-        background: "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
+        paddingBottom: canSelect ? 96 : 16,
+        background:
+          "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
       }}
     >
       <FullOverlay
@@ -945,10 +1091,19 @@ export default function PublicMenuEntryPage() {
         }
         actions={
           <>
-            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reintentar scan">
+            <PillButton
+              tone="soft"
+              onClick={() => qr.startScanSession()}
+              disabled={qr.sessionLoading}
+              title="Reintentar scan"
+            >
               {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
             </PillButton>
-            <PillButton tone="default" onClick={() => qr.setSessionBusy(null)} title="Cerrar aviso">
+            <PillButton
+              tone="default"
+              onClick={() => qr.setSessionBusy(null)}
+              title="Cerrar aviso"
+            >
               Entendido
             </PillButton>
           </>
@@ -960,17 +1115,27 @@ export default function PublicMenuEntryPage() {
         tone="warn"
         title="Sesión no disponible"
         message={
-          (qr.sessionUnavailable?.message || "Sesión no disponible, intente más tarde.") +
+          (qr.sessionUnavailable?.message ||
+            "Sesión no disponible, intente más tarde.") +
           "\n\n" +
           "El mesero ya atendió esta mesa.\n" +
           "Cuando finalice la atención, este QR volverá a estar disponible."
         }
         actions={
           <>
-            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reintentar">
+            <PillButton
+              tone="soft"
+              onClick={() => qr.startScanSession()}
+              disabled={qr.sessionLoading}
+              title="Reintentar"
+            >
               {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
             </PillButton>
-            <PillButton tone="default" onClick={() => qr.setSessionUnavailable(null)} title="Cerrar aviso">
+            <PillButton
+              tone="default"
+              onClick={() => qr.setSessionUnavailable(null)}
+              title="Cerrar aviso"
+            >
               Entendido
             </PillButton>
           </>
@@ -978,7 +1143,12 @@ export default function PublicMenuEntryPage() {
       />
 
       <FullOverlay
-        open={hasTable && !qr.sessionBusy && !qr.sessionUnavailable && qr.sessionExpired}
+        open={
+          hasTable &&
+          !qr.sessionBusy &&
+          !qr.sessionUnavailable &&
+          qr.sessionExpired
+        }
         tone="err"
         title="Tiempo agotado"
         message={
@@ -986,11 +1156,14 @@ export default function PublicMenuEntryPage() {
           "Vuelve a escanear para activar otra sesión y poder enviar pedidos."
         }
         actions={
-          <>
-            <PillButton tone="soft" onClick={() => qr.startScanSession()} disabled={qr.sessionLoading} title="Reiniciar sesión">
-              {qr.sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
-            </PillButton>
-          </>
+          <PillButton
+            tone="soft"
+            onClick={() => qr.startScanSession()}
+            disabled={qr.sessionLoading}
+            title="Reiniciar sesión"
+          >
+            {qr.sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
+          </PillButton>
         }
       />
 
@@ -1010,7 +1183,9 @@ export default function PublicMenuEntryPage() {
               disabled={qr.sessionLoading || qr.joinReq?.status === "pending"}
               title="Enviar solicitud al mesero"
             >
-              {qr.joinReq?.status === "pending" ? "⏳ Solicitando..." : "✅ Sí, retomar"}
+              {qr.joinReq?.status === "pending"
+                ? "⏳ Solicitando..."
+                : "✅ Sí, retomar"}
             </PillButton>
 
             <PillButton
@@ -1029,9 +1204,16 @@ export default function PublicMenuEntryPage() {
         open={!!qr.joinReq && qr.joinReq.status === "pending"}
         tone="default"
         title="Esperando aprobación"
-        message={qr.joinReq?.message || "Solicitud enviada. Espera aprobación del mesero."}
+        message={
+          qr.joinReq?.message ||
+          "Solicitud enviada. Espera aprobación del mesero."
+        }
         actions={
-          <PillButton tone="default" onClick={() => qr.clearTakeover()} title="Cerrar">
+          <PillButton
+            tone="default"
+            onClick={() => qr.clearTakeover()}
+            title="Cerrar"
+          >
             Entendido
           </PillButton>
         }
@@ -1041,9 +1223,15 @@ export default function PublicMenuEntryPage() {
         open={!!qr.joinReq && qr.joinReq.status === "rejected"}
         tone="err"
         title="No aprobado"
-        message={qr.joinReq?.message || "No fuiste aprobado para retomar la cuenta."}
+        message={
+          qr.joinReq?.message || "No fuiste aprobado para retomar la cuenta."
+        }
         actions={
-          <PillButton tone="default" onClick={() => qr.clearTakeover()} title="Cerrar">
+          <PillButton
+            tone="default"
+            onClick={() => qr.clearTakeover()}
+            title="Cerrar"
+          >
             Ok
           </PillButton>
         }
@@ -1084,11 +1272,19 @@ export default function PublicMenuEntryPage() {
         }}
         onToggleIncluded={(cid, included) => {
           if (!selectedCompositeProduct) return;
-          composite.setDraftIncluded?.(Number(selectedCompositeProduct.id), cid, included);
+          composite.setDraftIncluded?.(
+            Number(selectedCompositeProduct.id),
+            cid,
+            included,
+          );
         }}
         onVariantChange={(cid, variantId) => {
           if (!selectedCompositeProduct) return;
-          composite.setDraftVariant?.(Number(selectedCompositeProduct.id), cid, variantId);
+          composite.setDraftVariant?.(
+            Number(selectedCompositeProduct.id),
+            cid,
+            variantId,
+          );
         }}
         onConfirm={confirmCompositeSelection}
         confirmLabel="Agregar compuesto"
@@ -1107,6 +1303,161 @@ export default function PublicMenuEntryPage() {
         selectionScope={selectedExtrasSelectionScope}
       />
 
+      <ProductVariantsModal
+        open={variantsModalOpen}
+        product={selectedVariantsProduct}
+        canSelect={canSelect}
+        showSelectBtn={showSelectBtn}
+        onClose={closeVariantsViewer}
+        onAddVariant={openVariantSelectionFlow}
+      />
+
+      <MenuCartDrawer
+        open={cartDrawerOpen}
+        onClose={() => setCartDrawerOpen(false)}
+        title="Comanda"
+        subtitle={
+          canAppend
+            ? "Orden abierta: puedes agregar productos."
+            : "Revisa los productos seleccionados antes de enviar."
+        }
+        itemCount={cartDrawerItemCount}
+        total={cartOrder.totalGlobal}
+        disabledClose={cartOrder.sending || billRequesting}
+      >
+        <MenuCartPanel
+          title="Comanda"
+          subtitle={
+            canAppend
+              ? "Orden abierta: puedes agregar productos."
+              : "Se llena cuando seleccionas productos. Luego presiona Enviar."
+          }
+          customerName={
+            canAppend ? cartOrder.activeOrder?.customer_name || "" : ""
+          }
+          total={cartOrder.totalGlobal}
+          oldItems={cartOrder.oldItems}
+          newItems={cartOrder.cart}
+          sendToast={cartOrder.sendToast}
+          sending={cartOrder.sending}
+          canAppend={canAppend}
+          canSubmit={allowSendButton}
+          showPaymentMessage={
+            !!cartOrder?.activeOrder?.customer_ui?.show_payment_message
+          }
+          onEmpty={() => cartOrder.setCart([])}
+          onSubmit={() => {
+            if (canAppend) {
+              cartOrder.submitOrderOrAppend();
+              return;
+            }
+            cartOrder.setSendOpen(true);
+          }}
+          onQtyChange={cartOrder.setCartQty}
+          onNotesChange={cartOrder.setCartNotes}
+          onRemove={cartOrder.removeCartItem}
+          statusBadges={[
+            ...(canAppend ? [{ tone: "ok", label: "✅ Orden abierta" }] : []),
+            ...(!canAppend && pending
+              ? [{ tone: "warn", label: "⏳ En espera de aprobación" }]
+              : []),
+            ...(Array.isArray(cartOrder.oldItems) &&
+            cartOrder.oldItems.length > 0
+              ? [
+                  {
+                    tone: "dark",
+                    label: `Historial: ${cartOrder.oldItems.length}`,
+                    title: "Historial (solo lectura)",
+                  },
+                ]
+              : []),
+            {
+              tone: cartOrder.cart.length > 0 ? "ok" : "warn",
+              label: `Nuevos: ${cartOrder.cart.length}`,
+            },
+            ...(showBillButton
+              ? [
+                  {
+                    tone:
+                      String(cartOrder.activeOrder?.status || "") === "paying"
+                        ? "warn"
+                        : billAlreadySent
+                          ? "dark"
+                          : canRequestBill
+                            ? "ok"
+                            : "warn",
+                    label:
+                      String(cartOrder.activeOrder?.status || "") === "paying"
+                        ? "💳 En proceso de pago"
+                        : billAlreadySent
+                          ? `🧾 Aviso enviado${
+                              billRequestStatus ? ` (${billRequestStatus})` : ""
+                            }`
+                          : canRequestBill
+                            ? "🧾 Puedes pedir cuenta"
+                            : "🧾 Aún no disponible",
+                    title:
+                      requestBillReason ||
+                      "Estado del flujo para pedir cuenta",
+                  },
+                ]
+              : []),
+          ]}
+          requestBillBlock={
+            showBillButton ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <PillButton
+                  tone="soft"
+                  onClick={handleRequestBill}
+                  disabled={billRequesting || !canRequestBill}
+                  title={
+                    canRequestBill
+                      ? "Enviar solicitud de cuenta al mesero"
+                      : requestBillReason ||
+                        "La orden aún no puede solicitar cuenta"
+                  }
+                >
+                  {billRequesting ? "⏳ Solicitando..." : "🧾 Pedir cuenta"}
+                </PillButton>
+
+                {requestBillReason && !canRequestBill ? (
+                  <div
+                    style={{
+                      border: "1px solid rgba(0,0,0,0.10)",
+                      borderRadius: 14,
+                      padding: 10,
+                      background: "#fff",
+                      fontSize: 12,
+                      fontWeight: 850,
+                      whiteSpace: "pre-line",
+                      opacity: 0.85,
+                    }}
+                  >
+                    {requestBillReason}
+                  </div>
+                ) : null}
+
+                {billToast ? (
+                  <div
+                    style={{
+                      border: "1px solid rgba(0,0,0,0.10)",
+                      borderRadius: 14,
+                      padding: 10,
+                      background: "#fff",
+                      fontSize: 13,
+                      fontWeight: 850,
+                      whiteSpace: "pre-line",
+                    }}
+                  >
+                    {billToast}
+                  </div>
+                ) : null}
+              </div>
+            ) : null
+          }
+        />
+      </MenuCartDrawer>
+
       <MenuHeaderCard
         title={header?.restaurantName}
         subtitle={
@@ -1121,13 +1472,17 @@ export default function PublicMenuEntryPage() {
             <>
               {header?.orderingMode ? (
                 <>
-                  Modo de pedido: <strong>{translateOrderingMode(header.orderingMode)}</strong>
+                  Modo de pedido:{" "}
+                  <strong>{translateOrderingMode(header.orderingMode)}</strong>
                 </>
               ) : null}
               {header?.orderingMode && header?.tableServiceMode ? " · " : null}
               {header?.tableServiceMode ? (
                 <>
-                  Servicio de mesa: <strong>{translateTableServiceMode(header.tableServiceMode)}</strong>
+                  Servicio de mesa:{" "}
+                  <strong>
+                    {translateTableServiceMode(header.tableServiceMode)}
+                  </strong>
                 </>
               ) : null}
             </>
@@ -1144,18 +1499,26 @@ export default function PublicMenuEntryPage() {
                   qr.sessionUnavailable
                     ? "Sesión no disponible (ya atendida)."
                     : callLocked
-                    ? "El mesero ya está atendiendo. Intente más tarde."
-                    : !qr.sessionActive
-                    ? "Sesión no activa. Escanea de nuevo."
-                    : "Enviar una solicitud al mesero"
+                      ? "El mesero ya está atendiendo. Intente más tarde."
+                      : !qr.sessionActive
+                        ? "Sesión no activa. Escanea de nuevo."
+                        : "Enviar una solicitud al mesero"
                 }
               >
-                {calling ? "⏳ Llamando..." : callLocked ? "🔕 Llamada desactivada" : "🔔 Llamar al mesero"}
+                {calling
+                  ? "⏳ Llamando..."
+                  : callLocked
+                    ? "🔕 Llamada desactivada"
+                    : "🔔 Llamar al mesero"}
               </PillButton>
             ) : null}
 
             {hasTable && String(activeMenuPayload?.type) === "physical" ? (
-              <PillButton onClick={() => qr.startScanSession()} disabled={qr.sessionLoading || !!qr.sessionBusy} title="Revalidar sesión de mesa">
+              <PillButton
+                onClick={() => qr.startScanSession()}
+                disabled={qr.sessionLoading || !!qr.sessionBusy}
+                title="Revalidar sesión de mesa"
+              >
                 {qr.sessionLoading ? "⏳ Validando..." : "📷 Validar QR"}
               </PillButton>
             ) : null}
@@ -1177,23 +1540,23 @@ export default function PublicMenuEntryPage() {
             </PillButton>
           </>
         }
-        categoryOptions={categoryOptions}
-        categoryFilter={categoryFilter}
-        onCategoryChange={setCategoryFilter}
         q={q}
         onSearchChange={setQ}
         totalVisible={filteredProducts.length}
         extraFilterActions={
           canSelect ? (
             <Badge tone="ok" title="Items nuevos por enviar/agregar">
-              En comanda: <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
+              En comanda:{" "}
+              <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
             </Badge>
           ) : null
         }
       >
         {isWeb ? (
           <div style={{ marginTop: 10, display: "grid", gap: 6, maxWidth: 420 }}>
-            <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>Canal a visualizar</div>
+            <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.85 }}>
+              Canal a visualizar
+            </div>
             <select
               value={activeWebChannelId}
               onChange={(e) => setWebChannelId(e.target.value)}
@@ -1233,6 +1596,12 @@ export default function PublicMenuEntryPage() {
         ) : null}
       </MenuHeaderCard>
 
+      <PublicMenuCategoryTabs
+        categoryOptions={categoryOptions}
+        value={categoryFilter}
+        onChange={setCategoryFilter}
+      />
+
       {activeMenuPayload?.warning ? (
         <div
           style={{
@@ -1261,180 +1630,75 @@ export default function PublicMenuEntryPage() {
             @media (min-width: 640px) { .menuGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
             @media (min-width: 900px) { .menuGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
             @media (min-width: 1200px) { .menuGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-
-            .menuLayout {
-              display: grid;
-              gap: 12px;
-              grid-template-columns: 1fr;
-              align-items: start;
-            }
-
-            @media (min-width: 1100px) {
-              .menuLayout {
-                grid-template-columns: minmax(0, 1fr) 380px;
-              }
-              .comandaAside {
-                position: sticky;
-                top: 14px;
-              }
-            }
           `}
         </style>
 
-        <div className="menuLayout">
-          <div>
-            <div className="menuGrid">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((p) => (
-                  <MenuProductCard
-                    key={p.id}
-                    product={p}
-                    categoryName={
-                      p.__categoryName ||
-                      categoryNameById.get(Number(p.category_id)) ||
-                      "Sin categoría"
-                    }
-                    canSelect={canSelect}
-                    showSelectBtn={showSelectBtn}
-                    onAddSimple={openProductSelectionFlow}
-                    onAddVariant={openVariantSelectionFlow}
-                    onOpenComposite={openCompositeConfigurator}
-                    onOpenExtras={openReadOnlyExtrasViewer}
-                  />
-                ))
-              ) : (
-                <div
-                  style={{
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                    borderRadius: 16,
-                    padding: 14,
-                    gridColumn: "1 / -1",
-                  }}
-                >
-                  <div style={{ fontWeight: 950 }}>Sin resultados</div>
-                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
-                    Prueba con otro texto o limpia filtros.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="comandaAside">
-            <MenuCartPanel
-              title="Comanda"
-              subtitle={
-                canAppend
-                  ? "Orden abierta: puedes agregar productos."
-                  : "Se llena cuando seleccionas productos. Luego presiona Enviar."
-              }
-              customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
-              total={cartOrder.totalGlobal}
-              oldItems={cartOrder.oldItems}
-              newItems={cartOrder.cart}
-              sendToast={cartOrder.sendToast}
-              sending={cartOrder.sending}
-              canAppend={canAppend}
-              canSubmit={allowSendButton}
-              showPaymentMessage={!!cartOrder?.activeOrder?.customer_ui?.show_payment_message}
-              onEmpty={() => cartOrder.setCart([])}
-              onSubmit={() => {
-                if (canAppend) {
-                  cartOrder.submitOrderOrAppend();
-                  return;
+        <div className="menuGrid">
+          {filteredProducts.length > 0 ? (
+            paginatedProducts.map((p) => (
+              <MenuProductCard
+                key={p.id}
+                product={p}
+                categoryName={
+                  p.__categoryName ||
+                  categoryNameById.get(Number(p.category_id)) ||
+                  "Sin categoría"
                 }
-                cartOrder.setSendOpen(true);
+                canSelect={canSelect}
+                showSelectBtn={showSelectBtn}
+                onAddSimple={openProductSelectionFlow}
+                onAddVariant={openVariantSelectionFlow}
+                onOpenComposite={openCompositeConfigurator}
+                onOpenExtras={openReadOnlyExtrasViewer}
+                onOpenVariants={openVariantsViewer}
+              />
+            ))
+          ) : (
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.12)",
+                background: "#fff",
+                borderRadius: 16,
+                padding: 14,
+                gridColumn: "1 / -1",
               }}
-              onQtyChange={cartOrder.setCartQty}
-              onNotesChange={cartOrder.setCartNotes}
-              onRemove={cartOrder.removeCartItem}
-              statusBadges={[
-                ...(canAppend ? [{ tone: "ok", label: "✅ Orden abierta" }] : []),
-                ...(!canAppend && pending ? [{ tone: "warn", label: "⏳ En espera de aprobación" }] : []),
-                ...(Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0
-                  ? [{ tone: "dark", label: `Historial: ${cartOrder.oldItems.length}`, title: "Historial (solo lectura)" }]
-                  : []),
-                { tone: cartOrder.cart.length > 0 ? "ok" : "warn", label: `Nuevos: ${cartOrder.cart.length}` },
-                ...(showBillButton
-                  ? [
-                      {
-                        tone:
-                          String(cartOrder.activeOrder?.status || "") === "paying"
-                            ? "warn"
-                            : billAlreadySent
-                            ? "dark"
-                            : canRequestBill
-                            ? "ok"
-                            : "warn",
-                        label:
-                          String(cartOrder.activeOrder?.status || "") === "paying"
-                            ? "💳 En proceso de pago"
-                            : billAlreadySent
-                            ? `🧾 Aviso enviado${billRequestStatus ? ` (${billRequestStatus})` : ""}`
-                            : canRequestBill
-                            ? "🧾 Puedes pedir cuenta"
-                            : "🧾 Aún no disponible",
-                        title: requestBillReason || "Estado del flujo para pedir cuenta",
-                      },
-                    ]
-                  : []),
-              ]}
-              requestBillBlock={
-                showBillButton ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <PillButton
-                      tone="soft"
-                      onClick={handleRequestBill}
-                      disabled={billRequesting || !canRequestBill}
-                      title={
-                        canRequestBill
-                          ? "Enviar solicitud de cuenta al mesero"
-                          : requestBillReason || "La orden aún no puede solicitar cuenta"
-                      }
-                    >
-                      {billRequesting ? "⏳ Solicitando..." : "🧾 Pedir cuenta"}
-                    </PillButton>
+            >
+              <div style={{ fontWeight: 950 }}>Sin resultados</div>
+              <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
+                Prueba con otro texto o limpia filtros.
+              </div>
+            </div>
+          )}
+        </div>
 
-                    {requestBillReason && !canRequestBill ? (
-                      <div
-                        style={{
-                          border: "1px solid rgba(0,0,0,0.10)",
-                          borderRadius: 14,
-                          padding: 10,
-                          background: "#fff",
-                          fontSize: 12,
-                          fontWeight: 850,
-                          whiteSpace: "pre-line",
-                          opacity: 0.85,
-                        }}
-                      >
-                        {requestBillReason}
-                      </div>
-                    ) : null}
-
-                    {billToast ? (
-                      <div
-                        style={{
-                          border: "1px solid rgba(0,0,0,0.10)",
-                          borderRadius: 14,
-                          padding: 10,
-                          background: "#fff",
-                          fontSize: 13,
-                          fontWeight: 850,
-                          whiteSpace: "pre-line",
-                        }}
-                      >
-                        {billToast}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null
-              }
+        {filteredProducts.length > 0 ? (
+          <div style={{ marginTop: 14 }}>
+            <PaginationFooter
+              page={page}
+              totalPages={totalPages}
+              startItem={startItem}
+              endItem={endItem}
+              total={total}
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              onPrev={prevPage}
+              onNext={nextPage}
+              itemLabel="productos"
             />
           </div>
-        </div>
+        ) : null}
       </div>
+
+      {canSelect ? (
+        <MenuCartFloatingButton
+          itemCount={cartDrawerItemCount}
+          total={cartOrder.totalGlobal}
+          disabled={false}
+          onClick={() => setCartDrawerOpen(true)}
+          label={hasCartContent ? "Ver comanda" : "Comanda"}
+          title="Abrir comanda"
+        />
+      ) : null}
     </div>
   );
 }

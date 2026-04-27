@@ -1,24 +1,34 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import echo from "../../../realtime/echo";
 
 import { fetchStaffWaiterMenu } from "../../../services/staff/waiter/staffOrders.service";
 
 import { Badge, Modal, PillButton, SkeletonCard } from "../../public/publicMenu.ui";
+import usePagination from "../../../hooks/usePagination";
+import PaginationFooter from "../../../components/common/PaginationFooter";
+
 import { useMenuProducts } from "../../../hooks/public/useMenuProducts";
 import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
 import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder";
-import {
-  buildModifierContextSections,
-} from "../../../hooks/public/publicMenu.utils";
+import { buildModifierContextSections } from "../../../hooks/public/publicMenu.utils";
 
 import MenuHeaderCard from "../../../components/menu/shared/MenuHeaderCard";
 import MenuProductCard from "../../../components/menu/shared/MenuProductCard";
+import ProductVariantsModal from "../../../components/menu/shared/ProductVariantsModal";
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
+import MenuCartDrawer from "../../../components/menu/shared/MenuCartDrawer";
+import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloatingButton";
 import WaiterWarehouseCreateDialog from "../../../components/menu/shared/WaiterWarehouseCreateDialog";
+import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 
 function buildComponentModifierKey(componentProductId, variantId = null) {
   return `${Number(componentProductId || 0)}:${variantId ? Number(variantId) : 0}`;
@@ -86,10 +96,7 @@ export default function StaffMenuEntryPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const intentFromState = location.state?.intent || null;
   const orderIdFromState = location.state?.existingOrderId || null;
-
-  const modeFromQuery = String(sp.get("mode") || "create");
   const orderIdFromQuery = sp.get("order_id") ? Number(sp.get("order_id")) : null;
 
   const effectiveOrderId = orderIdFromState || orderIdFromQuery || null;
@@ -97,18 +104,25 @@ export default function StaffMenuEntryPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [q, setQ] = useState("");
 
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+
+  const [variantsModalOpen, setVariantsModalOpen] = useState(false);
+  const [selectedVariantsProduct, setSelectedVariantsProduct] = useState(null);
+
   const [compositeModalOpen, setCompositeModalOpen] = useState(false);
   const [selectedCompositeProduct, setSelectedCompositeProduct] = useState(null);
 
   const [extrasModalOpen, setExtrasModalOpen] = useState(false);
   const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
   const [selectedExtrasVariantId, setSelectedExtrasVariantId] = useState(null);
-  const [selectedExtrasCompositeDraft, setSelectedExtrasCompositeDraft] = useState(null);
+  const [selectedExtrasCompositeDraft, setSelectedExtrasCompositeDraft] =
+    useState(null);
   const [selectedExtrasInitialValue, setSelectedExtrasInitialValue] = useState([]);
   const [selectedExtrasReadOnly, setSelectedExtrasReadOnly] = useState(false);
   const [selectedExtrasSubmitKind, setSelectedExtrasSubmitKind] = useState(null);
   const [selectedExtrasVariantObj, setSelectedExtrasVariantObj] = useState(null);
-  const [selectedExtrasSelectionScope, setSelectedExtrasSelectionScope] = useState("all");
+  const [selectedExtrasSelectionScope, setSelectedExtrasSelectionScope] =
+    useState("all");
   const [pendingCompositeComponents, setPendingCompositeComponents] = useState([]);
   const [pendingCompositeDetails, setPendingCompositeDetails] = useState([]);
 
@@ -131,13 +145,31 @@ export default function StaffMenuEntryPage() {
   const sections = Array.isArray(data?.sections)
     ? data.sections
     : Array.isArray(data?.data?.sections)
-    ? data.data.sections
-    : [];
+      ? data.data.sections
+      : [];
 
   const { categoryNameById, categoryOptions, filteredProducts } = useMenuProducts({
     sections,
     categoryFilter,
     q,
+  });
+
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems: paginatedProducts,
+  } = usePagination({
+    items: filteredProducts,
+    initialPage: 1,
+    pageSize: 8,
+    mode: "frontend",
   });
 
   const load = async ({ silent = false } = {}) => {
@@ -169,6 +201,7 @@ export default function StaffMenuEntryPage() {
   }, [tableId]);
 
   const onceRef = useRef(false);
+
   useEffect(() => {
     if (onceRef.current) return;
     if (!effectiveOrderId) return;
@@ -222,6 +255,13 @@ export default function StaffMenuEntryPage() {
   const canAppend = cartOrder.canAppend;
   const hasOld = Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0;
 
+  const cartDrawerItemCount =
+    Number(cartOrder.cart?.length || 0) + Number(cartOrder.oldItems?.length || 0);
+
+  const hasCartContent =
+    (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
+    (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
+
   const resetExtrasFlow = () => {
     setExtrasModalOpen(false);
     setSelectedExtrasProduct(null);
@@ -250,6 +290,16 @@ export default function StaffMenuEntryPage() {
     setExtrasModalOpen(true);
   };
 
+  const openVariantsViewer = (product) => {
+    setSelectedVariantsProduct(product);
+    setVariantsModalOpen(true);
+  };
+
+  const closeVariantsViewer = () => {
+    setVariantsModalOpen(false);
+    setSelectedVariantsProduct(null);
+  };
+
   const openProductSelectionFlow = (product) => {
     if (hasContextualModifiers(product, { selectionScope: "product_only" })) {
       setSelectedExtrasProduct(product);
@@ -267,6 +317,7 @@ export default function StaffMenuEntryPage() {
     }
 
     cartOrder.addToCartFromProduct(product);
+    setCartDrawerOpen(true);
   };
 
   const openVariantSelectionFlow = (product, variant) => {
@@ -291,6 +342,7 @@ export default function StaffMenuEntryPage() {
     }
 
     cartOrder.addToCartFromVariant(product, variant);
+    setCartDrawerOpen(true);
   };
 
   const openCompositeConfigurator = (product) => {
@@ -333,6 +385,7 @@ export default function StaffMenuEntryPage() {
     cartOrder.addToCartFromProduct(selectedCompositeProduct, components, details);
     setCompositeModalOpen(false);
     setSelectedCompositeProduct(null);
+    setCartDrawerOpen(true);
   };
 
   const handleConfirmExtras = (result) => {
@@ -356,6 +409,7 @@ export default function StaffMenuEntryPage() {
         parentDisplayGroups,
       );
       resetExtrasFlow();
+      setCartDrawerOpen(true);
       return;
     }
 
@@ -378,6 +432,7 @@ export default function StaffMenuEntryPage() {
         parentDisplayGroups,
       );
       resetExtrasFlow();
+      setCartDrawerOpen(true);
       return;
     }
 
@@ -389,6 +444,7 @@ export default function StaffMenuEntryPage() {
       parentDisplayGroups,
     );
     resetExtrasFlow();
+    setCartDrawerOpen(true);
   };
 
   if (loading) {
@@ -460,6 +516,7 @@ export default function StaffMenuEntryPage() {
         maxWidth: 1200,
         margin: "18px auto",
         padding: 16,
+        paddingBottom: 96,
         background: "linear-gradient(180deg, rgba(238,242,255,0.55), rgba(255,255,255,0))",
       }}
     >
@@ -597,6 +654,67 @@ export default function StaffMenuEntryPage() {
         selectionScope={selectedExtrasSelectionScope}
       />
 
+      <ProductVariantsModal
+        open={variantsModalOpen}
+        product={selectedVariantsProduct}
+        canSelect={canSelect}
+        showSelectBtn={true}
+        onClose={closeVariantsViewer}
+        onAddVariant={openVariantSelectionFlow}
+      />
+
+      <MenuCartDrawer
+        open={cartDrawerOpen}
+        onClose={() => setCartDrawerOpen(false)}
+        title="Comanda"
+        subtitle={
+          canAppend
+            ? "Orden abierta: puedes agregar productos."
+            : "Revisa los productos seleccionados antes de crear la comanda."
+        }
+        itemCount={cartDrawerItemCount}
+        total={cartOrder.totalGlobal}
+        disabledClose={cartOrder.sending}
+      >
+        <MenuCartPanel
+          title="Comanda"
+          subtitle={
+            canAppend
+              ? "Orden abierta: puedes agregar productos."
+              : "Selecciona productos y luego crea la comanda."
+          }
+          customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
+          total={cartOrder.totalGlobal}
+          oldItems={cartOrder.oldItems}
+          newItems={cartOrder.cart}
+          sendToast={cartOrder.sendToast}
+          sending={cartOrder.sending}
+          canAppend={canAppend}
+          canSubmit={cartOrder.cart.length > 0}
+          onEmpty={() => cartOrder.setCart([])}
+          onSubmit={() => {
+            if (canAppend) {
+              cartOrder.submitOrderOrAppend();
+              return;
+            }
+            cartOrder.setSendOpen(true);
+          }}
+          onQtyChange={cartOrder.setCartQty}
+          onNotesChange={cartOrder.setCartNotes}
+          onRemove={cartOrder.removeCartItem}
+          statusBadges={[
+            { tone: "dark", label: "🧑‍🍳 Staff" },
+            ...(canAppend
+              ? [{ tone: "ok", label: "Orden abierta", title: "Orden abierta: puedes agregar productos" }]
+              : []),
+            ...(hasOld
+              ? [{ tone: "default", label: `Historial: ${cartOrder.oldItems.length}`, title: "Items ya enviados" }]
+              : []),
+            { tone: cartOrder.cart.length > 0 ? "ok" : "warn", label: `Nuevos: ${cartOrder.cart.length}` },
+          ]}
+        />
+      </MenuCartDrawer>
+
       <MenuHeaderCard
         title={header?.restaurantName || data?.restaurant?.trade_name || "Restaurante"}
         subtitle={
@@ -618,6 +736,10 @@ export default function StaffMenuEntryPage() {
         ]}
         rightActions={
           <>
+            <PillButton onClick={() => setCartDrawerOpen(true)} title="Abrir comanda">
+              🧾 Comanda
+            </PillButton>
+
             <PillButton onClick={() => load()} title="Recargar menú">
               🔄 Recargar
             </PillButton>
@@ -631,12 +753,15 @@ export default function StaffMenuEntryPage() {
             </PillButton>
           </>
         }
-        categoryOptions={categoryOptions}
-        categoryFilter={categoryFilter}
-        onCategoryChange={setCategoryFilter}
         q={q}
         onSearchChange={setQ}
         totalVisible={filteredProducts.length}
+      />
+
+      <PublicMenuCategoryTabs
+        categoryOptions={categoryOptions}
+        value={categoryFilter}
+        onChange={setCategoryFilter}
       />
 
       <div style={{ marginTop: 14 }}>
@@ -650,97 +775,73 @@ export default function StaffMenuEntryPage() {
             @media (min-width: 640px) { .menuGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
             @media (min-width: 900px) { .menuGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
             @media (min-width: 1200px) { .menuGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-
-            .menuLayout {
-              display: grid;
-              gap: 12px;
-              grid-template-columns: 1fr;
-              align-items: start;
-            }
-
-            @media (min-width: 1100px) {
-              .menuLayout {
-                grid-template-columns: minmax(0, 1fr) 380px;
-              }
-              .comandaAside {
-                position: sticky;
-                top: 14px;
-              }
-            }
           `}
         </style>
 
-        <div className="menuLayout">
-          <div>
-            <div className="menuGrid">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((p) => (
-                  <MenuProductCard
-                    key={p.id}
-                    product={p}
-                    categoryName={
-                      p.__categoryName ||
-                      categoryNameById.get(Number(p.category_id)) ||
-                      "Sin categoría"
-                    }
-                    canSelect={canSelect}
-                    showSelectBtn={true}
-                    onAddSimple={openProductSelectionFlow}
-                    onAddVariant={openVariantSelectionFlow}
-                    onOpenComposite={openCompositeConfigurator}
-                    onOpenExtras={openReadOnlyExtrasViewer}
-                  />
-                ))
-              ) : (
-                <div
-                  style={{
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    background: "#fff",
-                    borderRadius: 16,
-                    padding: 14,
-                    gridColumn: "1 / -1",
-                  }}
-                >
-                  <div style={{ fontWeight: 950 }}>Sin resultados</div>
-                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
-                    Prueba con otro texto o limpia filtros.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="comandaAside">
-            <MenuCartPanel
-              title="Comanda"
-              subtitle={
-                canAppend
-                  ? "Orden abierta: puedes agregar productos."
-                  : "Selecciona productos y luego crea la comanda."
-              }
-              customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
-              total={cartOrder.totalGlobal}
-              oldItems={cartOrder.oldItems}
-              newItems={cartOrder.cart}
-              sendToast={cartOrder.sendToast}
-              sending={cartOrder.sending}
-              canAppend={canAppend}
-              canSubmit={cartOrder.cart.length > 0}
-              onEmpty={() => cartOrder.setCart([])}
-              onSubmit={() => {
-                if (canAppend) {
-                  cartOrder.submitOrderOrAppend();
-                  return;
+        <div className="menuGrid">
+          {filteredProducts.length > 0 ? (
+            paginatedProducts.map((p) => (
+              <MenuProductCard
+                key={p.id}
+                product={p}
+                categoryName={
+                  p.__categoryName ||
+                  categoryNameById.get(Number(p.category_id)) ||
+                  "Sin categoría"
                 }
-                cartOrder.setSendOpen(true);
+                canSelect={canSelect}
+                showSelectBtn={true}
+                onAddSimple={openProductSelectionFlow}
+                onAddVariant={openVariantSelectionFlow}
+                onOpenComposite={openCompositeConfigurator}
+                onOpenExtras={openReadOnlyExtrasViewer}
+                onOpenVariants={openVariantsViewer}
+              />
+            ))
+          ) : (
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.12)",
+                background: "#fff",
+                borderRadius: 16,
+                padding: 14,
+                gridColumn: "1 / -1",
               }}
-              onQtyChange={cartOrder.setCartQty}
-              onNotesChange={cartOrder.setCartNotes}
-              onRemove={cartOrder.removeCartItem}
+            >
+              <div style={{ fontWeight: 950 }}>Sin resultados</div>
+              <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
+                Prueba con otro texto o limpia filtros.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {filteredProducts.length > 0 ? (
+          <div style={{ marginTop: 14 }}>
+            <PaginationFooter
+              page={page}
+              totalPages={totalPages}
+              startItem={startItem}
+              endItem={endItem}
+              total={total}
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              onPrev={prevPage}
+              onNext={nextPage}
+              itemLabel="productos"
             />
           </div>
-        </div>
+        ) : null}
       </div>
+
+      <MenuCartFloatingButton
+        itemCount={cartDrawerItemCount}
+        total={cartOrder.totalGlobal}
+        disabled={false}
+        onClick={() => setCartDrawerOpen(true)}
+        label={hasCartContent ? "Ver comanda" : "Comanda"}
+        title="Abrir comanda"
+      />
     </div>
   );
 }
