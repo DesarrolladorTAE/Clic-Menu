@@ -43,6 +43,8 @@ export default function RestaurantOperationLayout() {
     currentKey = "tables";
   } else if (pathname.includes("/cash-registers")) {
     currentKey = "cash-registers";
+  } else if (pathname.includes("/public-menu-settings")) {
+  currentKey = "public-menu-settings";
   } else if (pathname.includes("/ticket-settings")) {
     currentKey = "ticket-settings";
   } else if (pathname.includes("/customer-loyalty-settings")) {
@@ -95,6 +97,10 @@ export default function RestaurantOperationLayout() {
 
       case "ticket-settings":
         nav(`${base}/ticket-settings`, { state: { restaurantName } });
+        break;
+
+      case "public-menu-settings":
+        nav(`${base}/public-menu-settings`, { state: { restaurantName } });
         break;
 
       case "customer-loyalty-settings":

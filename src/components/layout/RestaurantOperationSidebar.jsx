@@ -1,16 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Collapse,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography,
+  Box, Collapse, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography,
   useMediaQuery,
 } from "@mui/material";
 
@@ -42,6 +32,7 @@ import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import LocalDiningRoundedIcon from "@mui/icons-material/LocalDiningRounded";
 import SettingsSuggestRoundedIcon from "@mui/icons-material/SettingsSuggestRounded";
 import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import WebAssetOutlinedIcon from "@mui/icons-material/WebAssetOutlined";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED = 78;
@@ -96,6 +87,7 @@ export default function RestaurantOperationSidebar({
           { key: "tables", label: "Mesas", icon: <TableRestaurantIcon /> },
           { key: "cash-registers", label: "Cajas", icon: <PointOfSaleIcon /> },
           { key: "ticket-settings", label: "Tickets", icon: <ReceiptLongIcon /> },
+          { key: "public-menu-settings", label: "Menú público", icon: <WebAssetOutlinedIcon /> },
           { key: "customer-loyalty-settings", label: "Puntos", icon: <StarsOutlinedIcon /> },
         ],
       },
