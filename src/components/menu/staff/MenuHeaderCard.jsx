@@ -44,9 +44,20 @@ export default function MenuHeaderCard({
           <div style={{ fontSize: 13, opacity: 0.85 }}>{subtitle}</div>
 
           {badges?.length ? (
-            <div style={{ marginTop: 6, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 6,
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
               {badges.map((b, idx) => (
-                <Badge key={`${b?.label || idx}-${idx}`} tone={b?.tone || "default"} title={b?.title}>
+                <Badge
+                  key={`${b?.label || idx}-${idx}`}
+                  tone={b?.tone || "default"}
+                  title={b?.title}
+                >
                   {b?.label}
                 </Badge>
               ))}
@@ -63,33 +74,42 @@ export default function MenuHeaderCard({
         </div>
 
         {rightActions ? (
-          <div style={{ display: "flex", gap: 10, alignItems: "start", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "start",
+              flexWrap: "wrap",
+            }}
+          >
             {rightActions}
           </div>
         ) : null}
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            overflowX: "auto",
-            paddingBottom: 6,
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {categoryOptions.map((c) => (
-            <CategoryChip
-              key={c.value}
-              label={c.label}
-              active={categoryFilter === c.value}
-              onClick={() => onCategoryChange?.(c.value)}
-            />
-          ))}
-        </div>
+        {categoryOptions?.length ? (
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              overflowX: "auto",
+              paddingBottom: 6,
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            {categoryOptions.map((c) => (
+              <CategoryChip
+                key={c.value}
+                label={c.label}
+                active={categoryFilter === c.value}
+                onClick={() => onCategoryChange?.(c.value)}
+              />
+            ))}
+          </div>
+        ) : null}
 
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: categoryOptions?.length ? 10 : 0 }}>
           <SearchBar value={q} onChange={onSearchChange} />
         </div>
 

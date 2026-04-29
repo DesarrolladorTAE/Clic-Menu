@@ -19,7 +19,9 @@ import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
 import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder";
 import { buildModifierContextSections } from "../../../hooks/public/publicMenu.utils";
 
-import MenuHeaderCard from "../../../components/menu/shared/MenuHeaderCard";
+import MenuHeaderCard from "../../../components/menu/staff/MenuHeaderCard";
+import WaiterWarehouseCreateDialog from "../../../components/menu/staff/WaiterWarehouseCreateDialog";
+
 import MenuProductCard from "../../../components/menu/shared/MenuProductCard";
 import ProductVariantsModal from "../../../components/menu/shared/ProductVariantsModal";
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
@@ -27,7 +29,6 @@ import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasMod
 import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
 import MenuCartDrawer from "../../../components/menu/shared/MenuCartDrawer";
 import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloatingButton";
-import WaiterWarehouseCreateDialog from "../../../components/menu/shared/WaiterWarehouseCreateDialog";
 import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 
 function buildComponentModifierKey(componentProductId, variantId = null) {
