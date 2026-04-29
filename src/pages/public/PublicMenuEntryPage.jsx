@@ -1022,7 +1022,7 @@ export default function PublicMenuEntryPage() {
           maxWidth: 1200,
           margin: "0 auto",
           padding: "12px clamp(10px, 3vw, 16px)",
-          paddingBottom: canSelect ? 96 : 16,
+          paddingBottom: 0,
           boxSizing: "border-box",
         }}
       >
@@ -1165,10 +1165,12 @@ export default function PublicMenuEntryPage() {
           }}
         />
 
-        <PublicMenuFooter
-          publicMenu={publicMenu}
-          restaurantName={restaurantName}
-        />
+        <div style={{ marginTop: 28 }}>
+          <PublicMenuFooter
+            publicMenu={publicMenu}
+            restaurantName={restaurantName}
+          />
+        </div>
 
         {canSelect ? (
           <MenuCartFloatingButton

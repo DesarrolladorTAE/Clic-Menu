@@ -50,7 +50,7 @@ export default function PublicMenuFooter({ publicMenu, restaurantName }) {
         width: "100vw",
         marginLeft: "calc(50% - 50vw)",
         marginRight: "calc(50% - 50vw)",
-        marginTop: 28,
+        marginTop: 0,
         background: themeColor,
         color: "#FFFFFF",
         padding: "34px 16px 30px",
