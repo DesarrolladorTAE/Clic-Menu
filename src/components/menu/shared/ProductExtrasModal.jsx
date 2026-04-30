@@ -1,8 +1,6 @@
+// src/components/menu/shared/ProductExtrasModal.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Modal,
-  PillButton,
-} from "../../../pages/public/publicMenu.ui";
+import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import {
   buildModifierContextSections,
   buildModifierDisplayGroupsFromApiGroups,
@@ -11,6 +9,14 @@ import {
 } from "../../../hooks/public/publicMenu.utils";
 import usePagination from "../../../hooks/usePagination";
 import PaginationFooter from "../../common/PaginationFooter";
+
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
+function getSafeThemeColor(themeColor) {
+  return isValidColor(themeColor) ? themeColor : "#FF7A00";
+}
 
 function makeGroupSelectionKey(section, group) {
   const componentProductId = Number(section?.component?.component_product_id || 0);
@@ -34,20 +40,22 @@ function buildPreparedSections(product, sections) {
       section?.context_type === "variant"
         ? "variant"
         : section?.context_type === "component"
-        ? "component"
-        : section?.context_type === "component_variant"
-        ? "component_variant"
-        : "product";
+          ? "component"
+          : section?.context_type === "component_variant"
+            ? "component_variant"
+            : "product";
 
     const appliesToLevel =
-      section?.context_type === "component" || section?.context_type === "component_variant"
+      section?.context_type === "component" ||
+      section?.context_type === "component_variant"
         ? "composite_component"
         : "order_item";
 
     const contextLabel = section?.subtitle || title;
 
     const componentProductId =
-      section?.context_type === "component" || section?.context_type === "component_variant"
+      section?.context_type === "component" ||
+      section?.context_type === "component_variant"
         ? Number(section?.component?.component_product_id || 0) || null
         : null;
 
@@ -58,15 +66,17 @@ function buildPreparedSections(product, sections) {
 
     return {
       ...section,
-      groups: (Array.isArray(section?.groups) ? section.groups : []).map((group) => ({
-        ...group,
-        __selection_key: makeGroupSelectionKey(section, group),
-        __context_source: contextSource,
-        __applies_to_level: appliesToLevel,
-        __context_label: contextLabel,
-        __component_product_id: componentProductId,
-        __component_variant_id: componentVariantId,
-      })),
+      groups: (Array.isArray(section?.groups) ? section.groups : []).map(
+        (group) => ({
+          ...group,
+          __selection_key: makeGroupSelectionKey(section, group),
+          __context_source: contextSource,
+          __applies_to_level: appliesToLevel,
+          __context_label: contextLabel,
+          __component_product_id: componentProductId,
+          __component_variant_id: componentVariantId,
+        }),
+      ),
     };
   });
 }
@@ -87,7 +97,9 @@ function buildInitialSelectionMap(initialValue, preparedSections) {
   const groups = Array.isArray(initialValue) ? initialValue : [];
   const map = {};
 
-  const allPreparedGroups = preparedSections.flatMap((section) => section.groups || []);
+  const allPreparedGroups = preparedSections.flatMap(
+    (section) => section.groups || [],
+  );
 
   allPreparedGroups.forEach((pg) => {
     const match = groups.find((g) => {
@@ -122,7 +134,9 @@ function buildInitialSelectionMap(initialValue, preparedSections) {
 }
 
 function normalizeSelectionForResult(preparedSections, selectionMap) {
-  const allPreparedGroups = preparedSections.flatMap((section) => section.groups || []);
+  const allPreparedGroups = preparedSections.flatMap(
+    (section) => section.groups || [],
+  );
   const normalized = [];
 
   allPreparedGroups.forEach((group) => {
@@ -153,7 +167,9 @@ function normalizeSelectionForResult(preparedSections, selectionMap) {
           meta: {
             track_inventory: !!opt?.track_inventory,
             is_default: !!opt?.is_default,
-            max_quantity_per_selection: Number(opt?.max_quantity_per_selection || 1),
+            max_quantity_per_selection: Number(
+              opt?.max_quantity_per_selection || 1,
+            ),
             availability: opt?.availability || null,
             is_available:
               typeof opt?.is_available === "boolean" ? opt.is_available : true,
@@ -198,16 +214,18 @@ function normalizeSelectionForResult(preparedSections, selectionMap) {
     parentModifiers,
     componentModifiers,
     parentDisplayGroups: buildModifierDisplayGroupsFromApiGroups(parentModifiers),
-    componentDisplayGroups: buildModifierDisplayGroupsFromApiGroups(componentModifiers),
-    total: Math.round(
-      normalized.reduce((acc, g) => {
-        const groupTotal = (Array.isArray(g.options) ? g.options : []).reduce(
-          (sum, opt) => sum + Number(opt?.total_price || 0),
-          0,
-        );
-        return acc + groupTotal;
-      }, 0) * 100,
-    ) / 100,
+    componentDisplayGroups:
+      buildModifierDisplayGroupsFromApiGroups(componentModifiers),
+    total:
+      Math.round(
+        normalized.reduce((acc, g) => {
+          const groupTotal = (Array.isArray(g.options) ? g.options : []).reduce(
+            (sum, opt) => sum + Number(opt?.total_price || 0),
+            0,
+          );
+          return acc + groupTotal;
+        }, 0) * 100,
+      ) / 100,
   };
 }
 
@@ -250,9 +268,7 @@ function validatePreparedSections(preparedSections, selectionMap) {
 function getAvailabilityUi(option) {
   const availability = option?.availability || null;
   const status = String(
-    option?.availability_label ||
-      availability?.status ||
-      "disponible"
+    option?.availability_label || availability?.status || "disponible",
   ).toLowerCase();
 
   const maxQty = availability?.max_available_qty;
@@ -348,11 +364,13 @@ function OptionRow({
   option,
   selectedQty,
   readOnly,
+  themeColor,
   onSelectOption,
   onIncrementQty,
   onDecrementQty,
   onRemoveOption,
 }) {
+  const safeThemeColor = getSafeThemeColor(themeColor);
   const affectsPrice = !!option?.affects_total;
   const price = Number(option?.price || 0);
   const maxPerSelection = Number(option?.max_quantity_per_selection || 1);
@@ -365,9 +383,9 @@ function OptionRow({
         display: "grid",
         gap: 10,
         padding: "12px",
-        borderRadius: 14,
+        borderRadius: 10,
         border: "1px solid rgba(0,0,0,0.08)",
-        background: selectedQty > 0 ? "#fff7ed" : "#fff",
+        background: selectedQty > 0 ? `${safeThemeColor}0F` : "#fff",
         opacity: disabledByAvailability && selectedQty <= 0 ? 0.78 : 1,
       }}
     >
@@ -414,7 +432,9 @@ function OptionRow({
             }}
           >
             {affectsPrice ? `Ajuste: ${money(price)}` : "Sin ajuste al total"}
-            {maxPerSelection > 1 ? ` · Máx. por selección: ${maxPerSelection}` : ""}
+            {maxPerSelection > 1
+              ? ` · Máx. por selección: ${maxPerSelection}`
+              : ""}
             {option?.is_default ? " · Sugerido por defecto" : ""}
           </div>
 
@@ -523,9 +543,7 @@ function OptionRow({
               <PillButton
                 tone="soft"
                 onClick={() => onIncrementQty?.(group, option)}
-                disabled={
-                  selectedQty >= maxPerSelection || disabledByAvailability
-                }
+                disabled={selectedQty >= maxPerSelection || disabledByAvailability}
                 title="Sumar"
               >
                 +
@@ -565,6 +583,7 @@ function GroupCard({
   group,
   readOnly,
   selectedMap,
+  themeColor,
   onSelectOption,
   onIncrementQty,
   onDecrementQty,
@@ -572,7 +591,7 @@ function GroupCard({
 }) {
   const options = Array.isArray(group?.options) ? group.options : [];
   const distinctCount = countDistinctSelectedOptions(
-    selectedMap?.[group.__selection_key] || {}
+    selectedMap?.[group.__selection_key] || {},
   );
 
   return (
@@ -581,7 +600,7 @@ function GroupCard({
         display: "grid",
         gap: 12,
         padding: "14px",
-        borderRadius: 14,
+        borderRadius: 10,
         border: "1px solid #D9D3D3",
         background: "#FBF8F8",
         boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
@@ -641,7 +660,8 @@ function GroupCard({
         <div style={{ display: "grid", gap: 8 }}>
           {options.map((option) => {
             const selectedQty = Number(
-              selectedMap?.[group.__selection_key]?.[Number(option?.id || 0)] || 0,
+              selectedMap?.[group.__selection_key]?.[Number(option?.id || 0)] ||
+                0,
             );
 
             return (
@@ -651,6 +671,7 @@ function GroupCard({
                 option={option}
                 selectedQty={selectedQty}
                 readOnly={readOnly}
+                themeColor={themeColor}
                 onSelectOption={onSelectOption}
                 onIncrementQty={onIncrementQty}
                 onDecrementQty={onDecrementQty}
@@ -665,7 +686,7 @@ function GroupCard({
             fontSize: 12,
             color: "#6E6A6A",
             padding: "12px",
-            borderRadius: 12,
+            borderRadius: 10,
             background: "#fff",
             border: "1px dashed rgba(0,0,0,0.12)",
           }}
@@ -684,11 +705,14 @@ export default function ProductExtrasModal({
   compositeDraft = null,
   initialValue = [],
   readOnly = false,
+  themeColor,
   onClose,
   onConfirm,
   confirmLabel = "Continuar",
   selectionScope = "all",
 }) {
+  const safeThemeColor = getSafeThemeColor(themeColor);
+
   const sections = useMemo(() => {
     return buildPreparedSections(
       product,
@@ -814,7 +838,10 @@ export default function ProductExtrasModal({
       return;
     }
 
-    const nextQty = Math.min(maxPerSelection, Number(current?.[optionId] || 0) + 1);
+    const nextQty = Math.min(
+      maxPerSelection,
+      Number(current?.[optionId] || 0) + 1,
+    );
     current[optionId] = nextQty;
     updateGroupMap(group, current);
   };
@@ -859,7 +886,7 @@ export default function ProductExtrasModal({
 
           if (qty > 0 && !optionAvailable) {
             setErrorMsg(
-              `La opción "${option?.name || "Extra"}" ya no está disponible.`
+              `La opción "${option?.name || "Extra"}" ya no está disponible.`,
             );
             return;
           }
@@ -881,24 +908,32 @@ export default function ProductExtrasModal({
   const totalDistinctSelected = sections.reduce((acc, section) => {
     return (
       acc +
-      (Array.isArray(section?.groups) ? section.groups : []).reduce((sum, group) => {
-        return (
-          sum +
-          countDistinctSelectedOptions(selectionMap?.[group.__selection_key] || {})
-        );
-      }, 0)
+      (Array.isArray(section?.groups) ? section.groups : []).reduce(
+        (sum, group) => {
+          return (
+            sum +
+            countDistinctSelectedOptions(
+              selectionMap?.[group.__selection_key] || {},
+            )
+          );
+        },
+        0,
+      )
     );
   }, 0);
 
   const totalUnitsSelected = sections.reduce((acc, section) => {
     return (
       acc +
-      (Array.isArray(section?.groups) ? section.groups : []).reduce((sum, group) => {
-        return (
-          sum +
-          countTotalSelectedUnits(selectionMap?.[group.__selection_key] || {})
-        );
-      }, 0)
+      (Array.isArray(section?.groups) ? section.groups : []).reduce(
+        (sum, group) => {
+          return (
+            sum +
+            countTotalSelectedUnits(selectionMap?.[group.__selection_key] || {})
+          );
+        },
+        0,
+      )
     );
   }, 0);
 
@@ -910,6 +945,10 @@ export default function ProductExtrasModal({
       width="min(920px, 96vw)"
       maxHeight="min(88vh, 920px)"
       bodyPadding={16}
+      backdropBlur={false}
+      contentStyle={{
+        borderRadius: 18,
+      }}
       actions={
         <>
           <PillButton tone="default" onClick={onClose} title="Cerrar">
@@ -918,8 +957,13 @@ export default function ProductExtrasModal({
 
           <PillButton
             tone={readOnly ? "soft" : "orange"}
+            themeColor={safeThemeColor}
             onClick={handleConfirm}
-            title={readOnly ? "Cerrar vista de extras" : "Continuar con la selección actual"}
+            title={
+              readOnly
+                ? "Cerrar vista de extras"
+                : "Continuar con la selección actual"
+            }
           >
             {readOnly ? "Listo" : confirmLabel}
           </PillButton>
@@ -930,7 +974,7 @@ export default function ProductExtrasModal({
         <div
           style={{
             border: "1px solid #D9D3D3",
-            borderRadius: 14,
+            borderRadius: 10,
             background: "#FBF8F8",
             padding: 14,
             display: "grid",
@@ -1006,7 +1050,7 @@ export default function ProductExtrasModal({
               border: "1px solid rgba(242,100,42,0.28)",
               background: "#ffecec",
               color: "#a10000",
-              borderRadius: 14,
+              borderRadius: 10,
               padding: "10px 12px",
               fontSize: 12,
               fontWeight: 900,
@@ -1026,7 +1070,7 @@ export default function ProductExtrasModal({
                     display: "grid",
                     gap: 10,
                     padding: "14px",
-                    borderRadius: 14,
+                    borderRadius: 10,
                     border: "1px solid #D9D3D3",
                     background: "#fff",
                     boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
@@ -1062,6 +1106,7 @@ export default function ProductExtrasModal({
                         group={group}
                         readOnly={readOnly}
                         selectedMap={selectionMap}
+                        themeColor={safeThemeColor}
                         onSelectOption={handleSelectOption}
                         onIncrementQty={handleIncrementQty}
                         onDecrementQty={handleDecrementQty}
@@ -1076,7 +1121,7 @@ export default function ProductExtrasModal({
             <div
               style={{
                 border: "1px solid #D9D3D3",
-                borderRadius: 12,
+                borderRadius: 10,
                 overflow: "hidden",
                 background: "#fff",
               }}
@@ -1101,7 +1146,7 @@ export default function ProductExtrasModal({
               fontSize: 13,
               color: "#6E6A6A",
               padding: "16px",
-              borderRadius: 14,
+              borderRadius: 10,
               border: "1px dashed rgba(0,0,0,0.12)",
               background: "#FBF8F8",
             }}

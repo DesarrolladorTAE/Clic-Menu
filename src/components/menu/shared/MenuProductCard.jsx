@@ -15,6 +15,14 @@ import {
   money,
 } from "../../../hooks/public/publicMenu.utils";
 
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
+function getCardThemeColor(themeColor) {
+  return isValidColor(themeColor) ? themeColor : "#FF7A00";
+}
+
 function getAvailabilityLabel(availability) {
   const status = String(availability?.status || "").toLowerCase();
 
@@ -137,6 +145,7 @@ export default function MenuProductCard({
   categoryName = "Sin categoría",
   canSelect = true,
   showSelectBtn = true,
+  themeColor,
   onAddSimple,
   onAddVariant,
   onOpenComposite,
@@ -144,6 +153,7 @@ export default function MenuProductCard({
   onOpenVariants,
 }) {
   const theme = useTheme();
+  const cardThemeColor = getCardThemeColor(themeColor);
 
   const title = product?.display_name || product?.name || "Producto";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
@@ -208,7 +218,7 @@ export default function MenuProductCard({
           height: 4,
           background: productBlocked
             ? "rgba(63,58,82,0.12)"
-            : "linear-gradient(90deg, #FF9800, #FFB547)",
+            : cardThemeColor,
         }}
       />
 
@@ -277,7 +287,7 @@ export default function MenuProductCard({
                 fontWeight: 900,
                 fontSize: 13,
                 lineHeight: 1,
-                color: theme.palette.primary.main,
+                color: cardThemeColor,
                 whiteSpace: "nowrap",
                 paddingTop: 2,
               }}
@@ -357,6 +367,7 @@ export default function MenuProductCard({
           {showSelectBtn ? (
             <PillButton
               tone={productBlocked ? "danger" : "orange"}
+              themeColor={cardThemeColor}
               onClick={handleMainAction}
               title={
                 !canSelect

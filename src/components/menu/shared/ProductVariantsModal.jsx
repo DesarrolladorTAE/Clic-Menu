@@ -1,3 +1,5 @@
+// src/components/menu/shared/ProductVariantsModal.jsx
+
 import React, { useMemo } from "react";
 import { useTheme } from "@mui/material/styles";
 import { Badge, Modal, PillButton } from "../../../pages/public/publicMenu.ui";
@@ -9,6 +11,14 @@ import {
   isAvailabilityBlocked,
   money,
 } from "../../../hooks/public/publicMenu.utils";
+
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
+function getSafeThemeColor(themeColor) {
+  return isValidColor(themeColor) ? themeColor : "#FF7A00";
+}
 
 function getAvailabilityPalette(theme, tone) {
   const map = {
@@ -85,11 +95,13 @@ function AvailabilityNotice({ availability }) {
         fontSize: 12,
         lineHeight: 1.45,
         padding: "9px 11px",
-        borderRadius: 14,
+        borderRadius: 10,
         border: blocked
           ? `1px solid rgba(242, 100, 42, 0.22)`
           : `1px solid rgba(46, 175, 46, 0.18)`,
-        background: blocked ? "rgba(242, 100, 42, 0.08)" : "rgba(46, 175, 46, 0.08)",
+        background: blocked
+          ? "rgba(242, 100, 42, 0.08)"
+          : "rgba(46, 175, 46, 0.08)",
         color: blocked ? theme.palette.error.main : theme.palette.success.main,
         fontWeight: 800,
       }}
@@ -105,10 +117,12 @@ function VariantCard({
   index,
   canSelect,
   showSelectBtn,
+  themeColor,
   onAddVariant,
   onClose,
 }) {
   const theme = useTheme();
+  const safeThemeColor = getSafeThemeColor(themeColor);
 
   const variantAvailability = getAvailabilityData(variant?.availability);
   const variantBlocked = canSelect && isAvailabilityBlocked(variantAvailability);
@@ -117,7 +131,8 @@ function VariantCard({
     variant?.name || variant?.display_name || `Variante ${index + 1}`;
 
   const variantHasExtras =
-    Array.isArray(variant?.modifier_groups) && variant.modifier_groups.length > 0;
+    Array.isArray(variant?.modifier_groups) &&
+    variant.modifier_groups.length > 0;
 
   const handleSelect = () => {
     if (!canSelect || variantBlocked) return;
@@ -131,7 +146,7 @@ function VariantCard({
         display: "grid",
         gap: 10,
         padding: 14,
-        borderRadius: 20,
+        borderRadius: 10,
         border: `1px solid ${
           variantBlocked
             ? "rgba(242, 100, 42, 0.18)"
@@ -184,7 +199,7 @@ function VariantCard({
           style={{
             fontSize: 16,
             fontWeight: 950,
-            color: theme.palette.primary.main,
+            color: safeThemeColor,
             whiteSpace: "nowrap",
           }}
         >
@@ -209,13 +224,15 @@ function VariantCard({
       {showSelectBtn ? (
         <PillButton
           tone={variantBlocked ? "danger" : "orange"}
+          themeColor={safeThemeColor}
           onClick={handleSelect}
           title={
             !canSelect
               ? "Solo lectura"
               : variantBlocked
-              ? formatAvailabilityCaption(variantAvailability) || "No disponible"
-              : "Agregar variante a comanda"
+                ? formatAvailabilityCaption(variantAvailability) ||
+                  "No disponible"
+                : "Agregar variante a comanda"
           }
           disabled={!canSelect || variantBlocked}
         >
@@ -231,10 +248,12 @@ export default function ProductVariantsModal({
   product,
   canSelect = true,
   showSelectBtn = true,
+  themeColor,
   onClose,
   onAddVariant,
 }) {
   const theme = useTheme();
+  const safeThemeColor = getSafeThemeColor(themeColor);
 
   const title = product?.display_name || product?.name || "Producto";
 
@@ -252,6 +271,10 @@ export default function ProductVariantsModal({
       width="min(760px, 96vw)"
       maxHeight="min(88vh, 920px)"
       bodyPadding={16}
+      backdropBlur={false}
+      contentStyle={{
+        borderRadius: 18,
+      }}
       actions={
         <PillButton tone="default" onClick={onClose} title="Cerrar">
           Cerrar
@@ -262,7 +285,7 @@ export default function ProductVariantsModal({
         <div
           style={{
             border: `1px solid ${theme.palette.divider}`,
-            borderRadius: 20,
+            borderRadius: 12,
             background: theme.palette.background.paper,
             padding: 14,
             display: "grid",
@@ -280,24 +303,13 @@ export default function ProductVariantsModal({
             Elige una opción
           </div>
 
-          <div
-            style={{
-              fontSize: 13,
-              color: theme.palette.text.secondary,
-              lineHeight: 1.5,
-            }}
-          >
-            Las variantes se muestran aquí para no modificar el tamaño de las tarjetas del menú.
-          </div>
-
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Badge tone="default">
-              Variantes: <strong style={{ marginLeft: 6 }}>{variants.length}</strong>
+              Variantes:{" "}
+              <strong style={{ marginLeft: 6 }}>{variants.length}</strong>
             </Badge>
 
-            {!canSelect ? (
-              <Badge tone="warn">Solo lectura</Badge>
-            ) : null}
+            {!canSelect ? <Badge tone="warn">Solo lectura</Badge> : null}
           </div>
         </div>
 
@@ -306,7 +318,8 @@ export default function ProductVariantsModal({
             style={{
               display: "grid",
               gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
             }}
           >
             {variants.map((variant, index) => (
@@ -317,6 +330,7 @@ export default function ProductVariantsModal({
                 index={index}
                 canSelect={canSelect}
                 showSelectBtn={showSelectBtn}
+                themeColor={safeThemeColor}
                 onAddVariant={onAddVariant}
                 onClose={onClose}
               />
@@ -328,7 +342,7 @@ export default function ProductVariantsModal({
               fontSize: 13,
               color: theme.palette.text.secondary,
               padding: 16,
-              borderRadius: 18,
+              borderRadius: 12,
               border: "1px dashed rgba(63, 58, 82, 0.16)",
               background: "#FFFFFF",
             }}

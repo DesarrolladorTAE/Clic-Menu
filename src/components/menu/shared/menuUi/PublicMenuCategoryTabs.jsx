@@ -3,12 +3,18 @@
 import React from "react";
 import { Box, Tab, Tabs } from "@mui/material";
 
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
 export default function PublicMenuCategoryTabs({
   categoryOptions = [],
   value = "all",
   onChange,
+  themeColor,
 }) {
   const safeOptions = Array.isArray(categoryOptions) ? categoryOptions : [];
+  const safeThemeColor = isValidColor(themeColor) ? themeColor : "#FF7A00";
 
   const handleChange = (_, nextValue) => {
     onChange?.(nextValue);
@@ -26,14 +32,14 @@ export default function PublicMenuCategoryTabs({
     transition:
       "background-color 0.18s ease, color 0.18s ease, transform 0.12s ease",
     "&.Mui-selected": {
-      color: "primary.main",
+      color: safeThemeColor,
       bgcolor: "transparent",
     },
     "&:hover": {
-      bgcolor: "rgba(255, 152, 0, 0.06)",
+      bgcolor: `${safeThemeColor}10`,
     },
     "&:active": {
-      bgcolor: "rgba(255, 152, 0, 0.14)",
+      bgcolor: `${safeThemeColor}22`,
       transform: "scale(0.98)",
     },
   };
@@ -61,7 +67,7 @@ export default function PublicMenuCategoryTabs({
             sx: {
               height: 3,
               borderRadius: "999px 999px 0 0",
-              backgroundColor: "primary.main",
+              backgroundColor: safeThemeColor,
             },
           },
         }}

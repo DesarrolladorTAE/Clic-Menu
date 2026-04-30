@@ -1,3 +1,4 @@
+// src/pages/public/public-menu-entry/PublicMenuModals.jsx
 // Modales del flujo de envío, productos compuestos, extras y variantes.
 
 import React from "react";
@@ -12,6 +13,7 @@ export default function PublicMenuModals({
   allowBaseSend,
   pending,
   canAppend,
+  themeColor,
 
   composite,
   compositeModalOpen,
@@ -83,6 +85,7 @@ export default function PublicMenuModals({
         compositeDraft={selectedExtrasCompositeDraft}
         initialValue={selectedExtrasInitialValue}
         readOnly={selectedExtrasReadOnly}
+        themeColor={themeColor}
         onClose={onCloseExtras}
         onConfirm={onConfirmExtras}
         confirmLabel={selectedExtrasReadOnly ? "Listo" : "Guardar extras"}
@@ -94,6 +97,7 @@ export default function PublicMenuModals({
         product={selectedVariantsProduct}
         canSelect={canSelect}
         showSelectBtn={showSelectBtn}
+        themeColor={themeColor}
         onClose={onCloseVariants}
         onAddVariant={onAddVariant}
       />

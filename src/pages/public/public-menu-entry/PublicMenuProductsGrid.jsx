@@ -11,6 +11,7 @@ export default function PublicMenuProductsGrid({
   categoryNameById,
   canSelect,
   showSelectBtn,
+  themeColor,
   onAddSimple,
   onAddVariant,
   onOpenComposite,
@@ -46,6 +47,7 @@ export default function PublicMenuProductsGrid({
               }
               canSelect={canSelect}
               showSelectBtn={showSelectBtn}
+              themeColor={themeColor}
               onAddSimple={onAddSimple}
               onAddVariant={onAddVariant}
               onOpenComposite={onOpenComposite}

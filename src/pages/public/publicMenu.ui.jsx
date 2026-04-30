@@ -15,6 +15,21 @@ const MENU_UI = {
   bgSoft: "#F6F3EF",
 };
 
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
+function hexToRgba(hex, alpha = 1) {
+  const safeHex = isValidColor(hex) ? hex : MENU_UI.orange;
+  const clean = safeHex.replace("#", "");
+
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 export function Badge({ children, tone = "default", title }) {
   const map = {
     default: {
@@ -116,7 +131,10 @@ export function PillButton({
   title,
   disabled,
   type = "button",
+  themeColor,
 }) {
+  const safeThemeColor = isValidColor(themeColor) ? themeColor : MENU_UI.orange;
+
   const map = {
     default: {
       bg: "#FFFFFF",
@@ -143,10 +161,10 @@ export function PillButton({
       shadow: "0 8px 18px rgba(239,68,68,0.08)",
     },
     orange: {
-      bg: `linear-gradient(135deg, ${MENU_UI.orange}, #FF9F2F)`,
-      bd: "rgba(255,122,0,0.85)",
+      bg: `linear-gradient(135deg, ${safeThemeColor}, ${safeThemeColor})`,
+      bd: hexToRgba(safeThemeColor, 0.85),
       fg: "#FFFFFF",
-      shadow: "0 14px 26px rgba(255,122,0,0.24)",
+      shadow: `0 14px 26px ${hexToRgba(safeThemeColor, 0.24)}`,
     },
   };
 
@@ -475,6 +493,7 @@ export function Modal({
   bodyStyle = {},
   footerStyle = {},
   closeOnBackdrop = true,
+  backdropBlur = true,
 }) {
   if (!open) return null;
 
@@ -488,7 +507,7 @@ export function Modal({
         display: "grid",
         placeItems: "center",
         padding: 16,
-        backdropFilter: "blur(8px)",
+        backdropFilter: backdropBlur ? "blur(8px)" : "none",
       }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && closeOnBackdrop) onClose?.();

@@ -1048,6 +1048,7 @@ export default function PublicMenuEntryPage() {
           allowBaseSend={allowBaseSend}
           pending={pending}
           canAppend={canAppend}
+          themeColor={themeColor}
           composite={composite}
           compositeModalOpen={compositeModalOpen}
           selectedCompositeProduct={selectedCompositeProduct}
@@ -1137,6 +1138,7 @@ export default function PublicMenuEntryPage() {
           categoryOptions={categoryOptions}
           value={categoryFilter}
           onChange={setCategoryFilter}
+          themeColor={themeColor}
         />
 
         <PublicMenuWarningBlock warning={activeMenuPayload?.warning} />
@@ -1147,6 +1149,7 @@ export default function PublicMenuEntryPage() {
           categoryNameById={categoryNameById}
           canSelect={canSelect}
           showSelectBtn={showSelectBtn}
+          themeColor={themeColor}
           onAddSimple={openProductSelectionFlow}
           onAddVariant={openVariantSelectionFlow}
           onOpenComposite={openCompositeConfigurator}
@@ -1180,6 +1183,7 @@ export default function PublicMenuEntryPage() {
             onClick={() => setCartDrawerOpen(true)}
             label={hasCartContent ? "Ver comanda" : "Comanda"}
             title="Abrir comanda"
+            themeColor={themeColor}
           />
         ) : null}
       </div>

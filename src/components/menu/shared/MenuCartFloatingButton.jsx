@@ -4,6 +4,10 @@ import React from "react";
 import { useTheme } from "@mui/material/styles";
 import { money } from "../../../hooks/public/publicMenu.utils";
 
+function isValidColor(color) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+}
+
 export default function MenuCartFloatingButton({
   itemCount = 0,
   total = 0,
@@ -12,11 +16,27 @@ export default function MenuCartFloatingButton({
   label = "Ver comanda",
   title = "Abrir comanda",
   showTotal = true,
+  themeColor, // 👈 NUEVO
 }) {
   const theme = useTheme();
 
   const safeItemCount = Number(itemCount || 0);
   const hasItems = safeItemCount > 0;
+
+  const isPublicTheme = isValidColor(themeColor);
+  const color = isPublicTheme
+    ? themeColor
+    : theme.palette.primary.main;
+
+  const gradient = disabled
+    ? "rgba(63,58,82,0.35)"
+    : `linear-gradient(135deg, ${color}, ${color})`;
+
+  const shadow = disabled
+    ? "none"
+    : isPublicTheme
+    ? `0 18px 40px ${color}55`
+    : "0 18px 40px rgba(255, 122, 0, 0.34)";
 
   return (
     <button
@@ -32,13 +52,9 @@ export default function MenuCartFloatingButton({
         cursor: disabled ? "not-allowed" : "pointer",
         border: "1px solid rgba(255,255,255,0.45)",
         borderRadius: 999,
-        background: disabled
-          ? "rgba(63,58,82,0.35)"
-          : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`,
+        background: gradient,
         color: "#FFFFFF",
-        boxShadow: disabled
-          ? "none"
-          : "0 18px 40px rgba(255, 122, 0, 0.34)",
+        boxShadow: shadow,
         padding: "10px 12px 10px 10px",
         minHeight: 58,
         maxWidth: "calc(100vw - 28px)",
