@@ -7,21 +7,8 @@ import {
 } from "../../services/floor/operationalSettings.service";
 
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog,DialogContent,DialogTitle,FormControlLabel,IconButton,MenuItem, Stack,
+  Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -198,6 +185,7 @@ export default function OperationalSettingsModal({
       table_service_mode: initial?.table_service_mode ?? "free_for_all",
       is_qr_enabled: !!initial?.is_qr_enabled,
       assignment_strategy: initial?.assignment_strategy ?? "table_only",
+      cashier_direct_mode: initial?.cashier_direct_mode ?? "disabled",
       min_seats:
         initial?.min_seats != null ? String(initial.min_seats) : "1",
       max_seats:
@@ -219,6 +207,7 @@ export default function OperationalSettingsModal({
   const orderingMode = watch("ordering_mode");
   const tableServiceMode = watch("table_service_mode");
   const assignmentStrategy = watch("assignment_strategy");
+  const cashierDirectMode = watch("cashier_direct_mode");
   const isQrEnabled = watch("is_qr_enabled");
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
@@ -264,6 +253,15 @@ export default function OperationalSettingsModal({
       ? "Cada mesa puede tener un mesero distinto."
       : "";
 
+  const cashierDirectHelper =
+    cashierDirectMode === "disabled"
+      ? "La caja no podrá crear ventas directas."
+      : cashierDirectMode === "with_kitchen"
+      ? "La caja podrá crear ventas directas que se enviarán a cocina después del cobro."
+      : cashierDirectMode === "without_kitchen"
+      ? "La caja podrá crear ventas directas sin enviarlas a cocina."
+      : "";
+
   const onSubmit = async (form) => {
     setSaving(true);
 
@@ -278,6 +276,7 @@ export default function OperationalSettingsModal({
           String(effectiveTableServiceMode) === "assigned_waiter"
             ? form.assignment_strategy || "table_only"
             : null,
+        cashier_direct_mode: form.cashier_direct_mode || "disabled",
         min_seats: Number(form.min_seats),
         max_seats: Number(form.max_seats),
       };
@@ -598,6 +597,39 @@ export default function OperationalSettingsModal({
                     }
                   />
                 </SwitchInfoCard>
+
+                <SectionTitle title="Venta directa desde caja" />
+
+                <FieldBlock
+                  label="Modo de venta directa"
+                  input={
+                    <Controller
+                      name="cashier_direct_mode"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          select
+                          fullWidth
+                          value={field.value ?? "disabled"}
+                          onChange={field.onChange}
+                          SelectProps={{
+                            IconComponent: KeyboardArrowDownIcon,
+                          }}
+                        >
+                          <MenuItem value="disabled">Desactivada</MenuItem>
+                          <MenuItem value="with_kitchen">
+                            Activada con cocina
+                          </MenuItem>
+                          <MenuItem value="without_kitchen">
+                            Activada sin cocina
+                          </MenuItem>
+                        </TextField>
+                      )}
+                    />
+                  }
+                  help={cashierDirectHelper}
+                  error={errors?.cashier_direct_mode?.message}
+                />
 
                 <SectionTitle title="Capacidad de mesas" />
 

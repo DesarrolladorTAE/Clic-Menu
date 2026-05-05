@@ -38,10 +38,6 @@ export default function FloorPlanInstructionsCard() {
           text="Si usas asignación por zona, podrás vincular un mesero y el sistema aplicará esa relación a sus mesas."
         />
 
-        <InstructionRow
-          step="4"
-          text="Los cambios se reflejan de forma fluida dentro de la misma vista, sin necesitar recargar manualmente."
-        />
       </Stack>
     </Paper>
   );

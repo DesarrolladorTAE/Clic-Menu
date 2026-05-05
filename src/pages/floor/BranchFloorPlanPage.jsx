@@ -59,6 +59,12 @@ const ASSIGNMENT_STRATEGY_ES = {
   zone: "Zona",
 };
 
+const CASHIER_DIRECT_MODE_ES = {
+  disabled: "Desactivada",
+  with_kitchen: "Con cocina",
+  without_kitchen: "Sin cocina",
+};
+
 function toBool(v) {
   if (typeof v === "boolean") return v;
   if (typeof v === "number") return v === 1;
@@ -202,12 +208,15 @@ export default function BranchFloorPlanPage() {
       ? ASSIGNMENT_STRATEGY_ES[settings.assignment_strategy] ||
         settings.assignment_strategy
       : null;
+    const cashierDirectLabel =
+      CASHIER_DIRECT_MODE_ES[settings.cashier_direct_mode] || "Desactivada";
 
     return {
       orderingLabel,
       tableServiceLabel,
       strategyLabel,
       qrLabel: boolES(toBool(settings.is_qr_enabled)),
+      cashierDirectLabel,
     };
   }, [settings]);
 
@@ -273,7 +282,8 @@ export default function BranchFloorPlanPage() {
       zoneFilter === "all"
         ? normalized
         : normalized.filter(
-            (table) => String(table.zone_id ?? table.zone?.id) === String(zoneFilter)
+            (table) =>
+              String(table.zone_id ?? table.zone?.id) === String(zoneFilter)
           );
 
     return [...rows].sort((a, b) => {
