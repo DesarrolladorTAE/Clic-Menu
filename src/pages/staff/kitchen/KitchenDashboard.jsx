@@ -516,17 +516,27 @@ export default function KitchenDashboard() {
 
     try {
       const res = await notifyKitchenOrderReady(orderId);
+      const isCashierDirect = String(order?.source || "") === "cashier_direct";
       setOkMsg(
         res?.message ||
           (res?.data?.already
-            ? "El aviso de pedido listo ya estaba enviado."
+            ? isCashierDirect
+              ? "El aviso de orden lista para caja ya estaba enviado."
+              : "El aviso de pedido listo ya estaba enviado."
+            : isCashierDirect
+            ? "Orden lista para entregar en caja."
             : "Aviso enviado al mesero.")
       );
     } catch (e) {
       await loadOrders({ silent: true });
+
+      const isCashierDirect = String(order?.source || "") === "cashier_direct";
+
       setErr(
         e?.response?.data?.message ||
-          "No se pudo enviar el aviso de pedido listo."
+          (isCashierDirect
+            ? "No se pudo enviar el aviso de orden lista a caja."
+            : "No se pudo enviar el aviso de pedido listo.")
       );
     } finally {
       setNotifyingOrderId(null);

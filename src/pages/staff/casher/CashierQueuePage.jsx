@@ -18,9 +18,17 @@ import {
   takeCashierSale,
 } from "../../../services/staff/casher/cashierQueue.service";
 
+import {
+  fetchCashierReadyNotifications,
+  markCashierReadyNotificationRead,
+} from "../../../services/staff/casher/cashierReadyNotifications.service";
+
+import echo from "../../../realtime/echo";
+
 import CashierQueueHeroCard from "../../../components/staff/casher/queuePage/CashierQueueHeroCard";
 import CashierQueueTabs from "../../../components/staff/casher/queuePage/CashierQueueTabs";
 import CashierSalesPanel from "../../../components/staff/casher/queuePage/CashierSalesPanel";
+import CashierReadyNotificationsDrawer from "../../../components/staff/casher/queuePage/CashierReadyNotificationsDrawer";
 
 const PAGE_SIZE = 5;
 
@@ -35,6 +43,10 @@ export default function CashierQueuePage() {
   const [tab, setTab] = useState("available");
   const [takingSaleId, setTakingSaleId] = useState(null);
 
+  const [readyNotifications, setReadyNotifications] = useState([]);
+  const [readyBusyId, setReadyBusyId] = useState(null);
+  const [readyDrawerOpen, setReadyDrawerOpen] = useState(false);
+
   const [alertState, setAlertState] = useState({
     open: false,
     severity: "info",
@@ -43,6 +55,8 @@ export default function CashierQueuePage() {
   });
 
   const pollRef = useRef(null);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -75,13 +89,33 @@ export default function CashierQueuePage() {
 
   const pickCode = (e) => e?.response?.data?.code;
 
+  const isContextConflict = (e) => {
+    const status = Number(e?.response?.status || 0);
+    const message = String(
+      e?.response?.data?.message || e?.message || ""
+    ).toLowerCase();
+
+    if (status !== 409) return false;
+
+    return (
+      message.includes("no hay un turno activo") ||
+      message.includes("selecciona sucursal") ||
+      message.includes("sucursal sin configuración operativa")
+    );
+  };
+
   const load = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
       else setRefreshing(true);
 
-      const res = await fetchCashierSaleQueue();
-      setQueueData(res?.data || null);
+      const [resQueue, resReady] = await Promise.all([
+        fetchCashierSaleQueue(),
+        fetchCashierReadyNotifications().catch(() => null),
+      ]);
+
+      setQueueData(resQueue?.data || null);
+      setReadyNotifications(Array.isArray(resReady?.data) ? resReady.data : []);
     } catch (e) {
       const st = e?.response?.status;
       const code = pickCode(e);
@@ -94,6 +128,11 @@ export default function CashierQueuePage() {
       if (st === 401) {
         clearStaff?.();
         nav("/staff/login", { replace: true });
+        return;
+      }
+
+      if (isContextConflict(e)) {
+        nav("/staff/select-context", { replace: true });
         return;
       }
 
@@ -119,9 +158,92 @@ export default function CashierQueuePage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cashSession = queueData?.cash_session || null;
+  const meta = queueData?.meta || {};
+
+  const branchId = Number(
+    meta?.branch_id ||
+      cashSession?.branch_id ||
+      queueData?.branch_id ||
+      queueData?.branch?.id ||
+      0
+  );
+
+  const staffId = Number(
+    meta?.staff_id ||
+      cashSession?.staff_id ||
+      cashSession?.opened_by_staff_id ||
+      queueData?.staff_id ||
+      0
+  );
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    const channelName = `branch.${branchId}.cashier`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+
+      wsRefreshFastRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 120);
+
+      wsRefreshSlowRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 900);
+    };
+
+    const handleCashierQueueUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+
+      scheduleRefresh();
+
+      const targetStaffId = Number(payload?.target_staff_id || 0);
+      const msg = String(payload?.message || "").trim();
+      const reason = String(payload?.reason || "").trim();
+
+      if (msg && (!targetStaffId || !staffId || targetStaffId === staffId)) {
+        showAlert({
+          severity:
+            reason === "cashier_ready_notice_read" ? "success" : "info",
+          message: msg,
+        });
+      }
+    };
+
+    echo
+      .private(channelName)
+      .listen(".cashier.queue.updated", handleCashierQueueUpdated);
+
+    return () => {
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, staffId]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+    };
+  }, []);
 
   const availableSales = useMemo(
     () =>
@@ -262,6 +384,36 @@ export default function CashierQueuePage() {
     }
   };
 
+  const handleReadReadyNotification = async (notificationId) => {
+    if (!notificationId) return;
+
+    setReadyBusyId(notificationId);
+
+    try {
+      const res = await markCashierReadyNotificationRead(notificationId);
+
+      setReadyNotifications((prev) =>
+        prev.filter((row) => Number(row?.id) !== Number(notificationId))
+      );
+
+      showAlert({
+        severity: "success",
+        message:
+          res?.message ||
+          "Aviso de caja marcado como leído. La orden quedó lista para entregar.",
+      });
+
+      await load({ silent: true });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo marcar el aviso como leído."),
+      });
+    } finally {
+      setReadyBusyId(null);
+    }
+  };
+
   const handleOpenDetail = (sale) => {
     const saleId = sale?.sale_id;
     if (!saleId) return;
@@ -289,6 +441,10 @@ export default function CashierQueuePage() {
 
   const handleGoCustomers = () => {
     nav("/staff/cashier/customers");
+  };
+
+  const handleNewDirectOrder = () => {
+    nav("/staff/cashier/direct-order");
   };
 
   if (loading) {
@@ -324,6 +480,7 @@ export default function CashierQueuePage() {
           onBack={handleBackWithCheck}
           onGoHistory={handleGoHistory}
           onGoCustomers={handleGoCustomers}
+          onNewDirectOrder={handleNewDirectOrder}
         />
 
         <CashierQueueTabs
@@ -356,6 +513,15 @@ export default function CashierQueuePage() {
           onOpenDetail={handleOpenDetail}
         />
       </Stack>
+
+      <CashierReadyNotificationsDrawer
+        open={readyDrawerOpen}
+        onOpen={() => setReadyDrawerOpen(true)}
+        onClose={() => setReadyDrawerOpen(false)}
+        notifications={readyNotifications}
+        busyId={readyBusyId}
+        onReadNotification={handleReadReadyNotification}
+      />
 
       <AppAlert
         open={alertState.open}

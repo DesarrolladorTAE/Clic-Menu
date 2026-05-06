@@ -153,11 +153,15 @@ export default function KitchenOrderCard({
           })
         ) : readyNoticeSent ? (
           <div style={emptyItemsBox}>
-            <div style={emptyItemsTitle}>Esperando confirmación del mesero</div>
+            <div style={emptyItemsTitle}>
+              {order?.source === "cashier_direct"
+                ? "Esperando confirmación de caja"
+                : "Esperando confirmación del mesero"}
+            </div>
             <div style={emptyItemsText}>
               Ya no hay ítems visibles en esta comanda, mas el aviso de{" "}
               <b>Pedido listo</b> sigue activo. La tarjeta permanecerá aquí
-              hasta que el mesero lo marque como <b>Leído</b>.
+              hasta que {order?.source === "cashier_direct" ? "caja" : "el mesero"} lo marque como <b>Leído</b>.
             </div>
           </div>
         ) : (
@@ -173,10 +177,18 @@ export default function KitchenOrderCard({
       <div style={ticketFooter}>
         <div style={ticketFooterLeft}>
           {readyNoticeSent ? (
-            <span style={noticeSentPill}>Aviso enviado al mesero</span>
+            <span style={noticeSentPill}>
+              {order?.source === "cashier_direct"
+                ? "Aviso enviado a caja"
+                : "Aviso enviado al mesero"}
+            </span>
           ) : (
             <span style={noticePendingPill}>
-              {allReady ? "Listo para avisar" : "Aún hay ítems pendientes"}
+              {allReady
+                ? order?.source === "cashier_direct"
+                  ? "Listo para avisar a caja"
+                  : "Listo para avisar al mesero"
+                : "Aún hay ítems pendientes"}
             </span>
           )}
         </div>
@@ -189,7 +201,9 @@ export default function KitchenOrderCard({
             title={
               canNotifyReady
                 ? readyNoticeSent
-                  ? "El aviso ya fue enviado. Si lo oprimes de nuevo, el sistema te lo confirmará."
+                  ? "El aviso ya fue enviado."
+                  : order?.source === "cashier_direct"
+                  ? "Avisar a caja que la orden está lista"
                   : "Avisar al mesero que el pedido está listo"
                 : "Aún hay pedidos pendientes"
             }
@@ -197,7 +211,11 @@ export default function KitchenOrderCard({
             {notifying
               ? "Enviando aviso…"
               : readyNoticeSent
-              ? "Pedido listo enviado"
+              ? order?.source === "cashier_direct"
+                ? "Aviso a caja enviado"
+                : "Pedido listo enviado"
+              : order?.source === "cashier_direct"
+              ? "Avisar a caja"
               : "Pedido listo"}
           </button>
         </div>

@@ -15,6 +15,7 @@ import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import PeopleRoundedIcon from "@mui/icons-material/PeopleRounded";
+import AddShoppingCartRoundedIcon from "@mui/icons-material/AddShoppingCartRounded";
 
 export default function CashierQueueHeroCard({
   cashSession,
@@ -25,6 +26,7 @@ export default function CashierQueueHeroCard({
   onBack,
   onGoHistory,
   onGoCustomers,
+  onNewDirectOrder,
 }) {
   return (
     <Card
@@ -169,37 +171,59 @@ export default function CashierQueueHeroCard({
             />
           </Box>
 
-           <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<HistoryRoundedIcon />}
-                onClick={onGoHistory}
-                sx={{
-                  fontWeight: 800,
-                  borderRadius: 2,
-                  height: 40,
-                  px: 3,
-                  width: { xs: "100%", sm: "auto" },
-                }}
-              >
-                Ver historial
-              </Button>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            alignItems="center"
+            sx={{ width: "100%" }}
+          >
+            <Button
+              variant="contained"
+              startIcon={<AddShoppingCartRoundedIcon />}
+              onClick={onNewDirectOrder}
+              sx={{
+                fontWeight: 800,
+                borderRadius: 2,
+                height: 40,
+                px: 3,
+                width: { xs: "100%", sm: "auto" },
+              }}
+            >
+              Nueva venta directa
+            </Button>
 
-              <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<PeopleRoundedIcon />}
-                onClick={onGoCustomers}
-                sx={{
-                  fontWeight: 800,
-                  borderRadius: 2,
-                  height: 40,
-                  px: 3,
-                  width: { xs: "100%", sm: "auto" },
-                }}
-              >
-                Clientes
-              </Button>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<HistoryRoundedIcon />}
+              onClick={onGoHistory}
+              sx={{
+                fontWeight: 800,
+                borderRadius: 2,
+                height: 40,
+                px: 3,
+                width: { xs: "100%", sm: "auto" },
+              }}
+            >
+              Ver historial
+            </Button>
+
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<PeopleRoundedIcon />}
+              onClick={onGoCustomers}
+              sx={{
+                fontWeight: 800,
+                borderRadius: 2,
+                height: 40,
+                px: 3,
+                width: { xs: "100%", sm: "auto" },
+              }}
+            >
+              Clientes
+            </Button>
+          </Stack>
         </Stack>
       </CardContent>
     </Card>

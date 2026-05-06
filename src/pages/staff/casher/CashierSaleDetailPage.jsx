@@ -961,6 +961,40 @@ export default function CashierSaleDetailPage() {
     } catch (e) {
       const code = pickCode(e);
 
+      if (code === "INSUFFICIENT_WAREHOUSE_STOCK_ON_PAYMENT") {
+        const data = pickData(e);
+
+        const orderId = Number(
+          data?.order_id ||
+            sale?.order?.id ||
+            sale?.order_id ||
+            detailData?.sale?.order?.id ||
+            0
+        );
+
+        const currentSaleId = Number(sale?.sale_id || sale?.id || saleId || 0);
+
+        showAlert({
+          severity: "warning",
+          title: "Stock insuficiente",
+          message: pickErr(
+            e,
+            "Algunos productos ya no tienen stock suficiente. Corrige la venta antes de cobrar."
+          ),
+        });
+
+        if (orderId && currentSaleId) {
+          setTimeout(() => {
+            nav(
+              `/staff/cashier/direct-order?order_id=${orderId}&return_sale_id=${currentSaleId}`,
+              { replace: true }
+            );
+          }, 700);
+        }
+
+        return;
+      }
+
       if (
         code === "SALE_ALREADY_PAID" ||
         code === "SALE_NOT_OWNED_BY_SESSION" ||

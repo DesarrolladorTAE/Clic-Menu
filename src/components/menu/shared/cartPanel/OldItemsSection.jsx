@@ -1,9 +1,36 @@
 import React from "react";
-import { Badge } from "../../../../pages/public/publicMenu.ui";
+import { Badge, PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money, safeNum } from "../../../../hooks/public/publicMenu.utils";
 import { renderNotes } from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
+
+function getOldItemId(item) {
+  return Number(item?.id || item?.order_item_id || 0);
+}
+
+function OldRemoveButton({
+  item,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
+  if (!onRemoveOldItem) return null;
+
+  const itemId = getOldItemId(item);
+  const removing = itemId > 0 && Number(removingOldItemId || 0) === itemId;
+
+  return (
+    <PillButton
+      tone="danger"
+      disabled={removing}
+      title="Quitar producto guardado"
+      onClick={() => onRemoveOldItem?.(item)}
+    >
+      {removing ? "⏳ Quitando..." : `🗑️ ${oldItemRemoveLabel}`}
+    </PillButton>
+  );
+}
 
 function OldChildRow({ item }) {
   const label = item?.variant_name
@@ -48,7 +75,12 @@ function OldChildRow({ item }) {
   );
 }
 
-function OldRow({ item }) {
+function OldRow({
+  item,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -105,11 +137,27 @@ function OldRow({ item }) {
       >
         {money(subtotal)}
       </td>
+
+      {onRemoveOldItem ? (
+        <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
+          <OldRemoveButton
+            item={item}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
+        </td>
+      ) : null}
     </tr>
   );
 }
 
-function OldItemCard({ item }) {
+function OldItemCard({
+  item,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -144,6 +192,17 @@ function OldItemCard({ item }) {
 
       {item?.notes ? (
         <div className="cm-note">• {renderNotes(item.notes)}</div>
+      ) : null}
+
+      {onRemoveOldItem ? (
+        <div style={{ marginTop: 10, display: "flex", justifyContent: "end" }}>
+          <OldRemoveButton
+            item={item}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
+        </div>
       ) : null}
 
       {Array.isArray(item?.children) && item.children.length > 0 ? (
@@ -190,7 +249,15 @@ function OldItemCard({ item }) {
   );
 }
 
-export default function OldItemsSection({ oldItems = [], oldItemsTree = [] }) {
+export default function OldItemsSection({
+  oldItems = [],
+  oldItemsTree = [],
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
+  const canRemoveOldItems = typeof onRemoveOldItem === "function";
+
   return (
     <div className="cm-section">
       <div className="cm-section-title">
@@ -206,13 +273,21 @@ export default function OldItemsSection({ oldItems = [], oldItemsTree = [] }) {
               <th style={{ textAlign: "right" }}>Precio</th>
               <th style={{ textAlign: "center" }}>Cant</th>
               <th style={{ textAlign: "right" }}>Subtotal</th>
+              {canRemoveOldItems ? (
+                <th style={{ textAlign: "right" }}>Acción</th>
+              ) : null}
             </tr>
           </thead>
 
           <tbody>
             {oldItemsTree.map((it) => (
               <React.Fragment key={`old-${it?.id}`}>
-                <OldRow item={it} />
+                <OldRow
+                  item={it}
+                  onRemoveOldItem={onRemoveOldItem}
+                  removingOldItemId={removingOldItemId}
+                  oldItemRemoveLabel={oldItemRemoveLabel}
+                />
 
                 {Array.isArray(it?.children) && it.children.length > 0
                   ? it.children.map((child) => (
@@ -230,7 +305,13 @@ export default function OldItemsSection({ oldItems = [], oldItemsTree = [] }) {
 
       <div className="cm-mobile-list">
         {oldItemsTree.map((it) => (
-          <OldItemCard key={`old-mobile-${it?.id}`} item={it} />
+          <OldItemCard
+            key={`old-mobile-${it?.id}`}
+            item={it}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
         ))}
       </div>
     </div>

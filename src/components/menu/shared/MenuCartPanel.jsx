@@ -27,11 +27,18 @@ export default function MenuCartPanel({
   statusBadges = [],
   extraTopActions = null,
 
+  submitLabel = "",
+  submitTitle = "",
+
   onEmpty,
   onSubmit,
   onQtyChange,
   onNotesChange,
   onRemove,
+
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
 
   requestBillBlock = null,
 }) {
@@ -42,6 +49,14 @@ export default function MenuCartPanel({
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
   const toastStyles = getToastStyles(sendToast);
+
+  const resolvedSubmitTitle =
+    submitTitle ||
+    (canAppend ? "Agregar productos a la orden abierta" : "Enviar comanda");
+
+  const resolvedSubmitLabel =
+    submitLabel ||
+    (sending ? "⏳ Enviando..." : canAppend ? "➕ Agregar" : "📤 Enviar");
 
   const openNoteModal = (item) => {
     setNoteItem(item);
@@ -106,13 +121,9 @@ export default function MenuCartPanel({
               tone="orange"
               onClick={onSubmit}
               disabled={!canSubmit || sending}
-              title={
-                canAppend
-                  ? "Agregar productos a la orden abierta"
-                  : "Enviar comanda"
-              }
+              title={resolvedSubmitTitle}
             >
-              {sending ? "⏳ Enviando..." : canAppend ? "➕ Agregar" : "📤 Enviar"}
+              {sending ? "⏳ Enviando..." : resolvedSubmitLabel}
             </PillButton>
 
             {extraTopActions}
@@ -164,7 +175,13 @@ export default function MenuCartPanel({
       ) : null}
 
       {hasOld ? (
-        <OldItemsSection oldItems={oldItems} oldItemsTree={oldItemsTree} />
+        <OldItemsSection
+          oldItems={oldItems}
+          oldItemsTree={oldItemsTree}
+          onRemoveOldItem={onRemoveOldItem}
+          removingOldItemId={removingOldItemId}
+          oldItemRemoveLabel={oldItemRemoveLabel}
+        />
       ) : (
         <div className="cm-empty-history">No hay historial cargado.</div>
       )}

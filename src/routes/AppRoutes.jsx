@@ -34,6 +34,7 @@ import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
 import CashierRefundsHistoryPage from "../pages/staff/casher/refunds/CashierRefundsHistoryPage";
 import CashierRefundSaleDetailPage from "../pages/staff/casher/refunds/CashierRefundSaleDetailPage";
 import CashierCustomersPage from "../pages/staff/casher/customer/CashierCustomersPage";
+import CashierDirectOrderPage from "../pages/staff/casher/CashierDirectOrderPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -141,6 +142,7 @@ export default function AppRoutes() {
         {/* Cajero */}
         <Route path="/staff/cashier" element={<CashierHomePage />} />
         <Route path="/staff/cashier/queue" element={<CashierQueuePage />} />
+        <Route path="/staff/cashier/direct-order" element={<CashierDirectOrderPage />} />
         <Route path="/staff/cashier/sales/:saleId" element={<CashierSaleDetailPage />} />
         <Route path="/staff/cashier/refunds" element={<CashierRefundsHistoryPage />} />
         <Route path="/staff/cashier/refunds/:saleId" element={<CashierRefundSaleDetailPage />} />
