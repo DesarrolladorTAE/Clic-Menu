@@ -1,4 +1,4 @@
-//Tarjetita Pagos
+// Tarjetita Pagos
 import React from "react";
 import {
   Box,
@@ -101,7 +101,16 @@ export default function CashierPaymentFormCard({
             />
           </Box>
 
-          <Stack spacing={2}>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 2,
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: payments.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))",
+              },
+            }}
+          >
             {payments.map((payment, index) => {
               const method = methods.find(
                 (m) => Number(m.id) === Number(payment.payment_method_id)
@@ -112,6 +121,8 @@ export default function CashierPaymentFormCard({
                 .map((row) => Number(row.payment_method_id || 0))
                 .filter(Boolean);
 
+              const isThirdPayment = index === 2;
+
               return (
                 <Box
                   key={payment.localId}
@@ -121,6 +132,10 @@ export default function CashierPaymentFormCard({
                     borderRadius: 1,
                     backgroundColor: "#FCFCFC",
                     p: 2,
+                    gridColumn: {
+                      xs: "auto",
+                      md: isThirdPayment ? "1 / -1" : "auto",
+                    },
                   }}
                 >
                   <Stack spacing={1.5}>
@@ -142,7 +157,9 @@ export default function CashierPaymentFormCard({
 
                       <IconButton
                         onClick={() => onRemovePayment(payment.localId)}
-                        disabled={payments.length <= 1 || disabled || previewing || paying}
+                        disabled={
+                          payments.length <= 1 || disabled || previewing || paying
+                        }
                         sx={{
                           width: 40,
                           height: 40,
@@ -210,7 +227,11 @@ export default function CashierPaymentFormCard({
                             fullWidth
                             value={payment.amount}
                             onChange={(e) =>
-                              onPaymentChange(payment.localId, "amount", e.target.value)
+                              onPaymentChange(
+                                payment.localId,
+                                "amount",
+                                e.target.value
+                              )
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder="0.00"
@@ -222,13 +243,19 @@ export default function CashierPaymentFormCard({
 
                     <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                       <FieldBlock
-                        label={`Referencia${method?.requires_reference ? " *" : ""}`}
+                        label={`Referencia${
+                          method?.requires_reference ? " *" : ""
+                        }`}
                         input={
                           <TextField
                             fullWidth
                             value={payment.reference}
                             onChange={(e) =>
-                              onPaymentChange(payment.localId, "reference", e.target.value)
+                              onPaymentChange(
+                                payment.localId,
+                                "reference",
+                                e.target.value
+                              )
                             }
                             placeholder={
                               method?.requires_reference ? "Requerida" : "No aplica"
@@ -244,7 +271,9 @@ export default function CashierPaymentFormCard({
                       />
 
                       <FieldBlock
-                        label={`Últimos 4 dígitos${method?.requires_last4 ? " *" : ""}`}
+                        label={`Últimos 4 dígitos${
+                          method?.requires_last4 ? " *" : ""
+                        }`}
                         input={
                           <TextField
                             fullWidth
@@ -259,9 +288,7 @@ export default function CashierPaymentFormCard({
                               )
                             }
                             inputProps={{ inputMode: "numeric", maxLength: 4 }}
-                            placeholder={
-                              method?.requires_last4 ? "0000" : "No aplica"
-                            }
+                            placeholder={method?.requires_last4 ? "0000" : "No aplica"}
                             disabled={
                               disabled ||
                               previewing ||
@@ -275,13 +302,19 @@ export default function CashierPaymentFormCard({
 
                     <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                       <FieldBlock
-                        label={`Recibido${method?.requires_received_amount ? " *" : ""}`}
+                        label={`Recibido${
+                          method?.requires_received_amount ? " *" : ""
+                        }`}
                         input={
                           <TextField
                             fullWidth
                             value={payment.received}
                             onChange={(e) =>
-                              onPaymentChange(payment.localId, "received", e.target.value)
+                              onPaymentChange(
+                                payment.localId,
+                                "received",
+                                e.target.value
+                              )
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder={
@@ -314,7 +347,7 @@ export default function CashierPaymentFormCard({
                 </Box>
               );
             })}
-          </Stack>
+          </Box>
 
           <Box
             sx={{

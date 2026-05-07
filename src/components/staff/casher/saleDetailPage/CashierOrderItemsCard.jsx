@@ -1,30 +1,62 @@
 // Tarjeta detalles del producto
-import React from "react";
+import React, { useMemo } from "react";
 import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  Stack,
-  Typography,
+  Box, Card, CardContent, Chip, Divider, Stack, Typography,
 } from "@mui/material";
+
+import PaginationFooter from "../../../common/PaginationFooter";
+import usePagination from "../../../../hooks/usePagination";
+
+const PAGE_SIZE = 5;
 
 export default function CashierOrderItemsCard({
   itemsTree = [],
   itemsSummary = null,
 }) {
+  const normalizedItems = useMemo(() => {
+    return Array.isArray(itemsTree) ? itemsTree : [];
+  }, [itemsTree]);
+
+  const {
+    page,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    nextPage,
+    prevPage,
+    paginatedItems,
+  } = usePagination({
+    items: normalizedItems,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const hasItems = normalizedItems.length > 0;
+
   return (
     <Card
       sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
         boxShadow: "none",
         backgroundColor: "background.paper",
+        overflow: "hidden",
       }}
     >
-      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+      <CardContent
+        sx={{
+          p: { xs: 2, sm: 3 },
+          flex: 1,
+        }}
+      >
         <Stack spacing={2}>
           <Box>
             <Typography
@@ -77,16 +109,35 @@ export default function CashierOrderItemsCard({
             </Stack>
           ) : null}
 
-          {Array.isArray(itemsTree) && itemsTree.length > 0 ? (
-            <Stack spacing={1.5}>
-              {itemsTree.map((item, index) => (
-                <Box key={item?.id || index}>
-                  <OrderItemBlock item={item} />
+          {hasItems ? (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                backgroundColor: "#FCFCFC",
+                overflow: "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  maxHeight: { xs: 520, md: 620 },
+                  overflowY: "auto",
+                  px: { xs: 1.5, sm: 2 },
+                  py: 1,
+                }}
+              >
+                <Stack spacing={1.5}>
+                  {paginatedItems.map((item, index) => (
+                    <Box key={item?.id || index}>
+                      <OrderItemBlock item={item} />
 
-                  {index < itemsTree.length - 1 ? <Divider /> : null}
-                </Box>
-              ))}
-            </Stack>
+                      {index < paginatedItems.length - 1 ? <Divider /> : null}
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            </Box>
           ) : (
             <Box
               sx={{
@@ -122,6 +173,21 @@ export default function CashierOrderItemsCard({
           )}
         </Stack>
       </CardContent>
+
+      {hasItems ? (
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={total}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={prevPage}
+          onNext={nextPage}
+          itemLabel="productos"
+        />
+      ) : null}
     </Card>
   );
 }
@@ -192,12 +258,7 @@ function OrderItemBlock({ item, level = 0 }) {
           </Box>
 
           <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
-            <Typography
-              sx={{
-                fontSize: 13,
-                color: "text.secondary",
-              }}
-            >
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
               Unitario {formatCurrency(unitPrice)}
             </Typography>
 
@@ -230,8 +291,7 @@ function OrderItemBlock({ item, level = 0 }) {
               const modPrice = Number(
                 mod?.total_price ?? mod?.price ?? mod?.unit_price ?? 0
               );
-              const modName =
-                mod?.name_snapshot || mod?.name || "Modificador";
+              const modName = mod?.name_snapshot || mod?.name || "Modificador";
 
               return (
                 <Box
@@ -354,18 +414,14 @@ function resolveItemTypeLabel(item, level) {
 function formatNotes(notes) {
   if (!notes) return "";
 
-  if (typeof notes === "string") {
-    return notes.trim();
-  }
+  if (typeof notes === "string") return notes.trim();
 
   if (Array.isArray(notes)) {
     return notes
       .map((entry) => {
         if (typeof entry === "string") return entry.trim();
         if (entry && typeof entry === "object") {
-          return Object.values(entry)
-            .filter(Boolean)
-            .join(" ");
+          return Object.values(entry).filter(Boolean).join(" ");
         }
         return "";
       })

@@ -1,7 +1,16 @@
-//Tarjetita de cancelaciones
-import React, { useMemo } from "react";
+// src/components/staff/casher/saleDetailPage/CashierAdjustmentCard.jsx
+import React, { useMemo, useState } from "react";
 import {
-  Box, Button, Card, CardContent, Chip, Divider, IconButton, MenuItem, Stack, TextField, Typography,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  IconButton,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import PlaylistRemoveRoundedIcon from "@mui/icons-material/PlaylistRemoveRounded";
@@ -26,6 +35,8 @@ export default function CashierAdjustmentCard({
   busy = false,
   disabled = false,
 }) {
+  const [activeMode, setActiveMode] = useState("partial");
+
   const normalizedItems = useMemo(() => {
     const rows = Array.isArray(itemsFlat) ? itemsFlat : [];
     return rows
@@ -50,7 +61,6 @@ export default function CashierAdjustmentCard({
 
   const cancelledQtyMap = useMemo(() => {
     const map = new Map();
-
     const adjustments = Array.isArray(summary?.adjustments)
       ? summary.adjustments
       : [];
@@ -122,13 +132,7 @@ export default function CashierAdjustmentCard({
       <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
           <Box>
-            <Typography
-              sx={{
-                fontSize: 22,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
+            <Typography sx={{ fontSize: 22, fontWeight: 800, color: "text.primary" }}>
               Ajustes y cancelaciones
             </Typography>
 
@@ -168,316 +172,334 @@ export default function CashierAdjustmentCard({
               borderColor: "divider",
               borderRadius: 1,
               backgroundColor: "#FCFCFC",
-              p: 2,
+              p: 1.25,
             }}
           >
-            <Stack spacing={1.75}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <PlaylistRemoveRoundedIcon color="primary" />
-                <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                  Cancelación parcial por ítems
-                </Typography>
-              </Stack>
-
-              <FieldBlock
-                label="Motivo *"
-                input={
-                  <TextField
-                    fullWidth
-                    value={partialForm?.reason || ""}
-                    onChange={(e) =>
-                      onPartialFormChange?.("reason", e.target.value)
-                    }
-                    placeholder="Ej. Cliente ya no quiere una bebida"
-                    disabled={busy || disabled}
-                  />
-                }
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 1.25,
+              }}
+            >
+              <ModeButton
+                active={activeMode === "partial"}
+                icon={<PlaylistRemoveRoundedIcon />}
+                title="Cancelación parcial"
+                subtitle="Cancelar productos"
+                onClick={() => setActiveMode("partial")}
               />
 
-              {partialDrafts.length > 0 ? (
-                <Stack spacing={1.25}>
-                  {partialDrafts.map((draft, index) => {
-                    const selectedItem = selectableItems.find(
-                      (item) =>
-                        Number(item.orderItemId) === Number(draft?.orderItemId || 0)
-                    );
+              <ModeButton
+                active={activeMode === "total"}
+                icon={<RemoveShoppingCartRoundedIcon />}
+                title="Cancelación total"
+                subtitle="Cancelar la orden"
+                onClick={() => setActiveMode("total")}
+                danger
+              />
+            </Box>
+          </Box>
 
-                    return (
-                      <Box
-                        key={draft.localId}
-                        sx={{
-                          border: "1px solid",
-                          borderColor: "divider",
-                          borderRadius: 1,
-                          backgroundColor: "#fff",
-                          p: 1.5,
-                        }}
-                      >
-                        <Stack spacing={1.25}>
-                          <Stack
-                            direction={{ xs: "column", sm: "row" }}
-                            justifyContent="space-between"
-                            alignItems={{ xs: "stretch", sm: "center" }}
-                            spacing={1}
-                          >
-                            <Typography
-                              sx={{
-                                fontSize: 15,
-                                fontWeight: 800,
-                                color: "text.primary",
-                              }}
-                            >
-                              Ítem a cancelar {index + 1}
-                            </Typography>
+          {activeMode === "partial" ? (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                backgroundColor: "#FCFCFC",
+                p: 2,
+              }}
+            >
+              <Stack spacing={1.75}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <PlaylistRemoveRoundedIcon color="warning" />
+                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                    Cancelación parcial por ítems
+                  </Typography>
+                </Stack>
 
-                            <IconButton
-                              onClick={() => onRemovePartialDraft?.(draft.localId)}
-                              disabled={busy || disabled}
-                              sx={{
-                                width: 40,
-                                height: 40,
-                                bgcolor: "error.main",
-                                color: "#fff",
-                                borderRadius: 1.5,
-                                "&:hover": {
-                                  bgcolor: "error.dark",
-                                },
-                                "&.Mui-disabled": {
-                                  bgcolor: "action.disabledBackground",
-                                  color: "action.disabled",
-                                },
-                              }}
-                            >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
+                <FieldBlock
+                  label="Motivo *"
+                  input={
+                    <TextField
+                      fullWidth
+                      value={partialForm?.reason || ""}
+                      onChange={(e) => onPartialFormChange?.("reason", e.target.value)}
+                      placeholder="Ej. Cliente ya no quiere una bebida"
+                      disabled={busy || disabled}
+                    />
+                  }
+                />
 
-                          <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                            <FieldBlock
-                              label="Ítem *"
-                              input={
-                                <TextField
-                                  select
-                                  fullWidth
-                                  value={draft.orderItemId || ""}
-                                  onChange={(e) =>
-                                    onPartialDraftChange?.(
-                                      draft.localId,
-                                      "orderItemId",
-                                      e.target.value
-                                    )
-                                  }
-                                  disabled={busy || disabled}
-                                >
-                                  <MenuItem value="">Selecciona un ítem</MenuItem>
+                {partialDrafts.length > 0 ? (
+                  <Stack spacing={1.25}>
+                    {partialDrafts.map((draft, index) => {
+                      const selectedItem = selectableItems.find(
+                        (item) =>
+                          Number(item.orderItemId) === Number(draft?.orderItemId || 0)
+                      );
 
-                                  {selectableItems.map((item) => {
-                                    const usedByOtherDraft =
-                                      selectedDraftItemIds.includes(
-                                        Number(item.orderItemId)
-                                      ) &&
-                                      Number(draft.orderItemId || 0) !==
-                                        Number(item.orderItemId);
-
-                                    return (
-                                      <MenuItem
-                                        key={item.orderItemId}
-                                        value={String(item.orderItemId)}
-                                        disabled={usedByOtherDraft}
-                                      >
-                                        {item.quantity} × {item.name}
-                                      </MenuItem>
-                                    );
-                                  })}
-                                </TextField>
-                              }
-                            />
-
-                            <FieldBlock
-                              label="Cantidad *"
-                              input={
-                                <TextField
-                                  select
-                                  fullWidth
-                                  value={draft.quantity || ""}
-                                  onChange={(e) =>
-                                    onPartialDraftChange?.(
-                                      draft.localId,
-                                      "quantity",
-                                      e.target.value
-                                    )
-                                  }
-                                  disabled={busy || disabled || !selectedItem}
-                                >
-                                  <MenuItem value="">Selecciona</MenuItem>
-                                  {Array.from(
-                                    { length: Number(selectedItem?.availableQty || 0) },
-                                    (_, idx) => idx + 1
-                                  ).map((qty) => (
-                                    <MenuItem key={qty} value={String(qty)}>
-                                      {qty}
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
-                              }
-                            />
-                          </Stack>
-
-                          {selectedItem ? (
-                            <Box
-                              sx={{
-                                borderRadius: 1,
-                                px: 1.25,
-                                py: 1,
-                                bgcolor: "rgba(255, 152, 0, 0.06)",
-                              }}
+                      return (
+                        <Box
+                          key={draft.localId}
+                          sx={{
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                            backgroundColor: "#fff",
+                            p: 1.5,
+                          }}
+                        >
+                          <Stack spacing={1.25}>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              justifyContent="space-between"
+                              alignItems={{ xs: "stretch", sm: "center" }}
+                              spacing={1}
                             >
                               <Typography
                                 sx={{
-                                  fontSize: 13,
-                                  fontWeight: 700,
+                                  fontSize: 15,
+                                  fontWeight: 800,
                                   color: "text.primary",
                                 }}
                               >
-                                Disponible para cancelar: {selectedItem.availableQty} ·
-                                Precio unitario: {formatCurrency(selectedItem.unitPrice)}
+                                Ítem a cancelar {index + 1}
                               </Typography>
-                            </Box>
-                          ) : null}
-                        </Stack>
-                      </Box>
-                    );
-                  })}
-                </Stack>
-              ) : (
-                <HelperBox>
-                  Agrega uno o más ítems a cancelar. Si el ajuste dejara la orden
-                  en cero, el sistema te pedirá usar cancelación total.
-                </HelperBox>
-              )}
 
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1.25}
-                justifyContent="space-between"
-              >
-                <Button
-                  variant="outlined"
-                  onClick={onAddPartialDraft}
-                  disabled={busy || disabled || selectableItems.length === 0}
-                  startIcon={<AddRoundedIcon />}
-                  sx={{
-                    minWidth: { xs: "100%", sm: 220 },
-                    height: 42,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
+                              <IconButton
+                                onClick={() => onRemovePartialDraft?.(draft.localId)}
+                                disabled={busy || disabled}
+                                sx={iconDeleteSx}
+                              >
+                                <DeleteOutlineRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
+
+                            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                              <FieldBlock
+                                label="Ítem *"
+                                input={
+                                  <TextField
+                                    select
+                                    fullWidth
+                                    value={draft.orderItemId || ""}
+                                    onChange={(e) =>
+                                      onPartialDraftChange?.(
+                                        draft.localId,
+                                        "orderItemId",
+                                        e.target.value
+                                      )
+                                    }
+                                    disabled={busy || disabled}
+                                  >
+                                    <MenuItem value="">Selecciona un ítem</MenuItem>
+
+                                    {selectableItems.map((item) => {
+                                      const usedByOtherDraft =
+                                        selectedDraftItemIds.includes(
+                                          Number(item.orderItemId)
+                                        ) &&
+                                        Number(draft.orderItemId || 0) !==
+                                          Number(item.orderItemId);
+
+                                      return (
+                                        <MenuItem
+                                          key={item.orderItemId}
+                                          value={String(item.orderItemId)}
+                                          disabled={usedByOtherDraft}
+                                        >
+                                          {item.quantity} × {item.name}
+                                        </MenuItem>
+                                      );
+                                    })}
+                                  </TextField>
+                                }
+                              />
+
+                              <FieldBlock
+                                label="Cantidad *"
+                                input={
+                                  <TextField
+                                    select
+                                    fullWidth
+                                    value={draft.quantity || ""}
+                                    onChange={(e) =>
+                                      onPartialDraftChange?.(
+                                        draft.localId,
+                                        "quantity",
+                                        e.target.value
+                                      )
+                                    }
+                                    disabled={busy || disabled || !selectedItem}
+                                  >
+                                    <MenuItem value="">Selecciona</MenuItem>
+                                    {Array.from(
+                                      { length: Number(selectedItem?.availableQty || 0) },
+                                      (_, idx) => idx + 1
+                                    ).map((qty) => (
+                                      <MenuItem key={qty} value={String(qty)}>
+                                        {qty}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                }
+                              />
+                            </Stack>
+
+                            {selectedItem ? (
+                              <Box
+                                sx={{
+                                  borderRadius: 1,
+                                  px: 1.25,
+                                  py: 1,
+                                  bgcolor: "rgba(255, 152, 0, 0.06)",
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    color: "text.primary",
+                                  }}
+                                >
+                                  Disponible para cancelar: {selectedItem.availableQty} ·
+                                  Precio unitario: {formatCurrency(selectedItem.unitPrice)}
+                                </Typography>
+                              </Box>
+                            ) : null}
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                ) : (
+                  <HelperBox>
+                    Agrega uno o más ítems a cancelar. Si el ajuste dejara la orden
+                    en cero, el sistema te pedirá usar cancelación total.
+                  </HelperBox>
+                )}
+
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.25}
+                  justifyContent="space-between"
                 >
-                  Agregar ítem a cancelar
-                </Button>
-
-                <Button
-                  variant="contained"
-                  color="warning"
-                  onClick={onSubmitPartial}
-                  disabled={busy || disabled || partialDrafts.length === 0}
-                  startIcon={<PlaylistRemoveRoundedIcon />}
-                  sx={{
-                    minWidth: { xs: "100%", sm: 240 },
-                    height: 42,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
-                >
-                  Aplicar cancelación parcial
-                </Button>
-              </Stack>
-
-              {selectableItems.length === 0 ? (
-                <HelperBox>
-                  No se encontraron ítems principales disponibles para cancelar.
-                </HelperBox>
-              ) : null}
-            </Stack>
-          </Box>
-
-          <Divider />
-
-          <Box
-            sx={{
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 1,
-              backgroundColor: "#FCFCFC",
-              p: 2,
-            }}
-          >
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <RemoveShoppingCartRoundedIcon color="error" />
-                <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                  Cancelación total de la orden
-                </Typography>
-              </Stack>
-
-              <FieldBlock
-                label="Motivo *"
-                input={
-                  <TextField
-                    fullWidth
-                    value={cancelOrderReason || ""}
-                    onChange={(e) => onCancelOrderReasonChange?.(e.target.value)}
-                    placeholder="Ej. Cliente decidió no consumir"
-                    disabled={busy || disabled}
-                  />
-                }
-              />
-
-              <Box
-                sx={{
-                  border: "1px dashed",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  p: 1.5,
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <WarningAmberRoundedIcon
-                    sx={{ mt: 0.15, color: "warning.main", fontSize: 18 }}
-                  />
-                  <Typography
+                  <Button
+                    variant="outlined"
+                    onClick={onAddPartialDraft}
+                    disabled={busy || disabled || selectableItems.length === 0}
+                    startIcon={<AddRoundedIcon />}
                     sx={{
-                      fontSize: 13,
-                      color: "text.secondary",
-                      lineHeight: 1.55,
+                      minWidth: { xs: "100%", sm: 220 },
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
                     }}
                   >
-                    La cancelación total dejará la orden y la venta en estado
-                    cancelado, liberará la mesa y cerrará la sesión QR si existe.
+                    Agregar ítem a cancelar
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={onSubmitPartial}
+                    disabled={busy || disabled || partialDrafts.length === 0}
+                    startIcon={<PlaylistRemoveRoundedIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 240 },
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Aplicar cancelación parcial
+                  </Button>
+                </Stack>
+
+                {selectableItems.length === 0 ? (
+                  <HelperBox>
+                    No se encontraron ítems principales disponibles para cancelar.
+                  </HelperBox>
+                ) : null}
+              </Stack>
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                backgroundColor: "#FCFCFC",
+                p: 2,
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <RemoveShoppingCartRoundedIcon color="error" />
+                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                    Cancelación total de la orden
                   </Typography>
                 </Stack>
-              </Box>
 
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={onSubmitCancelOrder}
-                disabled={busy || disabled}
-                startIcon={<RemoveShoppingCartRoundedIcon />}
-                sx={{
-                  alignSelf: "flex-end",
-                  minWidth: { xs: "100%", sm: 260 },
-                  height: 42,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                Cancelar orden completa
-              </Button>
-            </Stack>
-          </Box>
+                <FieldBlock
+                  label="Motivo *"
+                  input={
+                    <TextField
+                      fullWidth
+                      value={cancelOrderReason || ""}
+                      onChange={(e) => onCancelOrderReasonChange?.(e.target.value)}
+                      placeholder="Ej. Cliente decidió no consumir"
+                      disabled={busy || disabled}
+                    />
+                  }
+                />
 
-          <Divider />
+                <Box
+                  sx={{
+                    border: "1px dashed",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    p: 1.5,
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <WarningAmberRoundedIcon
+                      sx={{ mt: 0.15, color: "warning.main", fontSize: 18 }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "text.secondary",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      La cancelación total dejará la orden y la venta en estado
+                      cancelado, liberará la mesa y cerrará la sesión QR si existe.
+                    </Typography>
+                  </Stack>
+                </Box>
+
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={onSubmitCancelOrder}
+                  disabled={busy || disabled}
+                  startIcon={<RemoveShoppingCartRoundedIcon />}
+                  sx={{
+                    alignSelf: "flex-end",
+                    minWidth: { xs: "100%", sm: 260 },
+                    height: 42,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  Cancelar orden completa
+                </Button>
+              </Stack>
+            </Box>
+          )}
 
           <Box>
             <Typography
@@ -557,10 +579,9 @@ export default function CashierAdjustmentCard({
                         {adjustmentItems.length > 0 ? (
                           <Stack spacing={0.5}>
                             {adjustmentItems.map((row) => {
-                              const itemName =
-                                row?.order_item?.id
-                                  ? resolveAdjustmentItemName(row)
-                                  : `Ítem #${row?.order_item_id || "—"}`;
+                              const itemName = row?.order_item?.id
+                                ? resolveAdjustmentItemName(row)
+                                : `Ítem #${row?.order_item_id || "—"}`;
 
                               return (
                                 <Typography
@@ -590,6 +611,75 @@ export default function CashierAdjustmentCard({
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+function ModeButton({ active, icon, title, subtitle, onClick, danger = false }) {
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      variant="outlined"
+      sx={{
+        justifyContent: "flex-start",
+        minHeight: 72,
+        px: 2,
+        py: 1.25,
+        borderRadius: 2,
+        textTransform: "none",
+        borderColor: active ? (danger ? "error.main" : "#FF9800") : "divider",
+        bgcolor: active ? (danger ? "error.main" : "#FF9800") : "#fff",
+        color: active ? "#fff" : "text.primary",
+        "&:hover": {
+          borderColor: danger ? "error.dark" : "#F57C00",
+          bgcolor: active
+            ? danger
+              ? "error.dark"
+              : "#F57C00"
+            : "rgba(255, 152, 0, 0.06)",
+        },
+      }}
+    >
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+        <Box
+          sx={{
+            display: "grid",
+            placeItems: "center",
+            color: active ? "#fff" : danger ? "error.main" : "#FF9800",
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </Box>
+
+        <Box sx={{ minWidth: 0, textAlign: "left" }}>
+          <Typography
+            sx={{
+              fontSize: 15,
+              fontWeight: 900,
+              lineHeight: 1.15,
+              color: "inherit",
+              wordBreak: "break-word",
+            }}
+          >
+            {title}
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.25,
+              fontSize: 13,
+              fontWeight: 800,
+              lineHeight: 1.2,
+              color: active ? "rgba(255,255,255,0.92)" : "text.secondary",
+              wordBreak: "break-word",
+            }}
+          >
+            {subtitle}
+          </Typography>
+        </Box>
+      </Stack>
+    </Button>
   );
 }
 
@@ -693,4 +783,19 @@ const fieldLabelSx = {
   fontWeight: 800,
   color: "text.primary",
   mb: 1,
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
+  },
 };

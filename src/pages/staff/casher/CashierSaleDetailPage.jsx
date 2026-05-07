@@ -7,6 +7,9 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import LocalOfferRoundedIcon from "@mui/icons-material/LocalOfferRounded";
 
 import PageContainer from "../../../components/common/PageContainer";
 import AppAlert from "../../../components/common/AppAlert";
@@ -65,6 +68,8 @@ import CashierTaxSelectorCard from "../../../components/staff/casher/saleDetailP
 import CashierDiscountCard from "../../../components/staff/casher/saleDetailPage/CashierDiscountCard";
 import CashierAdjustmentCard from "../../../components/staff/casher/saleDetailPage/CashierAdjustmentCard";
 import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage/CashierCustomerCard";
+import CashierSaleOptionalActionsBar from "../../../components/staff/casher/saleDetailPage/CashierSaleOptionalActionsBar";
+import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
 import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
 
 export default function CashierSaleDetailPage() {
@@ -73,6 +78,7 @@ export default function CashierSaleDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [taking, setTaking] = useState(false);
+  const [activeTool, setActiveTool] = useState(null);
 
   const [detailData, setDetailData] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -266,23 +272,42 @@ export default function CashierSaleDetailPage() {
   }, [discountSummary]);
 
   const buildDefaultTaxCode = (loadedSale, loadedTaxOptions) => {
+    const options = Array.isArray(loadedTaxOptions) ? loadedTaxOptions : [];
+
     const saleTaxKind = String(loadedSale?.tax_kind || "");
     const saleTaxRate = Number(loadedSale?.tax_rate ?? 0);
 
-    const matched = (Array.isArray(loadedTaxOptions) ? loadedTaxOptions : []).find(
-      (row) => {
-        const rowKind = String(row?.tax_kind || "");
-        const rowRate = Number(row?.rate ?? 0);
+    const defaultIva16 = options.find((row) => {
+      const code = String(row?.code || "").toLowerCase();
+      const name = String(row?.name || row?.label || "").toLowerCase();
+      const kind = String(row?.tax_kind || "").toLowerCase();
+      const rate = Number(row?.rate ?? 0);
 
-        if (saleTaxKind === "exempt") {
-          return rowKind === "exempt";
-        }
+      return (
+        code.includes("iva") && code.includes("16")
+      ) || (
+        name.includes("iva") && name.includes("16")
+      ) || (
+        kind === "iva" && (Math.abs(rate - 0.16) < 0.001 || Math.abs(rate - 16) < 0.001)
+      );
+    });
 
-        return rowKind === saleTaxKind && Math.abs(rowRate - saleTaxRate) < 0.001;
+    if (!saleTaxKind) {
+      return defaultIva16?.code || options?.[0]?.code || "";
+    }
+
+    const matched = options.find((row) => {
+      const rowKind = String(row?.tax_kind || "");
+      const rowRate = Number(row?.rate ?? 0);
+
+      if (saleTaxKind === "exempt") {
+        return rowKind === "exempt";
       }
-    );
 
-    return matched?.code || "";
+      return rowKind === saleTaxKind && Math.abs(rowRate - saleTaxRate) < 0.001;
+    });
+
+    return matched?.code || defaultIva16?.code || options?.[0]?.code || "";
   };
 
   const syncSaleFromDiscountSummary = (summaryData) => {
@@ -1573,86 +1598,40 @@ export default function CashierSaleDetailPage() {
           onBack={() => nav("/staff/cashier/queue")}
         />
 
+        <CashierSaleOptionalActionsBar
+          adjustmentSummary={adjustmentSummary}
+          customerSummary={customerSummary}
+          discountSummary={discountSummary}
+          disabled={previewing || paying || postPaymentOpen}
+          onOpenAdjustments={() => setActiveTool("adjustments")}
+          onOpenCustomer={() => setActiveTool("customer")}
+          onOpenDiscounts={() => setActiveTool("discounts")}
+        />
+
         <Box
           sx={{
             display: "grid",
             gap: 3,
             gridTemplateColumns: {
               xs: "1fr",
-              xl: "1.2fr 0.9fr",
+              xl: "1.15fr 0.85fr",
             },
-            alignItems: "start",
+            alignItems: "stretch",
           }}
         >
-          <Stack spacing={3}>
+          <Box sx={{ height: "100%" }}>
             <CashierOrderItemsCard
               itemsTree={itemsTree}
               itemsSummary={itemsSummary}
             />
+          </Box>
 
-            <CashierAdjustmentCard
-              sale={sale}
-              itemsFlat={itemsFlat}
-              summary={adjustmentSummary}
-              partialForm={partialCancelForm}
-              onPartialFormChange={handlePartialFormChange}
-              partialDrafts={partialCancelDrafts}
-              onAddPartialDraft={handleAddPartialDraft}
-              onRemovePartialDraft={handleRemovePartialDraft}
-              onPartialDraftChange={handlePartialDraftChange}
-              onSubmitPartial={handleSubmitPartialCancel}
-              cancelOrderReason={cancelOrderReason}
-              onCancelOrderReasonChange={setCancelOrderReason}
-              onSubmitCancelOrder={handleSubmitCancelOrder}
-              busy={adjustmentBusy}
-              disabled={!canOperate || previewing || paying || postPaymentOpen}
-            />
-
-            <CashierDiscountCard
-              sale={sale}
-              itemsFlat={itemsFlat}
-              summary={discountSummary}
-              globalForm={globalDiscountForm}
-              onGlobalFormChange={handleGlobalFormChange}
-              itemDiscountDrafts={itemDiscountDrafts}
-              onAddItemDiscountDraft={handleAddItemDiscountDraft}
-              onRemoveItemDiscountDraft={handleRemoveItemDiscountDraft}
-              onItemDiscountDraftChange={handleItemDiscountDraftChange}
-              onApplyGlobal={handleApplyGlobalDiscount}
-              onRemoveGlobal={handleRemoveGlobalDiscount}
-              onApplyItemDraft={handleApplyItemDraft}
-              onRemoveItem={handleRemoveItemDiscount}
-              busy={discountBusy}
-              disabled={!canOperate || previewing || paying || postPaymentOpen}
-            />
-          </Stack>
-
-          <Stack spacing={3}>
+          <Stack spacing={3} sx={{ height: "100%" }}>
             <CashierSaleSummaryCard
               sale={sale}
               liveTip={Number(tip || 0)}
               preview={preview}
               selectedTaxOption={selectedTaxOption}
-            />
-
-            <CashierCustomerCard
-              summary={customerSummary}
-              contactForm={contactForm}
-              onContactFormChange={handleContactFormChange}
-              onSaveContact={handleSaveContact}
-              onRemoveContact={handleRemoveContact}
-              searchForm={searchCustomerForm}
-              onSearchFormChange={handleSearchCustomerFormChange}
-              onSearch={handleSearchCustomers}
-              searchResults={customerSearchResults}
-              onAttachCustomer={handleAttachCustomer}
-              createForm={createCustomerForm}
-              onCreateFormChange={handleCreateCustomerFormChange}
-              onCreateAndAttach={handleCreateAndAttachCustomer}
-              onDetachCustomer={handleDetachCustomer}
-              searching={searchingCustomers}
-              busy={customerBusy}
-              disabled={!canManageCustomer || previewing || paying || postPaymentOpen}
             />
 
             <CashierTaxSelectorCard
@@ -1664,6 +1643,8 @@ export default function CashierSaleDetailPage() {
               }}
               disabled={!canOperate || previewing || paying || postPaymentOpen}
             />
+            </Stack>
+        </Box>
 
             <CashierPaymentFormCard
               methods={paymentMethods}
@@ -1680,9 +1661,91 @@ export default function CashierSaleDetailPage() {
               onPay={handlePay}
               disabled={!canOperate || postPaymentOpen}
             />
-          </Stack>
-        </Box>
+
       </Stack>
+
+      <CashierSaleToolDialog
+        open={activeTool === "adjustments"}
+        onClose={() => setActiveTool(null)}
+        title="Ajustes y cancelaciones"
+        subtitle="Cancela ítems o la orden completa únicamente cuando sea necesario antes del cobro."
+        icon={<TuneRoundedIcon />}
+        maxWidth="lg"
+      >
+        <CashierAdjustmentCard
+          sale={sale}
+          itemsFlat={itemsFlat}
+          summary={adjustmentSummary}
+          partialForm={partialCancelForm}
+          onPartialFormChange={handlePartialFormChange}
+          partialDrafts={partialCancelDrafts}
+          onAddPartialDraft={handleAddPartialDraft}
+          onRemovePartialDraft={handleRemovePartialDraft}
+          onPartialDraftChange={handlePartialDraftChange}
+          onSubmitPartial={handleSubmitPartialCancel}
+          cancelOrderReason={cancelOrderReason}
+          onCancelOrderReasonChange={setCancelOrderReason}
+          onSubmitCancelOrder={handleSubmitCancelOrder}
+          busy={adjustmentBusy}
+          disabled={!canOperate || previewing || paying || postPaymentOpen}
+        />
+      </CashierSaleToolDialog>
+
+      <CashierSaleToolDialog
+        open={activeTool === "customer"}
+        onClose={() => setActiveTool(null)}
+        title="Cliente"
+        subtitle="Guarda contacto simple o asocia un cliente formal a esta venta."
+        icon={<PersonRoundedIcon />}
+        maxWidth="lg"
+      >
+        <CashierCustomerCard
+          summary={customerSummary}
+          contactForm={contactForm}
+          onContactFormChange={handleContactFormChange}
+          onSaveContact={handleSaveContact}
+          onRemoveContact={handleRemoveContact}
+          searchForm={searchCustomerForm}
+          onSearchFormChange={handleSearchCustomerFormChange}
+          onSearch={handleSearchCustomers}
+          searchResults={customerSearchResults}
+          onAttachCustomer={handleAttachCustomer}
+          createForm={createCustomerForm}
+          onCreateFormChange={handleCreateCustomerFormChange}
+          onCreateAndAttach={handleCreateAndAttachCustomer}
+          onDetachCustomer={handleDetachCustomer}
+          searching={searchingCustomers}
+          busy={customerBusy}
+          disabled={!canManageCustomer || previewing || paying || postPaymentOpen}
+        />
+      </CashierSaleToolDialog>
+
+      <CashierSaleToolDialog
+        open={activeTool === "discounts"}
+        onClose={() => setActiveTool(null)}
+        title="Descuentos"
+        subtitle="Aplica descuentos globales o por ítem antes de validar la vista previa del cobro."
+        icon={<LocalOfferRoundedIcon />}
+        maxWidth="lg"
+      >
+        <CashierDiscountCard
+          sale={sale}
+          itemsFlat={itemsFlat}
+          summary={discountSummary}
+          globalForm={globalDiscountForm}
+          onGlobalFormChange={handleGlobalFormChange}
+          itemDiscountDrafts={itemDiscountDrafts}
+          onAddItemDiscountDraft={handleAddItemDiscountDraft}
+          onRemoveItemDiscountDraft={handleRemoveItemDiscountDraft}
+          onItemDiscountDraftChange={handleItemDiscountDraftChange}
+          onApplyGlobal={handleApplyGlobalDiscount}
+          onRemoveGlobal={handleRemoveGlobalDiscount}
+          onApplyItemDraft={handleApplyItemDraft}
+          onRemoveItem={handleRemoveItemDiscount}
+          busy={discountBusy}
+          disabled={!canOperate || previewing || paying || postPaymentOpen}
+        />
+      </CashierSaleToolDialog>
 
       <CashierPostPaymentTicketModal
         open={postPaymentOpen}
