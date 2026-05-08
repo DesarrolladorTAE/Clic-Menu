@@ -1,14 +1,13 @@
+// src/components/staff/casher/refunds/CashierRefundsHeroCard.jsx
 import React from "react";
 import {
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
   Stack,
   Typography,
 } from "@mui/material";
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
@@ -17,7 +16,6 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 export default function CashierRefundsHeroCard({
   syncing = false,
   rows = [],
-  onBack,
 }) {
   const paidCount = rows.filter((row) => String(row?.status) === "paid").length;
   const partialCount = rows.filter(
@@ -71,38 +69,15 @@ export default function CashierRefundsHeroCard({
               </Typography>
             </Box>
 
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.5}
-              alignItems="center"
-              sx={{ width: { xs: "100%", sm: "auto" } }}
-            >
-              <Chip
-                icon={<HistoryRoundedIcon />}
-                label={syncing ? "Sincronizando…" : "Vista histórica"}
-                sx={{
-                  fontWeight: 800,
-                  bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
-                  color: syncing ? "#8A6D3B" : "#0A7A2F",
-                }}
-              />
-
-              <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<ArrowBackRoundedIcon />}
-                onClick={onBack}
-                sx={{
-                  fontWeight: 800,
-                  borderRadius: 2,
-                  height: 40,
-                  px: 3,
-                  width: { xs: "100%", sm: "auto" },
-                }}
-              >
-                Volver al tablero
-              </Button>
-            </Stack>
+            <Chip
+              icon={<HistoryRoundedIcon />}
+              label={syncing ? "Sincronizando…" : "Vista histórica"}
+              sx={{
+                fontWeight: 800,
+                bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
+                color: syncing ? "#8A6D3B" : "#0A7A2F",
+              }}
+            />
           </Stack>
 
           <Box

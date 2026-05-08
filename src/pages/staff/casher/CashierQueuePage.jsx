@@ -1,3 +1,4 @@
+// src/pages/staff/casher/CashierQueuePage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -421,32 +422,6 @@ export default function CashierQueuePage() {
     nav(`/staff/cashier/sales/${saleId}`);
   };
 
-  const handleBackWithCheck = () => {
-    if (mySales.length > 0) {
-      showAlert({
-        severity: "warning",
-        title: "Ventas tomadas",
-        message:
-          "Aún tienes ventas tomadas en tu tablero. Debes cobrarlas o liberarlas antes de salir.",
-      });
-      return;
-    }
-
-    nav("/staff/cashier");
-  };
-
-  const handleGoHistory = () => {
-    nav("/staff/cashier/refunds");
-  };
-
-  const handleGoCustomers = () => {
-    nav("/staff/cashier/customers");
-  };
-
-  const handleNewDirectOrder = () => {
-    nav("/staff/cashier/direct-order");
-  };
-
   if (loading) {
     return (
       <PageContainer>
@@ -477,10 +452,6 @@ export default function CashierQueuePage() {
           myCount={mySales.length}
           myTotal={myTotal}
           syncing={refreshing}
-          onBack={handleBackWithCheck}
-          onGoHistory={handleGoHistory}
-          onGoCustomers={handleGoCustomers}
-          onNewDirectOrder={handleNewDirectOrder}
         />
 
         <CashierQueueTabs

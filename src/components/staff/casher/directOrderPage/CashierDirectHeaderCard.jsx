@@ -1,3 +1,4 @@
+// src/components/staff/casher/directOrderPage/CashierDirectHeaderCard.jsx
 import React from "react";
 import {
   Box,
@@ -9,7 +10,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 import KitchenRoundedIcon from "@mui/icons-material/KitchenRounded";
@@ -27,7 +27,6 @@ export default function CashierDirectHeaderCard({
   q = "",
   onSearchChange,
   totalVisible = 0,
-  onBack,
   onOpenCart,
   onRefresh,
   syncing = false,
@@ -95,9 +94,7 @@ export default function CashierDirectHeaderCard({
                 <Chip
                   label={syncing ? "Sincronizando…" : "Menú activo"}
                   size="small"
-                  sx={{
-                    fontWeight: 800,
-                  }}
+                  sx={{ fontWeight: 800 }}
                 />
               </Stack>
 
@@ -144,21 +141,6 @@ export default function CashierDirectHeaderCard({
                 }}
               >
                 {syncing ? "Cargando…" : "Recargar"}
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="inherit"
-                onClick={onBack}
-                startIcon={<ArrowBackRoundedIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 150 },
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                Volver
               </Button>
 
               <Button

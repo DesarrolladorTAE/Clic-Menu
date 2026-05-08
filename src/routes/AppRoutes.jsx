@@ -27,7 +27,9 @@ import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
 import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
 
 
-//Cajeros
+
+//Menu:Cajero
+import CashierLayout from "../layouts/CashierLayout";
 import CashierHomePage from "../pages/staff/casher/CashierHomePage";
 import CashierQueuePage from "../pages/staff/casher/CashierQueuePage";
 import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
@@ -56,6 +58,7 @@ import ProductModifierCatalogPage from "../pages/menu/modifiers/catalogs/Product
 import VariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/VariantModifierCatalogPage";
 import CompositeComponentModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentModifierCatalogPage";
 import CompositeComponentVariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentVariantModifierCatalogPage";
+
 
 
 //Sucursales
@@ -138,16 +141,18 @@ export default function AppRoutes() {
         {/* Cocina */}
         <Route path="/staff/kitchen" element={<KitchenDashboard />} />
         
-
         {/* Cajero */}
         <Route path="/staff/cashier" element={<CashierHomePage />} />
-        <Route path="/staff/cashier/queue" element={<CashierQueuePage />} />
-        <Route path="/staff/cashier/direct-order" element={<CashierDirectOrderPage />} />
+
+        <Route path="/staff/cashier" element={<CashierLayout />}>
+          <Route path="queue" element={<CashierQueuePage />} />
+          <Route path="direct-order" element={<CashierDirectOrderPage />} />
+          <Route path="refunds" element={<CashierRefundsHistoryPage />} />
+          <Route path="refunds/:saleId" element={<CashierRefundSaleDetailPage />} />
+          <Route path="customers" element={<CashierCustomersPage />} />
+        </Route>
         <Route path="/staff/cashier/sales/:saleId" element={<CashierSaleDetailPage />} />
-        <Route path="/staff/cashier/refunds" element={<CashierRefundsHistoryPage />} />
-        <Route path="/staff/cashier/refunds/:saleId" element={<CashierRefundSaleDetailPage />} />
-        <Route path="/staff/cashier/customers" element={<CashierCustomersPage />} />
-      
+              
       </Route>
 
       {/* OWNER PROTECTED */}

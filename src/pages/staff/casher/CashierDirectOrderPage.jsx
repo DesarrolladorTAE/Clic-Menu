@@ -606,7 +606,6 @@ export default function CashierDirectOrderPage() {
           q={q}
           onSearchChange={setQ}
           totalVisible={filteredProducts.length}
-          onBack={handleBack}
           onOpenCart={() => setCartDrawerOpen(true)}
           onRefresh={() => load({ silent: true })}
           syncing={syncing}

@@ -1,3 +1,4 @@
+// src/pages/staff/casher/refunds/CashierRefundsHistoryPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -76,11 +77,7 @@ export default function CashierRefundsHistoryPage() {
   const pickCode = (e) => e?.response?.data?.code;
 
   const normalizeRows = (res) => {
-    const raw =
-      res?.data?.rows ||
-      res?.data?.sales ||
-      res?.data ||
-      [];
+    const raw = res?.data?.rows || res?.data?.sales || res?.data || [];
 
     if (!Array.isArray(raw)) return [];
 
@@ -154,6 +151,7 @@ export default function CashierRefundsHistoryPage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredRows = useMemo(() => {
@@ -205,10 +203,6 @@ export default function CashierRefundsHistoryPage() {
     }));
   };
 
-  const handleBack = () => {
-    nav("/staff/cashier/queue");
-  };
-
   const handleOpenDetail = (sale) => {
     const saleId = sale?.sale_id;
     if (!saleId) return;
@@ -240,11 +234,7 @@ export default function CashierRefundsHistoryPage() {
   return (
     <PageContainer>
       <Stack spacing={3}>
-        <CashierRefundsHeroCard
-          syncing={refreshing}
-          rows={rows}
-          onBack={handleBack}
-        />
+        <CashierRefundsHeroCard syncing={refreshing} rows={rows} />
 
         <CashierRefundHistoryFiltersCard
           filters={filters}

@@ -1,5 +1,5 @@
+// src/pages/staff/casher/customer/CashierCustomersPage.jsx
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Box,
   CircularProgress,
@@ -24,8 +24,6 @@ import CashierCustomerLedgerCard from "../../../../components/staff/casher/custo
 import CashierCustomerSalesHistoryCard from "../../../../components/staff/casher/customer/CashierCustomerSalesHistoryCard";
 
 export default function CashierCustomersPage() {
-  const nav = useNavigate();
-
   const [searching, setSearching] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
@@ -187,7 +185,6 @@ export default function CashierCustomersPage() {
           selectedCustomer={selectedCustomer}
           ledgerCount={ledgerRows.length}
           salesCount={salesRows.length}
-          onBack={() => nav("/staff/cashier/queue")}
         />
 
         <CashierCustomerLookupCard

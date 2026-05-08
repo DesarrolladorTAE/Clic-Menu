@@ -1,4 +1,4 @@
-//Tarjeta de Encabezado
+// src/components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard.jsx
 import React from "react";
 import {
   Box,
@@ -26,6 +26,11 @@ export default function CashierSaleDetailHeroCard({
 }) {
   const order = sale?.order || null;
   const table = sale?.table || null;
+
+  const saleStatusLabel = translateStatus(sale?.status, "sale");
+  const orderStatusLabel = translateStatus(order?.status, "order");
+  const tableStatusLabel = translateStatus(table?.status, "table");
+  const cashSessionStatusLabel = translateStatus(cashSession?.status, "cash");
 
   return (
     <Card
@@ -112,7 +117,13 @@ export default function CashierSaleDetailHeroCard({
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
-              label={canOperate ? "Lista para cobro" : canTake ? "Solo consulta" : "No operable"}
+              label={
+                canOperate
+                  ? "Lista para cobro"
+                  : canTake
+                  ? "Pendiente por tomar"
+                  : "No disponible para cobro"
+              }
               size="small"
               sx={{
                 fontWeight: 800,
@@ -121,8 +132,8 @@ export default function CashierSaleDetailHeroCard({
               }}
             />
 
-            <Chip label={`Estado venta: ${sale?.status || "—"}`} size="small" />
-            <Chip label={`Estado orden: ${order?.status || "—"}`} size="small" />
+            <Chip label={`Estado venta: ${saleStatusLabel}`} size="small" />
+            <Chip label={`Estado orden: ${orderStatusLabel}`} size="small" />
           </Stack>
 
           <Box
@@ -147,21 +158,25 @@ export default function CashierSaleDetailHeroCard({
               icon={<PersonRoundedIcon />}
               label="Cliente"
               value={order?.customer_name?.trim() || "Cliente sin nombre"}
-              helper={order?.status || "—"}
+              helper={orderStatusLabel}
             />
 
             <MetricCard
               icon={<TableRestaurantRoundedIcon />}
               label="Mesa"
               value={table?.name || "Sin mesa"}
-              helper={table?.status || "—"}
+              helper={tableStatusLabel}
             />
 
             <MetricCard
               icon={<ReceiptLongRoundedIcon />}
               label="Caja activa"
-              value={cashSession?.cash_register_id ? `#${cashSession.cash_register_id}` : "—"}
-              helper={cashSession?.status || "—"}
+              value={
+                cashSession?.cash_register_id
+                  ? `#${cashSession.cash_register_id}`
+                  : "—"
+              }
+              helper={cashSessionStatusLabel}
             />
           </Box>
 
@@ -200,8 +215,7 @@ export default function CashierSaleDetailHeroCard({
                 }}
               >
                 Esta venta aún no puede cobrarse desde esta pantalla. Debe estar
-                tomada por tu caja y la orden debe estar en estado{" "}
-                <strong>paying</strong>.
+                tomada por tu caja y la orden debe estar en proceso de cobro.
               </Typography>
             </Box>
           ) : null}
@@ -274,11 +288,45 @@ function MetricCard({ icon, label, value, helper }) {
             color: "text.secondary",
           }}
         >
-          {helper}
+          {helper || "—"}
         </Typography>
       </Box>
     </Box>
   );
+}
+
+function translateStatus(status, context = "general") {
+  const key = String(status || "").trim().toLowerCase();
+
+  const dictionary = {
+    pending: "Pendiente",
+    taken: "Tomada",
+    paying: "En cobro",
+    paid: "Pagada",
+    cancelled: "Cancelada",
+    canceled: "Cancelada",
+    open: "Abierta",
+    closed: "Cerrada",
+    occupied: "Ocupada",
+    available: "Disponible",
+    free: "Libre",
+    active: "Activa",
+    inactive: "Inactiva",
+    ready: "Lista",
+    queued: "En espera",
+    in_progress: "En preparación",
+    served: "Entregada",
+    delivered: "Entregada",
+    refunded: "Devuelta",
+    partially_refunded: "Parcialmente devuelta",
+  };
+
+  if (dictionary[key]) return dictionary[key];
+
+  if (context === "table") return "Sin estado";
+  if (context === "cash") return "Activa";
+
+  return "—";
 }
 
 function formatCurrency(value) {

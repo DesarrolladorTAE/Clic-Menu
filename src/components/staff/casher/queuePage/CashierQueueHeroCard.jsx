@@ -1,7 +1,7 @@
+// src/components/staff/casher/queuePage/CashierQueueHeroCard.jsx
 import React from "react";
 import {
   Box,
-  Button,
   Card,
   CardContent,
   Chip,
@@ -12,10 +12,6 @@ import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import AssignmentTurnedInRoundedIcon from "@mui/icons-material/AssignmentTurnedInRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
-import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import PeopleRoundedIcon from "@mui/icons-material/PeopleRounded";
-import AddShoppingCartRoundedIcon from "@mui/icons-material/AddShoppingCartRounded";
 
 export default function CashierQueueHeroCard({
   cashSession,
@@ -23,10 +19,6 @@ export default function CashierQueueHeroCard({
   myCount = 0,
   myTotal = 0,
   syncing = false,
-  onBack,
-  onGoHistory,
-  onGoCustomers,
-  onNewDirectOrder,
 }) {
   return (
     <Card
@@ -72,38 +64,15 @@ export default function CashierQueueHeroCard({
               </Typography>
             </Box>
 
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.5}
-              alignItems="center"
-              sx={{ width: { xs: "100%", sm: "auto" } }}
-            >
-              <Chip
-                icon={<PointOfSaleRoundedIcon />}
-                label={syncing ? "Sincronizando…" : "Caja activa"}
-                sx={{
-                  fontWeight: 800,
-                  bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
-                  color: syncing ? "#8A6D3B" : "#0A7A2F",
-                }}
-              />
-
-              <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<ArrowBackRoundedIcon />}
-                onClick={onBack}
-                sx={{
-                  fontWeight: 800,
-                  borderRadius: 2,
-                  height: 40,
-                  px: 3,
-                  width: { xs: "100%", sm: "auto" },
-                }}
-              >
-                Regresar
-              </Button>
-            </Stack>
+            <Chip
+              icon={<PointOfSaleRoundedIcon />}
+              label={syncing ? "Sincronizando…" : "Caja activa"}
+              sx={{
+                fontWeight: 800,
+                bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
+                color: syncing ? "#8A6D3B" : "#0A7A2F",
+              }}
+            />
           </Stack>
 
           <Box
@@ -170,60 +139,6 @@ export default function CashierQueueHeroCard({
               helper="Monto pendiente de cobrar"
             />
           </Box>
-
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1.5}
-            alignItems="center"
-            sx={{ width: "100%" }}
-          >
-            <Button
-              variant="contained"
-              startIcon={<AddShoppingCartRoundedIcon />}
-              onClick={onNewDirectOrder}
-              sx={{
-                fontWeight: 800,
-                borderRadius: 2,
-                height: 40,
-                px: 3,
-                width: { xs: "100%", sm: "auto" },
-              }}
-            >
-              Nueva venta directa
-            </Button>
-
-            <Button
-              variant="outlined"
-              color="inherit"
-              startIcon={<HistoryRoundedIcon />}
-              onClick={onGoHistory}
-              sx={{
-                fontWeight: 800,
-                borderRadius: 2,
-                height: 40,
-                px: 3,
-                width: { xs: "100%", sm: "auto" },
-              }}
-            >
-              Ver historial
-            </Button>
-
-            <Button
-              variant="outlined"
-              color="inherit"
-              startIcon={<PeopleRoundedIcon />}
-              onClick={onGoCustomers}
-              sx={{
-                fontWeight: 800,
-                borderRadius: 2,
-                height: 40,
-                px: 3,
-                width: { xs: "100%", sm: "auto" },
-              }}
-            >
-              Clientes
-            </Button>
-          </Stack>
         </Stack>
       </CardContent>
     </Card>

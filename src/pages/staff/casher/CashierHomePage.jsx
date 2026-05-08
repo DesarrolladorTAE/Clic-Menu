@@ -93,8 +93,15 @@ export default function CashierHomePage() {
         fetchCashierRegisters(),
       ]);
 
-      setCurrentSession(sessionRes?.data || null);
+      const sessionData = sessionRes?.data || null;
+
+      setCurrentSession(sessionData);
       setRegisters(Array.isArray(registersRes?.data) ? registersRes.data : []);
+
+      if (sessionData?.id) {
+        nav("/staff/cashier/queue", { replace: true });
+        return;
+      }
     } catch (e) {
       const status = e?.response?.status;
 
@@ -178,19 +185,19 @@ export default function CashierHomePage() {
 
       showAlert({
         severity: "success",
-        title: code === "EXISTING_OPEN_CASH_SESSION" ? "Caja recuperada" : "Listo",
+        title:
+          code === "EXISTING_OPEN_CASH_SESSION" ? "Caja recuperada" : "Listo",
         message:
           code === "EXISTING_OPEN_CASH_SESSION"
             ? "Se recuperó tu caja abierta anterior. Puedes continuar con tu tablero de cobro."
-            : (res?.message || "Caja abierta correctamente."),
+            : res?.message || "Caja abierta correctamente.",
       });
 
       nav("/staff/cashier/queue", { replace: true });
     } catch (e) {
       showAlert({
         severity: "error",
-        message:
-          e?.response?.data?.message || "No se pudo abrir la caja.",
+        message: e?.response?.data?.message || "No se pudo abrir la caja.",
       });
     } finally {
       setOpening(false);
@@ -226,9 +233,7 @@ export default function CashierHomePage() {
 
       showAlert({
         severity: "warning",
-        message:
-          e?.response?.data?.message ||
-          "No se pudo cerrar la caja.",
+        message: e?.response?.data?.message || "No se pudo cerrar la caja.",
       });
     } finally {
       setClosing(false);
@@ -266,10 +271,6 @@ export default function CashierHomePage() {
     setLeaving(true);
 
     try {
-      /**
-       * Si hay caja abierta, intentamos cerrarla primero.
-       * Si backend detecta ventas tomadas, NO dejamos salir.
-       */
       if (currentSession?.id) {
         try {
           await closeCashierSession({});
@@ -298,10 +299,7 @@ export default function CashierHomePage() {
           showAlert({
             severity: "error",
             title: "No se pudo salir",
-            message: pickErr(
-              e,
-              "No se pudo cerrar la caja antes de salir."
-            ),
+            message: pickErr(e, "No se pudo cerrar la caja antes de salir."),
           });
           return;
         }
@@ -344,7 +342,7 @@ export default function CashierHomePage() {
           onExit={handleExit}
           exitLabel={exitLabel}
           closing={closing || leaving}
-          showExitButton={!currentSession} //  solo se muestra si NO hay caja abierta
+          showExitButton={!currentSession}
         />
 
         {!currentSession ? (
@@ -465,7 +463,7 @@ export default function CashierHomePage() {
                 color: "text.primary",
               }}
             >
-              Todo listo para cobrar
+              Redirigiendo al tablero de cobro…
             </Typography>
 
             <Typography
@@ -476,9 +474,7 @@ export default function CashierHomePage() {
                 lineHeight: 1.6,
               }}
             >
-              Ya tienes una caja abierta en este contexto. El siguiente paso es
-              pasar al tablero de cobro para tomar ventas disponibles o continuar
-              con las que ya tomaste.
+              Ya tienes una caja abierta en este contexto.
             </Typography>
           </Box>
         )}
