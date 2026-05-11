@@ -37,7 +37,7 @@ import SystemAdminDashboard from "../pages/system-admin/SystemAdminDashboard";
 
 import SystemOwnersPage from "../pages/system-admin/owners/SystemOwnersPage";
 import SystemOwnerDetailPage from "../pages/system-admin/owners/SystemOwnerDetailPage";
-
+import SystemOwnerRestaurantDetailPage from "../pages/system-admin/owners/restaurants/SystemOwnerRestaurantDetailPage";
 
 
 //Menu:Cajero
@@ -252,6 +252,7 @@ export default function AppRoutes() {
           
           <Route path="owners" element={<SystemOwnersPage />} />
           <Route path="owners/:ownerId" element={<SystemOwnerDetailPage />} />
+          <Route path="owners/:ownerId/restaurants/:restaurantId" element={<SystemOwnerRestaurantDetailPage />} />
 
         </Route>
       </Route>
