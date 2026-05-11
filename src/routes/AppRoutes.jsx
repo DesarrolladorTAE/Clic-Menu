@@ -38,7 +38,7 @@ import SystemAdminDashboard from "../pages/system-admin/SystemAdminDashboard";
 import SystemOwnersPage from "../pages/system-admin/owners/SystemOwnersPage";
 import SystemOwnerDetailPage from "../pages/system-admin/owners/SystemOwnerDetailPage";
 import SystemOwnerRestaurantDetailPage from "../pages/system-admin/owners/restaurants/SystemOwnerRestaurantDetailPage";
-
+import SystemSubscriptionSalesPage from "../pages/system-admin/subscription-sales/SystemSubscriptionSalesPage";
 
 //Menu:Cajero
 import CashierLayout from "../layouts/CashierLayout";
@@ -253,6 +253,8 @@ export default function AppRoutes() {
           <Route path="owners" element={<SystemOwnersPage />} />
           <Route path="owners/:ownerId" element={<SystemOwnerDetailPage />} />
           <Route path="owners/:ownerId/restaurants/:restaurantId" element={<SystemOwnerRestaurantDetailPage />} />
+
+          <Route path="subscription-sales" element={<SystemSubscriptionSalesPage />} />
 
         </Route>
       </Route>
