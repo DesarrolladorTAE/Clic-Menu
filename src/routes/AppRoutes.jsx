@@ -3,15 +3,19 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import OwnerRoute from "./OwnerRoute";
 import StaffProtectedRoute from "./StaffProtectedRoute";
+import SystemAdminProtectedRoute from "./SystemAdminProtectedRoute";
+
 
 import TestMui from "../pages/TestMui";
 
+//Registro administrador
+import SystemAdminLogin from "../pages/system-admin/SystemAdminLogin";
 
-//Registro o Login OWNER
+//Registro propietario
 import Register from "../pages/auth/Register";
 import Login from "../pages/auth/Login";
 
-//STAFF
+//Registro staff
 import StaffLogin from "../pages/staff/StaffLogin";
 import StaffSelectContext from "../pages/staff/StaffSelectContext";
 import StaffDashboard from "../pages/staff/waiter/StaffDashboard"; 
@@ -25,6 +29,13 @@ import WaiterTablesGrid from "../pages/staff/waiter/WaiterTablesGrid";
 
 //Cocina
 import KitchenDashboard from "../pages/staff/kitchen/KitchenDashboard";
+
+
+//Menu:Administrador
+import SystemAdminLayout from "../layouts/SystemAdminLayout";
+import SystemAdminDashboard from "../pages/system-admin/SystemAdminDashboard";
+
+import SystemOwnersPage from "../pages/system-admin/owners/SystemOwnersPage";
 
 
 
@@ -230,8 +241,21 @@ export default function AppRoutes() {
 
       </Route>
 
+      {/* SYSTEM ADMIN AUTH */}
+      <Route path="/system-admin/login" element={<SystemAdminLogin />} />
+
+      {/* SYSTEM ADMIN PROTECTED */}
+      <Route element={<SystemAdminProtectedRoute />}>
+        <Route path="/system-admin" element={<SystemAdminLayout />}>
+          <Route index element={<SystemAdminDashboard />} />
+          <Route path="owners" element={<SystemOwnersPage />} />
+
+        </Route>
+      </Route>
+
       {/* DEFAULT */}
       <Route path="*" element={<Navigate to="/auth/login" replace />} />
+      
     </Routes>
   );
 }

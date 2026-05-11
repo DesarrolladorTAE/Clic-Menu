@@ -1,4 +1,4 @@
-// src/main.jsx
+//src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -8,8 +8,8 @@ import App from "./App.jsx";
 import theme from "./theme/theme";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { StaffAuthProvider } from "./context/StaffAuthContext.jsx";
+import { SystemAdminAuthProvider } from "./context/SystemAdminAuthContext.jsx";
 import "./index.css";
-
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -18,11 +18,12 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <BrowserRouter>
         <AuthProvider>
           <StaffAuthProvider>
-            <App />
+            <SystemAdminAuthProvider>
+              <App />
+            </SystemAdminAuthProvider>
           </StaffAuthProvider>
         </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
   </React.StrictMode>
 );
-
