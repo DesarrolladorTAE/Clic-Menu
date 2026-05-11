@@ -36,6 +36,7 @@ import SystemAdminLayout from "../layouts/SystemAdminLayout";
 import SystemAdminDashboard from "../pages/system-admin/SystemAdminDashboard";
 
 import SystemOwnersPage from "../pages/system-admin/owners/SystemOwnersPage";
+import SystemOwnerDetailPage from "../pages/system-admin/owners/SystemOwnerDetailPage";
 
 
 
@@ -248,7 +249,9 @@ export default function AppRoutes() {
       <Route element={<SystemAdminProtectedRoute />}>
         <Route path="/system-admin" element={<SystemAdminLayout />}>
           <Route index element={<SystemAdminDashboard />} />
+          
           <Route path="owners" element={<SystemOwnersPage />} />
+          <Route path="owners/:ownerId" element={<SystemOwnerDetailPage />} />
 
         </Route>
       </Route>
