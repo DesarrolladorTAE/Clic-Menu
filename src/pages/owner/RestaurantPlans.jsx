@@ -147,7 +147,7 @@ export default function RestaurantPlans() {
 
       const newStatus = await getRestaurantSubscriptionStatus(restaurantId);
       if (newStatus?.is_operational) {
-        nav("/owner/restaurants", { replace: true });
+        nav("/owner/restaurants-home", { replace: true });
       }
     } catch (e) {
       const code = e?.response?.data?.code;
