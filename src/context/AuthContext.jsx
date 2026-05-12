@@ -8,17 +8,22 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const syncUserSession = (nextUser) => {
+    if (nextUser?.id) {
+      sessionStorage.setItem("auth_user_id", String(nextUser.id));
+    } else {
+      sessionStorage.removeItem("auth_user_id");
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const res = await authService.me();
-        setUser(res.user || null);
+        const nextUser = res.user || null;
 
-        if (res?.user?.id) {
-          sessionStorage.setItem("auth_user_id", String(res.user.id));
-        } else {
-          sessionStorage.removeItem("auth_user_id");
-        }
+        setUser(nextUser);
+        syncUserSession(nextUser);
       } catch {
         setUser(null);
         sessionStorage.removeItem("auth_user_id");
@@ -34,6 +39,12 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: !!user,
 
+      updateUser(nextUser) {
+        const normalizedUser = nextUser || null;
+        setUser(normalizedUser);
+        syncUserSession(normalizedUser);
+      },
+
       clearAuth() {
         localStorage.removeItem("auth_token");
         sessionStorage.removeItem("auth_user_id");
@@ -44,14 +55,13 @@ export function AuthProvider({ children }) {
       async login(email, password) {
         const prevUserId = sessionStorage.getItem("auth_user_id");
 
-        // authService.login() ya guarda el token en localStorage
         const res = await authService.login({ email, password });
 
-        const nextUserId = res?.user?.id ? String(res.user.id) : "";
-        setUser(res.user || null);
+        const nextUser = res.user || null;
+        const nextUserId = nextUser?.id ? String(nextUser.id) : "";
 
-        if (nextUserId) sessionStorage.setItem("auth_user_id", nextUserId);
-        else sessionStorage.removeItem("auth_user_id");
+        setUser(nextUser);
+        syncUserSession(nextUser);
 
         const userChanged =
           !!prevUserId && !!nextUserId && prevUserId !== nextUserId;

@@ -1,10 +1,23 @@
+// src/pages/restaurant/MyRestaurantsHome.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-  IconButton, Stack, Typography, } from "@mui/material";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  IconButton,
+  Stack,
+  Typography,
+} from "@mui/material";
+
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
-import LogoutIcon from "@mui/icons-material/Logout";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
@@ -13,8 +26,12 @@ import {
   getRestaurantSubscriptionStatus,
   deleteRestaurant,
 } from "../../services/restaurant/restaurant.service";
+
 import { useAuth } from "../../context/AuthContext";
 import RestaurantFormModal from "../../components/restaurant/RestaurantFormModal";
+import OwnerProfileModal from "../../components/owner/profile/OwnerProfileModal";
+import OwnerUserMenu from "../../components/layout/OwnerUserMenu";
+import AppAlert from "../../components/common/AppAlert";
 
 function getBadgeConfig(st) {
   if (!st) {
@@ -61,12 +78,38 @@ export default function MyRestaurantsHome() {
   const [modalMode, setModalMode] = useState("create");
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
 
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "success",
+    title: "",
+    message: "",
+  });
+
   const ownerName = useMemo(() => {
     if (!user) return "";
     return [user.name, user.last_name_paternal, user.last_name_maternal]
       .filter(Boolean)
       .join(" ");
   }, [user]);
+
+  const userMenuOpen = Boolean(userMenuAnchor);
+
+  const showAlert = ({ severity = "success", title = "Hecho", message = "" }) => {
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
 
   const openCreate = () => {
     setSelectedRestaurant(null);
@@ -97,7 +140,10 @@ export default function MyRestaurantsHome() {
         );
         setStatusMap(Object.fromEntries(pairs));
       } catch (e) {
-        console.log("No se pudieron cargar estados de suscripción", e?.response?.data || e?.message);
+        console.log(
+          "No se pudieron cargar estados de suscripción",
+          e?.response?.data || e?.message
+        );
       }
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudieron cargar restaurantes.");
@@ -121,6 +167,14 @@ export default function MyRestaurantsHome() {
   const onSaved = async () => {
     await load();
     closeModal();
+  };
+
+  const onProfileSaved = () => {
+    showAlert({
+      severity: "success",
+      title: "Hecho",
+      message: "Perfil actualizado correctamente.",
+    });
   };
 
   const onGoPlans = (restaurantId) => {
@@ -152,13 +206,12 @@ export default function MyRestaurantsHome() {
     if (!ok) return;
 
     try {
-        await deleteRestaurant(restaurantId);
-        await load();
+      await deleteRestaurant(restaurantId);
+      await load();
     } catch (e) {
-        setErr(e?.response?.data?.message || "No se pudo eliminar el restaurante.");
+      setErr(e?.response?.data?.message || "No se pudo eliminar el restaurante.");
     }
   };
-  
 
   if (loading) {
     return (
@@ -190,7 +243,22 @@ export default function MyRestaurantsHome() {
         onSaved={onSaved}
       />
 
-      {/* Header */}
+      <OwnerProfileModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onSaved={onProfileSaved}
+      />
+
+      <OwnerUserMenu
+        anchorEl={userMenuAnchor}
+        open={userMenuOpen}
+        onClose={() => setUserMenuAnchor(null)}
+        user={user}
+        ownerName={ownerName}
+        onEditProfile={() => setProfileOpen(true)}
+        onLogout={onLogout}
+      />
+
       <Box
         sx={{
           bgcolor: "primary.main",
@@ -221,31 +289,38 @@ export default function MyRestaurantsHome() {
             </Stack>
 
             <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-              <Stack direction="row" alignItems="center" spacing={1.2}>
-                <Avatar sx={{ bgcolor: "rgba(255,255,255,0.35)", color: "#fff" }}>
-                  {ownerName?.charAt(0)?.toUpperCase() || "U"}
-                </Avatar>
-                <Typography sx={{ fontWeight: 700 }}>
-                  Bienvenido, {user?.name || "Propietario"}!
-                </Typography>
-              </Stack>
-
-              <Button
-                variant="contained"
-                onClick={onLogout}
-                startIcon={<LogoutIcon />}
+              <Typography
                 sx={{
-                  bgcolor: "#fff",
-                  color: "primary.main",
                   fontWeight: 800,
-                  px: 2.5,
+                  display: { xs: "none", sm: "block" },
+                }}
+              >
+                Bienvenido, {user?.name || "Propietario"}!
+              </Typography>
+
+              <IconButton
+                onClick={(event) => setUserMenuAnchor(event.currentTarget)}
+                sx={{
+                  p: 0.3,
+                  borderRadius: 999,
+                  bgcolor: "rgba(255,255,255,0.16)",
                   "&:hover": {
-                    bgcolor: "#f7f7f7",
+                    bgcolor: "rgba(255,255,255,0.25)",
                   },
                 }}
               >
-                Cerrar sesión
-              </Button>
+                <Avatar
+                  sx={{
+                    bgcolor: "rgba(255,255,255,0.35)",
+                    color: "#fff",
+                    fontWeight: 900,
+                    width: 50,
+                    height: 50,
+                  }}
+                >
+                  {ownerName?.charAt(0)?.toUpperCase() || "U"}
+                </Avatar>
+              </IconButton>
             </Stack>
           </Stack>
         </Container>
@@ -315,12 +390,19 @@ export default function MyRestaurantsHome() {
                   <StorefrontIcon sx={{ fontSize: 34 }} />
                 </Avatar>
 
-                <Typography sx={{ fontSize: 28, fontWeight: 800, color: "text.primary" }}>
+                <Typography
+                  sx={{
+                    fontSize: 28,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
                   Aún no tienes restaurantes registrados
                 </Typography>
 
                 <Typography sx={{ maxWidth: 560, color: "text.secondary" }}>
-                  Registra tu primer restaurante para comenzar con la configuración y operación.
+                  Registra tu primer restaurante para comenzar con la configuración
+                  y operación.
                 </Typography>
 
                 <Button
@@ -400,7 +482,14 @@ export default function MyRestaurantsHome() {
 
                       <Box sx={{ flex: 1 }} />
 
-                      <Stack spacing={1.5} sx={{ maxWidth: 260, mx: "auto", width: "100%" }}>
+                      <Stack
+                        spacing={1.5}
+                        sx={{
+                          maxWidth: 260,
+                          mx: "auto",
+                          width: "100%",
+                        }}
+                      >
                         <Button
                           variant="contained"
                           onClick={() => onGoPlans(r.id)}
@@ -431,18 +520,18 @@ export default function MyRestaurantsHome() {
 
                       <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
                         <IconButton
-                            onClick={() => onDelete(r.id)}
-                            sx={{
-                                bgcolor: "error.main",
-                                color: "#fff",
-                                borderRadius: 2,
-                                "&:hover": {
-                                bgcolor: "error.dark",
-                                },
-                            }}
-                            title="Eliminar restaurante"
+                          onClick={() => onDelete(r.id)}
+                          sx={{
+                            bgcolor: "error.main",
+                            color: "#fff",
+                            borderRadius: 2,
+                            "&:hover": {
+                              bgcolor: "error.dark",
+                            },
+                          }}
+                          title="Eliminar restaurante"
                         >
-                        <DeleteOutlineIcon />
+                          <DeleteOutlineIcon />
                         </IconButton>
                       </Stack>
                     </CardContent>
@@ -453,6 +542,15 @@ export default function MyRestaurantsHome() {
           )}
         </Stack>
       </Container>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={3000}
+      />
     </Box>
   );
 }
