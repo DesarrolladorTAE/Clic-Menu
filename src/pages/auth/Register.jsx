@@ -18,6 +18,7 @@ import TermsModal from "../../components/auth/TermsModal";
 import AuthBrandPanel from "../../components/auth/AuthBrandPanel";
 import { normalizePhone } from "../../utils/phone";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
+import { useAuth } from "../../context/AuthContext";
 import {
   requestRegisterCode,
   verifyRegisterCode,
@@ -26,6 +27,7 @@ import {
 
 export default function Register() {
   const nav = useNavigate();
+  const { updateUser } = useAuth();
 
   const [step, setStep] = useState(1); // 1 = datos, 2 = código
   const [globalMsg, setGlobalMsg] = useState("");
@@ -163,8 +165,12 @@ export default function Register() {
     try {
       const res = await verifyRegisterCode({ phone: normalized, code });
 
+      if (res?.user) {
+        updateUser(res.user);
+      }
+
       setGlobalMsg(res?.message || "Registro completado.");
-      setTimeout(() => nav("/auth/login", { replace: true }), 900);
+      setTimeout(() => nav("/owner/restaurants-home", { replace: true }), 900);
     } catch (err) {
       const status = err?.response?.status;
       const msg = err?.response?.data?.message || "No se pudo verificar el código.";

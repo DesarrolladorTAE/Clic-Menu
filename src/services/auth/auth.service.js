@@ -1,4 +1,4 @@
-// src/services/auth.service.js
+// src/services/auth/auth.service.js
 import api from "../api";
 
 /**
@@ -11,6 +11,11 @@ export async function requestRegisterCode(payload) {
 
 export async function verifyRegisterCode(payload) {
   const { data } = await api.post("/register/verify-code", payload);
+
+  if (data?.token) {
+    localStorage.setItem("auth_token", data.token);
+  }
+
   return data;
 }
 
@@ -23,20 +28,21 @@ export async function resendRegisterCode(payload) {
  * Login / sesión
  */
 export async function login(payload) {
-  // payload = { email, password }
   const { data } = await api.post("/login", payload);
-  // Solo guardamos token si vino (cuando términos ya están aceptados)
-  if (data?.token) localStorage.setItem("auth_token", data.token);
-  return data; // { message, user, token }
+
+  if (data?.token) {
+    localStorage.setItem("auth_token", data.token);
+  }
+
+  return data;
 }
 
 /**
  * Aceptar términos SIN sesión (user_id/email)
  */
 export async function acceptTerms(payload) {
-  // payload: { accepted: true, user_id, email }
   const { data } = await api.post("/terms/accept", payload);
-  return data; // { ok, message }
+  return data;
 }
 
 export async function me() {
