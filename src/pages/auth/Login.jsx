@@ -3,13 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Container,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, Container, Stack, TextField, Typography,
 } from "@mui/material";
 
 import { useAuth } from "../../context/AuthContext";
@@ -370,6 +364,39 @@ export default function Login() {
                       }}
                     >
                       Crear cuenta
+                    </Button>
+                  </Box>
+
+                  <Box sx={{ textAlign: "center", pt: 0 }}>
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontSize: 15,
+                        color: "text.secondary",
+                      }}
+                    >
+                      ¿Eres empleado?{" "}
+                    </Typography>
+
+                    <Button
+                      type="button"
+                      onClick={() => nav("/staff/login")}
+                      variant="text"
+                      sx={{
+                        p: 0,
+                        minWidth: "auto",
+                        minHeight: "auto",
+                        color: "primary.main",
+                        fontSize: 15,
+                        fontWeight: 800,
+                        verticalAlign: "baseline",
+                        "&:hover": {
+                          backgroundColor: "transparent",
+                          textDecoration: "underline",
+                        },
+                      }}
+                    >
+                      Inicia sesión
                     </Button>
                   </Box>
                 </Stack>
