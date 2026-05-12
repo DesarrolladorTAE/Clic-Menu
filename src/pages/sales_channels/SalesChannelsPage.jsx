@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Alert, Box, Button, Card, Chip, CircularProgress, IconButton, Paper, Stack, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+  Alert, Box, Button, Card, Chip, CircularProgress, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -21,6 +21,7 @@ import {
 } from "../../services/products/sales_channels/sales_channels.service";
 
 import usePagination from "../../hooks/usePagination";
+import usePlanAccess from "../../hooks/plan/usePlanAccess";
 import PaginationFooter from "../../components/common/PaginationFooter";
 import SalesChannelUpsertModal from "../../components/sales_channels/SalesChannelUpsertModal";
 
@@ -31,6 +32,9 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 5;
 const SALON_CODE = "SALON";
+
+const PLAN_CHANNEL_MESSAGE =
+  "Tu plan actual solo permite el canal SALÓN. Para crear canales adicionales, cambia al Plan Gestión o Plan Total.";
 
 function normalizeCode(v) {
   return (v || "")
@@ -51,6 +55,12 @@ export default function SalesChannelsPage() {
   const { restaurantId } = useParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const {
+    loading: planAccessLoading,
+    error: planAccessError,
+    canUseAdditionalSalesChannels,
+  } = usePlanAccess(restaurantId);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -109,6 +119,11 @@ export default function SalesChannelsPage() {
   }, [restaurantId]);
 
   const openCreate = () => {
+    if (!canUseAdditionalSalesChannels) {
+      setErr(PLAN_CHANNEL_MESSAGE);
+      return;
+    }
+
     setErr("");
     setModalErr("");
     setEditing(null);
@@ -150,6 +165,11 @@ export default function SalesChannelsPage() {
 
     if (editing?.id && isSalonChannel(editing)) {
       setModalErr('El canal "Salón" es fijo y no puede modificarse.');
+      return;
+    }
+
+    if (!editing?.id && !canUseAdditionalSalesChannels) {
+      setModalErr(PLAN_CHANNEL_MESSAGE);
       return;
     }
 
@@ -233,7 +253,7 @@ export default function SalesChannelsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || planAccessLoading) {
     return (
       <Box
         sx={{
@@ -309,21 +329,68 @@ export default function SalesChannelsPage() {
                 Volver
               </Button>
 
-              <Button
-                onClick={openCreate}
-                variant="contained"
-                startIcon={<AddIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 180 },
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
+              <Tooltip
+                title={
+                  !canUseAdditionalSalesChannels
+                    ? PLAN_CHANNEL_MESSAGE
+                    : "Crear canal"
+                }
               >
-                Crear canal
-              </Button>
+                <span>
+                  <Button
+                    onClick={openCreate}
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    disabled={!canUseAdditionalSalesChannels || saving}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Crear canal
+                  </Button>
+                </span>
+              </Tooltip>
             </Stack>
           </Stack>
+
+          {planAccessError && (
+            <Alert
+              severity="warning"
+              sx={{
+                borderRadius: 1,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Permisos del plan
+                </Typography>
+                <Typography variant="body2">{planAccessError}</Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {!canUseAdditionalSalesChannels && (
+            <Alert
+              severity="info"
+              sx={{
+                borderRadius: 1,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Canal limitado por plan
+                </Typography>
+                <Typography variant="body2">
+                  Tu plan actual solo permite trabajar con el canal SALÓN.
+                </Typography>
+              </Box>
+            </Alert>
+          )}
 
           {err && (
             <Alert
@@ -378,20 +445,31 @@ export default function SalesChannelsPage() {
                   Crea el primero. Por ejemplo: COMEDOR, DELIVERY o PICKUP.
                 </Typography>
 
-                <Button
-                  onClick={openCreate}
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  sx={{
-                    mt: 2.5,
-                    minWidth: 220,
-                    height: 44,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
+                <Tooltip
+                  title={
+                    !canUseAdditionalSalesChannels
+                      ? PLAN_CHANNEL_MESSAGE
+                      : "Crear canal"
+                  }
                 >
-                  Crear canal
-                </Button>
+                  <span>
+                    <Button
+                      onClick={openCreate}
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      disabled={!canUseAdditionalSalesChannels || saving}
+                      sx={{
+                        mt: 2.5,
+                        minWidth: 220,
+                        height: 44,
+                        borderRadius: 2,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Crear canal
+                    </Button>
+                  </span>
+                </Tooltip>
               </Box>
             ) : (
               <>
