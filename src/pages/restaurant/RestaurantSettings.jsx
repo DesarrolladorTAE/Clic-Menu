@@ -2,8 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Alert, Box, Button, Card, CardContent, CircularProgress, Divider, FormControl, MenuItem, Select,
-  Stack, Typography,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Divider,
+  FormControl,
+  MenuItem,
+  Select,
+  Stack,
+  Typography,
 } from "@mui/material";
 
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -32,8 +42,16 @@ export default function RestaurantSettings() {
   const [warn, setWarn] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  const [uiMeta, setUiMeta] = useState({
+    can_edit_modes: false,
+    selectors_disabled: true,
+    save_disabled: true,
+    locked_by_plan: true,
+    locked_reason: "",
+  });
+
   const [form, setForm] = useState({
-    inventory_mode: "branch",
+    inventory_mode: "global",
     products_mode: "global",
     recipe_mode: "global",
     modifiers_mode: "global",
@@ -42,6 +60,9 @@ export default function RestaurantSettings() {
   const title = useMemo(() => `Configuración del restaurante`, [restaurantId]);
 
   const productsIsBranch = form.products_mode === "branch";
+  const canEditModes = Boolean(uiMeta?.can_edit_modes);
+  const selectorsDisabled = Boolean(uiMeta?.selectors_disabled || !canEditModes);
+  const saveDisabled = Boolean(uiMeta?.save_disabled || !canEditModes);
 
   const load = async () => {
     setErr("");
@@ -52,9 +73,19 @@ export default function RestaurantSettings() {
     try {
       const st = await getRestaurantSettings(restaurantId);
 
+      const nextUi = st?._meta?.ui ?? {
+        can_edit_modes: false,
+        selectors_disabled: true,
+        save_disabled: true,
+        locked_by_plan: true,
+        locked_reason: "",
+      };
+
+      setUiMeta(nextUi);
+
       if (st) {
         const next = {
-          inventory_mode: st.inventory_mode ?? "branch",
+          inventory_mode: st.inventory_mode ?? "global",
           products_mode: st.products_mode ?? "global",
           recipe_mode: st.recipe_mode ?? "global",
           modifiers_mode: st.modifiers_mode ?? "global",
@@ -89,6 +120,8 @@ export default function RestaurantSettings() {
   }, [successMsg]);
 
   const onChange = (key, value) => {
+    if (!canEditModes) return;
+
     setErr("");
     setWarn("");
     setSuccessMsg("");
@@ -125,6 +158,14 @@ export default function RestaurantSettings() {
   };
 
   const onSave = async () => {
+    if (!canEditModes) {
+      setErr(
+        uiMeta?.locked_reason ||
+          "Tu plan actual no permite modificar la configuración por modo."
+      );
+      return;
+    }
+
     setErr("");
     setWarn("");
     setSuccessMsg("");
@@ -138,6 +179,21 @@ export default function RestaurantSettings() {
     try {
       const res = await upsertRestaurantSettings(restaurantId, payload);
 
+      if (res?.ui) {
+        setUiMeta(res.ui);
+      }
+
+      if (res?.settings) {
+        const st = res.settings;
+
+        setForm({
+          inventory_mode: st.inventory_mode ?? "global",
+          products_mode: st.products_mode ?? "global",
+          recipe_mode: st.recipe_mode ?? "global",
+          modifiers_mode: st.modifiers_mode ?? "global",
+        });
+      }
+
       if (res?.recipe_mode_forced) {
         setWarn(
           res?.message ||
@@ -148,6 +204,10 @@ export default function RestaurantSettings() {
       setSuccessMsg("La configuración se guardó correctamente.");
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo guardar la configuración");
+
+      if (e?.response?.data?.ui) {
+        setUiMeta(e.response.data.ui);
+      }
     } finally {
       setSaving(false);
     }
@@ -204,6 +264,26 @@ export default function RestaurantSettings() {
               Define cómo se comportará tu restaurante
             </Typography>
           </Box>
+
+          {uiMeta?.locked_by_plan && (
+            <Alert
+              severity="info"
+              sx={{
+                borderRadius: 1,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Configuración bloqueada por plan
+                </Typography>
+                <Typography variant="body2">
+                  {uiMeta?.locked_reason ||
+                    "Tu plan actual no permite modificar la configuración por modo."}
+                </Typography>
+              </Box>
+            </Alert>
+          )}
 
           {err && (
             <Alert
@@ -270,6 +350,12 @@ export default function RestaurantSettings() {
                   onChange={(v) => onChange("inventory_mode", v)}
                   options={MODES}
                   help="Global: un solo almacén. Por sucursal: cada sucursal tiene su almacén."
+                  disabled={selectorsDisabled}
+                  lockMessage={
+                    selectorsDisabled
+                      ? "Bloqueado: tu plan actual no permite modificar este modo."
+                      : ""
+                  }
                 />
 
                 <FieldSelect
@@ -278,8 +364,13 @@ export default function RestaurantSettings() {
                   onChange={(v) => onChange("products_mode", v)}
                   options={MODES}
                   help="Global: catálogo base compartido. Por sucursal: cada sucursal administra su catálogo."
+                  disabled={selectorsDisabled}
+                  lockMessage={
+                    selectorsDisabled
+                      ? "Bloqueado: tu plan actual no permite modificar este modo."
+                      : ""
+                  }
                 />
-
 
                 <FieldSelect
                   label="Modo de modificadores"
@@ -287,6 +378,12 @@ export default function RestaurantSettings() {
                   onChange={(v) => onChange("modifiers_mode", v)}
                   options={MODES}
                   help="Global: todos los extras y modificadores se comparten en todo el restaurante. Por sucursal: cada sucursal podrá manejar sus propios modificadores."
+                  disabled={selectorsDisabled}
+                  lockMessage={
+                    selectorsDisabled
+                      ? "Bloqueado: tu plan actual no permite modificar este modo."
+                      : ""
+                  }
                 />
 
                 <FieldSelect
@@ -295,6 +392,7 @@ export default function RestaurantSettings() {
                   onChange={(v) => onChange("recipe_mode", v)}
                   options={MODES}
                   help="Global: receta base compartida. Por sucursal: receta puede variar por sucursal."
+                  disabled={selectorsDisabled}
                   disabledValues={productsIsBranch ? ["global"] : []}
                   tooltipByValue={
                     productsIsBranch
@@ -305,7 +403,9 @@ export default function RestaurantSettings() {
                       : {}
                   }
                   lockMessage={
-                    productsIsBranch
+                    selectorsDisabled
+                      ? "Bloqueado: tu plan actual no permite modificar este modo."
+                      : productsIsBranch
                       ? "Bloqueado: con productos por sucursal, las recetas deben ser por sucursal."
                       : ""
                   }
@@ -341,7 +441,8 @@ export default function RestaurantSettings() {
                             lineHeight: 1.6,
                           }}
                         >
-                          “Modo de recetas” queda en <strong>Por sucursal</strong> porque elegiste{" "}
+                          “Modo de recetas” queda en{" "}
+                          <strong>Por sucursal</strong> porque elegiste{" "}
                           <strong>Productos por sucursal</strong>.
                         </Typography>
 
@@ -352,7 +453,8 @@ export default function RestaurantSettings() {
                             fontSize: 13,
                           }}
                         >
-                          Los productos por sucursal no pueden tener recetas globales.
+                          Los productos por sucursal no pueden tener recetas
+                          globales.
                         </Typography>
                       </Box>
                     </Stack>
@@ -370,7 +472,6 @@ export default function RestaurantSettings() {
                     nav(`/owner/restaurants/${restaurantId}/sales-channels`)
                   }
                 />
-
               </Stack>
             </CardContent>
           </Card>
@@ -382,7 +483,7 @@ export default function RestaurantSettings() {
           >
             <Button
               onClick={onSave}
-              disabled={saving}
+              disabled={saving || saveDisabled}
               variant="contained"
               sx={{
                 minWidth: { xs: "100%", sm: 220 },
@@ -406,6 +507,7 @@ function FieldSelect({
   onChange,
   options,
   help,
+  disabled = false,
   disabledValues = [],
   tooltipByValue = {},
   lockMessage = "",
@@ -451,14 +553,15 @@ function FieldSelect({
         </Typography>
       )}
 
-      <FormControl fullWidth>
+      <FormControl fullWidth disabled={disabled}>
         <Select
           value={value}
           onChange={(e) => onChange(e.target.value)}
           IconComponent={KeyboardArrowDownIcon}
           displayEmpty
+          disabled={disabled}
           sx={{
-            bgcolor: "#F4F4F4",
+            bgcolor: disabled ? "#ECECEC" : "#F4F4F4",
             borderRadius: 0,
             minHeight: 44,
             "& .MuiOutlinedInput-notchedOutline": {
@@ -476,24 +579,28 @@ function FieldSelect({
               fontSize: 14,
               color: "text.primary",
             },
+            "&.Mui-disabled .MuiSelect-select": {
+              color: "text.secondary",
+              WebkitTextFillColor: "inherit",
+            },
           }}
         >
           {options.map((op) => {
-            const disabled = disabledValues.includes(op.value);
+            const optionDisabled = disabledValues.includes(op.value);
             const tooltip = tooltipByValue?.[op.value];
 
             return (
               <MenuItem
                 key={op.value}
                 value={op.value}
-                disabled={disabled}
+                disabled={optionDisabled}
                 title={tooltip || ""}
                 sx={{
                   fontSize: 14,
                 }}
               >
                 {op.label}
-                {disabled ? " (no disponible)" : ""}
+                {optionDisabled ? " (no disponible)" : ""}
               </MenuItem>
             );
           })}
