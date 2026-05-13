@@ -35,6 +35,25 @@ function isSalonName(name) {
   return n === "salón" || n === "salon" || n === "salón " || n === "salon ";
 }
 
+function unwrapQrCodesPayload(res) {
+  if (!res || typeof res !== "object") {
+    return {
+      data: Array.isArray(res) ? res : [],
+      ui: null,
+    };
+  }
+
+  return {
+    data: Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [],
+    ui: res?.ui || null,
+  };
+}
+
+function unwrapMutationPayload(res) {
+  if (!res || typeof res !== "object") return res;
+  return res?.data && typeof res.data === "object" ? res.data : res;
+}
+
 export default function BranchQrCodesPage() {
   const nav = useNavigate();
   const location = useLocation();
@@ -54,6 +73,8 @@ export default function BranchQrCodesPage() {
   const [items, setItems] = useState([]);
   const [tables, setTables] = useState([]);
   const [channels, setChannels] = useState([]);
+
+  const [qrUiMeta, setQrUiMeta] = useState(null);
 
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -144,6 +165,7 @@ export default function BranchQrCodesPage() {
       setItems([]);
       setTables([]);
       setChannels([]);
+      setQrUiMeta(null);
       return;
     }
 
@@ -159,13 +181,16 @@ export default function BranchQrCodesPage() {
       setSettingsRes(settingsResponse);
       setSettingsLoaded(true);
 
-      const [list, t, ch] = await Promise.all([
+      const [qrResponse, t, ch] = await Promise.all([
         getBranchQrCodes(restaurantId, targetBranchId),
         getTables(restaurantId, targetBranchId),
         getBranchSalesChannels(restaurantId, targetBranchId),
       ]);
 
-      setItems(Array.isArray(list) ? list : []);
+      const qrPayload = unwrapQrCodesPayload(qrResponse);
+
+      setItems(qrPayload.data);
+      setQrUiMeta(qrPayload.ui);
       setTables(Array.isArray(t) ? t : []);
       setChannels(Array.isArray(ch) ? ch : []);
     } catch (e) {
@@ -190,6 +215,7 @@ export default function BranchQrCodesPage() {
         setItems([]);
         setTables([]);
         setChannels([]);
+        setQrUiMeta(null);
       }
     } catch (e) {
       const msg =
@@ -258,9 +284,20 @@ export default function BranchQrCodesPage() {
       return;
     }
 
+    if (!qr?.is_active && qr?.blocked_by_plan) {
+      showAlert({
+        severity: "warning",
+        title: "QR bloqueado por plan",
+        message:
+          qr?.blocked_reason ||
+          "Tu plan actual no permite activar este tipo de QR.",
+      });
+      return;
+    }
+
     setBusy(true);
     try {
-      const updated = await updateBranchQrCode(
+      const res = await updateBranchQrCode(
         restaurantId,
         selectedBranchId,
         qr.id,
@@ -268,6 +305,8 @@ export default function BranchQrCodesPage() {
           is_active: !qr.is_active,
         }
       );
+
+      const updated = unwrapMutationPayload(res);
 
       setItems((prev) =>
         prev.map((x) => (x.id === qr.id ? { ...x, ...updated } : x))
@@ -387,11 +426,13 @@ export default function BranchQrCodesPage() {
         }
       }
 
-      const created = await createBranchQrCode(
+      const res = await createBranchQrCode(
         restaurantId,
         selectedBranchId,
         payload
       );
+
+      const created = unwrapMutationPayload(res);
 
       setItems((prev) => [created, ...prev]);
       setCreateOpen(false);
@@ -548,6 +589,7 @@ export default function BranchQrCodesPage() {
           canManageQr={canManageQr}
           manageQrBlockReason={manageQrBlockReason}
           selectedBranchId={selectedBranchId}
+          qrUiMeta={qrUiMeta}
         />
       </Stack>
 
@@ -561,6 +603,7 @@ export default function BranchQrCodesPage() {
         salonChannel={salonChannel}
         channelOptionsRaw={channelOptionsRaw}
         tableOptions={tableOptions}
+        qrUiMeta={qrUiMeta}
       />
 
       <AppAlert

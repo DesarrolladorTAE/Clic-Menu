@@ -7,8 +7,21 @@ import {
 } from "../../services/floor/operationalSettings.service";
 
 import {
-  Box, Button, Card, CardContent, Dialog,DialogContent,DialogTitle,FormControlLabel,IconButton,MenuItem, Stack,
-  Switch, TextField, Typography, useMediaQuery,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -17,6 +30,17 @@ import SaveIcon from "@mui/icons-material/Save";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 const SEAT_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1);
+
+const ORDERING_MODE_OPTIONS_DEFAULT = [
+  {
+    value: "waiter_only",
+    label: "Solo mesero",
+  },
+  {
+    value: "customer_assisted",
+    label: "Cliente asistido",
+  },
+];
 
 function FieldError({ message }) {
   if (!message) return null;
@@ -171,11 +195,58 @@ export default function OperationalSettingsModal({
     return initialData;
   }, [initialData]);
 
+  const initialUi = useMemo(() => {
+    if (!initialData) return null;
+    if (initialData?.ui && typeof initialData.ui === "object") {
+      return initialData.ui;
+    }
+    return null;
+  }, [initialData]);
+
   const initialNotices = useMemo(() => {
     if (!initialData) return [];
     if (Array.isArray(initialData?.notices)) return initialData.notices;
     return [];
   }, [initialData]);
+
+  const qrOrderingAllowed = useMemo(() => {
+    if (!initialUi) return true;
+    return initialUi.qr_ordering_allowed !== false;
+  }, [initialUi]);
+
+  const orderingModeBlockedReason = useMemo(() => {
+    return (
+      initialUi?.ordering_mode_blocked_reason ||
+      "Disponible desde Plan Total"
+    );
+  }, [initialUi]);
+
+  const orderingModeOptionsFromServer = useMemo(() => {
+    const raw = initialUi?.ordering_mode_options;
+
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return ORDERING_MODE_OPTIONS_DEFAULT;
+    }
+
+    return raw
+      .map((item) => {
+        if (typeof item === "string") {
+          return {
+            value: item,
+            label:
+              item === "customer_assisted"
+                ? "Cliente asistido"
+                : "Solo mesero",
+          };
+        }
+
+        return {
+          value: item?.value,
+          label: item?.label,
+        };
+      })
+      .filter((item) => item.value && item.label);
+  }, [initialUi]);
 
   const showMissingConfigNotice = mode === "create" && !initial;
 
@@ -212,12 +283,57 @@ export default function OperationalSettingsModal({
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
 
+  const orderingModeOptions = useMemo(() => {
+    let options = orderingModeOptionsFromServer;
+
+    // REGLA FRONT QR:
+    // Si el QR está apagado, no se muestra Cliente asistido aunque el plan lo permita.
+    if (!isQrEnabled) {
+      options = options.filter((item) => item.value !== "customer_assisted");
+    }
+
+    // REGLA FRONT PLAN:
+    // Si el plan no permite pedidos por QR, solo dejamos Solo mesero.
+    if (!qrOrderingAllowed) {
+      options = options.filter((item) => item.value !== "customer_assisted");
+    }
+
+    if (!options.some((item) => item.value === "waiter_only")) {
+      options.unshift({
+        value: "waiter_only",
+        label: "Solo mesero",
+      });
+    }
+
+    return options;
+  }, [orderingModeOptionsFromServer, isQrEnabled, qrOrderingAllowed]);
+
   useEffect(() => {
     if (!open) return;
     if (String(tableServiceMode) !== "assigned_waiter") {
       setValue("assignment_strategy", "table_only");
     }
   }, [open, tableServiceMode, setValue]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // REGLA FRONT QR:
+    // Si QR está apagado, no debe quedar seleccionado Cliente asistido.
+    if (!isQrEnabled && String(orderingMode) === "customer_assisted") {
+      setValue("ordering_mode", "waiter_only");
+    }
+  }, [open, isQrEnabled, orderingMode, setValue]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // REGLA FRONT PLAN:
+    // Digital/Gestión no pueden quedarse visualmente en Cliente asistido.
+    if (!qrOrderingAllowed && String(orderingMode) === "customer_assisted") {
+      setValue("ordering_mode", "waiter_only");
+    }
+  }, [open, qrOrderingAllowed, orderingMode, setValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -268,8 +384,19 @@ export default function OperationalSettingsModal({
     try {
       const effectiveTableServiceMode = form.table_service_mode || null;
 
+      // REGLA FRONT DE SEGURIDAD:
+      // Aunque el select ya lo impide, evitamos mandar customer_assisted si:
+      // - QR está apagado
+      // - el plan no permite pedidos QR
+      const safeOrderingMode =
+        !form.is_qr_enabled ||
+        !qrOrderingAllowed ||
+        form.ordering_mode !== "customer_assisted"
+          ? "waiter_only"
+          : "customer_assisted";
+
       const payload = {
-        ordering_mode: form.ordering_mode || null,
+        ordering_mode: safeOrderingMode,
         table_service_mode: effectiveTableServiceMode,
         is_qr_enabled: !!form.is_qr_enabled,
         assignment_strategy:
@@ -442,6 +569,40 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
+                {!qrOrderingAllowed ? (
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1,
+                      border: "1px solid",
+                      borderColor: "#B8D7F0",
+                      backgroundColor: "#EEF7FF",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color: "#0B4A75",
+                        mb: 0.5,
+                      }}
+                    >
+                      Pedidos por QR limitados por plan
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "#0B4A75",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      En este plan el QR funciona
+                      como menú visual.
+                    </Typography>
+                  </Box>
+                ) : null}
+
                 {serverNotices.length > 0 ? (
                   <Box
                     sx={{
@@ -498,15 +659,20 @@ export default function OperationalSettingsModal({
                             IconComponent: KeyboardArrowDownIcon,
                           }}
                         >
-                          <MenuItem value="waiter_only">Solo mesero</MenuItem>
-                          <MenuItem value="customer_assisted">
-                            Cliente asistido
-                          </MenuItem>
+                          {orderingModeOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
                         </TextField>
                       )}
                     />
                   }
-                  help={orderingHelper}
+                  help={
+                    !isQrEnabled
+                      ? "Cliente asistido no está disponible si el QR está desactivado."
+                      : orderingHelper
+                  }
                   error={errors?.ordering_mode?.message}
                 />
 

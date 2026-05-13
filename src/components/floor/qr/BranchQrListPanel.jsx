@@ -1,21 +1,6 @@
 import {
-  Box,
-  Button,
-  Card,
-  FormControlLabel,
-  IconButton,
-  Paper,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -24,6 +9,13 @@ import OpenInNewOutlinedIcon from "@mui/icons-material/OpenInNewOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import PaginationFooter from "../../common/PaginationFooter";
+
+function getQrPlanBlockReason(qr) {
+  return (
+    qr?.blocked_reason ||
+    "Disponible desde Plan Gestión"
+  );
+}
 
 export default function BranchQrListPanel({
   items = [],
@@ -155,7 +147,9 @@ export default function BranchQrListPanel({
               {items.map((qr) => {
                 const channelName = qr?.sales_channel?.name || "—";
                 const tableName = qr?.table?.name || "General";
-                const toggleDisabled = busy || !canManageQr;
+                const blockedByPlan = !!qr?.blocked_by_plan;
+                const planBlockReason = getQrPlanBlockReason(qr);
+                const toggleDisabled = busy || !canManageQr || blockedByPlan;
 
                 return (
                   <Card
@@ -164,7 +158,7 @@ export default function BranchQrListPanel({
                       borderRadius: 1,
                       boxShadow: "none",
                       border: "1px solid",
-                      borderColor: "divider",
+                      borderColor: blockedByPlan ? "#F3D48B" : "divider",
                       backgroundColor: "#fff",
                       minHeight: 260,
                     }}
@@ -222,28 +216,40 @@ export default function BranchQrListPanel({
                         <InfoRow label="Mesa" value={tableName} />
                         <InfoRow label="URL" value={qr.public_url} long />
 
-                        <FormControlLabel
-                          sx={{ m: 0 }}
-                          control={
-                            <Switch
-                              checked={!!qr.is_active}
-                              onChange={() => onToggleActive(qr)}
-                              disabled={toggleDisabled}
-                              color="primary"
+                        <Tooltip
+                          title={
+                            blockedByPlan
+                              ? planBlockReason
+                              : !canManageQr
+                              ? manageQrBlockReason || "QR desactivado para esta sucursal."
+                              : ""
+                          }
+                        >
+                          <Box sx={{ width: "fit-content" }}>
+                            <FormControlLabel
+                              sx={{ m: 0 }}
+                              control={
+                                <Switch
+                                  checked={!!qr.is_active}
+                                  onChange={() => onToggleActive(qr)}
+                                  disabled={toggleDisabled}
+                                  color="primary"
+                                />
+                              }
+                              label={
+                                <Typography
+                                  sx={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "text.primary",
+                                  }}
+                                >
+                                  {qr.is_active ? "Activo" : "Inactivo"}
+                                </Typography>
+                              }
                             />
-                          }
-                          label={
-                            <Typography
-                              sx={{
-                                fontSize: 14,
-                                fontWeight: 700,
-                                color: "text.primary",
-                              }}
-                            >
-                              {qr.is_active ? "Activo" : "Inactivo"}
-                            </Typography>
-                          }
-                        />
+                          </Box>
+                        </Tooltip>
 
                         {!canManageQr ? (
                           <Typography
@@ -256,6 +262,19 @@ export default function BranchQrListPanel({
                           >
                             {manageQrBlockReason ||
                               "QR desactivado para esta sucursal."}
+                          </Typography>
+                        ) : null}
+
+                        {blockedByPlan ? (
+                          <Typography
+                            sx={{
+                              fontSize: 12,
+                              color: "#8A5A00",
+                              fontWeight: 800,
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {planBlockReason}
                           </Typography>
                         ) : null}
 
@@ -324,7 +343,9 @@ export default function BranchQrListPanel({
                   {items.map((qr) => {
                     const channelName = qr?.sales_channel?.name || "—";
                     const tableName = qr?.table?.name || "General";
-                    const toggleDisabled = busy || !canManageQr;
+                    const blockedByPlan = !!qr?.blocked_by_plan;
+                    const planBlockReason = getQrPlanBlockReason(qr);
+                    const toggleDisabled = busy || !canManageQr || blockedByPlan;
 
                     return (
                       <TableRow
@@ -338,12 +359,32 @@ export default function BranchQrListPanel({
                             color: "text.primary",
                             whiteSpace: "nowrap",
                           },
+                          ...(blockedByPlan
+                            ? {
+                                backgroundColor: "#FFFDF5",
+                              }
+                            : {}),
                         }}
                       >
                         <TableCell>
-                          <Typography sx={{ fontWeight: 800 }}>
-                            {qr.name}
-                          </Typography>
+                          <Stack spacing={0.5}>
+                            <Typography sx={{ fontWeight: 800 }}>
+                              {qr.name}
+                            </Typography>
+
+                            {blockedByPlan ? (
+                              <Typography
+                                sx={{
+                                  fontSize: 12,
+                                  color: "#8A5A00",
+                                  fontWeight: 800,
+                                  lineHeight: 1.35,
+                                }}
+                              >
+                                {planBlockReason}
+                              </Typography>
+                            ) : null}
+                          </Stack>
                         </TableCell>
 
                         <TableCell>{typeLabelMap[qr.type] || qr.type}</TableCell>
@@ -361,28 +402,40 @@ export default function BranchQrListPanel({
                         </TableCell>
 
                         <TableCell align="center">
-                          <FormControlLabel
-                            sx={{ m: 0 }}
-                            control={
-                              <Switch
-                                checked={!!qr.is_active}
-                                onChange={() => onToggleActive(qr)}
-                                disabled={toggleDisabled}
-                                color="primary"
+                          <Tooltip
+                            title={
+                              blockedByPlan
+                                ? planBlockReason
+                                : !canManageQr
+                                ? manageQrBlockReason || "QR desactivado para esta sucursal."
+                                : ""
+                            }
+                          >
+                            <Box sx={{ display: "inline-flex" }}>
+                              <FormControlLabel
+                                sx={{ m: 0 }}
+                                control={
+                                  <Switch
+                                    checked={!!qr.is_active}
+                                    onChange={() => onToggleActive(qr)}
+                                    disabled={toggleDisabled}
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography
+                                    sx={{
+                                      fontSize: 14,
+                                      fontWeight: 700,
+                                      color: "text.primary",
+                                    }}
+                                  >
+                                    {qr.is_active ? "Activo" : "Inactivo"}
+                                  </Typography>
+                                }
                               />
-                            }
-                            label={
-                              <Typography
-                                sx={{
-                                  fontSize: 14,
-                                  fontWeight: 700,
-                                  color: "text.primary",
-                                }}
-                              >
-                                {qr.is_active ? "Activo" : "Inactivo"}
-                              </Typography>
-                            }
-                          />
+                            </Box>
+                          </Tooltip>
                         </TableCell>
 
                         <TableCell align="right">

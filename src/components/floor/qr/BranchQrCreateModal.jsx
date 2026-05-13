@@ -1,27 +1,22 @@
 import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch,
+  TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
 import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+
+const DEFAULT_QR_TYPE_OPTIONS = [
+  {
+    value: "physical",
+    label: "Físico",
+    description: "QR físico para mesa o menú general del salón.",
+  },
+];
 
 function isSalonName(name) {
   const n = String(name || "").trim().toLowerCase();
@@ -92,19 +87,40 @@ export default function BranchQrCreateModal({
   salonChannel,
   channelOptionsRaw = [],
   tableOptions = [],
+  qrUiMeta = null,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const qrTypeOptions = useMemo(() => {
+    const options = Array.isArray(qrUiMeta?.qr_type_options)
+      ? qrUiMeta.qr_type_options
+      : DEFAULT_QR_TYPE_OPTIONS;
+
+    const clean = options
+      .filter((item) => item?.value)
+      .map((item) => ({
+        value: String(item.value),
+        label: item.label || String(item.value),
+        description: item.description || "",
+      }));
+
+    return clean.length > 0 ? clean : DEFAULT_QR_TYPE_OPTIONS;
+  }, [qrUiMeta]);
+
+  const defaultType = useMemo(() => {
+    return qrTypeOptions[0]?.value || "physical";
+  }, [qrTypeOptions]);
+
   const defaultValues = useMemo(() => {
     return {
       name: "",
-      type: "physical",
+      type: defaultType,
       sales_channel_id: salonChannel?.id ? String(salonChannel.id) : "",
       table_id: "",
       is_active: true,
     };
-  }, [salonChannel]);
+  }, [defaultType, salonChannel]);
 
   const { control, watch, reset, setValue, handleSubmit } = useForm({
     defaultValues,
@@ -113,6 +129,10 @@ export default function BranchQrCreateModal({
   const type = watch("type");
   const tableId = watch("table_id");
   const salesChannelId = watch("sales_channel_id");
+
+  const selectedTypeMeta = useMemo(() => {
+    return qrTypeOptions.find((item) => item.value === type) || null;
+  }, [qrTypeOptions, type]);
 
   const filteredChannelOptions = useMemo(() => {
     if (!type) return [];
@@ -141,8 +161,10 @@ export default function BranchQrCreateModal({
     const hasName = String(watch("name") || "").trim().length > 0;
     const hasType = String(type || "").length > 0;
     const hasChannel = String(salesChannelId || "").length > 0;
-    return hasName && hasType && hasChannel;
-  }, [watch, type, salesChannelId]);
+    const typeAllowed = qrTypeOptions.some((item) => item.value === type);
+
+    return hasName && hasType && hasChannel && typeAllowed;
+  }, [watch, type, salesChannelId, qrTypeOptions]);
 
   useEffect(() => {
     if (!open) return;
@@ -151,6 +173,14 @@ export default function BranchQrCreateModal({
 
   useEffect(() => {
     if (!open) return;
+
+    const typeAllowed = qrTypeOptions.some((item) => item.value === type);
+
+    if (!typeAllowed) {
+      setValue("type", defaultType);
+      setValue("table_id", "");
+      return;
+    }
 
     if (type === "delivery" || type === "web") {
       if (tableId) {
@@ -184,6 +214,16 @@ export default function BranchQrCreateModal({
       if (!salesChannelId && filteredChannelOptions.length > 0) {
         setValue("sales_channel_id", String(filteredChannelOptions[0].id));
       }
+
+      if (salesChannelId && filteredChannelOptions.length > 0) {
+        const exists = filteredChannelOptions.some(
+          (item) => Number(item.id) === Number(salesChannelId)
+        );
+
+        if (!exists) {
+          setValue("sales_channel_id", String(filteredChannelOptions[0].id));
+        }
+      }
     }
   }, [
     open,
@@ -192,6 +232,8 @@ export default function BranchQrCreateModal({
     salesChannelId,
     salonChannel,
     filteredChannelOptions,
+    qrTypeOptions,
+    defaultType,
     setValue,
   ]);
 
@@ -330,15 +372,19 @@ export default function BranchQrCreateModal({
                               IconComponent: KeyboardArrowDownIcon,
                             }}
                           >
-                            <MenuItem value="physical">Físico</MenuItem>
-                            <MenuItem value="web">Web</MenuItem>
-                            <MenuItem value="delivery">Delivery</MenuItem>
+                            {qrTypeOptions.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
                           </TextField>
                         )}
                       />
                     }
                     help={
-                      type === "web" || type === "delivery"
+                      selectedTypeMeta?.description
+                        ? selectedTypeMeta.description
+                        : type === "web" || type === "delivery"
                         ? `${type === "web" ? "Web" : "Delivery"}: se fuerza “General (sin mesa)”.`
                         : null
                     }
