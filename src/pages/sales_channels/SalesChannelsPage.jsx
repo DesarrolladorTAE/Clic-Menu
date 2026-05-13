@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Alert, Box, Button, Card, Chip, CircularProgress, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+  Box,
+  CircularProgress,
+  Stack,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
-import LockOutlineIcon from "@mui/icons-material/LockOutline";
 
 import {
   createSalesChannel,
@@ -22,8 +18,11 @@ import {
 
 import usePagination from "../../hooks/usePagination";
 import usePlanAccess from "../../hooks/plan/usePlanAccess";
-import PaginationFooter from "../../components/common/PaginationFooter";
+
 import SalesChannelUpsertModal from "../../components/sales_channels/SalesChannelUpsertModal";
+import SalesChannelsHeader from "../../components/sales_channels/SalesChannelsHeader";
+import SalesChannelsAlerts from "../../components/sales_channels/SalesChannelsAlerts";
+import SalesChannelsList from "../../components/sales_channels/SalesChannelsList";
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Activo" },
@@ -34,7 +33,7 @@ const PAGE_SIZE = 5;
 const SALON_CODE = "SALON";
 
 const PLAN_CHANNEL_MESSAGE =
-  "Tu plan actual solo permite el canal SALÓN. Para crear canales adicionales, cambia al Plan Gestión o Plan Total.";
+  "Tu plan actual solo permite el canal SALÓN. Para crear o activar canales adicionales, cambia al Plan Gestión o Plan Total.";
 
 function normalizeCode(v) {
   return (v || "")
@@ -137,6 +136,11 @@ export default function SalesChannelsPage() {
       return;
     }
 
+    if (!canUseAdditionalSalesChannels) {
+      setErr(PLAN_CHANNEL_MESSAGE);
+      return;
+    }
+
     setErr("");
     setModalErr("");
     setEditing(it);
@@ -219,6 +223,11 @@ export default function SalesChannelsPage() {
       return;
     }
 
+    if (!canUseAdditionalSalesChannels) {
+      setErr(PLAN_CHANNEL_MESSAGE);
+      return;
+    }
+
     setErr("");
     setSaving(true);
     try {
@@ -282,529 +291,44 @@ export default function SalesChannelsPage() {
     >
       <Box sx={{ maxWidth: 1100, mx: "auto" }}>
         <Stack spacing={3}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-            spacing={2}
-          >
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: { xs: 30, md: 42 },
-                  fontWeight: 800,
-                  color: "text.primary",
-                  lineHeight: 1.1,
-                }}
-              >
-                {title}
-              </Typography>
+          <SalesChannelsHeader
+            title={title}
+            restaurantId={restaurantId}
+            nav={nav}
+            saving={saving}
+            canUseAdditionalSalesChannels={canUseAdditionalSalesChannels}
+            planMessage={PLAN_CHANNEL_MESSAGE}
+            onCreate={openCreate}
+          />
 
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: "text.secondary",
-                  fontSize: { xs: 15, md: 18 },
-                }}
-              >
-                Aquí defines los canales posibles del restaurante, sin sucursales ni productos.
-              </Typography>
-            </Box>
+          <SalesChannelsAlerts
+            planAccessError={planAccessError}
+            canUseAdditionalSalesChannels={canUseAdditionalSalesChannels}
+            err={err}
+          />
 
-            <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              spacing={1.5}
-              width={{ xs: "100%", md: "auto" }}
-            >
-              <Button
-                onClick={() => nav(`/owner/restaurants/${restaurantId}/settings`)}
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 150 },
-                  height: 44,
-                  borderRadius: 2,
-                }}
-              >
-                Volver
-              </Button>
-
-              <Tooltip
-                title={
-                  !canUseAdditionalSalesChannels
-                    ? PLAN_CHANNEL_MESSAGE
-                    : "Crear canal"
-                }
-              >
-                <span>
-                  <Button
-                    onClick={openCreate}
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    disabled={!canUseAdditionalSalesChannels || saving}
-                    sx={{
-                      minWidth: { xs: "100%", sm: 180 },
-                      height: 44,
-                      borderRadius: 2,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Crear canal
-                  </Button>
-                </span>
-              </Tooltip>
-            </Stack>
-          </Stack>
-
-          {planAccessError && (
-            <Alert
-              severity="warning"
-              sx={{
-                borderRadius: 1,
-                alignItems: "flex-start",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
-                  Permisos del plan
-                </Typography>
-                <Typography variant="body2">{planAccessError}</Typography>
-              </Box>
-            </Alert>
-          )}
-
-          {!canUseAdditionalSalesChannels && (
-            <Alert
-              severity="info"
-              sx={{
-                borderRadius: 1,
-                alignItems: "flex-start",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
-                  Canal limitado por plan
-                </Typography>
-                <Typography variant="body2">
-                  Tu plan actual solo permite trabajar con el canal SALÓN.
-                </Typography>
-              </Box>
-            </Alert>
-          )}
-
-          {err && (
-            <Alert
-              severity="error"
-              sx={{
-                borderRadius: 1,
-                alignItems: "flex-start",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
-                  Error
-                </Typography>
-                <Typography variant="body2">{err}</Typography>
-              </Box>
-            </Alert>
-          )}
-
-          <Paper
-            sx={{
-              p: 0,
-              overflow: "hidden",
-              borderRadius: 0,
-              backgroundColor: "background.paper",
-            }}
-          >
-            {items.length === 0 ? (
-              <Box
-                sx={{
-                  px: 3,
-                  py: 5,
-                  textAlign: "center",
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: 20,
-                    fontWeight: 800,
-                    color: "text.primary",
-                  }}
-                >
-                  No hay canales registrados
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 1,
-                    color: "text.secondary",
-                    fontSize: 14,
-                  }}
-                >
-                  Crea el primero. Por ejemplo: COMEDOR, DELIVERY o PICKUP.
-                </Typography>
-
-                <Tooltip
-                  title={
-                    !canUseAdditionalSalesChannels
-                      ? PLAN_CHANNEL_MESSAGE
-                      : "Crear canal"
-                  }
-                >
-                  <span>
-                    <Button
-                      onClick={openCreate}
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      disabled={!canUseAdditionalSalesChannels || saving}
-                      sx={{
-                        mt: 2.5,
-                        minWidth: 220,
-                        height: 44,
-                        borderRadius: 2,
-                        fontWeight: 800,
-                      }}
-                    >
-                      Crear canal
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Box>
-            ) : (
-              <>
-                {isMobile ? (
-                  <Stack spacing={1.5} sx={{ p: 2 }}>
-                    {paginatedItems.map((it) => {
-                      const active = it.status === "active";
-                      const locked = isSalonChannel(it);
-
-                      return (
-                        <Card
-                          key={it.id}
-                          sx={{
-                            borderRadius: 1,
-                            boxShadow: "none",
-                            border: "1px solid",
-                            borderColor: "divider",
-                            backgroundColor: "#fff",
-                          }}
-                        >
-                          <Box sx={{ p: 2 }}>
-                            <Stack spacing={1.5}>
-                              <Stack
-                                direction="row"
-                                justifyContent="space-between"
-                                alignItems="flex-start"
-                                spacing={1}
-                              >
-                                <Box sx={{ minWidth: 0 }}>
-                                  <Typography
-                                    sx={{
-                                      fontSize: 15,
-                                      fontWeight: 800,
-                                      color: "text.primary",
-                                      lineHeight: 1.3,
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
-                                    {it.name}
-                                  </Typography>
-
-                                  <Typography
-                                    sx={{
-                                      mt: 0.5,
-                                      fontSize: 13,
-                                      color: "text.secondary",
-                                      fontFamily: "monospace",
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
-                                    {it.code}
-                                  </Typography>
-                                </Box>
-
-                                <Stack spacing={0.75} alignItems="flex-end">
-                                  <Chip
-                                    label={active ? "ACTIVO" : "INACTIVO"}
-                                    color={active ? "success" : "default"}
-                                    size="small"
-                                    sx={{ fontWeight: 800 }}
-                                  />
-
-                                  {locked && (
-                                    <Chip
-                                      label="FIJO"
-                                      size="small"
-                                      icon={<LockOutlineIcon />}
-                                      sx={{
-                                        fontWeight: 800,
-                                        bgcolor: "#EEF2FF",
-                                        color: "#3F3A52",
-                                      }}
-                                    />
-                                  )}
-                                </Stack>
-                              </Stack>
-
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                justifyContent="flex-end"
-                                alignItems="center"
-                              >
-                                <Tooltip
-                                  title={
-                                    locked
-                                      ? 'El canal "Salón" no se puede desactivar'
-                                      : active
-                                      ? "Desactivar"
-                                      : "Activar"
-                                  }
-                                >
-                                  <span>
-                                    <IconButton
-                                      onClick={() => onToggleStatus(it)}
-                                      disabled={saving || locked}
-                                      sx={{
-                                        width: 40,
-                                        height: 40,
-                                        bgcolor: active ? "#D67A3A" : "success.main",
-                                        color: "#fff",
-                                        borderRadius: 1.5,
-                                        "&:hover": {
-                                          bgcolor: active ? "#B96328" : "success.dark",
-                                        },
-                                      }}
-                                    >
-                                      <PowerSettingsNewIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-
-                                <Tooltip
-                                  title={
-                                    locked
-                                      ? 'El canal "Salón" no se puede editar'
-                                      : "Editar"
-                                  }
-                                >
-                                  <span>
-                                    <IconButton
-                                      onClick={() => openEdit(it)}
-                                      disabled={saving || locked}
-                                      sx={iconEditSx}
-                                    >
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-
-                                <Tooltip
-                                  title={
-                                    locked
-                                      ? 'El canal "Salón" no se puede eliminar'
-                                      : "Eliminar"
-                                  }
-                                >
-                                  <span>
-                                    <IconButton
-                                      onClick={() => onDelete(it)}
-                                      disabled={saving || locked}
-                                      sx={iconDeleteSx}
-                                    >
-                                      <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              </Stack>
-                            </Stack>
-                          </Box>
-                        </Card>
-                      );
-                    })}
-                  </Stack>
-                ) : (
-                  <TableContainer sx={{ width: "100%", overflowX: "auto", borderRadius: 0 }}>
-                    <Table sx={{ minWidth: 900 }}>
-                      <TableHead>
-                        <TableRow
-                          sx={{
-                            "& th": {
-                              backgroundColor: "primary.main",
-                              color: "#fff",
-                              fontWeight: 800,
-                              fontSize: 13,
-                              borderBottom: "none",
-                              whiteSpace: "nowrap",
-                            },
-                          }}
-                        >
-                          <TableCell>Code</TableCell>
-                          <TableCell>Nombre</TableCell>
-                          <TableCell>Estado</TableCell>
-                          <TableCell align="right">Acciones</TableCell>
-                        </TableRow>
-                      </TableHead>
-
-                      <TableBody>
-                        {paginatedItems.map((it) => {
-                          const active = it.status === "active";
-                          const locked = isSalonChannel(it);
-
-                          return (
-                            <TableRow
-                              key={it.id}
-                              hover
-                              sx={{
-                                "& td": {
-                                  borderBottom: "1px solid",
-                                  borderColor: "divider",
-                                  fontSize: 14,
-                                  color: "text.primary",
-                                  whiteSpace: "nowrap",
-                                },
-                              }}
-                            >
-                              <TableCell
-                                sx={{
-                                  fontFamily: "monospace",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                {it.code}
-                              </TableCell>
-
-                              <TableCell>
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                  <Typography sx={{ fontWeight: 700 }}>
-                                    {it.name}
-                                  </Typography>
-
-                                  {locked && (
-                                    <Chip
-                                      label="FIJO"
-                                      size="small"
-                                      icon={<LockOutlineIcon />}
-                                      sx={{
-                                        fontWeight: 800,
-                                        bgcolor: "#EEF2FF",
-                                        color: "#3F3A52",
-                                      }}
-                                    />
-                                  )}
-                                </Stack>
-                              </TableCell>
-
-                              <TableCell>
-                                <Chip
-                                  label={active ? "ACTIVO" : "INACTIVO"}
-                                  color={active ? "success" : "default"}
-                                  size="small"
-                                  sx={{
-                                    fontWeight: 800,
-                                    minWidth: 90,
-                                  }}
-                                />
-                              </TableCell>
-
-                              <TableCell align="right">
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  justifyContent="flex-end"
-                                  alignItems="center"
-                                  flexWrap="nowrap"
-                                >
-                                  <Tooltip
-                                    title={
-                                      locked
-                                        ? 'El canal "Salón" no se puede desactivar'
-                                        : active
-                                        ? "Desactivar"
-                                        : "Activar"
-                                    }
-                                  >
-                                    <span>
-                                      <IconButton
-                                        onClick={() => onToggleStatus(it)}
-                                        disabled={saving || locked}
-                                        sx={{
-                                          width: 36,
-                                          height: 36,
-                                          bgcolor: active ? "#D67A3A" : "success.main",
-                                          color: "#fff",
-                                          borderRadius: 1.5,
-                                          "&:hover": {
-                                            bgcolor: active ? "#B96328" : "success.dark",
-                                          },
-                                        }}
-                                      >
-                                        <PowerSettingsNewIcon fontSize="small" />
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
-
-                                  <Tooltip
-                                    title={
-                                      locked
-                                        ? 'El canal "Salón" no se puede editar'
-                                        : "Editar"
-                                    }
-                                  >
-                                    <span>
-                                      <IconButton
-                                        onClick={() => openEdit(it)}
-                                        disabled={saving || locked}
-                                        sx={iconEditSx}
-                                      >
-                                        <EditIcon fontSize="small" />
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
-
-                                  <Tooltip
-                                    title={
-                                      locked
-                                        ? 'El canal "Salón" no se puede eliminar'
-                                        : "Eliminar"
-                                    }
-                                  >
-                                    <span>
-                                      <IconButton
-                                        onClick={() => onDelete(it)}
-                                        disabled={saving || locked}
-                                        sx={iconDeleteSx}
-                                      >
-                                        <DeleteOutlineIcon fontSize="small" />
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
-                                </Stack>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-
-                <PaginationFooter
-                  page={page}
-                  totalPages={totalPages}
-                  startItem={startItem}
-                  endItem={endItem}
-                  total={total}
-                  hasPrev={hasPrev}
-                  hasNext={hasNext}
-                  onPrev={prevPage}
-                  onNext={nextPage}
-                  itemLabel="canales"
-                />
-              </>
-            )}
-          </Paper>
+          <SalesChannelsList
+            items={items}
+            paginatedItems={paginatedItems}
+            isMobile={isMobile}
+            saving={saving}
+            canUseAdditionalSalesChannels={canUseAdditionalSalesChannels}
+            planMessage={PLAN_CHANNEL_MESSAGE}
+            page={page}
+            totalPages={totalPages}
+            startItem={startItem}
+            endItem={endItem}
+            total={total}
+            hasPrev={hasPrev}
+            hasNext={hasNext}
+            prevPage={prevPage}
+            nextPage={nextPage}
+            isSalonChannel={isSalonChannel}
+            onCreate={openCreate}
+            onEdit={openEdit}
+            onDelete={onDelete}
+            onToggleStatus={onToggleStatus}
+          />
         </Stack>
       </Box>
 
@@ -822,25 +346,3 @@ export default function SalesChannelsPage() {
     </Box>
   );
 }
-
-const iconEditSx = {
-  width: 36,
-  height: 36,
-  bgcolor: "#E3C24A",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "#C9AA39",
-  },
-};
-
-const iconDeleteSx = {
-  width: 36,
-  height: 36,
-  bgcolor: "error.main",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "error.dark",
-  },
-};
