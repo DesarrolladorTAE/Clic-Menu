@@ -11,13 +11,9 @@ import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 
-import {
-  getMenuSections,
-} from "../../services/menu/menuSections.service";
+import { getMenuSections } from "../../services/menu/menuSections.service";
 
-import {
-  getCategories,
-} from "../../services/menu/categories.service";
+import { getCategories } from "../../services/menu/categories.service";
 
 import AppAlert from "../../components/common/AppAlert";
 import MenuTabs from "../../components/menu/MenuTabs";
@@ -29,6 +25,7 @@ export default function MenuManager() {
   const { restaurantId } = useParams();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -67,6 +64,10 @@ export default function MenuManager() {
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const normalizeSettingsResponse = (res) => {
+    return res?.data ?? res?.settings ?? res ?? null;
+  };
+
   const effectiveBranchId = useMemo(() => {
     if (!requiresBranch) return null;
     return branchId ? Number(branchId) : null;
@@ -90,27 +91,38 @@ export default function MenuManager() {
     return sectionNameById[sectionId] || "Sección eliminada";
   };
 
-  const refreshSections = async (queryOverride = null) => {
-    const sec = await getMenuSections(
-      restaurantId,
-      queryOverride ?? branchQuery
-    );
+  const refreshMenuCatalog = async (queryOverride = null) => {
+    const query = queryOverride ?? branchQuery;
+
+    const [sec, cat] = await Promise.all([
+      getMenuSections(restaurantId, query),
+      getCategories(restaurantId, query),
+    ]);
+
     setSections(Array.isArray(sec) ? sec : []);
+    setCategories(Array.isArray(cat) ? cat : []);
+
+    return {
+      sections: Array.isArray(sec) ? sec : [],
+      categories: Array.isArray(cat) ? cat : [],
+    };
+  };
+
+  const refreshSections = async (queryOverride = null) => {
+    return refreshMenuCatalog(queryOverride);
   };
 
   const refreshCategories = async (queryOverride = null) => {
-    const cat = await getCategories(
-      restaurantId,
-      queryOverride ?? branchQuery
-    );
-    setCategories(Array.isArray(cat) ? cat : []);
+    return refreshMenuCatalog(queryOverride);
   };
 
   const loadAll = async () => {
     setLoading(true);
 
     try {
-      const st = await getRestaurantSettings(restaurantId);
+      const settingsResponse = await getRestaurantSettings(restaurantId);
+      const st = normalizeSettingsResponse(settingsResponse);
+
       setSettings(st);
 
       let selectedBranchId = null;
@@ -140,13 +152,7 @@ export default function MenuManager() {
           ? { branch_id: selectedBranchId }
           : {};
 
-      const [sec, cat] = await Promise.all([
-        getMenuSections(restaurantId, query),
-        getCategories(restaurantId, query),
-      ]);
-
-      setSections(Array.isArray(sec) ? sec : []);
-      setCategories(Array.isArray(cat) ? cat : []);
+      await refreshMenuCatalog(query);
     } catch (e) {
       showAlert({
         severity: "error",
@@ -169,15 +175,10 @@ export default function MenuManager() {
     if (!effectiveBranchId) return;
 
     (async () => {
-      try {
-        const query = { branch_id: effectiveBranchId };
-        const [sec, cat] = await Promise.all([
-          getMenuSections(restaurantId, query),
-          getCategories(restaurantId, query),
-        ]);
+      setRefreshing(true);
 
-        setSections(Array.isArray(sec) ? sec : []);
-        setCategories(Array.isArray(cat) ? cat : []);
+      try {
+        await refreshMenuCatalog({ branch_id: effectiveBranchId });
       } catch (e) {
         showAlert({
           severity: "error",
@@ -186,8 +187,11 @@ export default function MenuManager() {
             e?.response?.data?.message ||
             "No se pudieron recargar las secciones y categorías",
         });
+      } finally {
+        setRefreshing(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requiresBranch, effectiveBranchId, restaurantId]);
 
   if (loading) {
@@ -249,7 +253,9 @@ export default function MenuManager() {
             </Box>
 
             <Button
-              onClick={() => nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)}
+              onClick={() =>
+                nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
+              }
               variant="contained"
               startIcon={<RestaurantMenuIcon />}
               sx={{
@@ -301,6 +307,11 @@ export default function MenuManager() {
                     : "Selecciona la sucursal correcta antes de crear o editar secciones y categorías."
                 }
               />
+
+              <InstructionRow
+                step="3"
+                text="Siempre debe existir al menos una sección y una categoría activa para que los productos puedan organizarse correctamente."
+              />
             </Stack>
           </Paper>
 
@@ -323,6 +334,7 @@ export default function MenuManager() {
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
                   fullWidth
+                  disabled={refreshing}
                   SelectProps={{
                     IconComponent: KeyboardArrowDownIcon,
                   }}
@@ -342,6 +354,20 @@ export default function MenuManager() {
                 >
                   Tu restaurante está configurado por sucursal, así que los cambios se aplicarán solo a la sucursal seleccionada.
                 </Typography>
+
+                {refreshing ? (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CircularProgress size={16} />
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        color: "text.secondary",
+                      }}
+                    >
+                      Actualizando secciones y categorías…
+                    </Typography>
+                  </Stack>
+                ) : null}
               </Stack>
             </Paper>
           ) : null}
@@ -355,6 +381,7 @@ export default function MenuManager() {
               effectiveBranchId={effectiveBranchId}
               sections={sections}
               onReload={refreshSections}
+              onReloadAll={refreshMenuCatalog}
             />
           ) : (
             <MenuCategoriesPanel
@@ -365,6 +392,7 @@ export default function MenuManager() {
               sections={sections}
               getSectionLabel={getSectionLabel}
               onReload={refreshCategories}
+              onReloadAll={refreshMenuCatalog}
             />
           )}
         </Stack>

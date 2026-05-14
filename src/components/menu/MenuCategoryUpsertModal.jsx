@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  Box,Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton,
-  MenuItem, Select, Stack, Switch, TextField, Typography, useMediaQuery,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -73,8 +88,30 @@ export default function MenuCategoryUpsertModal({
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const getBackendMessage = (e, fallback) => {
+    const data = e?.response?.data;
+
+    return (
+      data?.message ||
+      data?.errors?.branch_id?.[0] ||
+      data?.errors?.section_id?.[0] ||
+      data?.errors?.name?.[0] ||
+      data?.errors?.description?.[0] ||
+      data?.errors?.sort_order?.[0] ||
+      data?.errors?.status?.[0] ||
+      fallback
+    );
+  };
+
   useEffect(() => {
     if (!open) return;
+
+    setAlertState({
+      open: false,
+      severity: "error",
+      title: "",
+      message: "",
+    });
 
     if (isEdit) {
       setSectionId(editing?.section_id ? String(editing.section_id) : "");
@@ -149,8 +186,7 @@ export default function MenuCategoryUpsertModal({
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo guardar la categoría",
+        message: getBackendMessage(e, "No se pudo guardar la categoría"),
       });
     } finally {
       setSaving(false);
@@ -261,12 +297,13 @@ export default function MenuCategoryUpsertModal({
                   <FieldBlock
                     label="Sección (opcional)"
                     input={
-                      <FormControl fullWidth>
+                      <FormControl fullWidth disabled={saving}>
                         <Select
                           value={sectionId}
                           onChange={(e) => setSectionId(e.target.value)}
                           displayEmpty
                           IconComponent={KeyboardArrowDownIcon}
+                          disabled={saving}
                           sx={selectSx}
                         >
                           <MenuItem value="">Sin sección</MenuItem>
@@ -287,6 +324,7 @@ export default function MenuCategoryUpsertModal({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Ej. Refrescos"
+                        disabled={saving}
                       />
                     }
                   />
@@ -300,6 +338,7 @@ export default function MenuCategoryUpsertModal({
                         placeholder="Opcional"
                         multiline
                         minRows={3}
+                        disabled={saving}
                       />
                     }
                   />
@@ -314,6 +353,7 @@ export default function MenuCategoryUpsertModal({
                           onChange={(e) => setSortOrder(e.target.value)}
                           inputProps={{ inputMode: "numeric" }}
                           placeholder="0"
+                          disabled={saving}
                         />
                       }
                     />
@@ -340,6 +380,7 @@ export default function MenuCategoryUpsertModal({
                                 setStatus(e.target.checked ? "active" : "inactive")
                               }
                               color="primary"
+                              disabled={saving}
                             />
                           }
                           label={

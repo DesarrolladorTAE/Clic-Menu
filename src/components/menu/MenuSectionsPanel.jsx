@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 
 import {
-  Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+  Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch,Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -30,6 +30,7 @@ export default function MenuSectionsPanel({
   effectiveBranchId,
   sections,
   onReload,
+  onReloadAll,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -63,6 +64,22 @@ export default function MenuSectionsPanel({
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const getBackendMessage = (e, fallback) => {
+    return (
+      e?.response?.data?.message ||
+      e?.response?.data?.errors?.branch_id?.[0] ||
+      fallback
+    );
+  };
+
+  const reloadCatalog = async () => {
+    if (typeof onReloadAll === "function") {
+      return await onReloadAll();
+    }
+
+    return await onReload();
+  };
+
   const setSaving = (sectionId, value) => {
     setSavingMap((prev) => ({ ...prev, [sectionId]: value }));
   };
@@ -74,6 +91,10 @@ export default function MenuSectionsPanel({
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
     );
   }, [sections]);
+
+  const activeSectionsCount = useMemo(() => {
+    return sortedSections.filter((s) => s.status === "active").length;
+  }, [sortedSections]);
 
   const {
     page,
@@ -108,7 +129,15 @@ export default function MenuSectionsPanel({
     if (!sectionId || isSaving(sectionId)) return;
 
     const nextStatus = row.status === "active" ? "inactive" : "active";
-    const snapshot = [...sections];
+
+    if (row.status === "active" && activeSectionsCount <= 1) {
+      showAlert({
+        severity: "warning",
+        title: "No disponible",
+        message: "Debe existir al menos una sección activa en este contexto.",
+      });
+      return;
+    }
 
     setSaving(sectionId, true);
 
@@ -121,27 +150,51 @@ export default function MenuSectionsPanel({
         status: nextStatus,
       });
 
-      await onReload();
+      await reloadCatalog();
+
+      showAlert({
+        severity: "success",
+        title: "Hecho",
+        message:
+          nextStatus === "active"
+            ? "Sección activada correctamente."
+            : "Sección desactivada correctamente.",
+      });
     } catch (e) {
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo actualizar la sección",
+        message: getBackendMessage(e, "No se pudo actualizar la sección"),
       });
-      await onReload(snapshot);
+
+      await reloadCatalog();
     } finally {
       setSaving(sectionId, false);
     }
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (row) => {
+    const sectionId = row?.id;
+    if (!sectionId) return;
+
+    if (row.status === "active" && activeSectionsCount <= 1) {
+      showAlert({
+        severity: "warning",
+        title: "No disponible",
+        message: "Debe existir al menos una sección activa en este contexto.",
+      });
+      return;
+    }
+
     const ok = window.confirm("¿Eliminar esta sección?");
     if (!ok) return;
 
+    setSaving(sectionId, true);
+
     try {
-      await deleteMenuSection(restaurantId, id);
-      await onReload();
+      await deleteMenuSection(restaurantId, sectionId);
+      await reloadCatalog();
+
       showAlert({
         severity: "success",
         title: "Hecho",
@@ -151,9 +204,12 @@ export default function MenuSectionsPanel({
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo eliminar la sección",
+        message: getBackendMessage(e, "No se pudo eliminar la sección"),
       });
+
+      await reloadCatalog();
+    } finally {
+      setSaving(sectionId, false);
     }
   };
 
@@ -180,15 +236,27 @@ export default function MenuSectionsPanel({
             flexWrap: "wrap",
           }}
         >
-          <Typography
-            sx={{
-              fontSize: 18,
-              fontWeight: 800,
-              color: "text.primary",
-            }}
-          >
-            Lista de secciones
-          </Typography>
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              Lista de secciones
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 12,
+                color: "text.secondary",
+              }}
+            >
+              Debe existir al menos una sección activa para poder organizar productos.
+            </Typography>
+          </Box>
 
           <Button
             onClick={openCreate}
@@ -255,6 +323,7 @@ export default function MenuSectionsPanel({
                 {paginatedItems.map((s) => {
                   const active = s.status === "active";
                   const busy = isSaving(s.id);
+                  const isLastActive = active && activeSectionsCount <= 1;
 
                   return (
                     <Card
@@ -300,6 +369,19 @@ export default function MenuSectionsPanel({
                                   {s.description}
                                 </Typography>
                               ) : null}
+
+                              {isLastActive ? (
+                                <Typography
+                                  sx={{
+                                    mt: 0.75,
+                                    fontSize: 12,
+                                    color: "warning.dark",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Esta es la única sección activa.
+                                </Typography>
+                              ) : null}
                             </Box>
 
                             <Chip
@@ -322,40 +404,60 @@ export default function MenuSectionsPanel({
                               flexWrap: "wrap",
                             }}
                           >
-                            <FormControlLabel
-                              sx={{ m: 0 }}
-                              control={
-                                <Switch
-                                  checked={active}
-                                  onChange={() => onToggleStatus(s)}
-                                  disabled={busy}
-                                  color="primary"
+                            <Tooltip
+                              title={
+                                isLastActive
+                                  ? "Debe existir al menos una sección activa."
+                                  : ""
+                              }
+                            >
+                              <span>
+                                <FormControlLabel
+                                  sx={{ m: 0 }}
+                                  control={
+                                    <Switch
+                                      checked={active}
+                                      onChange={() => onToggleStatus(s)}
+                                      disabled={busy || isLastActive}
+                                      color="primary"
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={switchLabelSx}>
+                                      {active ? "Activo" : "Inactivo"}
+                                    </Typography>
+                                  }
                                 />
-                              }
-                              label={
-                                <Typography sx={switchLabelSx}>
-                                  {active ? "Activo" : "Inactivo"}
-                                </Typography>
-                              }
-                            />
+                              </span>
+                            </Tooltip>
 
                             <Stack direction="row" spacing={1}>
                               <Tooltip title="Editar">
                                 <IconButton
                                   onClick={() => openEdit(s)}
                                   sx={iconEditSx}
+                                  disabled={busy}
                                 >
                                   <EditIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
 
-                              <Tooltip title="Eliminar">
-                                <IconButton
-                                  onClick={() => onDelete(s.id)}
-                                  sx={iconDeleteSx}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
-                                </IconButton>
+                              <Tooltip
+                                title={
+                                  isLastActive
+                                    ? "Debe existir al menos una sección activa."
+                                    : "Eliminar"
+                                }
+                              >
+                                <span>
+                                  <IconButton
+                                    onClick={() => onDelete(s)}
+                                    sx={iconDeleteSx}
+                                    disabled={busy || isLastActive}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             </Stack>
                           </Box>
@@ -393,6 +495,7 @@ export default function MenuSectionsPanel({
                     {paginatedItems.map((s) => {
                       const active = s.status === "active";
                       const busy = isSaving(s.id);
+                      const isLastActive = active && activeSectionsCount <= 1;
 
                       return (
                         <TableRow
@@ -409,9 +512,23 @@ export default function MenuSectionsPanel({
                           }}
                         >
                           <TableCell>
-                            <Typography sx={{ fontWeight: 800 }}>
-                              {s.name}
-                            </Typography>
+                            <Stack spacing={0.5}>
+                              <Typography sx={{ fontWeight: 800 }}>
+                                {s.name}
+                              </Typography>
+
+                              {isLastActive ? (
+                                <Typography
+                                  sx={{
+                                    fontSize: 12,
+                                    color: "warning.dark",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Única sección activa
+                                </Typography>
+                              ) : null}
+                            </Stack>
                           </TableCell>
 
                           <TableCell
@@ -426,22 +543,32 @@ export default function MenuSectionsPanel({
                           <TableCell>{s.sort_order ?? 0}</TableCell>
 
                           <TableCell align="center">
-                            <FormControlLabel
-                              sx={{ m: 0 }}
-                              control={
-                                <Switch
-                                  checked={active}
-                                  onChange={() => onToggleStatus(s)}
-                                  disabled={busy}
-                                  color="primary"
+                            <Tooltip
+                              title={
+                                isLastActive
+                                  ? "Debe existir al menos una sección activa."
+                                  : ""
+                              }
+                            >
+                              <span>
+                                <FormControlLabel
+                                  sx={{ m: 0 }}
+                                  control={
+                                    <Switch
+                                      checked={active}
+                                      onChange={() => onToggleStatus(s)}
+                                      disabled={busy || isLastActive}
+                                      color="primary"
+                                    />
+                                  }
+                                  label={
+                                    <Typography sx={switchLabelSx}>
+                                      {active ? "Activo" : "Inactivo"}
+                                    </Typography>
+                                  }
                                 />
-                              }
-                              label={
-                                <Typography sx={switchLabelSx}>
-                                  {active ? "Activo" : "Inactivo"}
-                                </Typography>
-                              }
-                            />
+                              </span>
+                            </Tooltip>
                           </TableCell>
 
                           <TableCell align="right">
@@ -456,18 +583,28 @@ export default function MenuSectionsPanel({
                                 <IconButton
                                   onClick={() => openEdit(s)}
                                   sx={iconEditSx}
+                                  disabled={busy}
                                 >
                                   <EditIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
 
-                              <Tooltip title="Eliminar">
-                                <IconButton
-                                  onClick={() => onDelete(s.id)}
-                                  sx={iconDeleteSx}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
-                                </IconButton>
+                              <Tooltip
+                                title={
+                                  isLastActive
+                                    ? "Debe existir al menos una sección activa."
+                                    : "Eliminar"
+                                }
+                              >
+                                <span>
+                                  <IconButton
+                                    onClick={() => onDelete(s)}
+                                    sx={iconDeleteSx}
+                                    disabled={busy || isLastActive}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             </Stack>
                           </TableCell>
@@ -505,7 +642,7 @@ export default function MenuSectionsPanel({
         onSaved={async () => {
           setModalOpen(false);
           setEditing(null);
-          await onReload();
+          await reloadCatalog();
         }}
         api={{
           createMenuSection,
@@ -540,6 +677,10 @@ const iconEditSx = {
   "&:hover": {
     bgcolor: "#C9AA39",
   },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
 };
 
 const iconDeleteSx = {
@@ -550,5 +691,9 @@ const iconDeleteSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
   },
 };

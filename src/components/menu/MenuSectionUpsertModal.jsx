@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton,
-  Stack, Switch, TextField, Typography, useMediaQuery,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -64,8 +76,29 @@ export default function MenuSectionUpsertModal({
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const getBackendMessage = (e, fallback) => {
+    const data = e?.response?.data;
+
+    return (
+      data?.message ||
+      data?.errors?.branch_id?.[0] ||
+      data?.errors?.name?.[0] ||
+      data?.errors?.description?.[0] ||
+      data?.errors?.sort_order?.[0] ||
+      data?.errors?.status?.[0] ||
+      fallback
+    );
+  };
+
   useEffect(() => {
     if (!open) return;
+
+    setAlertState({
+      open: false,
+      severity: "error",
+      title: "",
+      message: "",
+    });
 
     if (isEdit) {
       setName(editing?.name || "");
@@ -137,8 +170,7 @@ export default function MenuSectionUpsertModal({
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo guardar la sección",
+        message: getBackendMessage(e, "No se pudo guardar la sección"),
       });
     } finally {
       setSaving(false);
@@ -253,6 +285,7 @@ export default function MenuSectionUpsertModal({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Ej. Bebidas"
+                        disabled={saving}
                       />
                     }
                   />
@@ -266,6 +299,7 @@ export default function MenuSectionUpsertModal({
                         placeholder="Opcional"
                         multiline
                         minRows={3}
+                        disabled={saving}
                       />
                     }
                   />
@@ -280,6 +314,7 @@ export default function MenuSectionUpsertModal({
                           onChange={(e) => setSortOrder(e.target.value)}
                           inputProps={{ inputMode: "numeric" }}
                           placeholder="0"
+                          disabled={saving}
                         />
                       }
                     />
@@ -306,6 +341,7 @@ export default function MenuSectionUpsertModal({
                                 setStatus(e.target.checked ? "active" : "inactive")
                               }
                               color="primary"
+                              disabled={saving}
                             />
                           }
                           label={

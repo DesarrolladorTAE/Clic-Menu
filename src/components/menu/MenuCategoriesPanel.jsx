@@ -1,8 +1,8 @@
 import { Fragment, useMemo, useState } from "react";
 
 import {
-  Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack,Switch, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+  Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -32,6 +32,7 @@ export default function MenuCategoriesPanel({
   sections,
   getSectionLabel,
   onReload,
+  onReloadAll,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -63,6 +64,23 @@ export default function MenuCategoriesPanel({
   const closeAlert = (_, reason) => {
     if (reason === "clickaway") return;
     setAlertState((prev) => ({ ...prev, open: false }));
+  };
+
+  const getBackendMessage = (e, fallback) => {
+    return (
+      e?.response?.data?.message ||
+      e?.response?.data?.errors?.branch_id?.[0] ||
+      e?.response?.data?.errors?.section_id?.[0] ||
+      fallback
+    );
+  };
+
+  const reloadCatalog = async () => {
+    if (typeof onReloadAll === "function") {
+      return await onReloadAll();
+    }
+
+    return await onReload();
   };
 
   const setSaving = (categoryId, value) => {
@@ -119,6 +137,10 @@ export default function MenuCategoriesPanel({
     });
   }, [categories, sections]);
 
+  const activeCategoriesCount = useMemo(() => {
+    return sortedCategories.filter((c) => c.status === "active").length;
+  }, [sortedCategories]);
+
   const {
     page,
     nextPage,
@@ -153,6 +175,15 @@ export default function MenuCategoriesPanel({
 
     const nextStatus = row.status === "active" ? "inactive" : "active";
 
+    if (row.status === "active" && activeCategoriesCount <= 1) {
+      showAlert({
+        severity: "warning",
+        title: "No disponible",
+        message: "Debe existir al menos una categoría activa en este contexto.",
+      });
+      return;
+    }
+
     setSaving(categoryId, true);
 
     try {
@@ -165,26 +196,51 @@ export default function MenuCategoriesPanel({
         status: nextStatus,
       });
 
-      await onReload();
+      await reloadCatalog();
+
+      showAlert({
+        severity: "success",
+        title: "Hecho",
+        message:
+          nextStatus === "active"
+            ? "Categoría activada correctamente."
+            : "Categoría desactivada correctamente.",
+      });
     } catch (e) {
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo actualizar la categoría",
+        message: getBackendMessage(e, "No se pudo actualizar la categoría"),
       });
+
+      await reloadCatalog();
     } finally {
       setSaving(categoryId, false);
     }
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (row) => {
+    const categoryId = row?.id;
+    if (!categoryId) return;
+
+    if (row.status === "active" && activeCategoriesCount <= 1) {
+      showAlert({
+        severity: "warning",
+        title: "No disponible",
+        message: "Debe existir al menos una categoría activa en este contexto.",
+      });
+      return;
+    }
+
     const ok = window.confirm("¿Eliminar esta categoría?");
     if (!ok) return;
 
+    setSaving(categoryId, true);
+
     try {
-      await deleteCategory(restaurantId, id);
-      await onReload();
+      await deleteCategory(restaurantId, categoryId);
+      await reloadCatalog();
+
       showAlert({
         severity: "success",
         title: "Hecho",
@@ -194,9 +250,12 @@ export default function MenuCategoriesPanel({
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message || "No se pudo eliminar la categoría",
+        message: getBackendMessage(e, "No se pudo eliminar la categoría"),
       });
+
+      await reloadCatalog();
+    } finally {
+      setSaving(categoryId, false);
     }
   };
 
@@ -223,15 +282,27 @@ export default function MenuCategoriesPanel({
             flexWrap: "wrap",
           }}
         >
-          <Typography
-            sx={{
-              fontSize: 18,
-              fontWeight: 800,
-              color: "text.primary",
-            }}
-          >
-            Lista de categorías
-          </Typography>
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              Lista de categorías
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 12,
+                color: "text.secondary",
+              }}
+            >
+              Debe existir al menos una categoría activa para poder clasificar productos.
+            </Typography>
+          </Box>
 
           <Button
             onClick={openCreate}
@@ -298,6 +369,7 @@ export default function MenuCategoriesPanel({
                 {paginatedItems.map((c, index) => {
                   const active = c.status === "active";
                   const busy = isSaving(c.id);
+                  const isLastActive = active && activeCategoriesCount <= 1;
                   const prev = paginatedItems[index - 1];
                   const sectionChanged =
                     !prev || prev.section_id !== c.section_id;
@@ -368,6 +440,19 @@ export default function MenuCategoriesPanel({
                                     {c.description}
                                   </Typography>
                                 ) : null}
+
+                                {isLastActive ? (
+                                  <Typography
+                                    sx={{
+                                      mt: 0.75,
+                                      fontSize: 12,
+                                      color: "warning.dark",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    Esta es la única categoría activa.
+                                  </Typography>
+                                ) : null}
                               </Box>
 
                               <Chip
@@ -397,40 +482,60 @@ export default function MenuCategoriesPanel({
                                 flexWrap: "wrap",
                               }}
                             >
-                              <FormControlLabel
-                                sx={{ m: 0 }}
-                                control={
-                                  <Switch
-                                    checked={active}
-                                    onChange={() => onToggleStatus(c)}
-                                    disabled={busy}
-                                    color="primary"
+                              <Tooltip
+                                title={
+                                  isLastActive
+                                    ? "Debe existir al menos una categoría activa."
+                                    : ""
+                                }
+                              >
+                                <span>
+                                  <FormControlLabel
+                                    sx={{ m: 0 }}
+                                    control={
+                                      <Switch
+                                        checked={active}
+                                        onChange={() => onToggleStatus(c)}
+                                        disabled={busy || isLastActive}
+                                        color="primary"
+                                      />
+                                    }
+                                    label={
+                                      <Typography sx={switchLabelSx}>
+                                        {active ? "Activo" : "Inactivo"}
+                                      </Typography>
+                                    }
                                   />
-                                }
-                                label={
-                                  <Typography sx={switchLabelSx}>
-                                    {active ? "Activo" : "Inactivo"}
-                                  </Typography>
-                                }
-                              />
+                                </span>
+                              </Tooltip>
 
                               <Stack direction="row" spacing={1}>
                                 <Tooltip title="Editar">
                                   <IconButton
                                     onClick={() => openEdit(c)}
                                     sx={iconEditSx}
+                                    disabled={busy}
                                   >
                                     <EditIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
 
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(c.id)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
+                                <Tooltip
+                                  title={
+                                    isLastActive
+                                      ? "Debe existir al menos una categoría activa."
+                                      : "Eliminar"
+                                  }
+                                >
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onDelete(c)}
+                                      sx={iconDeleteSx}
+                                      disabled={busy || isLastActive}
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
                               </Stack>
                             </Box>
@@ -470,6 +575,7 @@ export default function MenuCategoriesPanel({
                     {paginatedItems.map((c, index) => {
                       const active = c.status === "active";
                       const busy = isSaving(c.id);
+                      const isLastActive = active && activeCategoriesCount <= 1;
                       const prev = paginatedItems[index - 1];
                       const sectionChanged =
                         !prev || prev.section_id !== c.section_id;
@@ -509,9 +615,23 @@ export default function MenuCategoriesPanel({
                             }}
                           >
                             <TableCell>
-                              <Typography sx={{ fontWeight: 800 }}>
-                                {c.name}
-                              </Typography>
+                              <Stack spacing={0.5}>
+                                <Typography sx={{ fontWeight: 800 }}>
+                                  {c.name}
+                                </Typography>
+
+                                {isLastActive ? (
+                                  <Typography
+                                    sx={{
+                                      fontSize: 12,
+                                      color: "warning.dark",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    Única categoría activa
+                                  </Typography>
+                                ) : null}
+                              </Stack>
                             </TableCell>
 
                             <TableCell
@@ -528,22 +648,32 @@ export default function MenuCategoriesPanel({
                             <TableCell>{c.sort_order ?? 0}</TableCell>
 
                             <TableCell align="center">
-                              <FormControlLabel
-                                sx={{ m: 0 }}
-                                control={
-                                  <Switch
-                                    checked={active}
-                                    onChange={() => onToggleStatus(c)}
-                                    disabled={busy}
-                                    color="primary"
+                              <Tooltip
+                                title={
+                                  isLastActive
+                                    ? "Debe existir al menos una categoría activa."
+                                    : ""
+                                }
+                              >
+                                <span>
+                                  <FormControlLabel
+                                    sx={{ m: 0 }}
+                                    control={
+                                      <Switch
+                                        checked={active}
+                                        onChange={() => onToggleStatus(c)}
+                                        disabled={busy || isLastActive}
+                                        color="primary"
+                                      />
+                                    }
+                                    label={
+                                      <Typography sx={switchLabelSx}>
+                                        {active ? "Activo" : "Inactivo"}
+                                      </Typography>
+                                    }
                                   />
-                                }
-                                label={
-                                  <Typography sx={switchLabelSx}>
-                                    {active ? "Activo" : "Inactivo"}
-                                  </Typography>
-                                }
-                              />
+                                </span>
+                              </Tooltip>
                             </TableCell>
 
                             <TableCell align="right">
@@ -558,18 +688,28 @@ export default function MenuCategoriesPanel({
                                   <IconButton
                                     onClick={() => openEdit(c)}
                                     sx={iconEditSx}
+                                    disabled={busy}
                                   >
                                     <EditIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
 
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(c.id)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
+                                <Tooltip
+                                  title={
+                                    isLastActive
+                                      ? "Debe existir al menos una categoría activa."
+                                      : "Eliminar"
+                                  }
+                                >
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onDelete(c)}
+                                      sx={iconDeleteSx}
+                                      disabled={busy || isLastActive}
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
                               </Stack>
                             </TableCell>
@@ -609,7 +749,7 @@ export default function MenuCategoriesPanel({
         onSaved={async () => {
           setModalOpen(false);
           setEditing(null);
-          await onReload();
+          await reloadCatalog();
         }}
         api={{
           createCategory,
@@ -659,6 +799,10 @@ const iconEditSx = {
   "&:hover": {
     bgcolor: "#C9AA39",
   },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
 };
 
 const iconDeleteSx = {
@@ -669,5 +813,9 @@ const iconDeleteSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
   },
 };
