@@ -1,27 +1,50 @@
 import api from "../api";
 
 export async function getProducts(restaurantId, params = {}) {
-  const { data } = await api.get(`/restaurants/${restaurantId}/products`, { params });
-  return data?.data ?? [];
+  const { data } = await api.get(`/restaurants/${restaurantId}/products`, {
+    params,
+  });
+
+  return {
+    mode: data?.mode ?? "global",
+    allowed_products: data?.allowed_products ?? {
+      allowed_product_types: ["simple"],
+      allowed_inventory_types: ["none"],
+      allowed_combinations: [
+        { product_type: "simple", inventory_type: "none" },
+      ],
+    },
+    data: data?.data ?? [],
+  };
 }
 
 export async function createProduct(restaurantId, payload) {
-  const { data } = await api.post(`/restaurants/${restaurantId}/products`, payload);
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/products`,
+    payload
+  );
   return data?.data;
 }
 
 export async function getProduct(restaurantId, productId) {
-  const { data } = await api.get(`/restaurants/${restaurantId}/products/${productId}`);
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/products/${productId}`
+  );
   return data?.data;
 }
 
 export async function updateProduct(restaurantId, productId, payload) {
-  const { data } = await api.put(`/restaurants/${restaurantId}/products/${productId}`, payload);
+  const { data } = await api.put(
+    `/restaurants/${restaurantId}/products/${productId}`,
+    payload
+  );
   return data?.data;
 }
 
 export async function deleteProduct(restaurantId, productId) {
-  const { data } = await api.delete(`/restaurants/${restaurantId}/products/${productId}`);
+  const { data } = await api.delete(
+    `/restaurants/${restaurantId}/products/${productId}`
+  );
   return data;
 }
 
@@ -33,9 +56,15 @@ export async function getProductImages(restaurantId, productId) {
   return data?.data ?? [];
 }
 
-export async function uploadProductImage(restaurantId, productId, file, sort_order = null) {
+export async function uploadProductImage(
+  restaurantId,
+  productId,
+  file,
+  sort_order = null
+) {
   const fd = new FormData();
   fd.append("image", file);
+
   if (sort_order !== null && sort_order !== undefined) {
     fd.append("sort_order", String(sort_order));
   }

@@ -1,62 +1,63 @@
 import { useEffect, useMemo, useState } from "react";
 
-/**
- * Hook reutilizable de paginación.
- *
- * Soporta:
- * - modo frontend: recibe un arreglo completo en `items`
- * - modo backend: recibe metadatos externos en `serverMeta`
- *
- * serverMeta esperado:
- * {
- *   page: 1,
- *   perPage: 5,
- *   total: 23
- * }
- */
 export default function usePagination({
   items = [],
   initialPage = 1,
   pageSize = 5,
-  mode = "frontend", // "frontend" | "backend"
+  mode = "frontend",
   serverMeta = null,
+  resetKey = null,
+  resetOnItemsChange = false,
 }) {
   const [page, setPage] = useState(initialPage);
 
-  // Si cambia la data fuente, volvemos a página 1 en frontend
   useEffect(() => {
-    if (mode === "frontend") {
-      setPage(initialPage);
-    }
-  }, [items, initialPage, mode]);
+    setPage(initialPage);
+  }, [initialPage, resetKey]);
 
   const frontendTotal = items.length;
   const frontendTotalPages = Math.max(1, Math.ceil(frontendTotal / pageSize));
 
   useEffect(() => {
     if (mode !== "frontend") return;
+
+    if (resetOnItemsChange) {
+      setPage(initialPage);
+      return;
+    }
+
     if (page > frontendTotalPages) {
       setPage(frontendTotalPages);
     }
-  }, [page, frontendTotalPages, mode]);
+  }, [
+    mode,
+    page,
+    frontendTotalPages,
+    initialPage,
+    resetOnItemsChange,
+  ]);
 
   const paginatedItems = useMemo(() => {
     if (mode !== "frontend") return items;
+
     const start = (page - 1) * pageSize;
     return items.slice(start, start + pageSize);
   }, [items, page, pageSize, mode]);
 
-  const total = mode === "backend"
-    ? Number(serverMeta?.total || 0)
-    : frontendTotal;
+  const total =
+    mode === "backend"
+      ? Number(serverMeta?.total || 0)
+      : frontendTotal;
 
-  const perPage = mode === "backend"
-    ? Number(serverMeta?.perPage || pageSize)
-    : pageSize;
+  const perPage =
+    mode === "backend"
+      ? Number(serverMeta?.perPage || pageSize)
+      : pageSize;
 
-  const currentPage = mode === "backend"
-    ? Number(serverMeta?.page || page || 1)
-    : page;
+  const currentPage =
+    mode === "backend"
+      ? Number(serverMeta?.page || page || 1)
+      : page;
 
   const totalPages = Math.max(
     1,

@@ -1,8 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Alert,Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, FormControl, FormControlLabel,
-  IconButton, MenuItem, Select, Stack, Switch, TextField, Tooltip, Typography, useMediaQuery,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+  useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -15,9 +33,16 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
 import { changeProductType } from "../../services/products/catalog/productType.service";
 import { changeInventoryType } from "../../services/products/catalog/productInventoryType.service";
+
+const DEFAULT_ALLOWED_PRODUCTS = {
+  allowed_product_types: ["simple"],
+  allowed_inventory_types: ["none"],
+  allowed_combinations: [{ product_type: "simple", inventory_type: "none" }],
+};
 
 const PRODUCT_TYPES = [
   { value: "simple", label: "Simple" },
@@ -30,19 +55,62 @@ const INVENTORY_TYPES = [
   { value: "none", label: "Sin inventario" },
 ];
 
-function allowedInventoryTypesForProductType(productType) {
-  if (productType === "composite") return ["none"];
-  return ["ingredients", "product"];
+function allowedCombinations(allowedProducts) {
+  return Array.isArray(allowedProducts?.allowed_combinations)
+    ? allowedProducts.allowed_combinations
+    : DEFAULT_ALLOWED_PRODUCTS.allowed_combinations;
 }
 
-function normalizeInventoryForProductType(productType, inventoryType) {
-  const allowed = allowedInventoryTypesForProductType(productType);
-  return allowed.includes(inventoryType) ? inventoryType : allowed[0];
+function planAllowsCombination(allowedProducts, productType, inventoryType) {
+  return allowedCombinations(allowedProducts).some(
+    (combo) =>
+      combo.product_type === productType && combo.inventory_type === inventoryType
+  );
+}
+
+function allowedProductTypesForPlan(allowedProducts) {
+  const types = Array.isArray(allowedProducts?.allowed_product_types)
+    ? allowedProducts.allowed_product_types
+    : DEFAULT_ALLOWED_PRODUCTS.allowed_product_types;
+
+  return PRODUCT_TYPES.filter((op) => types.includes(op.value));
+}
+
+function allowedInventoryTypesForProductType(productType, allowedProducts) {
+  const combos = allowedCombinations(allowedProducts);
+
+  const allowed = combos
+    .filter((combo) => combo.product_type === productType)
+    .map((combo) => combo.inventory_type);
+
+  if (allowed.length) return allowed;
+
+  if (productType === "composite") return ["none"];
+
+  return ["none"];
+}
+
+function normalizeInventoryForProductType(
+  productType,
+  inventoryType,
+  allowedProducts = DEFAULT_ALLOWED_PRODUCTS
+) {
+  const allowed = allowedInventoryTypesForProductType(productType, allowedProducts);
+  return allowed.includes(inventoryType) ? inventoryType : allowed[0] || "none";
+}
+
+function defaultProductType(allowedProducts) {
+  const options = allowedProductTypesForPlan(allowedProducts);
+  return options?.[0]?.value || "simple";
+}
+
+function defaultInventoryType(allowedProducts, productType = "simple") {
+  return normalizeInventoryForProductType(productType, "none", allowedProducts);
 }
 
 function getModeKey(productType, inventoryType) {
   const pt = productType || "simple";
-  const it = inventoryType || (pt === "composite" ? "none" : "ingredients");
+  const it = inventoryType || (pt === "composite" ? "none" : "none");
   return `${pt}:${it}`;
 }
 
@@ -55,6 +123,10 @@ function modeHelp(productType, inventoryType) {
 
   if (key === "simple:product") {
     return "Producto simple sin receta. Descuenta stock del producto directamente.";
+  }
+
+  if (key === "simple:none") {
+    return "Producto simple sin inventario. No requiere receta, ingredientes, almacén ni compras.";
   }
 
   if (key === "composite:none") {
@@ -87,6 +159,7 @@ export default function ProductFormModal({
   effectiveBranchId,
   categories,
   initialData,
+  allowedProducts = DEFAULT_ALLOWED_PRODUCTS,
   getProduct,
   createProduct,
   updateProduct,
@@ -113,7 +186,8 @@ export default function ProductFormModal({
     description: "",
     status: "active",
     product_type: "simple",
-    inventory_type: "ingredients",
+    inventory_type: "none",
+    plan_meta: null,
   });
 
   const [images, setImages] = useState([]);
@@ -124,22 +198,40 @@ export default function ProductFormModal({
 
   const currentInitialId = initialData?.id || null;
 
+  const planMeta = form?.plan_meta || null;
+  const isBlockedByPlan = Boolean(planMeta?.blocked_by_plan);
+  const canEditTypeInventory = !isEdit || planMeta?.can_edit_type_inventory !== false;
+
+  const productTypeOptions = useMemo(() => {
+    return allowedProductTypesForPlan(allowedProducts);
+  }, [allowedProducts]);
+
   const inventoryOptions = useMemo(() => {
-    const allowed = allowedInventoryTypesForProductType(form.product_type);
+    const allowed = allowedInventoryTypesForProductType(
+      form.product_type,
+      allowedProducts
+    );
+
     return INVENTORY_TYPES.filter((x) => allowed.includes(x.value));
-  }, [form.product_type]);
+  }, [form.product_type, allowedProducts]);
 
   useEffect(() => {
     if (!open) return;
 
     setErr("");
 
-    const nextCategory =
-      initialData?.category_id
-        ? String(initialData.category_id)
-        : categories?.[0]?.id
-        ? String(categories[0].id)
-        : "";
+    const nextCategory = initialData?.category_id
+      ? String(initialData.category_id)
+      : categories?.[0]?.id
+      ? String(categories[0].id)
+      : "";
+
+    const initialProductType =
+      initialData?.product_type || defaultProductType(allowedProducts);
+
+    const initialInventoryType =
+      initialData?.inventory_type ||
+      defaultInventoryType(allowedProducts, initialProductType);
 
     setForm({
       id: initialData?.id || null,
@@ -147,13 +239,9 @@ export default function ProductFormModal({
       name: initialData?.name || "",
       description: initialData?.description || "",
       status: initialData?.status || "active",
-      product_type: initialData?.product_type || "simple",
-      inventory_type:
-        initialData?.inventory_type ||
-        normalizeInventoryForProductType(
-          initialData?.product_type || "simple",
-          "ingredients"
-        ),
+      product_type: initialProductType,
+      inventory_type: initialInventoryType,
+      plan_meta: initialData?.plan_meta || null,
     });
 
     setImages([]);
@@ -163,7 +251,7 @@ export default function ProductFormModal({
       fileInputRef.current.value = "";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id, categories]);
+  }, [open, initialData?.id, categories, allowedProducts]);
 
   useEffect(() => {
     if (!open) return;
@@ -198,17 +286,15 @@ export default function ProductFormModal({
     })();
   }, [open, currentInitialId, form.id, restaurantId, getProductImages]);
 
-
   useEffect(() => {
     if (!err) return;
 
     const timer = setTimeout(() => {
       setErr("");
-    }, 4500); // puedes cambiar la duración
+    }, 4500);
 
     return () => clearTimeout(timer);
   }, [err]);
-
 
   const title = isEdit ? "Editar producto" : "Nuevo producto";
 
@@ -220,14 +306,17 @@ export default function ProductFormModal({
   }, [requiresBranch, effectiveBranchId, form.category_id, form.name]);
 
   const handleProductTypeChange = async (nextType) => {
+    if (!canEditTypeInventory) return;
+
     setErr("");
 
     const prevType = form.product_type || "simple";
-    const prevInventory = form.inventory_type || "ingredients";
+    const prevInventory = form.inventory_type || "none";
 
     const nextInventory = normalizeInventoryForProductType(
       nextType,
-      prevInventory
+      prevInventory,
+      allowedProducts
     );
 
     setForm((prev) => ({
@@ -249,9 +338,11 @@ export default function ProductFormModal({
           updated?.inventory_type ||
           normalizeInventoryForProductType(
             updated?.product_type || nextType,
-            prev.inventory_type
+            prev.inventory_type,
+            allowedProducts
           ),
         status: updated?.status || prev.status,
+        plan_meta: updated?.plan_meta || prev.plan_meta,
       }));
 
       await onSaved?.(updated || { id: form.id });
@@ -266,14 +357,20 @@ export default function ProductFormModal({
   };
 
   const handleInventoryTypeChange = async (nextInventory) => {
+    if (!canEditTypeInventory) return;
+
     setErr("");
 
-    const prevInventory = form.inventory_type || "ingredients";
+    const prevInventory = form.inventory_type || "none";
     const productType = form.product_type || "simple";
 
-    const allowed = allowedInventoryTypesForProductType(productType);
+    const allowed = allowedInventoryTypesForProductType(
+      productType,
+      allowedProducts
+    );
+
     if (!allowed.includes(nextInventory)) {
-      const forced = allowed[0];
+      const forced = allowed[0] || "none";
       setForm((prev) => ({
         ...prev,
         inventory_type: forced,
@@ -300,6 +397,7 @@ export default function ProductFormModal({
         ...prev,
         inventory_type: updated?.inventory_type || nextInventory,
         status: updated?.status || prev.status,
+        plan_meta: updated?.plan_meta || prev.plan_meta,
       }));
 
       await onSaved?.(updated || { id: form.id });
@@ -308,9 +406,7 @@ export default function ProductFormModal({
         ...prev,
         inventory_type: prevInventory,
       }));
-      setErr(
-        apiErrorToMessage(e, "No se pudo cambiar el tipo de inventario")
-      );
+      setErr(apiErrorToMessage(e, "No se pudo cambiar el tipo de inventario"));
     }
   };
 
@@ -332,11 +428,17 @@ export default function ProductFormModal({
       return;
     }
 
-    const pt = form.product_type || "simple";
+    const pt = form.product_type || defaultProductType(allowedProducts);
     const it = normalizeInventoryForProductType(
       pt,
-      form.inventory_type || "ingredients"
+      form.inventory_type || defaultInventoryType(allowedProducts, pt),
+      allowedProducts
     );
+
+    if (!isEdit && !planAllowsCombination(allowedProducts, pt, it)) {
+      setErr("Tu plan actual no permite crear productos con esta configuración.");
+      return;
+    }
 
     setSaving(true);
 
@@ -366,8 +468,10 @@ export default function ProductFormModal({
             fresh.inventory_type ||
             normalizeInventoryForProductType(
               fresh.product_type || prev.product_type,
-              prev.inventory_type
+              prev.inventory_type,
+              allowedProducts
             ),
+          plan_meta: fresh.plan_meta || prev.plan_meta,
         }));
       } else {
         const createPayload = {
@@ -392,6 +496,7 @@ export default function ProductFormModal({
           status: saved.status || prev.status,
           product_type: saved.product_type || prev.product_type,
           inventory_type: saved.inventory_type || prev.inventory_type,
+          plan_meta: saved.plan_meta || prev.plan_meta,
         }));
       }
 
@@ -595,6 +700,27 @@ export default function ProductFormModal({
             </Alert>
           ) : null}
 
+          {isBlockedByPlan ? (
+            <Alert
+              severity="warning"
+              icon={<LockOutlinedIcon />}
+              sx={{
+                borderRadius: 1,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Producto bloqueado por plan
+                </Typography>
+                <Typography variant="body2">
+                  {planMeta?.blocked_reason ||
+                    "Este producto no es compatible con el plan actual. Solo puedes editar datos básicos."}
+                </Typography>
+              </Box>
+            </Alert>
+          ) : null}
+
           <Card
             sx={{
               borderRadius: 0,
@@ -685,17 +811,32 @@ export default function ProductFormModal({
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Tipo de producto *"
+                      help={
+                        !canEditTypeInventory
+                          ? "Bloqueado por plan: este campo no puede modificarse."
+                          : ""
+                      }
                       input={
-                        <FormControl fullWidth>
+                        <FormControl fullWidth disabled={!canEditTypeInventory}>
                           <Select
                             value={form.product_type}
                             onChange={(e) =>
                               handleProductTypeChange(e.target.value)
                             }
                             IconComponent={KeyboardArrowDownIcon}
-                            sx={selectSx}
+                            disabled={!canEditTypeInventory}
+                            sx={{
+                              ...selectSx,
+                              bgcolor: !canEditTypeInventory
+                                ? "#ECECEC"
+                                : "#F4F4F4",
+                              "&.Mui-disabled .MuiSelect-select": {
+                                color: "text.secondary",
+                                WebkitTextFillColor: "inherit",
+                              },
+                            }}
                           >
-                            {PRODUCT_TYPES.map((op) => (
+                            {productTypeOptions.map((op) => (
                               <MenuItem key={op.value} value={op.value}>
                                 {op.label}
                               </MenuItem>
@@ -707,15 +848,30 @@ export default function ProductFormModal({
 
                     <FieldBlock
                       label="Tipo de inventario *"
+                      help={
+                        !canEditTypeInventory
+                          ? "Bloqueado por plan: este campo no puede modificarse."
+                          : ""
+                      }
                       input={
-                        <FormControl fullWidth>
+                        <FormControl fullWidth disabled={!canEditTypeInventory}>
                           <Select
                             value={form.inventory_type}
                             onChange={(e) =>
                               handleInventoryTypeChange(e.target.value)
                             }
                             IconComponent={KeyboardArrowDownIcon}
-                            sx={selectSx}
+                            disabled={!canEditTypeInventory}
+                            sx={{
+                              ...selectSx,
+                              bgcolor: !canEditTypeInventory
+                                ? "#ECECEC"
+                                : "#F4F4F4",
+                              "&.Mui-disabled .MuiSelect-select": {
+                                color: "text.secondary",
+                                WebkitTextFillColor: "inherit",
+                              },
+                            }}
                           >
                             {inventoryOptions.map((op) => (
                               <MenuItem key={op.value} value={op.value}>
@@ -729,14 +885,16 @@ export default function ProductFormModal({
                   </Stack>
 
                   <Alert
-                    severity="info"
+                    severity={isBlockedByPlan ? "warning" : "info"}
                     sx={{
                       borderRadius: 1,
                       alignItems: "flex-start",
                     }}
                   >
                     <Typography variant="body2">
-                      {modeHelp(form.product_type, form.inventory_type)}
+                      {isBlockedByPlan
+                        ? "La lógica de inventario/tipo queda protegida para no perder recetas, componentes, costos, inventario ni historial."
+                        : modeHelp(form.product_type, form.inventory_type)}
                     </Typography>
                   </Alert>
 
@@ -789,7 +947,9 @@ export default function ProductFormModal({
                               onChange={(e) =>
                                 setForm((prev) => ({
                                   ...prev,
-                                  status: e.target.checked ? "active" : "inactive",
+                                  status: e.target.checked
+                                    ? "active"
+                                    : "inactive",
                                 }))
                               }
                               color="primary"
@@ -825,11 +985,13 @@ export default function ProductFormModal({
                         </Typography>
 
                         <Alert
-                          severity="warning"
+                          severity={isBlockedByPlan ? "warning" : "info"}
                           sx={{ borderRadius: 1, alignItems: "flex-start" }}
                         >
                           <Typography variant="body2">
-                            El estado activo o inactivo se controla desde la página principal.
+                            {isBlockedByPlan
+                              ? "Este producto no puede activarse con el plan actual."
+                              : "El estado activo o inactivo se controla desde la página principal."}
                           </Typography>
                         </Alert>
                       </Box>
