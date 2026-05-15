@@ -108,7 +108,9 @@ export function makeComponentModifierKey(componentProductId, componentVariantId 
 
 export function getModifierSelectionCount(group, selectedMap = {}) {
   const mode = String(group?.selection_mode || "").toLowerCase();
-  const values = Object.values(selectedMap || {}).map((v) => Number(v || 0)).filter((v) => v > 0);
+  const values = Object.values(selectedMap || {})
+    .map((v) => Number(v || 0))
+    .filter((v) => v > 0);
 
   if (!values.length) return 0;
 
@@ -126,8 +128,12 @@ export function normalizeModifierGroupsForKey(groups) {
     .map((g) => ({
       modifier_group_id: Number(g?.modifier_group_id || g?.id || 0),
       applies_to_level: String(g?.applies_to_level || "order_item"),
-      component_product_id: g?.component_product_id ? Number(g.component_product_id) : null,
-      component_variant_id: g?.component_variant_id ? Number(g.component_variant_id) : null,
+      component_product_id: g?.component_product_id
+        ? Number(g.component_product_id)
+        : null,
+      component_variant_id: g?.component_variant_id
+        ? Number(g.component_variant_id)
+        : null,
       options: (Array.isArray(g?.options) ? g.options : [])
         .map((o) => ({
           modifier_option_id: Number(o?.modifier_option_id || o?.id || 0),
@@ -139,12 +145,20 @@ export function normalizeModifierGroupsForKey(groups) {
     .filter((g) => g.modifier_group_id > 0 && g.options.length > 0)
     .sort((a, b) => {
       if (a.applies_to_level !== b.applies_to_level) {
-        return String(a.applies_to_level).localeCompare(String(b.applies_to_level));
+        return String(a.applies_to_level).localeCompare(
+          String(b.applies_to_level),
+        );
       }
-      if (safeNum(a.component_product_id, 0) !== safeNum(b.component_product_id, 0)) {
+      if (
+        safeNum(a.component_product_id, 0) !==
+        safeNum(b.component_product_id, 0)
+      ) {
         return safeNum(a.component_product_id, 0) - safeNum(b.component_product_id, 0);
       }
-      if (safeNum(a.component_variant_id, 0) !== safeNum(b.component_variant_id, 0)) {
+      if (
+        safeNum(a.component_variant_id, 0) !==
+        safeNum(b.component_variant_id, 0)
+      ) {
         return safeNum(a.component_variant_id, 0) - safeNum(b.component_variant_id, 0);
       }
       return a.modifier_group_id - b.modifier_group_id;
@@ -158,8 +172,12 @@ export function buildModifierDisplayGroupsFromApiGroups(groups) {
   arr.forEach((group) => {
     const groupName = String(group?.group_name_snapshot || group?.name || "Extras");
     const appliesToLevel = String(group?.applies_to_level || "order_item");
-    const componentProductId = group?.component_product_id ? Number(group.component_product_id) : null;
-    const componentVariantId = group?.component_variant_id ? Number(group.component_variant_id) : null;
+    const componentProductId = group?.component_product_id
+      ? Number(group.component_product_id)
+      : null;
+    const componentVariantId = group?.component_variant_id
+      ? Number(group.component_variant_id)
+      : null;
 
     const key = [
       groupName,
@@ -187,7 +205,9 @@ export function buildModifierDisplayGroupsFromApiGroups(groups) {
 
       map[key].options.push({
         id: Number(opt?.id || 0),
-        modifier_group_id: Number(opt?.modifier_group_id || group?.modifier_group_id || group?.id || 0),
+        modifier_group_id: Number(
+          opt?.modifier_group_id || group?.modifier_group_id || group?.id || 0,
+        ),
         modifier_option_id: Number(opt?.modifier_option_id || opt?.id || 0),
         name: String(opt?.name || opt?.name_snapshot || "Extra"),
         quantity: Number(opt?.quantity || 1),
@@ -213,9 +233,7 @@ export function normalizeCompositeComponentsForKey(components) {
       component_product_id: Number(c?.component_product_id || 0),
       variant_id: c?.variant_id ? Number(c.variant_id) : null,
       quantity:
-        c?.quantity == null || c?.quantity === ""
-          ? null
-          : Number(c.quantity),
+        c?.quantity == null || c?.quantity === "" ? null : Number(c.quantity),
       modifiers: normalizeModifierGroupsForKey(c?.modifiers || []),
     }))
     .filter((c) => c.component_product_id > 0)
@@ -282,10 +300,7 @@ export function buildCompositeDetailsFromDraft(product, draftRows = []) {
         component_display_name: r.name || "Componente",
         variant_id: r.variant_id ? Number(r.variant_id) : null,
         variant_name: variant?.name || null,
-        quantity:
-          r.quantity == null || r.quantity === ""
-            ? 1
-            : Number(r.quantity),
+        quantity: r.quantity == null || r.quantity === "" ? 1 : Number(r.quantity),
         is_optional: !!r.is_optional,
         allow_variant: !!r.allow_variant,
         apply_variant_price: !!r.apply_variant_price,
@@ -360,21 +375,11 @@ export function hasAnyModifierGroups(product) {
   return false;
 }
 
-/**
- * selectionScope:
- * - "all": vista general, muestra todo
- * - "product_only": solo grupos base del producto
- * - "variant_only": solo grupos de la variante elegida
- * - "composite_only": conserva el flujo contextual de compuestos
- */
 export function buildModifierContextSections(product, opts = {}) {
   if (!product || typeof product !== "object") return [];
 
-  const {
-    variantId = null,
-    compositeDraft = null,
-    selectionScope = "all",
-  } = opts || {};
+  const { variantId = null, compositeDraft = null, selectionScope = "all" } =
+    opts || {};
 
   const sections = [];
   const title = product?.display_name || product?.name || "Producto";
@@ -385,12 +390,10 @@ export function buildModifierContextSections(product, opts = {}) {
     selectionScope === "composite_only";
 
   const includeVariantGroups =
-    selectionScope === "all" ||
-    selectionScope === "variant_only";
+    selectionScope === "all" || selectionScope === "variant_only";
 
   const includeCompositeGroups =
-    selectionScope === "all" ||
-    selectionScope === "composite_only";
+    selectionScope === "all" || selectionScope === "composite_only";
 
   if (includeProductBase && hasGroups(product?.modifier_groups)) {
     sections.push({
@@ -475,7 +478,9 @@ export function buildModifierContextSections(product, opts = {}) {
         `Variante ${optionIdx + 1}`;
 
       if (compositeDraft) {
-        const selectedVariantId = draftRow?.variant_id ? Number(draftRow.variant_id) : null;
+        const selectedVariantId = draftRow?.variant_id
+          ? Number(draftRow.variant_id)
+          : null;
         if (!selectedVariantId || selectedVariantId !== optionVariantId) {
           return;
         }
@@ -542,9 +547,8 @@ export function isAvailabilityBlocked(availability) {
   if (!a) return false;
 
   const status = String(a?.status || "").toLowerCase();
-  const maxAvailableQty = Number(a?.max_available_qty || 0);
 
-  if (status === "available" && maxAvailableQty > 0) {
+  if (status === "available") {
     return false;
   }
 
