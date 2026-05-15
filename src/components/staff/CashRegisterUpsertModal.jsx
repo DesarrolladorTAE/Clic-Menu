@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack,
-  Switch, TextField, Typography, useMediaQuery,
+  Switch, TextField, Typography, useMediaQuery, CircularProgress,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -9,6 +9,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../components/common/AppAlert";
+import { getWarehouses } from "../../services/inventory/warehouses/warehouses.service";
 
 export default function CashRegisterUpsertModal({
   open,
@@ -16,6 +17,8 @@ export default function CashRegisterUpsertModal({
   restaurantId,
   branches,
   editing,
+  planAccess,
+  cashRegisterRequiresWarehouse = false,
   onSaved,
   api,
 }) {
@@ -25,6 +28,8 @@ export default function CashRegisterUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -34,6 +39,7 @@ export default function CashRegisterUpsertModal({
   });
 
   const [branchId, setBranchId] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -43,10 +49,24 @@ export default function CashRegisterUpsertModal({
     [isEdit]
   );
 
+  const currentPlanName = useMemo(() => {
+    return planAccess?.plan?.name || "Plan actual";
+  }, [planAccess]);
+
   const activeBranches = useMemo(
     () => (Array.isArray(branches) ? branches.filter((b) => b?.id) : []),
     [branches]
   );
+
+  const activeWarehouses = useMemo(() => {
+    if (!Array.isArray(warehouses)) return [];
+
+    return warehouses.filter((warehouse) => {
+      if (!warehouse?.id) return false;
+      if (warehouse?.status && warehouse.status !== "active") return false;
+      return true;
+    });
+  }, [warehouses]);
 
   const selectedBranchLabel = useMemo(() => {
     if (!editing?.branch_id) return "—";
@@ -79,22 +99,98 @@ export default function CashRegisterUpsertModal({
 
     if (isEdit) {
       setBranchId(String(editing?.branch_id || ""));
+      setWarehouseId(editing?.warehouse_id ? String(editing.warehouse_id) : "");
       setName(editing?.name || "");
       setCode(editing?.code || "");
       setIsActive((editing?.status || "active") === "active");
     } else {
       setBranchId(activeBranches?.[0]?.id ? String(activeBranches[0].id) : "");
+      setWarehouseId("");
       setName("");
       setCode("");
       setIsActive(true);
     }
   }, [open, isEdit, editing, activeBranches]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const selectedBranchId = isEdit
+      ? editing?.branch_id
+      : branchId;
+
+    if (!cashRegisterRequiresWarehouse || !selectedBranchId) {
+      setWarehouses([]);
+      setWarehouseId("");
+      return;
+    }
+
+    let alive = true;
+
+    const loadWarehouses = async () => {
+      setLoadingWarehouses(true);
+
+      try {
+        const response = await getWarehouses(restaurantId, {
+          branch_id: Number(selectedBranchId),
+          status: "active",
+        });
+
+        const rows = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response)
+            ? response
+            : [];
+
+        if (!alive) return;
+
+        setWarehouses(rows);
+
+        if (!isEdit) {
+          const firstWarehouse = rows.find((warehouse) => warehouse?.id);
+          setWarehouseId(firstWarehouse?.id ? String(firstWarehouse.id) : "");
+        } else if (editing?.warehouse_id) {
+          setWarehouseId(String(editing.warehouse_id));
+        }
+      } catch (e) {
+        if (!alive) return;
+
+        setWarehouses([]);
+
+        showAlert({
+          severity: "error",
+          title: "Error",
+          message:
+            e?.response?.data?.message ||
+            "No se pudieron cargar los almacenes disponibles.",
+        });
+      } finally {
+        if (alive) {
+          setLoadingWarehouses(false);
+        }
+      }
+    };
+
+    loadWarehouses();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    open,
+    restaurantId,
+    branchId,
+    isEdit,
+    editing,
+    cashRegisterRequiresWarehouse,
+  ]);
+
   const canSave = useMemo(() => {
     if (!name.trim()) return false;
     if (!isEdit && !branchId) return false;
+    if (cashRegisterRequiresWarehouse && !warehouseId) return false;
     return true;
-  }, [name, branchId, isEdit]);
+  }, [name, branchId, isEdit, cashRegisterRequiresWarehouse, warehouseId]);
 
   const save = async () => {
     if (!name.trim()) {
@@ -115,19 +211,34 @@ export default function CashRegisterUpsertModal({
       return;
     }
 
+    if (cashRegisterRequiresWarehouse && !warehouseId) {
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "Selecciona un almacén para esta caja.",
+      });
+      return;
+    }
+
     setSaving(true);
 
     try {
       let saved;
 
+      const warehousePayload = cashRegisterRequiresWarehouse
+        ? Number(warehouseId)
+        : null;
+
       if (isEdit) {
         saved = await api.updateCashRegister(restaurantId, editing.id, {
           name: name.trim(),
           code: code.trim() || null,
+          warehouse_id: warehousePayload,
         });
       } else {
         saved = await api.createCashRegister(restaurantId, {
           branch_id: Number(branchId),
+          warehouse_id: warehousePayload,
           name: name.trim(),
           code: code.trim() || null,
           status: isActive ? "active" : "inactive",
@@ -209,7 +320,7 @@ export default function CashRegisterUpsertModal({
                 }}
               >
                 {isEdit
-                  ? "Actualiza el nombre o código de la caja."
+                  ? "Actualiza el nombre, código o almacén de la caja."
                   : "Crea una caja para organizar el flujo de cobro por sucursal."}
               </Typography>
             </Box>
@@ -273,7 +384,10 @@ export default function CashRegisterUpsertModal({
                         <TextField
                           select
                           value={branchId}
-                          onChange={(e) => setBranchId(e.target.value)}
+                          onChange={(e) => {
+                            setBranchId(e.target.value);
+                            setWarehouseId("");
+                          }}
                         >
                           {activeBranches.map((branch) => (
                             <MenuItem key={branch.id} value={String(branch.id)}>
@@ -281,6 +395,50 @@ export default function CashRegisterUpsertModal({
                             </MenuItem>
                           ))}
                         </TextField>
+                      }
+                    />
+                  )}
+
+                  {cashRegisterRequiresWarehouse ? (
+                    <FieldBlock
+                      label="Almacén *"
+                      help={`${currentPlanName}: si la venta directa está activa, esta caja necesita un almacén asignado.`}
+                      input={
+                        <TextField
+                          select
+                          value={warehouseId}
+                          onChange={(e) => setWarehouseId(e.target.value)}
+                          disabled={loadingWarehouses || !branchId}
+                          helperText={
+                            loadingWarehouses
+                              ? "Cargando almacenes..."
+                              : activeWarehouses.length === 0
+                                ? "No hay almacenes activos disponibles para esta sucursal."
+                                : ""
+                          }
+                          InputProps={{
+                            endAdornment: loadingWarehouses ? (
+                              <CircularProgress size={18} sx={{ mr: 2 }} />
+                            ) : null,
+                          }}
+                        >
+                          {activeWarehouses.map((warehouse) => (
+                            <MenuItem key={warehouse.id} value={String(warehouse.id)}>
+                              {warehouse.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      }
+                    />
+                  ) : (
+                    <FieldBlock
+                      label="Almacén"
+                      help={`${currentPlanName}: esta caja puede operar sin almacén para productos simples sin inventario.`}
+                      input={
+                        <TextField
+                          value="Sin almacén requerido"
+                          disabled
+                        />
                       }
                     />
                   )}
@@ -363,7 +521,7 @@ export default function CashRegisterUpsertModal({
                   <Button
                     type="button"
                     onClick={save}
-                    disabled={!canSave || saving}
+                    disabled={!canSave || saving || loadingWarehouses}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{

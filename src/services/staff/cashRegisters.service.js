@@ -1,6 +1,5 @@
 import api from "../api";
 
-
 const buildBase = (restaurantId) => `/restaurants/${restaurantId}/cash-registers`;
 
 export async function getCashRegisters(restaurantId) {
@@ -26,4 +25,9 @@ export async function deleteCashRegister(restaurantId, cashRegisterId) {
     `${buildBase(restaurantId)}/${cashRegisterId}`
   );
   return data;
+}
+
+export async function getRestaurantPlanAccess(restaurantId) {
+  const { data } = await api.get(`/restaurants/${restaurantId}/plan-access`);
+  return data?.data || null;
 }

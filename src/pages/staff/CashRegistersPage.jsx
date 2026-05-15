@@ -24,6 +24,7 @@ import {
   createCashRegister,
   updateCashRegister,
   deleteCashRegister,
+  getRestaurantPlanAccess,
 } from "../../services/staff/cashRegisters.service";
 
 const PAGE_SIZE = 5;
@@ -36,6 +37,7 @@ export default function CashRegistersPage() {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState([]);
   const [cashRegisters, setCashRegisters] = useState([]);
+  const [planAccess, setPlanAccess] = useState(null);
 
   const [savingMap, setSavingMap] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -47,6 +49,14 @@ export default function CashRegistersPage() {
     title: "",
     message: "",
   });
+
+  const cashRegisterRequiresWarehouse = useMemo(() => {
+    return !!planAccess?.features?.cash_register_requires_warehouse;
+  }, [planAccess]);
+
+  const currentPlanName = useMemo(() => {
+    return planAccess?.plan?.name || "Plan actual";
+  }, [planAccess]);
 
   const showAlert = ({
     severity = "error",
@@ -118,13 +128,15 @@ export default function CashRegistersPage() {
     setLoading(true);
 
     try {
-      const [branchRows, registerRows] = await Promise.all([
+      const [branchRows, registerRows, planAccessRow] = await Promise.all([
         getBranchesByRestaurant(restaurantId),
         getCashRegisters(restaurantId),
+        getRestaurantPlanAccess(restaurantId),
       ]);
 
       setBranches(Array.isArray(branchRows) ? branchRows : []);
       setCashRegisters(Array.isArray(registerRows) ? registerRows : []);
+      setPlanAccess(planAccessRow || null);
     } catch (e) {
       showAlert({
         severity: "error",
@@ -204,6 +216,9 @@ export default function CashRegistersPage() {
       const updated = await updateCashRegister(restaurantId, cashRegisterId, {
         name: row.name,
         code: row.code || null,
+        warehouse_id: cashRegisterRequiresWarehouse && row.warehouse_id
+          ? Number(row.warehouse_id)
+          : null,
         status: nextStatus,
       });
 
@@ -368,12 +383,21 @@ export default function CashRegistersPage() {
 
             <InstructionRow
               step="2"
-              text="Activa o desactiva cajas desde esta misma pantalla sin salir ni recargar manualmente."
+              text="Activa o desactiva cajas desde esta misma pantalla."
             />
 
             <InstructionRow
               step="3"
-              text="Si una caja tiene sesión abierta, no se puede eliminar para proteger el flujo de cobro."
+              text="Si una caja tiene sesión abierta, no se puede eliminar."
+            />
+
+            <InstructionRow
+              step="4"
+              text={
+                cashRegisterRequiresWarehouse
+                  ? `${currentPlanName}: si la venta directa está activa, las cajas deben tener almacén asignado.`
+                  : `${currentPlanName}: puedes crear cajas sin almacén para vender productos simples sin inventario.`
+              }
             />
           </Stack>
         </Paper>
@@ -479,6 +503,11 @@ export default function CashRegistersPage() {
                       row?.branch?.name ||
                       "Sucursal no disponible";
 
+                    const warehouseLabel =
+                      row?.warehouse?.name ||
+                      row?.warehouse_name ||
+                      "Sin almacén";
+
                     const activeSession = row?.active_session || row?.activeSession || null;
                     const activeUser =
                       activeSession?.user
@@ -546,6 +575,17 @@ export default function CashRegistersPage() {
                               />
                             </Stack>
 
+                            {cashRegisterRequiresWarehouse ? (
+                              <Box>
+                                <Typography sx={mobileLabelSx}>
+                                  Almacén
+                                </Typography>
+                                <Typography sx={mobileValueSx}>
+                                  {warehouseLabel}
+                                </Typography>
+                              </Box>
+                            ) : null}
+
                             <Box>
                               <Typography sx={mobileLabelSx}>
                                 Sesión actual
@@ -611,7 +651,7 @@ export default function CashRegistersPage() {
                 </Stack>
               ) : (
                 <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                  <Table sx={{ minWidth: 1100 }}>
+                  <Table sx={{ minWidth: cashRegisterRequiresWarehouse ? 1100 : 950 }}>
                     <TableHead>
                       <TableRow
                         sx={{
@@ -628,6 +668,9 @@ export default function CashRegistersPage() {
                         <TableCell>Nombre</TableCell>
                         <TableCell>Código</TableCell>
                         <TableCell>Sucursal</TableCell>
+                        {cashRegisterRequiresWarehouse ? (
+                          <TableCell>Almacén</TableCell>
+                        ) : null}
                         <TableCell>Sesión actual</TableCell>
                         <TableCell align="center">Estado</TableCell>
                         <TableCell align="right">Acciones</TableCell>
@@ -642,6 +685,11 @@ export default function CashRegistersPage() {
                           branchNameById[row.branch_id] ||
                           row?.branch?.name ||
                           "Sucursal no disponible";
+
+                        const warehouseLabel =
+                          row?.warehouse?.name ||
+                          row?.warehouse_name ||
+                          "Sin almacén";
 
                         const activeSession = row?.active_session || row?.activeSession || null;
                         const activeUser =
@@ -678,6 +726,10 @@ export default function CashRegistersPage() {
                             <TableCell>{row.code || "—"}</TableCell>
 
                             <TableCell>{branchLabel}</TableCell>
+
+                            {cashRegisterRequiresWarehouse ? (
+                              <TableCell>{warehouseLabel}</TableCell>
+                            ) : null}
 
                             <TableCell
                               sx={{
@@ -771,6 +823,8 @@ export default function CashRegistersPage() {
         restaurantId={restaurantId}
         branches={branches}
         editing={editing}
+        planAccess={planAccess}
+        cashRegisterRequiresWarehouse={cashRegisterRequiresWarehouse}
         onSaved={handleSaved}
         api={{
           createCashRegister,
