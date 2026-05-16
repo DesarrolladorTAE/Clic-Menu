@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Collapse, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography,
+  Box,
+  Collapse,
+  Divider,
+  Drawer,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
+  Typography,
   useMediaQuery,
 } from "@mui/material";
 
@@ -43,6 +53,10 @@ export default function RestaurantOperationSidebar({
   onNavigate,
   onLogout,
   logoSrc,
+  planAccess = null,
+  planFeatures = {},
+  planAccessLoading = false,
+  planAccessError = "",
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -50,7 +64,9 @@ export default function RestaurantOperationSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuSections = useMemo(
+  const canUseIngredientModules = !!planFeatures?.ingredient_modules;
+
+  const baseMenuSections = useMemo(
     () => [
       {
         key: "management",
@@ -63,7 +79,12 @@ export default function RestaurantOperationSidebar({
         label: "Inventario",
         icon: <StorefrontRoundedIcon />,
         items: [
-          { key: "ingredients", label: "Ingredientes", icon: <Inventory2Icon /> },
+          {
+            key: "ingredients",
+            label: "Ingredientes",
+            icon: <Inventory2Icon />,
+            feature: "ingredient_modules",
+          },
           { key: "warehouses", label: "Almacenes", icon: <WarehouseOutlinedIcon /> },
           { key: "purchases", label: "Compras", icon: <ShoppingCartOutlinedIcon /> },
         ],
@@ -73,7 +94,11 @@ export default function RestaurantOperationSidebar({
         label: "Menú",
         icon: <LocalDiningRoundedIcon />,
         items: [
-          { key: "branch-sales-channels", label: "Canales de venta por sucursal", icon: <CampaignIcon /> },
+          {
+            key: "branch-sales-channels",
+            label: "Canales de venta por sucursal",
+            icon: <CampaignIcon />,
+          },
           { key: "menu", label: "Menú", icon: <MenuBookIcon /> },
           { key: "catalog", label: "Catálogo", icon: <CategoryIcon /> },
           { key: "modifiers", label: "Modificadores", icon: <TuneIcon /> },
@@ -103,6 +128,27 @@ export default function RestaurantOperationSidebar({
     ],
     []
   );
+
+  const menuSections = useMemo(() => {
+    return baseMenuSections
+      .map((section) => {
+        const items = section.items.filter((item) => {
+          if (!item.feature) return true;
+
+          if (item.feature === "ingredient_modules") {
+            return canUseIngredientModules;
+          }
+
+          return !!planFeatures?.[item.feature];
+        });
+
+        return {
+          ...section,
+          items,
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  }, [baseMenuSections, canUseIngredientModules, planFeatures]);
 
   const activeSectionKey = useMemo(() => {
     return (
@@ -172,17 +218,54 @@ export default function RestaurantOperationSidebar({
                 <RestaurantMenuIcon sx={{ color: "#ffcc33" }} />
               )}
 
-              <Typography
-                sx={{
-                  fontWeight: 900,
-                  fontSize: 14,
-                  lineHeight: 1.1,
-                  color: "#fff",
-                  whiteSpace: "normal",
-                }}
-              >
-                {restaurantName}
-              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 900,
+                    fontSize: 14,
+                    lineHeight: 1.1,
+                    color: "#fff",
+                    whiteSpace: "normal",
+                  }}
+                >
+                  {restaurantName}
+                </Typography>
+
+                {planAccessLoading ? (
+                  <Typography
+                    sx={{
+                      mt: 0.4,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: "rgba(255,255,255,0.72)",
+                    }}
+                  >
+                    Cargando plan…
+                  </Typography>
+                ) : planAccess?.plan?.name ? (
+                  <Typography
+                    sx={{
+                      mt: 0.4,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: "rgba(255,255,255,0.72)",
+                    }}
+                  >
+                    Plan: {planAccess.plan.name}
+                  </Typography>
+                ) : planAccessError ? (
+                  <Typography
+                    sx={{
+                      mt: 0.4,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: "rgba(255,255,255,0.72)",
+                    }}
+                  >
+                    Plan no disponible
+                  </Typography>
+                ) : null}
+              </Box>
             </Box>
 
             {!isMobile && (

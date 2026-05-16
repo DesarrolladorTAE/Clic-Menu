@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Box } from "@mui/material";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import RestaurantOperationSidebar from "../components/layout/RestaurantOperationSidebar";
+import { getPlanAccess } from "../services/plan/planAccess.service";
 
 export default function RestaurantOperationLayout() {
   const nav = useNavigate();
@@ -10,6 +11,49 @@ export default function RestaurantOperationLayout() {
 
   const restaurantName = location.state?.restaurantName || "RESTAURANTE";
   const pathname = location.pathname;
+
+  const [planAccess, setPlanAccess] = useState(null);
+  const [planAccessLoading, setPlanAccessLoading] = useState(false);
+  const [planAccessError, setPlanAccessError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPlanAccess = async () => {
+      if (!restaurantId) return;
+
+      setPlanAccessLoading(true);
+      setPlanAccessError("");
+
+      try {
+        const data = await getPlanAccess(restaurantId);
+
+        if (!mounted) return;
+
+        setPlanAccess(data || null);
+      } catch (error) {
+        if (!mounted) return;
+
+        setPlanAccess(null);
+        setPlanAccessError(
+          error?.response?.data?.message ||
+            error?.response?.data?.error ||
+            error?.message ||
+            "No se pudo cargar el acceso del plan."
+        );
+      } finally {
+        if (mounted) {
+          setPlanAccessLoading(false);
+        }
+      }
+    };
+
+    loadPlanAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [restaurantId]);
 
   let currentKey = "staff";
 
@@ -44,7 +88,7 @@ export default function RestaurantOperationLayout() {
   } else if (pathname.includes("/cash-registers")) {
     currentKey = "cash-registers";
   } else if (pathname.includes("/public-menu-settings")) {
-  currentKey = "public-menu-settings";
+    currentKey = "public-menu-settings";
   } else if (pathname.includes("/ticket-settings")) {
     currentKey = "ticket-settings";
   } else if (pathname.includes("/customer-loyalty-settings")) {
@@ -141,6 +185,10 @@ export default function RestaurantOperationLayout() {
         logoSrc="/images/clicmenu-blanco.png"
         onNavigate={handleNavigate}
         onLogout={handleBackToPreviousMenu}
+        planAccess={planAccess}
+        planFeatures={planAccess?.features || {}}
+        planAccessLoading={planAccessLoading}
+        planAccessError={planAccessError}
       />
 
       <Box
@@ -151,7 +199,14 @@ export default function RestaurantOperationLayout() {
           bgcolor: "background.default",
         }}
       >
-        <Outlet />
+        <Outlet
+          context={{
+            planAccess,
+            planFeatures: planAccess?.features || {},
+            planAccessLoading,
+            planAccessError,
+          }}
+        />
       </Box>
     </Box>
   );
