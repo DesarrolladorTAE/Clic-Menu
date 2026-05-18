@@ -10,13 +10,21 @@ import { useStaffAuth } from "../context/StaffAuthContext";
 
 import { fetchCashierSaleQueue } from "../services/staff/casher/cashierQueue.service";
 import { closeCashierSession } from "../services/staff/casher/cashierSession.service";
+import { getPlanAccess } from "../services/plan/planAccess.service";
 
 export default function CashierLayout() {
   const nav = useNavigate();
   const location = useLocation();
-  const { clearStaff } = useStaffAuth() || {};
+  const { clearStaff, context: staffContext, staffContext: fallbackStaffContext } =
+  useStaffAuth() || {};
+
+  const activeStaffContext = staffContext || fallbackStaffContext || null;
+  const restaurantId = activeStaffContext?.restaurant_id || null;
 
   const [closing, setClosing] = useState(false);
+
+  const [planAccess, setPlanAccess] = useState(null);
+  const [planAccessLoading, setPlanAccessLoading] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -27,6 +35,16 @@ export default function CashierLayout() {
 
   const pathname = location.pathname;
   const currentKey = getCurrentKey(pathname);
+
+  const planFeatures = planAccess?.features || {};
+  const canUseCustomerLoyaltyModules = !!planFeatures?.customer_loyalty_modules;
+
+  const isCustomersRoute = currentKey === "customers";
+  const shouldBlockCustomersRoute =
+    isCustomersRoute &&
+    !planAccessLoading &&
+    planAccess &&
+    !canUseCustomerLoyaltyModules;
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -59,6 +77,39 @@ export default function CashierLayout() {
 
   const pickCode = (e) => e?.response?.data?.code;
 
+  React.useEffect(() => {
+    let mounted = true;
+
+    const loadPlanAccess = async () => {
+      if (!restaurantId) return;
+
+      setPlanAccessLoading(true);
+
+      try {
+        const data = await getPlanAccess(restaurantId);
+        if (!mounted) return;
+        setPlanAccess(data || null);
+      } catch {
+        if (!mounted) return;
+        setPlanAccess(null);
+      } finally {
+        if (mounted) setPlanAccessLoading(false);
+      }
+    };
+
+    loadPlanAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [restaurantId]);
+
+  React.useEffect(() => {
+    if (!shouldBlockCustomersRoute) return;
+
+    nav("/staff/cashier/queue", { replace: true });
+  }, [shouldBlockCustomersRoute, nav]);
+
   const handleNavigate = (key) => {
     switch (key) {
       case "dashboard":
@@ -71,8 +122,19 @@ export default function CashierLayout() {
         nav("/staff/cashier/refunds");
         break;
       case "customers":
+        if (!canUseCustomerLoyaltyModules) {
+          showAlert({
+            severity: "warning",
+            title: "Módulo no disponible",
+            message: "El historial de puntos solo está disponible en el Plan Total.",
+          });
+          nav("/staff/cashier/queue");
+          return;
+        }
+
         nav("/staff/cashier/customers");
         break;
+
       default:
         nav("/staff/cashier/queue");
         break;
@@ -159,6 +221,7 @@ export default function CashierLayout() {
         closing={closing}
         onNavigate={handleNavigate}
         onCloseCashier={handleCloseCashier}
+        canUseCustomerLoyaltyModules={canUseCustomerLoyaltyModules}
       />
 
       <Box
@@ -169,7 +232,7 @@ export default function CashierLayout() {
           bgcolor: "background.default",
         }}
       >
-        <Outlet />
+        {!shouldBlockCustomersRoute ? <Outlet /> : null}
       </Box>
 
       <AppAlert

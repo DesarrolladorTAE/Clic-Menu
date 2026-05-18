@@ -118,6 +118,10 @@ export default function RestaurantOperationLayout() {
         feature: "report_modules",
         redirectTo: "staff",
       },
+      "customer-loyalty-settings": {
+        feature: "customer_loyalty_modules",
+        redirectTo: "staff",
+      },
     }),
     [] 
   );

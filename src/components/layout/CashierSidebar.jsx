@@ -32,6 +32,7 @@ export default function CashierSidebar({
   onCloseCashier,
   title = "Caja",
   closing = false,
+  canUseCustomerLoyaltyModules = false,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -56,13 +57,17 @@ export default function CashierSidebar({
         label: "Ver historial",
         icon: <HistoryRoundedIcon />,
       },
-      {
-        key: "customers",
-        label: "Clientes",
-        icon: <PeopleRoundedIcon />,
-      },
+      ...(canUseCustomerLoyaltyModules
+      ? [
+          {
+            key: "customers",
+            label: "Clientes",
+            icon: <PeopleRoundedIcon />,
+          },
+        ]
+      : []),
     ],
-    []
+    [canUseCustomerLoyaltyModules],
   );
 
   const width = collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH;
