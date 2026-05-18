@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box } from "@mui/material";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import RestaurantOperationSidebar from "../components/layout/RestaurantOperationSidebar";
@@ -15,6 +15,8 @@ export default function RestaurantOperationLayout() {
   const [planAccess, setPlanAccess] = useState(null);
   const [planAccessLoading, setPlanAccessLoading] = useState(false);
   const [planAccessError, setPlanAccessError] = useState("");
+
+  const planFeatures = useMemo(() => planAccess?.features || {}, [planAccess]);
 
   useEffect(() => {
     let mounted = true;
@@ -55,48 +57,113 @@ export default function RestaurantOperationLayout() {
     };
   }, [restaurantId]);
 
-  let currentKey = "staff";
+  const currentKey = useMemo(() => {
+    const isBranchSalesChannelsSection =
+      pathname.includes("/branch-sales-channels") ||
+      (pathname.includes("/operation/branches/") &&
+        pathname.includes("/sales-channels/") &&
+        pathname.includes("/products"));
 
-  const isBranchSalesChannelsSection =
-    pathname.includes("/branch-sales-channels") ||
-    (pathname.includes("/operation/branches/") &&
-      pathname.includes("/sales-channels/") &&
-      pathname.includes("/products"));
+    if (isBranchSalesChannelsSection) return "branch-sales-channels";
+    if (pathname.includes("/reports/sales")) return "sales-report";
+    if (pathname.includes("/reports/profit")) return "profit-report";
+    if (pathname.includes("/purchases")) return "purchases";
+    if (pathname.includes("/modifiers")) return "modifiers";
+    if (pathname.includes("/staff")) return "staff";
+    if (pathname.includes("/warehouses")) return "warehouses";
+    if (pathname.includes("/ingredients")) return "ingredients";
+    if (pathname.includes("/public-menu-settings")) return "public-menu-settings";
+    if (pathname.includes("/menu")) return "menu";
+    if (pathname.includes("/catalog")) return "catalog";
+    if (pathname.includes("/tables")) return "tables";
+    if (pathname.includes("/cash-registers")) return "cash-registers";
+    if (pathname.includes("/ticket-settings")) return "ticket-settings";
+    if (pathname.includes("/customer-loyalty-settings")) {
+      return "customer-loyalty-settings";
+    }
 
-  if (isBranchSalesChannelsSection) {
-    currentKey = "branch-sales-channels";
-  } else if (pathname.includes("/reports/sales")) {
-    currentKey = "sales-report";
-  } else if (pathname.includes("/reports/profit")) {
-    currentKey = "profit-report";
-  } else if (pathname.includes("/purchases")) {
-    currentKey = "purchases";
-  } else if (pathname.includes("/modifiers")) {
-    currentKey = "modifiers";
-  } else if (pathname.includes("/staff")) {
-    currentKey = "staff";
-  } else if (pathname.includes("/warehouses")) {
-    currentKey = "warehouses";
-  } else if (pathname.includes("/ingredients")) {
-    currentKey = "ingredients";
-  } else if (pathname.includes("/menu")) {
-    currentKey = "menu";
-  } else if (pathname.includes("/catalog")) {
-    currentKey = "catalog";
-  } else if (pathname.includes("/tables")) {
-    currentKey = "tables";
-  } else if (pathname.includes("/cash-registers")) {
-    currentKey = "cash-registers";
-  } else if (pathname.includes("/public-menu-settings")) {
-    currentKey = "public-menu-settings";
-  } else if (pathname.includes("/ticket-settings")) {
-    currentKey = "ticket-settings";
-  } else if (pathname.includes("/customer-loyalty-settings")) {
-    currentKey = "customer-loyalty-settings";
-  }
+    return "staff";
+  }, [pathname]);
+
+  const restrictedRouteByKey = useMemo(
+    () => ({
+      ingredients: {
+        feature: "ingredient_modules",
+        redirectTo: "staff",
+      },
+      warehouses: {
+        feature: "warehouse_modules",
+        redirectTo: "staff",
+      },
+      purchases: {
+        feature: "purchase_modules",
+        redirectTo: "staff",
+      },
+      modifiers: {
+        feature: "modifier_modules",
+        redirectTo: "staff",
+      },
+    }),
+    [] 
+  );
+
+  const canAccessKey = (key) => {
+    const restriction = restrictedRouteByKey[key];
+
+    if (!restriction) return true;
+
+    return !!planFeatures?.[restriction.feature];
+  };
+
+  const base = `/owner/restaurants/${restaurantId}/operation`;
+
+  const currentRestriction = restrictedRouteByKey[currentKey] || null;
+
+  const isRestrictedRoute =
+    !!currentRestriction &&
+    !!planAccess &&
+    !planAccessLoading &&
+    !canAccessKey(currentKey);
+
+  const shouldHoldOutlet =
+    !!currentRestriction &&
+    (planAccessLoading || (!planAccess && !planAccessError) || isRestrictedRoute);
+
+  useEffect(() => {
+    if (planAccessLoading) return;
+    if (!planAccess) return;
+    if (!isRestrictedRoute) return;
+
+    const redirectKey = currentRestriction?.redirectTo || "staff";
+
+    nav(`${base}/${redirectKey}`, {
+      replace: true,
+      state: {
+        restaurantName,
+        planBlockedMessage: "Tu plan actual no permite acceder a este módulo.",
+      },
+    });
+  }, [
+    base,
+    currentRestriction,
+    isRestrictedRoute,
+    nav,
+    planAccess,
+    planAccessLoading,
+    restaurantName,
+  ]);
 
   const handleNavigate = (key) => {
-    const base = `/owner/restaurants/${restaurantId}/operation`;
+    if (!canAccessKey(key)) {
+      nav(`${base}/staff`, {
+        replace: true,
+        state: {
+          restaurantName,
+          planBlockedMessage: "Tu plan actual no permite acceder a este módulo.",
+        },
+      });
+      return;
+    }
 
     switch (key) {
       case "staff":
@@ -186,7 +253,7 @@ export default function RestaurantOperationLayout() {
         onNavigate={handleNavigate}
         onLogout={handleBackToPreviousMenu}
         planAccess={planAccess}
-        planFeatures={planAccess?.features || {}}
+        planFeatures={planFeatures}
         planAccessLoading={planAccessLoading}
         planAccessError={planAccessError}
       />
@@ -199,14 +266,16 @@ export default function RestaurantOperationLayout() {
           bgcolor: "background.default",
         }}
       >
-        <Outlet
-          context={{
-            planAccess,
-            planFeatures: planAccess?.features || {},
-            planAccessLoading,
-            planAccessError,
-          }}
-        />
+        {!shouldHoldOutlet ? (
+          <Outlet
+            context={{
+              planAccess,
+              planFeatures,
+              planAccessLoading,
+              planAccessError,
+            }}
+          />
+        ) : null}
       </Box>
     </Box>
   );

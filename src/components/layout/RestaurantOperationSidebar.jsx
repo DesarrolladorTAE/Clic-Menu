@@ -1,17 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Collapse,
-  Divider,
-  Drawer,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Collapse, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -65,7 +54,11 @@ export default function RestaurantOperationSidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const canUseIngredientModules = !!planFeatures?.ingredient_modules;
-
+  const canUseWarehouseModules = !!planFeatures?.warehouse_modules;
+  const canUseStockMovementModules = !!planFeatures?.stock_movement_modules;
+  const canUsePurchaseModules = !!planFeatures?.purchase_modules;
+  const canUseModifierModules = !!planFeatures?.modifier_modules;
+  
   const baseMenuSections = useMemo(
     () => [
       {
@@ -85,8 +78,18 @@ export default function RestaurantOperationSidebar({
             icon: <Inventory2Icon />,
             feature: "ingredient_modules",
           },
-          { key: "warehouses", label: "Almacenes", icon: <WarehouseOutlinedIcon /> },
-          { key: "purchases", label: "Compras", icon: <ShoppingCartOutlinedIcon /> },
+          {
+            key: "warehouses",
+            label: "Almacenes",
+            icon: <WarehouseOutlinedIcon />,
+            feature: "warehouse_modules",
+          },
+          {
+            key: "purchases",
+            label: "Compras",
+            icon: <ShoppingCartOutlinedIcon />,
+            feature: "purchase_modules",
+          },
         ],
       },
       {
@@ -101,7 +104,12 @@ export default function RestaurantOperationSidebar({
           },
           { key: "menu", label: "Menú", icon: <MenuBookIcon /> },
           { key: "catalog", label: "Catálogo", icon: <CategoryIcon /> },
-          { key: "modifiers", label: "Modificadores", icon: <TuneIcon /> },
+          {
+            key: "modifiers",
+            label: "Modificadores",
+            icon: <TuneIcon />,
+            feature: "modifier_modules",
+          },
         ],
       },
       {
@@ -139,6 +147,22 @@ export default function RestaurantOperationSidebar({
             return canUseIngredientModules;
           }
 
+          if (item.feature === "warehouse_modules") {
+            return canUseWarehouseModules;
+          }
+
+          if (item.feature === "stock_movement_modules") {
+            return canUseStockMovementModules;
+          }
+
+          if (item.feature === "purchase_modules") {
+            return canUsePurchaseModules;
+          }
+
+          if (item.feature === "modifier_modules") {
+            return canUseModifierModules;
+          }
+
           return !!planFeatures?.[item.feature];
         });
 
@@ -148,7 +172,15 @@ export default function RestaurantOperationSidebar({
         };
       })
       .filter((section) => section.items.length > 0);
-  }, [baseMenuSections, canUseIngredientModules, planFeatures]);
+  }, [
+      baseMenuSections,
+      canUseIngredientModules,
+      canUseWarehouseModules,
+      canUseStockMovementModules,
+      canUsePurchaseModules,
+      canUseModifierModules,
+      planFeatures,
+    ]);
 
   const activeSectionKey = useMemo(() => {
     return (
