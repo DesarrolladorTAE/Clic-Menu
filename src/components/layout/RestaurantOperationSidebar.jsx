@@ -58,6 +58,7 @@ export default function RestaurantOperationSidebar({
   const canUseStockMovementModules = !!planFeatures?.stock_movement_modules;
   const canUsePurchaseModules = !!planFeatures?.purchase_modules;
   const canUseModifierModules = !!planFeatures?.modifier_modules;
+  const canUseReportModules = !!planFeatures?.report_modules;
   
   const baseMenuSections = useMemo(
     () => [
@@ -129,8 +130,18 @@ export default function RestaurantOperationSidebar({
         label: "Reportes",
         icon: <BarChartRoundedIcon />,
         items: [
-          { key: "sales-report", label: "Ventas", icon: <AssessmentOutlinedIcon /> },
-          { key: "profit-report", label: "Utilidades", icon: <TrendingUpOutlinedIcon /> },
+          {
+            key: "sales-report",
+            label: "Ventas",
+            icon: <AssessmentOutlinedIcon />,
+            feature: "report_modules",
+          },
+          {
+            key: "profit-report",
+            label: "Utilidades",
+            icon: <TrendingUpOutlinedIcon />,
+            feature: "report_modules",
+          },
         ],
       },
     ],
@@ -163,6 +174,10 @@ export default function RestaurantOperationSidebar({
             return canUseModifierModules;
           }
 
+          if (item.feature === "report_modules") {
+            return canUseReportModules;
+          }
+
           return !!planFeatures?.[item.feature];
         });
 
@@ -179,6 +194,7 @@ export default function RestaurantOperationSidebar({
       canUseStockMovementModules,
       canUsePurchaseModules,
       canUseModifierModules,
+      canUseReportModules,
       planFeatures,
     ]);
 

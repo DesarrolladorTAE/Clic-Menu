@@ -70,6 +70,9 @@ export default function RestaurantOperationLayout() {
     if (pathname.includes("/purchases")) return "purchases";
     if (pathname.includes("/modifiers")) return "modifiers";
     if (pathname.includes("/staff")) return "staff";
+    if (pathname.includes("/warehouses/inventory-report")) {
+      return "inventory-report";
+    }
     if (pathname.includes("/warehouses")) return "warehouses";
     if (pathname.includes("/ingredients")) return "ingredients";
     if (pathname.includes("/public-menu-settings")) return "public-menu-settings";
@@ -101,6 +104,18 @@ export default function RestaurantOperationLayout() {
       },
       modifiers: {
         feature: "modifier_modules",
+        redirectTo: "staff",
+      },
+      "sales-report": {
+        feature: "report_modules",
+        redirectTo: "staff",
+      },
+      "profit-report": {
+        feature: "report_modules",
+        redirectTo: "staff",
+      },
+      "inventory-report": {
+        feature: "report_modules",
         redirectTo: "staff",
       },
     }),

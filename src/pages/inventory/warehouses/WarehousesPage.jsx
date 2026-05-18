@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 
 import PageContainer from "../../../components/common/PageContainer";
 import AppAlert from "../../../components/common/AppAlert";
@@ -24,6 +24,10 @@ import {
 export default function WarehousesPage() {
   const navigate = useNavigate();
   const { restaurantId } = useParams();
+
+  const outletContext = useOutletContext() || {};
+  const planFeatures = outletContext?.planFeatures || {};
+  const canUseReportModules = !!planFeatures?.report_modules;
 
   const [loading, setLoading] = useState(true);
   const [savingDefaults, setSavingDefaults] = useState(false);
@@ -450,9 +454,11 @@ export default function WarehousesPage() {
           selectedBranch={selectedBranch}
         />
 
-        <WarehouseInventoryReportCard
-          onOpenReport={handleOpenInventoryReport}
-        />
+        {canUseReportModules ? (
+          <WarehouseInventoryReportCard
+            onOpenReport={handleOpenInventoryReport}
+          />
+        ) : null}
 
         <WarehousesListPanel
           inventoryMode={inventoryMode}
