@@ -122,6 +122,10 @@ export default function RestaurantOperationLayout() {
         feature: "customer_loyalty_modules",
         redirectTo: "staff",
       },
+      "public-menu-settings": {
+        feature: "public_menu_advanced_customization",
+        redirectTo: "staff",
+      },
     }),
     [] 
   );

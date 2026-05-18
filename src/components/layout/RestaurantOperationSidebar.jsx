@@ -60,6 +60,7 @@ export default function RestaurantOperationSidebar({
   const canUseModifierModules = !!planFeatures?.modifier_modules;
   const canUseReportModules = !!planFeatures?.report_modules;
   const canUseCustomerLoyaltyModules = !!planFeatures?.customer_loyalty_modules;
+  const canUsePublicMenuAdvancedCustomization = !!planFeatures?.public_menu_advanced_customization;
   
   const baseMenuSections = useMemo(
     () => [
@@ -122,7 +123,12 @@ export default function RestaurantOperationSidebar({
           { key: "tables", label: "Mesas", icon: <TableRestaurantIcon /> },
           { key: "cash-registers", label: "Cajas", icon: <PointOfSaleIcon /> },
           { key: "ticket-settings", label: "Tickets", icon: <ReceiptLongIcon /> },
-          { key: "public-menu-settings", label: "Menú público", icon: <WebAssetOutlinedIcon /> },
+          {
+            key: "public-menu-settings",
+            label: "Menú público",
+            icon: <WebAssetOutlinedIcon />,
+            feature: "public_menu_advanced_customization",
+          },
           {
             key: "customer-loyalty-settings",
             label: "Puntos",
@@ -187,6 +193,9 @@ export default function RestaurantOperationSidebar({
           if (item.feature === "customer_loyalty_modules") {
             return canUseCustomerLoyaltyModules;
           }
+          if (item.feature === "public_menu_advanced_customization") {
+            return canUsePublicMenuAdvancedCustomization;
+          }
 
           return !!planFeatures?.[item.feature];
         });
@@ -206,6 +215,7 @@ export default function RestaurantOperationSidebar({
       canUseModifierModules,
       canUseReportModules,
       canUseCustomerLoyaltyModules,
+      canUsePublicMenuAdvancedCustomization,
       planFeatures,
     ]);
 
