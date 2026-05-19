@@ -88,7 +88,7 @@ export default function AxiosAuthInterceptor() {
             }
 
             // 🔥 Token existe => No es sesión muerta, es NO PERMITIDO
-            navigate("/owner/restaurants", {
+            navigate("/owner/restaurants-home", {
               replace: true,
               state: { notice: "No tienes permisos para acceder a ese recurso." },
             });

@@ -55,7 +55,7 @@ import Dashboard from "../pages/admin/Dashboard";
 import StaffPage from "../pages/staff/RestaurantStaffPage";
 
 //Restaurantes
-import MyRestaurants from "../pages/restaurant/MyRestaurants";
+import MyRestaurantsHome from "../pages/restaurant/MyRestaurantsHome";
 import RestaurantEdit from "../pages/restaurant/RestaurantEdit";
 
 //Menu 1
@@ -70,8 +70,6 @@ import ProductModifierCatalogPage from "../pages/menu/modifiers/catalogs/Product
 import VariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/VariantModifierCatalogPage";
 import CompositeComponentModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentModifierCatalogPage";
 import CompositeComponentVariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentVariantModifierCatalogPage";
-
-
 
 //Sucursales
 import BranchesPage from "../pages/restaurant/BranchesPage";
@@ -121,8 +119,7 @@ import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 
 import TestEventPage from "../realtime/TestEventPage";
-//PRUEBAAAS
-import MyRestaurantsHome from "../pages/restaurant/MyRestaurantsHome";
+
 
 export default function AppRoutes() {
   return (
@@ -237,7 +234,6 @@ export default function AppRoutes() {
 
         </Route>
 
-        <Route path="/owner/restaurants" element={<MyRestaurants />} />
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
 
       </Route>

@@ -61,21 +61,43 @@ export default function StaffSelectContext() {
   }, [contexts]);
 
   useEffect(() => {
-    if (!forceSelection && activeContext?.role?.name) {
-      nav(routeByRole(activeContext.role.name), { replace: true });
-      return;
-    }
+    let cancelled = false;
 
-    if (!Array.isArray(contexts) || contexts.length === 0) {
-      nav("/staff/login", { replace: true, state: { from } });
-      return;
-    }
+    const boot = async () => {
+      if (!Array.isArray(contexts) || contexts.length === 0) {
+        nav("/staff/login", { replace: true, state: { from } });
+        return;
+      }
 
-    if (!forceSelection && contexts.length === 1) {
-      const only = contexts[0];
-      (async () => {
+      if (forceSelection && contexts.length <= 1) {
+        setLoggingOut(true);
+        setErr("");
+
+        try {
+          await logout();
+        } catch {
+          clearStaff();
+        } finally {
+          if (!cancelled) {
+            nav("/staff/login", { replace: true });
+            setLoggingOut(false);
+          }
+        }
+
+        return;
+      }
+
+      if (!forceSelection && activeContext?.role?.name) {
+        nav(routeByRole(activeContext.role.name), { replace: true });
+        return;
+      }
+
+      if (!forceSelection && contexts.length === 1) {
+        const only = contexts[0];
+
         setBusy(true);
         setErr("");
+
         try {
           const res = await selectContext({
             restaurant_id: only.restaurant.id,
@@ -88,12 +110,28 @@ export default function StaffSelectContext() {
         } catch (e) {
           setErr(e?.response?.data?.message || "No se pudo seleccionar el contexto.");
         } finally {
-          setBusy(false);
+          if (!cancelled) {
+            setBusy(false);
+          }
         }
-      })();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }
+    };
+
+    boot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeContext?.role?.name,
+    clearStaff,
+    contexts,
+    forceSelection,
+    from,
+    logout,
+    nav,
+    selectContext,
+  ]);
 
   const onSubmit = async () => {
     setErr("");

@@ -47,9 +47,16 @@ export default function StaffDashboard() {
 
   const onExitContext = async () => {
     setErr("");
+
     try {
       await exitContext();
-      nav("/staff/select-context", { replace: true });
+
+      nav("/staff/select-context", {
+        replace: true,
+        state: {
+          forceSelection: true,
+        },
+      });
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudo salir del contexto.");
     }
