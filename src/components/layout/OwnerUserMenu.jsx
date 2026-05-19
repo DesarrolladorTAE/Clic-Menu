@@ -13,7 +13,6 @@ import {
 
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LogoutIcon from "@mui/icons-material/Logout";
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 
 export default function OwnerUserMenu({
   anchorEl,
@@ -43,22 +42,34 @@ export default function OwnerUserMenu({
         paper: {
           sx: {
             mt: 1.5,
-            width: { xs: 300, sm: 360 },
-            borderRadius: 2,
+            width: { xs: 300, sm: 370 },
+            borderRadius: 0,
             overflow: "hidden",
-            bgcolor: "#242424",
-            color: "#fff",
-            boxShadow: "0 14px 34px rgba(0,0,0,0.32)",
+            bgcolor: "#fff",
+            color: "#111",
+            boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+            border: "1px solid rgba(0,0,0,0.08)",
+          },
+        },
+        list: {
+          sx: {
+            py: 0,
           },
         },
       }}
     >
-      <Box sx={{ px: 2.5, py: 2.2 }}>
+      <Box
+        sx={{
+          px: 2.5,
+          py: 2.3,
+          bgcolor: "#fff",
+        }}
+      >
         <Stack direction="row" spacing={1.6} alignItems="center">
           <Avatar
             sx={{
-              width: 58,
-              height: 58,
+              width: 60,
+              height: 60,
               bgcolor: "primary.main",
               color: "#fff",
               fontWeight: 900,
@@ -73,7 +84,7 @@ export default function OwnerUserMenu({
               sx={{
                 fontWeight: 900,
                 fontSize: 17,
-                color: "#fff",
+                color: "#111",
                 lineHeight: 1.25,
                 wordBreak: "break-word",
               }}
@@ -85,8 +96,9 @@ export default function OwnerUserMenu({
               sx={{
                 mt: 0.2,
                 fontSize: 13,
-                color: "rgba(255,255,255,0.72)",
+                color: "rgba(0,0,0,0.62)",
                 wordBreak: "break-word",
+                fontWeight: 600,
               }}
             >
               {user?.email || "Sin correo"}
@@ -95,7 +107,7 @@ export default function OwnerUserMenu({
         </Stack>
       </Box>
 
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.10)" }} />
+      <Divider sx={{ borderColor: "rgba(0,0,0,0.08)" }} />
 
       <MenuItem
         onClick={() => {
@@ -108,16 +120,9 @@ export default function OwnerUserMenu({
         <Typography sx={menuTextSx}>Editar perfil</Typography>
       </MenuItem>
 
-      <MenuItem disabled sx={{ ...menuItemSx, opacity: "1 !important" }}>
-        <PersonRoundedIcon sx={{ ...menuIconSx, color: "rgba(255,255,255,0.55)" }} />
-        <Typography sx={{ ...menuTextSx, color: "rgba(255,255,255,0.55)" }}>
-          Cuenta de propietario
-        </Typography>
-      </MenuItem>
+      <Divider sx={{ borderColor: "rgba(0,0,0,0.08)" }} />
 
-      <Divider sx={{ borderColor: "rgba(255,255,255,0.10)" }} />
-
-      <Box sx={{ p: 1.3 }}>
+      <Box sx={{ p: 1.5, bgcolor: "#fff" }}>
         <Button
           fullWidth
           onClick={() => {
@@ -127,14 +132,16 @@ export default function OwnerUserMenu({
           startIcon={<LogoutIcon />}
           sx={{
             justifyContent: "flex-start",
-            minHeight: 46,
-            borderRadius: 1.5,
-            px: 1.5,
-            color: "#ff7a7a",
-            bgcolor: "rgba(255,255,255,0.04)",
+            minHeight: 48,
+            borderRadius: 0,
+            px: 1.6,
+            color: "primary.main",
+            bgcolor: "rgba(255,152,0,0.10)",
             fontWeight: 900,
+            textTransform: "none",
+            fontSize: 15,
             "&:hover": {
-              bgcolor: "rgba(255,122,122,0.10)",
+              bgcolor: "rgba(255,152,0,0.16)",
             },
           }}
         >
@@ -146,23 +153,24 @@ export default function OwnerUserMenu({
 }
 
 const menuItemSx = {
-  minHeight: 54,
+  minHeight: 56,
   px: 2.5,
-  py: 1.3,
-  color: "#fff",
+  py: 1.4,
+  color: "#111",
   gap: 1.6,
+  bgcolor: "#fff",
   "&:hover": {
-    bgcolor: "rgba(255,152,0,0.16)",
+    bgcolor: "rgba(255,152,0,0.08)",
   },
 };
 
 const menuIconSx = {
-  color: "rgba(255,255,255,0.86)",
+  color: "#ff9800",
   fontSize: 24,
 };
 
 const menuTextSx = {
   fontSize: 15,
-  fontWeight: 800,
-  color: "#fff",
+  fontWeight: 900,
+  color: "#111",
 };
