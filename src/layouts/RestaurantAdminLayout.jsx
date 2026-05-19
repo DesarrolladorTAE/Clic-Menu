@@ -3,6 +3,8 @@ import { Box } from "@mui/material";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import RestaurantAdminSidebar from "../components/layout/RestaurantAdminSidebar";
 import { getPlanAccess } from "../services/plan/planAccess.service";
+import { getBranchesByRestaurant } from "../services/restaurant/branch.service";
+import AppAlert from "../components/common/AppAlert";
 
 export default function RestaurantAdminLayout() {
   const nav = useNavigate();
@@ -18,10 +20,40 @@ export default function RestaurantAdminLayout() {
   const [planAccessLoading, setPlanAccessLoading] = useState(false);
   const [planAccessError, setPlanAccessError] = useState("");
 
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+
+  const [alertState, setAlertState] = useState({
+    open: false,
+    severity: "info",
+    title: "",
+    message: "",
+  });
+
   const planFeatures = useMemo(
     () => planAccess?.features || {},
     [planAccess]
   );
+
+  const hasActiveBranch = useMemo(() => {
+    return branches.some((branch) => String(branch?.status) === "active");
+  }, [branches]);
+
+  const showAlert = ({ severity = "warning", title = "Aviso", message = "" }) => {
+    if (!message) return;
+
+    setAlertState({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const closeAlert = (_, reason) => {
+    if (reason === "clickaway") return;
+    setAlertState((prev) => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -57,6 +89,43 @@ export default function RestaurantAdminLayout() {
     };
 
     loadPlanAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [restaurantId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBranches = async () => {
+      if (!restaurantId) return;
+
+      setBranchesLoading(true);
+
+      try {
+        const res = await getBranchesByRestaurant(restaurantId);
+
+        if (!mounted) return;
+
+        const rows = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+        setBranches(rows);
+      } catch (error) {
+        if (!mounted) return;
+        setBranches([]);
+      } finally {
+        if (mounted) {
+          setBranchesLoading(false);
+        }
+      }
+    };
+
+    loadBranches();
 
     return () => {
       mounted = false;
@@ -173,8 +242,26 @@ export default function RestaurantAdminLayout() {
     }
 
     if (key === "operation") {
+      if (branchesLoading) {
+        showAlert({
+          severity: "info",
+          title: "Validando sucursales",
+          message: "Estamos revisando si el restaurante tiene una sucursal activa.",
+        });
+        return;
+      }
+
+      if (!hasActiveBranch) {
+        showAlert({
+          severity: "warning",
+          title: "Sucursal requerida",
+          message: "Primero debes crear una sucursal activa para acceder al módulo de operación.",
+        });
+        return;
+      }
+
       nav(`/owner/restaurants/${restaurantId}/operation/staff`, {
-         state: { restaurantName },
+        state: { restaurantName },
       });
       return;
     }
@@ -214,6 +301,15 @@ export default function RestaurantAdminLayout() {
           <Outlet />
         ) : null}
       </Box>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={4200}
+      />
     </Box>
   );
 }
