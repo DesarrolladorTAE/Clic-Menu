@@ -17,7 +17,7 @@ import { useStaffAuth } from "../../context/StaffAuthContext";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 
 function routeByRole(roleName) {
-  if (roleName === "waiter") return "/staff/app";
+  if (roleName === "waiter") return "/staff/waiter/tables/grid";
   if (roleName === "cashier") return "/staff/cashier";
   if (roleName === "kitchen") return "/staff/kitchen";
   return "/staff/select-context";

@@ -51,7 +51,7 @@ const PAGE_SIZE = 8;
 
 export default function WaiterTablesGrid() {
   const nav = useNavigate();
-  const { clearStaff } = useStaffAuth() || {};
+  const { clearStaff, contexts, exitContext, logout } = useStaffAuth() || {};
 
   const [busy, setBusy] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -341,6 +341,35 @@ export default function WaiterTablesGrid() {
     (Array.isArray(requests) ? requests.length : 0) +
     (Array.isArray(readyNotifications) ? readyNotifications.length : 0) +
     (Array.isArray(billRequests) ? billRequests.length : 0);
+
+  
+  const hasMultipleContexts = Array.isArray(contexts) && contexts.length > 1;
+
+  const headerActionLabel = hasMultipleContexts ? "Regresar" : "Cerrar sesión";
+
+  const handleHeaderAction = async () => {
+    try {
+      if (hasMultipleContexts) {
+        await exitContext?.();
+
+        nav("/staff/select-context", {
+          replace: true,
+          state: {
+            forceSelection: true,
+          },
+        });
+
+        return;
+      }
+
+      await logout?.();
+      clearStaff?.();
+      nav("/staff/login", { replace: true });
+    } catch (e) {
+      clearStaff?.();
+      nav("/staff/login", { replace: true });
+    }
+  };
 
   useEffect(() => {
     const branchId = Number(meta?.branch_id || 0);
@@ -946,7 +975,8 @@ export default function WaiterTablesGrid() {
           meta={meta}
           summary={summary}
           refreshing={refreshing}
-          onDashboard={() => nav("/staff/app")}
+          dashboardLabel={headerActionLabel}
+          onDashboard={handleHeaderAction}
         />
 
         <WaiterZoneTabs

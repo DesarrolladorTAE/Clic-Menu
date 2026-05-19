@@ -18,7 +18,7 @@ import Login from "../pages/auth/Login";
 //Registro staff
 import StaffLogin from "../pages/staff/StaffLogin";
 import StaffSelectContext from "../pages/staff/StaffSelectContext";
-import StaffDashboard from "../pages/staff/waiter/StaffDashboard"; 
+ 
 
 import StaffMenuEntryPage from "../pages/staff/waiter/StaffMenuEntryPage";
 import CashRegistersPage from "../pages/staff/CashRegistersPage";
@@ -143,7 +143,6 @@ export default function AppRoutes() {
         <Route path="/staff/select-context" element={<StaffSelectContext />} />
 
         {/* Mesero*/}
-        <Route path="/staff/app" element={<StaffDashboard />} />
         <Route path="/staff/waiter/tables/grid" element={<WaiterTablesGrid />} />
         <Route path="/staff/waiter/tables/:tableId/order" element={<StaffMenuEntryPage />} />
 

@@ -7,6 +7,7 @@ export default function WaiterTablesHeader({
   summary,
   refreshing,
   onDashboard,
+  dashboardLabel = "Dashboard",
 }) {
   const chips = [
     { label: `Libre: ${summary?.free || 0}`, bg: "#E7F8EB", color: "#0A7A2F" },
@@ -74,7 +75,7 @@ export default function WaiterTablesHeader({
             borderRadius: 2,
           }}
         >
-          Dashboard
+          {dashboardLabel}
         </Button>
       </Stack>
 

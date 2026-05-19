@@ -13,10 +13,10 @@ function roleLabel(name) {
 }
 
 function routeByRole(roleName) {
-  if (roleName === "waiter") return "/staff/app";
+  if (roleName === "waiter") return "/staff/waiter/tables/grid";
   if (roleName === "cashier") return "/staff/cashier";
   if (roleName === "kitchen") return "/staff/kitchen";
-  return "/staff/app";
+  return "/staff/select-context";
 }
 
 export default function StaffSelectContext() {
