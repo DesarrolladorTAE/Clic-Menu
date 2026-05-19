@@ -58,6 +58,7 @@ import {
   printCashierTicketFromHtml,
   saveCashierTicketPdf,
   openCashierTicketWindow,
+  sendCashierSaleTicketWhatsapp,
 } from "../../../services/staff/casher/cashierTicket.service";
 
 import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
@@ -141,11 +142,12 @@ export default function CashierSaleDetailPage() {
   const [postPaymentTicketErrorCode, setPostPaymentTicketErrorCode] = useState(null);
   const [postPaymentTicketErrorMessage, setPostPaymentTicketErrorMessage] = useState(null);
 
-  const [ticketBusy, setTicketBusy] = useState({
-    view: false,
-    print: false,
-    download: false,
-  });
+    const [ticketBusy, setTicketBusy] = useState({
+      view: false,
+      print: false,
+      download: false,
+      whatsapp: false,
+    });
 
   const localIdRef = useRef(1);
   const draftIdRef = useRef(1);
@@ -915,6 +917,37 @@ export default function CashierSaleDetailPage() {
       });
     } finally {
       setTicketBusyKey("download", false);
+    }
+  };
+
+  const handleSendTicketWhatsapp = async ({
+    phone,
+    body,
+    saveContact,
+  }) => {
+    try {
+      setTicketBusyKey("whatsapp", true);
+
+      await sendCashierSaleTicketWhatsapp(sale.sale_id, {
+        phone,
+        body,
+        save_contact: saveContact,
+      });
+
+      showAlert({
+        severity: "success",
+        message: "Ticket enviado correctamente por WhatsApp.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(
+          e,
+          "No se pudo enviar el ticket por WhatsApp."
+        ),
+      });
+    } finally {
+      setTicketBusyKey("whatsapp", false);
     }
   };
 
@@ -1754,9 +1787,12 @@ export default function CashierSaleDetailPage() {
         onViewTicket={handleViewTicket}
         onPrintTicket={handlePrintTicket}
         onDownloadTicket={handleDownloadTicket}
+        onSendWhatsapp={handleSendTicketWhatsapp}
         busyView={ticketBusy.view}
         busyPrint={ticketBusy.print}
         busyDownload={ticketBusy.download}
+        busyWhatsapp={ticketBusy.whatsapp}
+        customerSummary={customerSummary}
         ticket={postPaymentTicket}
         sale={detailData?.sale || null}
         order={detailData?.sale?.order || null}

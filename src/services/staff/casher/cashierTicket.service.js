@@ -296,3 +296,17 @@ export async function saveCashierTicketPdf(ticketId) {
 
   return true;
 }
+
+
+export async function sendCashierSaleTicketWhatsapp(saleId, payload = {}) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/ticket/whatsapp`,
+    {
+      phone: payload.phone || null,
+      save_contact: Boolean(payload.save_contact),
+      body: payload.body || null,
+    }
+  );
+
+  return res?.data;
+}

@@ -1,16 +1,12 @@
 import React from "react";
 import {
-  Box,
-  Dialog,
-  DialogContent,
-  IconButton,
-  Stack,
-  Typography,
+  Box, Dialog, DialogContent, IconButton, Stack, Typography,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 
 import CashierTicketPreviewCard from "./CashierTicketPreviewCard";
+import CashierTicketWhatsappCard from "./CashierTicketWhatsappCard";
 import CashierTicketActionsBar from "./CashierTicketActionsBar";
 
 export default function CashierPostPaymentTicketModal({
@@ -23,6 +19,9 @@ export default function CashierPostPaymentTicketModal({
   busyView = false,
   busyPrint = false,
   busyDownload = false,
+  busyWhatsapp = false,
+  onSendWhatsapp,
+  customerSummary = null,
   ticket = null,
   sale = null,
   order = null,
@@ -135,6 +134,13 @@ export default function CashierPostPaymentTicketModal({
               ticketWarning={ticketWarning}
               ticketErrorCode={ticketErrorCode}
               ticketErrorMessage={ticketErrorMessage}
+            />
+
+            <CashierTicketWhatsappCard
+              ticketAvailable={ticketAvailable}
+              customerSummary={customerSummary}
+              onSendWhatsapp={onSendWhatsapp}
+              busy={busyWhatsapp}
             />
 
             <CashierTicketActionsBar

@@ -23,6 +23,8 @@ export default function RestaurantAdminSidebar({
   onNavigate,
   onLogout,
   logoSrc,
+  planAccess = null,
+  planFeatures = {},
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -30,7 +32,9 @@ export default function RestaurantAdminSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuItems = useMemo(
+  const canUseRestaurantSettingsPage = !!planFeatures?.restaurant_settings_page;
+
+  const baseMenuItems = useMemo(
     () => [
       {
         key: "edit-info",
@@ -41,6 +45,7 @@ export default function RestaurantAdminSidebar({
         key: "config",
         label: "Configuración",
         icon: <SettingsIcon />,
+        feature: "restaurant_settings_page",
       },
       {
         key: "branches",
@@ -55,6 +60,18 @@ export default function RestaurantAdminSidebar({
     ],
     []
   );
+
+  const menuItems = useMemo(() => {
+    return baseMenuItems.filter((item) => {
+      if (!item.feature) return true;
+
+      if (item.feature === "restaurant_settings_page") {
+        return canUseRestaurantSettingsPage;
+      }
+
+      return !!planFeatures?.[item.feature];
+    });
+  }, [baseMenuItems, canUseRestaurantSettingsPage, planFeatures]);
 
   const width = collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH;
 

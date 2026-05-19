@@ -283,7 +283,7 @@ export default function CashierCustomerCard({
                     lineHeight: 1.55,
                   }}
                 >
-                  Sirve para seguimiento y ticket digital futuro, pero no genera
+                  Sirve para seguimiento y ticket digital, pero no genera
                   puntos ni historial formal.
                 </Typography>
 
