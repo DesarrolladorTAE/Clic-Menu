@@ -1,18 +1,14 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 export default function CashierRefundSaleCard({
   sale,
   onOpenDetail,
+  onSendTicket,
 }) {
   const status = String(sale?.status || "");
 
@@ -127,17 +123,39 @@ export default function CashierRefundSaleCard({
 
           <Box sx={{ flex: 1 }} />
 
-          <Button
-            variant="contained"
-            onClick={() => onOpenDetail?.(sale)}
-            sx={{
-              height: 44,
-              borderRadius: 2,
-              fontWeight: 800,
-            }}
-          >
-            Ver detalle
-          </Button>
+          <Stack spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<WhatsAppIcon />}
+              disabled={!sale?.ticket?.id}
+              onClick={() => onSendTicket?.(sale)}
+              sx={{
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+                borderColor: "#25D366",
+                color: "#128C4A",
+                "&:hover": {
+                  borderColor: "#1DA851",
+                  bgcolor: "rgba(37, 211, 102, 0.08)",
+                },
+              }}
+            >
+              Enviar ticket
+            </Button>
+
+            <Button
+              variant="contained"
+              onClick={() => onOpenDetail?.(sale)}
+              sx={{
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
+            >
+              Ver detalle
+            </Button>
+          </Stack>
         </Stack>
       </CardContent>
     </Card>

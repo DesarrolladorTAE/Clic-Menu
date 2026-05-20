@@ -17,9 +17,14 @@ import {
   fetchCashierRefundSalesHistory,
 } from "../../../../services/staff/casher/cashierRefunds.service";
 
+import {
+  sendCashierSaleTicketWhatsapp,
+} from "../../../../services/staff/casher/cashierTicket.service";
+
 import CashierRefundsHeroCard from "../../../../components/staff/casher/refunds/CashierRefundsHeroCard";
 import CashierRefundHistoryFiltersCard from "../../../../components/staff/casher/refunds/CashierRefundHistoryFiltersCard";
 import CashierRefundSalesPanel from "../../../../components/staff/casher/refunds/CashierRefundSalesPanel";
+import CashierRefundTicketWhatsappDialog from "../../../../components/staff/casher/refunds/CashierRefundTicketWhatsappDialog";
 
 const PAGE_SIZE = 6;
 
@@ -30,6 +35,9 @@ export default function CashierRefundsHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [rows, setRows] = useState([]);
+
+  const [whatsappSale, setWhatsappSale] = useState(null);
+  const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
   const [filters, setFilters] = useState({
     query: "",
@@ -103,6 +111,10 @@ export default function CashierRefundsHistoryPage() {
         refunded_total: refundedTotal,
         available_to_refund: availableToRefund,
         paid_at: row?.paid_at || null,
+
+        ticket: row?.ticket || null,
+        customer: row?.customer || null,
+        contact_data: row?.contact_data || null,
       };
     });
   };
@@ -210,6 +222,70 @@ export default function CashierRefundsHistoryPage() {
     nav(`/staff/cashier/refunds/${saleId}`);
   };
 
+
+  const handleOpenWhatsappModal = (sale) => {
+    if (!sale?.sale_id) return;
+
+    if (!sale?.ticket?.id) {
+      showAlert({
+        severity: "warning",
+        title: "Ticket no disponible",
+        message: "Esta venta no tiene ticket disponible para reenviar.",
+      });
+      return;
+    }
+
+    setWhatsappSale(sale);
+  };
+
+  const handleCloseWhatsappModal = () => {
+    if (sendingWhatsapp) return;
+    setWhatsappSale(null);
+  };
+
+  const handleSendWhatsapp = async ({ sale, phone, save_contact }) => {
+    const saleId = sale?.sale_id;
+
+    if (!saleId) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "No se pudo identificar la venta.",
+      });
+      return;
+    }
+
+    setSendingWhatsapp(true);
+
+    try {
+      const res = await sendCashierSaleTicketWhatsapp(saleId, {
+        phone,
+        save_contact,
+        body: null,
+      });
+
+      showAlert({
+        severity: "success",
+        title: "Ticket enviado",
+        message: res?.message || "Ticket enviado correctamente por WhatsApp.",
+      });
+
+      setWhatsappSale(null);
+      await load({ silent: true });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        title: "No se pudo enviar",
+        message: pickErr(
+          e,
+          "No se pudo reenviar el ticket por WhatsApp."
+        ),
+      });
+    } finally {
+      setSendingWhatsapp(false);
+    }
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -253,9 +329,18 @@ export default function CashierRefundsHistoryPage() {
           onPrev={prevPage}
           onNext={nextPage}
           onOpenDetail={handleOpenDetail}
+          onSendTicket={handleOpenWhatsappModal}
         />
       </Stack>
 
+      <CashierRefundTicketWhatsappDialog
+        open={!!whatsappSale}
+        sale={whatsappSale}
+        sending={sendingWhatsapp}
+        onClose={handleCloseWhatsappModal}
+        onSend={handleSendWhatsapp}
+      />
+      
       <AppAlert
         open={alertState.open}
         onClose={closeAlert}

@@ -1,19 +1,9 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  useMediaQuery,
+  Box, Button, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 import PaginationFooter from "../../../common/PaginationFooter";
 import CashierRefundSaleCard from "./CashierRefundSaleCard";
@@ -30,6 +20,7 @@ export default function CashierRefundSalesPanel({
   onPrev,
   onNext,
   onOpenDetail,
+  onSendTicket,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -125,12 +116,13 @@ export default function CashierRefundSalesPanel({
                   key={sale.sale_id}
                   sale={sale}
                   onOpenDetail={onOpenDetail}
+                  onSendTicket={onSendTicket}
                 />
               ))}
             </Box>
           ) : (
             <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-              <Table sx={{ minWidth: 1180 }}>
+              <Table sx={{ minWidth: 980 }}>
                 <TableHead>
                   <TableRow
                     sx={{
@@ -148,8 +140,6 @@ export default function CashierRefundSalesPanel({
                     <TableCell>Cliente</TableCell>
                     <TableCell>Estado</TableCell>
                     <TableCell>Total</TableCell>
-                    <TableCell>Devuelto</TableCell>
-                    <TableCell>Disponible</TableCell>
                     <TableCell>Pagada</TableCell>
                     <TableCell align="right">Acciones</TableCell>
                   </TableRow>
@@ -190,12 +180,31 @@ export default function CashierRefundSalesPanel({
 
                       <TableCell>{getRefundStatusLabel(sale.status)}</TableCell>
                       <TableCell>{formatCurrency(sale.total)}</TableCell>
-                      <TableCell>{formatCurrency(sale.refunded_total)}</TableCell>
-                      <TableCell>{formatCurrency(sale.available_to_refund)}</TableCell>
                       <TableCell>{formatDateTime(sale.paid_at)}</TableCell>
 
                       <TableCell align="right">
-                        <Stack direction="row" justifyContent="flex-end">
+                        <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                          <Button
+                            variant="outlined"
+                            startIcon={<WhatsAppIcon />}
+                            disabled={!sale?.ticket?.id}
+                            onClick={() => onSendTicket?.(sale)}
+                            sx={{
+                              minWidth: 155,
+                              height: 40,
+                              borderRadius: 2,
+                              fontWeight: 800,
+                              borderColor: "#25D366",
+                              color: "#128C4A",
+                              "&:hover": {
+                                borderColor: "#1DA851",
+                                bgcolor: "rgba(37, 211, 102, 0.08)",
+                              },
+                            }}
+                          >
+                            Enviar ticket
+                          </Button>
+
                           <Button
                             variant="contained"
                             onClick={() => onOpenDetail?.(sale)}
