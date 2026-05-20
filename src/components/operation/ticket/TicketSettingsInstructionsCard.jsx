@@ -42,6 +42,11 @@ export default function TicketSettingsInstructionsCard() {
           step="4"
           text="El folio se genera automáticamente al cobrar. Aquí solo defines el formato visual del folio, no el consecutivo real."
         />
+
+        <InstructionRow
+          step="5"
+          text="También puedes definir el teléfono y correo que aparecerán en el mensaje de WhatsApp cuando se envíe un ticket digital."
+        />
       </Stack>
     </Paper>
   );

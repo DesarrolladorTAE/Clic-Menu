@@ -10,16 +10,12 @@ import { useStaffAuth } from "../context/StaffAuthContext";
 
 import { fetchCashierSaleQueue } from "../services/staff/casher/cashierQueue.service";
 import { closeCashierSession } from "../services/staff/casher/cashierSession.service";
-import { getPlanAccess } from "../services/plan/planAccess.service";
+import { getStaffPlanAccess } from "../services/plan/planAccess.service";
 
 export default function CashierLayout() {
   const nav = useNavigate();
   const location = useLocation();
-  const { clearStaff, context: staffContext, staffContext: fallbackStaffContext } =
-  useStaffAuth() || {};
-
-  const activeStaffContext = staffContext || fallbackStaffContext || null;
-  const restaurantId = activeStaffContext?.restaurant_id || null;
+  const { clearStaff } = useStaffAuth() || {};
 
   const [closing, setClosing] = useState(false);
 
@@ -81,16 +77,17 @@ export default function CashierLayout() {
     let mounted = true;
 
     const loadPlanAccess = async () => {
-      if (!restaurantId) return;
-
       setPlanAccessLoading(true);
 
       try {
-        const data = await getPlanAccess(restaurantId);
+        const data = await getStaffPlanAccess();
+
         if (!mounted) return;
+
         setPlanAccess(data || null);
-      } catch {
+      } catch (e) {
         if (!mounted) return;
+
         setPlanAccess(null);
       } finally {
         if (mounted) setPlanAccessLoading(false);
@@ -102,7 +99,7 @@ export default function CashierLayout() {
     return () => {
       mounted = false;
     };
-  }, [restaurantId]);
+  }, []);
 
   React.useEffect(() => {
     if (!shouldBlockCustomersRoute) return;
@@ -115,13 +112,25 @@ export default function CashierLayout() {
       case "dashboard":
         nav("/staff/cashier/queue");
         break;
+
       case "new-sale":
         nav("/staff/cashier/direct-order");
         break;
+
       case "history":
         nav("/staff/cashier/refunds");
         break;
+
       case "customers":
+        if (planAccessLoading) {
+          showAlert({
+            severity: "info",
+            title: "Cargando permisos",
+            message: "Espera un momento mientras validamos tu plan.",
+          });
+          return;
+        }
+
         if (!canUseCustomerLoyaltyModules) {
           showAlert({
             severity: "warning",

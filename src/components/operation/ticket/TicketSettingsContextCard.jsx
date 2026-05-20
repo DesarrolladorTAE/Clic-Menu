@@ -2,6 +2,7 @@ import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
 import ConfirmationNumberOutlinedIcon from "@mui/icons-material/ConfirmationNumberOutlined";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 export default function TicketSettingsContextCard({
   selectedBranch,
@@ -10,6 +11,10 @@ export default function TicketSettingsContextCard({
   const logoContext = ticketData?.logo_context || {};
   const folioCounter = ticketData?.folio_counter || {};
   const ticketSetting = ticketData?.ticket_setting || {};
+
+  const hasWhatsappContact = Boolean(
+    ticketSetting?.whatsapp_contact_phone || ticketSetting?.whatsapp_contact_email
+  );
 
   return (
     <Paper
@@ -61,6 +66,23 @@ export default function TicketSettingsContextCard({
             value={`#${folioCounter?.last_number ?? 0}`}
             chipLabel={ticketSetting?.folio_mode === "pattern" ? "Pattern" : "Secuencial"}
             chipColor="primary"
+          />
+
+          <ContextMiniCard
+            icon={<WhatsAppIcon fontSize="small" />}
+            title="Contacto WhatsApp"
+            value={
+              hasWhatsappContact
+                ? [
+                    ticketSetting?.whatsapp_contact_phone || null,
+                    ticketSetting?.whatsapp_contact_email || null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "No configurado"
+            }
+            chipLabel={hasWhatsappContact ? "Configurado" : "Pendiente"}
+            chipColor={hasWhatsappContact ? "success" : "default"}
           />
         </Stack>
 
