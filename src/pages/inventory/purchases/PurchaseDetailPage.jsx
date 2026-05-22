@@ -75,14 +75,21 @@ export default function PurchaseDetailPage() {
     setLoading(true);
 
     try {
-      const [purchaseRes, ingredientsRes, productsRes] = await Promise.all([
-        getPurchase(restaurantId, purchaseId),
-        getPurchasableIngredients(restaurantId, { q: "" }),
-        getProducts(restaurantId, { include_inactive: true }),
-      ]);
-
+      const purchaseRes = await getPurchase(restaurantId, purchaseId);
       const nextPurchase = purchaseRes?.data || null;
+
       setPurchase(nextPurchase);
+
+      const purchaseBranchId =
+        nextPurchase?.branch_id || nextPurchase?.branch?.id || null;
+
+      const [ingredientsRes, productsRes] = await Promise.all([
+        getPurchasableIngredients(restaurantId, { q: "" }),
+        getProducts(restaurantId, {
+          include_inactive: true,
+          ...(purchaseBranchId ? { branch_id: Number(purchaseBranchId) } : {}),
+        }),
+      ]);
 
       setIngredients(
         Array.isArray(ingredientsRes?.data) ? ingredientsRes.data : []
