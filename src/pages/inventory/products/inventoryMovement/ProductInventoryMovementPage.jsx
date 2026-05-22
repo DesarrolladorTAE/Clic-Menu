@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import AddIcon from "@mui/icons-material/Add";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
@@ -10,14 +9,12 @@ import usePagination from "../../../../hooks/usePagination";
 
 import InventoryWarehouseContextCard from "../../../../components/inventory/shared/stock/InventoryWarehouseContextCard";
 import InventoryMovementSummaryCards from "../../../../components/inventory/shared/movement/InventoryMovementSummaryCards";
-import ManualMovementModal from "../../../../components/inventory/shared/movement/ManualMovementModal";
 import ProductInventoryMovementFilters from "../../../../components/inventory/products/inventoryMovement/ProductInventoryMovementFilters";
 import ProductInventoryMovementTable from "../../../../components/inventory/products/inventoryMovement/ProductInventoryMovementTable";
 
 import { getProducts } from "../../../../services/products/products.service";
 import {
   getProductInventoryMovements,
-  createProductInventoryMovement,
 } from "../../../../services/inventory/products/inventoryMovement/inventoryMovement.service";
 import { normalizeErr } from "../../../../utils/err";
 
@@ -26,6 +23,9 @@ const PAGE_SIZE = 5;
 export default function ProductInventoryMovementPage() {
   const nav = useNavigate();
   const { restaurantId, warehouseId } = useParams();
+  const [searchParams] = useSearchParams();
+
+  const branchId = searchParams.get("branch_id");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +37,6 @@ export default function ProductInventoryMovementPage() {
   const [productId, setProductId] = useState("");
   const [type, setType] = useState("");
   const [reason, setReason] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -82,6 +81,7 @@ export default function ProductInventoryMovementPage() {
         }),
         getProducts(restaurantId, {
           include_inactive: true,
+          ...(branchId ? { branch_id: Number(branchId) } : {}),
         }),
       ]);
 
@@ -129,28 +129,6 @@ export default function ProductInventoryMovementPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, type, reason]);
-
-  const handleSaveMovement = async (selectedProductId, payload) => {
-    const res = await createProductInventoryMovement(restaurantId, {
-      ...payload,
-      product_id: selectedProductId,
-    });
-
-    const movement = res?.data?.movement;
-    if (movement) {
-      setRows((prev) => [movement, ...prev]);
-    }
-
-    setModalOpen(false);
-
-    showAlert({
-      severity: "success",
-      title: "Hecho",
-      message: res?.message || "Movimiento aplicado correctamente.",
-    });
-
-    await load({ initial: false });
-  };
 
   const {
     page,
@@ -243,7 +221,11 @@ export default function ProductInventoryMovementPage() {
           >
             <Button
               onClick={() =>
-                nav(`/owner/restaurants/${restaurantId}/operation/warehouses`)
+                nav(
+                  `/owner/restaurants/${restaurantId}/operation/warehouses${
+                    branchId ? `?branch_id=${branchId}` : ""
+                  }`
+                )
               }
               variant="outlined"
               startIcon={<ArrowBackIcon />}
@@ -254,20 +236,6 @@ export default function ProductInventoryMovementPage() {
               }}
             >
               Volver a almacenes
-            </Button>
-
-            <Button
-              onClick={() => setModalOpen(true)}
-              variant="contained"
-              startIcon={<AddIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 210 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Nuevo movimiento
             </Button>
           </Stack>
         </Stack>
@@ -287,7 +255,7 @@ export default function ProductInventoryMovementPage() {
           total={rows.length}
         />
 
-        <ProductInventoryMovementTable
+      <ProductInventoryMovementTable
           rows={rows}
           paginatedItems={paginatedItems}
           page={page}
@@ -299,19 +267,8 @@ export default function ProductInventoryMovementPage() {
           hasNext={hasNext}
           onPrev={prevPage}
           onNext={nextPage}
-          onCreate={() => setModalOpen(true)}
         />
       </Stack>
-
-      <ManualMovementModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Nuevo movimiento manual de producto"
-        entityLabel="Producto"
-        entityOptions={productOptions}
-        warehouseId={warehouseId}
-        onSave={handleSaveMovement}
-      />
 
       <AppAlert
         open={alertState.open}

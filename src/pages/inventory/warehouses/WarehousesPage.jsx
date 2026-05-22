@@ -389,6 +389,22 @@ export default function WarehousesPage() {
     }
   };
 
+
+  const buildWarehousePath = (row, section) => {
+    const params = new URLSearchParams();
+
+    if (requiresBranch && branchId) {
+      params.set("branch_id", String(branchId));
+    }
+
+    const query = params.toString();
+
+    return `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/${section}${
+      query ? `?${query}` : ""
+    }`;
+  };
+
+
   const handleGoIngredientStocks = (row) => {
     navigate(
       `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/ingredient-stocks`
@@ -402,15 +418,11 @@ export default function WarehousesPage() {
   };
 
   const handleGoProductStocks = (row) => {
-    navigate(
-      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/product-stocks`
-    );
+    navigate(buildWarehousePath(row, "product-stocks"));
   };
 
   const handleGoProductMovements = (row) => {
-    navigate(
-      `/owner/restaurants/${restaurantId}/operation/warehouses/${row.id}/product-movements`
-    );
+    navigate(buildWarehousePath(row, "product-movements"));
   };
 
   if (loading) {

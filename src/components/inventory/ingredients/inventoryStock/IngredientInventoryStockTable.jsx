@@ -1,9 +1,8 @@
 import {
-  Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
+    Box, Card, Chip, FormControlLabel, Paper, Stack, Switch, Table, TableBody,
+    TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PaginationFooter from "../../../common/PaginationFooter";
 import InventoryStockEmptyState from "../../shared/stock/InventoryStockEmptyState";
 
@@ -35,7 +34,6 @@ export default function IngredientInventoryStockTable({
   hasNext,
   onPrev,
   onNext,
-  onOpenIngredientConfig,
   onToggleStatus,
 }) {
   const theme = useTheme();
@@ -178,19 +176,6 @@ export default function IngredientInventoryStockTable({
                         </Box>
 
                         <Box sx={{ flexGrow: 1 }} />
-
-                        <Button
-                          onClick={() => onOpenIngredientConfig(row)}
-                          variant="outlined"
-                          startIcon={<SettingsOutlinedIcon />}
-                          sx={{
-                            height: 40,
-                            borderRadius: 2,
-                            fontWeight: 800,
-                          }}
-                        >
-                          Configuración
-                        </Button>
                       </Stack>
                     </Box>
                   </Card>
@@ -202,7 +187,7 @@ export default function IngredientInventoryStockTable({
               <Table
                 sx={{
                   width: "100%",
-                  tableLayout: "fixed",
+                  tableLayout: "auto",
                 }}
               >
                 <TableHead>
@@ -218,16 +203,13 @@ export default function IngredientInventoryStockTable({
                       },
                     }}
                   >
-                    <TableCell sx={{ width: "24%" }}>Ingrediente</TableCell>
-                    <TableCell sx={{ width: "14%" }}>Grupo</TableCell>
+                    <TableCell sx={{ width: "30%" }}>Ingrediente</TableCell>
+                    <TableCell sx={{ width: "16%" }}>Grupo</TableCell>
                     <TableCell sx={{ width: "10%" }}>Unidad</TableCell>
                     <TableCell sx={{ width: "12%" }}>Stock</TableCell>
                     <TableCell sx={{ width: "14%" }}>Último costo</TableCell>
                     <TableCell sx={{ width: "14%" }}>Promedio</TableCell>
-                    <TableCell sx={{ width: "8%" }}>Activo</TableCell>
-                    <TableCell align="right" sx={{ width: "12%" }}>
-                      Acciones
-                    </TableCell>
+                    <TableCell sx={{ width: "14%" }}>Activo</TableCell>
                   </TableRow>
                 </TableHead>
 
@@ -300,17 +282,6 @@ export default function IngredientInventoryStockTable({
                             }
                           />
                         </TableCell>
-
-                        <TableCell align="right">
-                          <Tooltip title="Abrir configuración">
-                            <IconButton
-                              onClick={() => onOpenIngredientConfig(row)}
-                              sx={iconActionSx}
-                            >
-                              <SettingsOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -365,15 +336,4 @@ const mobileValueSx = {
   fontSize: 14,
   color: "text.primary",
   wordBreak: "break-word",
-};
-
-const iconActionSx = {
-  width: 40,
-  height: 40,
-  bgcolor: "#E3C24A",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "#C9AA39",
-  },
 };

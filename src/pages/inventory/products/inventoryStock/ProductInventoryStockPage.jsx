@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SettingsIcon from "@mui/icons-material/Settings";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
@@ -23,6 +22,9 @@ const PAGE_SIZE = 5;
 export default function ProductInventoryStockPage() {
   const nav = useNavigate();
   const { restaurantId, warehouseId } = useParams();
+  const [searchParams] = useSearchParams();
+
+  const branchId = searchParams.get("branch_id");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,6 +77,7 @@ export default function ProductInventoryStockPage() {
         category_id: categoryId,
         status,
         only_positive: onlyPositive,
+        ...(branchId ? { branch_id: Number(branchId) } : {}),
       });
 
       if (myReq !== reqRef.current) return;
@@ -85,7 +88,11 @@ export default function ProductInventoryStockPage() {
 
       const catRes = await getCategories(restaurantId, {
         status: "active",
-        ...(nextWarehouse?.branch_id ? { branch_id: nextWarehouse.branch_id } : {}),
+        ...(branchId
+          ? { branch_id: Number(branchId) }
+          : nextWarehouse?.branch_id
+            ? { branch_id: nextWarehouse.branch_id }
+            : {}),
       });
 
       if (myReq !== reqRef.current) return;
@@ -160,15 +167,6 @@ export default function ProductInventoryStockPage() {
         message: normalizeErr(e, "No se pudo actualizar el estado."),
       });
     }
-  };
-
-  const onOpenProductConfig = (row) => {
-    const product = row.product || {};
-    nav(`/owner/restaurants/${restaurantId}/operation/menu/products`, {
-      state: {
-        focusProductId: product.id,
-      },
-    });
   };
 
   const {
@@ -262,7 +260,11 @@ export default function ProductInventoryStockPage() {
           >
             <Button
               onClick={() =>
-                nav(`/owner/restaurants/${restaurantId}/operation/warehouses`)
+                nav(
+                  `/owner/restaurants/${restaurantId}/operation/warehouses${
+                    branchId ? `?branch_id=${branchId}` : ""
+                  }`
+                )
               }
               variant="outlined"
               startIcon={<ArrowBackIcon />}
@@ -273,22 +275,6 @@ export default function ProductInventoryStockPage() {
               }}
             >
               Volver a almacenes
-            </Button>
-
-            <Button
-              onClick={() =>
-                nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
-              }
-              variant="contained"
-              startIcon={<SettingsIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 210 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Configuración productos
             </Button>
           </Stack>
         </Stack>
@@ -322,7 +308,6 @@ export default function ProductInventoryStockPage() {
           hasNext={hasNext}
           onPrev={prevPage}
           onNext={nextPage}
-          onOpenProductConfig={onOpenProductConfig}
           onToggleStatus={onToggleStatus}
         />
       </Stack>

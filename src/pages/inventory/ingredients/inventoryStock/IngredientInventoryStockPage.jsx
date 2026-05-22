@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SettingsIcon from "@mui/icons-material/Settings";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
@@ -172,15 +171,6 @@ export default function IngredientInventoryStockPage() {
     }
   };
 
-  const onOpenIngredientConfig = (row) => {
-    const ing = row.ingredient || {};
-    nav(`/owner/restaurants/${restaurantId}/operation/ingredients`, {
-      state: {
-        focusIngredientId: ing.id,
-      },
-    });
-  };
-
   const {
     page,
     nextPage,
@@ -284,22 +274,6 @@ export default function IngredientInventoryStockPage() {
             >
               Volver a almacenes
             </Button>
-
-            <Button
-              onClick={() =>
-                nav(`/owner/restaurants/${restaurantId}/operation/ingredients`)
-              }
-              variant="contained"
-              startIcon={<SettingsIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 210 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Configuración ingredientes
-            </Button>
           </Stack>
         </Stack>
 
@@ -330,7 +304,6 @@ export default function IngredientInventoryStockPage() {
           hasNext={hasNext}
           onPrev={prevPage}
           onNext={nextPage}
-          onOpenIngredientConfig={onOpenIngredientConfig}
           onToggleStatus={onToggleStatus}
         />
       </Stack>

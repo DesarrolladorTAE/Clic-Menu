@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import AddIcon from "@mui/icons-material/Add";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
@@ -10,14 +9,12 @@ import usePagination from "../../../../hooks/usePagination";
 
 import InventoryWarehouseContextCard from "../../../../components/inventory/shared/stock/InventoryWarehouseContextCard";
 import InventoryMovementSummaryCards from "../../../../components/inventory/shared/movement/InventoryMovementSummaryCards";
-import ManualMovementModal from "../../../../components/inventory/shared/movement/ManualMovementModal";
 import IngredientInventoryMovementFilters from "../../../../components/inventory/ingredients/inventoryMovement/IngredientInventoryMovementFilters";
 import IngredientInventoryMovementTable from "../../../../components/inventory/ingredients/inventoryMovement/IngredientInventoryMovementTable";
 
 import { getIngredients } from "../../../../services/inventory/ingredients/ingredients.service";
 import {
   getIngredientInventoryMovements,
-  createIngredientInventoryMovement,
 } from "../../../../services/inventory/ingredients/inventoryMovement/inventoryMovement.service";
 import { normalizeErr } from "../../../../utils/err";
 
@@ -37,7 +34,6 @@ export default function IngredientInventoryMovementPage() {
   const [ingredientId, setIngredientId] = useState("");
   const [type, setType] = useState("");
   const [reason, setReason] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -126,28 +122,6 @@ export default function IngredientInventoryMovementPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingredientId, type, reason]);
-
-  const handleSaveMovement = async (selectedIngredientId, payload) => {
-    const res = await createIngredientInventoryMovement(restaurantId, {
-      ...payload,
-      ingredient_id: selectedIngredientId,
-    });
-
-    const movement = res?.data?.movement;
-    if (movement) {
-      setRows((prev) => [movement, ...prev]);
-    }
-
-    setModalOpen(false);
-
-    showAlert({
-      severity: "success",
-      title: "Hecho",
-      message: res?.message || "Movimiento aplicado correctamente.",
-    });
-
-    await load({ initial: false });
-  };
 
   const {
     page,
@@ -252,20 +226,6 @@ export default function IngredientInventoryMovementPage() {
             >
               Volver a almacenes
             </Button>
-
-            <Button
-              onClick={() => setModalOpen(true)}
-              variant="contained"
-              startIcon={<AddIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 210 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Nuevo movimiento
-            </Button>
           </Stack>
         </Stack>
 
@@ -296,19 +256,8 @@ export default function IngredientInventoryMovementPage() {
           hasNext={hasNext}
           onPrev={prevPage}
           onNext={nextPage}
-          onCreate={() => setModalOpen(true)}
         />
       </Stack>
-
-      <ManualMovementModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Nuevo movimiento manual de ingrediente"
-        entityLabel="Ingrediente"
-        entityOptions={ingredientOptions}
-        warehouseId={warehouseId}
-        onSave={handleSaveMovement}
-      />
 
       <AppAlert
         open={alertState.open}

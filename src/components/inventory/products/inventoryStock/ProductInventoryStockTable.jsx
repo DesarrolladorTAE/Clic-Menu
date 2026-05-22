@@ -1,25 +1,8 @@
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  FormControlLabel,
-  IconButton,
-  Paper,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, Chip,FormControlLabel, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PaginationFooter from "../../../common/PaginationFooter";
 import InventoryStockEmptyState from "../../shared/stock/InventoryStockEmptyState";
 
@@ -47,7 +30,6 @@ export default function ProductInventoryStockTable({
   hasNext,
   onPrev,
   onNext,
-  onOpenProductConfig,
   onToggleStatus,
 }) {
   const theme = useTheme();
@@ -202,19 +184,6 @@ export default function ProductInventoryStockTable({
                         </Box>
 
                         <Box sx={{ flexGrow: 1 }} />
-
-                        <Button
-                          onClick={() => onOpenProductConfig(row)}
-                          variant="outlined"
-                          startIcon={<SettingsOutlinedIcon />}
-                          sx={{
-                            height: 40,
-                            borderRadius: 2,
-                            fontWeight: 800,
-                          }}
-                        >
-                          Configuración
-                        </Button>
                       </Stack>
                     </Box>
                   </Card>
@@ -249,9 +218,6 @@ export default function ProductInventoryStockTable({
                     <TableCell sx={{ width: "14%" }}>Promedio</TableCell>
                     <TableCell sx={{ width: "10%" }}>Ámbito</TableCell>
                     <TableCell sx={{ width: "14%" }}>Activo</TableCell>
-                    <TableCell align="right" sx={{ width: "10%" }}>
-                      Acciones
-                    </TableCell>
                   </TableRow>
                 </TableHead>
 
@@ -326,17 +292,6 @@ export default function ProductInventoryStockTable({
                             }
                           />
                         </TableCell>
-
-                        <TableCell align="right">
-                          <Tooltip title="Abrir configuración">
-                            <IconButton
-                              onClick={() => onOpenProductConfig(row)}
-                              sx={iconActionSx}
-                            >
-                              <SettingsOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -391,15 +346,4 @@ const mobileValueSx = {
   fontSize: 14,
   color: "text.primary",
   wordBreak: "break-word",
-};
-
-const iconActionSx = {
-  width: 40,
-  height: 40,
-  bgcolor: "#E3C24A",
-  color: "#fff",
-  borderRadius: 1.5,
-  "&:hover": {
-    bgcolor: "#C9AA39",
-  },
 };
