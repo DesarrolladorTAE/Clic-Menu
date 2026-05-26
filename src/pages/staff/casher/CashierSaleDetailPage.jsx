@@ -59,6 +59,9 @@ import {
   saveCashierTicketPdf,
   openCashierTicketWindow,
   sendCashierSaleTicketWhatsapp,
+  fetchCashierSaleTicketPrintConfig,
+  fetchCashierSaleTicketPrintPayload,
+  sendCashierThermalPrintPayloadToWindows,
 } from "../../../services/staff/casher/cashierTicket.service";
 
 import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
@@ -141,13 +144,15 @@ export default function CashierSaleDetailPage() {
   const [postPaymentTicketWarning, setPostPaymentTicketWarning] = useState(false);
   const [postPaymentTicketErrorCode, setPostPaymentTicketErrorCode] = useState(null);
   const [postPaymentTicketErrorMessage, setPostPaymentTicketErrorMessage] = useState(null);
+  const [postPaymentPrintConfig, setPostPaymentPrintConfig] = useState(null);
 
-    const [ticketBusy, setTicketBusy] = useState({
-      view: false,
-      print: false,
-      download: false,
-      whatsapp: false,
-    });
+  const [ticketBusy, setTicketBusy] = useState({
+    view: false,
+    print: false,
+    thermalPrint: false,
+    download: false,
+    whatsapp: false,
+  });
 
   const localIdRef = useRef(1);
   const draftIdRef = useRef(1);
@@ -820,6 +825,23 @@ export default function CashierSaleDetailPage() {
     setPostPaymentOpen(false);
   };
 
+  const loadPostPaymentPrintConfig = async (targetSaleId) => {
+    if (!targetSaleId) {
+      setPostPaymentPrintConfig(null);
+      return null;
+    }
+
+    try {
+      const res = await fetchCashierSaleTicketPrintConfig(targetSaleId);
+      const config = res?.data || null;
+      setPostPaymentPrintConfig(config);
+      return config;
+    } catch {
+      setPostPaymentPrintConfig(null);
+      return null;
+    }
+  };
+
   const handleContinueToQueue = () => {
     setPostPaymentOpen(false);
     nav("/staff/cashier/queue", { replace: true });
@@ -901,6 +923,62 @@ export default function CashierSaleDetailPage() {
       });
     } finally {
       setTicketBusyKey("print", false);
+    }
+  };
+
+
+  const handleThermalPrintTicket = async () => {
+    const currentSaleId = Number(sale?.sale_id || sale?.id || saleId || 0);
+
+    if (!currentSaleId) {
+      showAlert({
+        severity: "warning",
+        message: "No hay una venta válida para imprimir.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("thermalPrint", true);
+
+      const configRes = await fetchCashierSaleTicketPrintConfig(currentSaleId);
+      const config = configRes?.data || null;
+
+      if (!config?.enabled || !config?.show_print_button) {
+        showAlert({
+          severity: "warning",
+          message:
+            config?.message ||
+            "La impresión térmica no está habilitada para esta sucursal.",
+        });
+        return;
+      }
+
+      setPostPaymentPrintConfig(config);
+
+      const payloadRes = await fetchCashierSaleTicketPrintPayload(currentSaleId);
+      const payload = payloadRes?.payload || null;
+
+      if (!payload) {
+        throw new Error("No se recibió el payload de impresión térmica.");
+      }
+
+      await sendCashierThermalPrintPayloadToWindows(payload);
+
+      showAlert({
+        severity: "success",
+        message: "Ticket enviado a impresión térmica correctamente.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(
+          e,
+          "No se pudo enviar el ticket a la aplicación de impresión térmica."
+        ),
+      });
+    } finally {
+      setTicketBusyKey("thermalPrint", false);
     }
   };
 
@@ -1007,6 +1085,17 @@ export default function CashierSaleDetailPage() {
       setPostPaymentTicketWarning(ticketWarningData.ticketWarning);
       setPostPaymentTicketErrorCode(ticketWarningData.ticketErrorCode);
       setPostPaymentTicketErrorMessage(ticketWarningData.ticketErrorMessage);
+
+      const currentSaleId = Number(
+        paidSaleData?.id ||
+          paidSaleData?.sale_id ||
+          sale?.sale_id ||
+          sale?.id ||
+          saleId ||
+          0
+      );
+
+      await loadPostPaymentPrintConfig(currentSaleId);
 
       setPreview(null);
 
@@ -1786,12 +1875,15 @@ export default function CashierSaleDetailPage() {
         onContinue={handleContinueToQueue}
         onViewTicket={handleViewTicket}
         onPrintTicket={handlePrintTicket}
+        onThermalPrintTicket={handleThermalPrintTicket}
         onDownloadTicket={handleDownloadTicket}
         onSendWhatsapp={handleSendTicketWhatsapp}
         busyView={ticketBusy.view}
         busyPrint={ticketBusy.print}
+        busyThermalPrint={ticketBusy.thermalPrint}
         busyDownload={ticketBusy.download}
         busyWhatsapp={ticketBusy.whatsapp}
+        printConfig={postPaymentPrintConfig}
         customerSummary={customerSummary}
         ticket={postPaymentTicket}
         sale={detailData?.sale || null}

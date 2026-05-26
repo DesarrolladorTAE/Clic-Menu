@@ -2,21 +2,27 @@ import React from "react";
 import { Button, Stack } from "@mui/material";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import EastRoundedIcon from "@mui/icons-material/EastRounded";
 
 export default function CashierTicketActionsBar({
   onView,
   onPrint,
+  onThermalPrint,
   onDownload,
   onContinue,
   loadingView = false,
   loadingPrint = false,
+  loadingThermalPrint = false,
   loadingDownload = false,
   disabled = false,
   ticketAvailable = true,
+  thermalPrintEnabled = false,
 }) {
   const ticketDisabled = disabled || !ticketAvailable;
+  const thermalPrintDisabled =
+    ticketDisabled || !thermalPrintEnabled || loadingThermalPrint;
 
   return (
     <Stack spacing={1.5}>
@@ -54,6 +60,22 @@ export default function CashierTicketActionsBar({
         >
           {loadingPrint ? "Imprimiendo…" : "Imprimir"}
         </Button>
+
+        <Button
+          variant="outlined"
+          startIcon={<ReceiptLongRoundedIcon />}
+          onClick={onThermalPrint}
+          disabled={thermalPrintDisabled}
+          sx={{
+            flex: 1,
+            height: 44,
+            borderRadius: 2,
+            fontWeight: 800,
+          }}
+        >
+          {loadingThermalPrint ? "Enviando…" : "Imprimir térmico"}
+        </Button>
+
       </Stack>
 
       <Stack

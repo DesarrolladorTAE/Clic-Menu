@@ -15,12 +15,15 @@ export default function CashierPostPaymentTicketModal({
   onContinue,
   onViewTicket,
   onPrintTicket,
+  onThermalPrintTicket,
   onDownloadTicket,
   busyView = false,
   busyPrint = false,
+  busyThermalPrint = false,
   busyDownload = false,
   busyWhatsapp = false,
   onSendWhatsapp,
+  printConfig = null,
   customerSummary = null,
   ticket = null,
   sale = null,
@@ -31,6 +34,10 @@ export default function CashierPostPaymentTicketModal({
   ticketErrorMessage = null,
 }) {
   const ticketAvailable = Boolean(ticket?.id);
+
+  const thermalPrintEnabled =
+    Boolean(printConfig?.enabled) &&
+    Boolean(printConfig?.show_print_button);
 
   return (
     <Dialog
@@ -143,15 +150,52 @@ export default function CashierPostPaymentTicketModal({
               busy={busyWhatsapp}
             />
 
+            {thermalPrintEnabled ? (
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderRadius: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.default",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  Impresión térmica habilitada
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize: 13,
+                    color: "text.secondary",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Esta sucursal tiene habilitada la impresión directa mediante la aplicación local de Windows.
+                </Typography>
+              </Box>
+            ) : null}
+
             <CashierTicketActionsBar
               onView={onViewTicket}
               onPrint={onPrintTicket}
+              onThermalPrint={onThermalPrintTicket}
               onDownload={onDownloadTicket}
               onContinue={onContinue}
               loadingView={busyView}
               loadingPrint={busyPrint}
+              loadingThermalPrint={busyThermalPrint}
               loadingDownload={busyDownload}
               ticketAvailable={ticketAvailable}
+              thermalPrintEnabled={thermalPrintEnabled}
             />
           </Stack>
         </Box>

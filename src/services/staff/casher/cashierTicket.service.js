@@ -181,6 +181,26 @@ function injectPrintScript(html) {
   return `${html}${printScript}`;
 }
 
+export async function sendCashierThermalPrintPayloadToWindows(payload) {
+  if (!payload) {
+    throw new Error("No se recibió payload de impresión.");
+  }
+
+  if (
+    typeof window === "undefined" ||
+    typeof window.sendPrintPayloadToWindows !== "function"
+  ) {
+    throw new Error(
+      "La aplicación de impresión térmica no está instalada o no está disponible."
+    );
+  }
+
+  const response = await window.sendPrintPayloadToWindows(payload);
+
+  return response;
+}
+
+
 function ensurePopupWindow(win, fallbackMessage) {
   if (!win) {
     throw new Error(fallbackMessage);
@@ -298,6 +318,31 @@ export async function saveCashierTicketPdf(ticketId) {
 }
 
 
+export async function fetchCashierSaleTicketPrintConfig(saleId) {
+  const res = await staffApi.get(
+    `/staff/cashier/sales/${saleId}/ticket/print-config`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
+export async function fetchCashierSaleTicketPrintPayload(saleId) {
+  const res = await staffApi.get(
+    `/staff/cashier/sales/${saleId}/ticket/print-payload`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
+
 export async function sendCashierSaleTicketWhatsapp(saleId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/sales/${saleId}/ticket/whatsapp`,
@@ -310,3 +355,9 @@ export async function sendCashierSaleTicketWhatsapp(saleId, payload = {}) {
 
   return res?.data;
 }
+
+
+
+
+
+
