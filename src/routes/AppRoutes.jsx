@@ -46,7 +46,6 @@ import CashierHomePage from "../pages/staff/casher/CashierHomePage";
 import CashierQueuePage from "../pages/staff/casher/CashierQueuePage";
 import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
 import CashierRefundsHistoryPage from "../pages/staff/casher/refunds/CashierRefundsHistoryPage";
-import CashierRefundSaleDetailPage from "../pages/staff/casher/refunds/CashierRefundSaleDetailPage";
 import CashierCustomersPage from "../pages/staff/casher/customer/CashierCustomersPage";
 import CashierDirectOrderPage from "../pages/staff/casher/CashierDirectOrderPage";
 
@@ -156,7 +155,6 @@ export default function AppRoutes() {
           <Route path="queue" element={<CashierQueuePage />} />
           <Route path="direct-order" element={<CashierDirectOrderPage />} />
           <Route path="refunds" element={<CashierRefundsHistoryPage />} />
-          <Route path="refunds/:saleId" element={<CashierRefundSaleDetailPage />} />
           <Route path="customers" element={<CashierCustomersPage />} />
         </Route>
         <Route path="/staff/cashier/sales/:saleId" element={<CashierSaleDetailPage />} />

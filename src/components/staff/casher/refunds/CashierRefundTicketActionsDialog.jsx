@@ -1,8 +1,7 @@
-// src/components/staff/casher/refunds/CashierRefundTicketWhatsappDialog.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton,
-  Stack, TextField, Typography, useMediaQuery,
+  Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, Stack,
+  TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -11,13 +10,20 @@ import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import PhoneRoundedIcon from "@mui/icons-material/PhoneRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 
-export default function CashierRefundTicketWhatsappDialog({
+export default function CashierRefundTicketActionsDialog({
   open = false,
   onClose,
   sale = null,
-  onSend,
-  sending = false,
+
+  onSendWhatsapp,
+  sendingWhatsapp = false,
+
+  thermalEnabled = false,
+  thermalConfig = null,
+  onThermalPrint,
+  thermalPrinting = false,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -29,7 +35,7 @@ export default function CashierRefundTicketWhatsappDialog({
     return contactPhone || customerPhone || "";
   }, [sale]);
 
-  const hasFormalCustomer = Boolean(sale?.customer?.customer_id);
+  const hasFormalCustomer = Boolean(sale?.customer?.customer_id || sale?.customer?.id);
   const hasSimpleContact = Boolean(sale?.contact_data?.phone);
 
   const [phone, setPhone] = useState("");
@@ -42,13 +48,22 @@ export default function CashierRefundTicketWhatsappDialog({
     setSaveContact(false);
   }, [open, initialPhone]);
 
+  const ticketAvailable = Boolean(sale?.ticket?.id);
   const cleanPhone = String(phone || "").replace(/\D/g, "");
 
-  const canSend =
+  const busy = sendingWhatsapp || thermalPrinting;
+
+  const canSendWhatsapp =
     !!sale?.sale_id &&
-    !!sale?.ticket?.id &&
+    ticketAvailable &&
     cleanPhone.length >= 10 &&
-    !sending;
+    !busy;
+
+  const canThermalPrint =
+    !!sale?.sale_id &&
+    ticketAvailable &&
+    thermalEnabled &&
+    !busy;
 
   const handlePhoneChange = (value) => {
     const cleanValue = String(value || "")
@@ -58,14 +73,20 @@ export default function CashierRefundTicketWhatsappDialog({
     setPhone(cleanValue);
   };
 
-  const handleSend = () => {
-    if (!canSend) return;
+  const handleSendWhatsapp = () => {
+    if (!canSendWhatsapp) return;
 
-    onSend?.({
+    onSendWhatsapp?.({
       sale,
       phone,
       save_contact: saveContact,
     });
+  };
+
+  const handleThermalPrint = () => {
+    if (!canThermalPrint) return;
+
+    onThermalPrint?.(sale);
   };
 
   if (!open) return null;
@@ -73,7 +94,7 @@ export default function CashierRefundTicketWhatsappDialog({
   return (
     <Dialog
       open={open}
-      onClose={sending ? undefined : onClose}
+      onClose={busy ? undefined : onClose}
       fullWidth
       maxWidth="sm"
       fullScreen={isMobile}
@@ -110,12 +131,12 @@ export default function CashierRefundTicketWhatsappDialog({
                 borderRadius: 1.5,
                 display: "grid",
                 placeItems: "center",
-                bgcolor: "#25D366",
+                bgcolor: "primary.main",
                 color: "#fff",
                 flexShrink: 0,
               }}
             >
-              <WhatsAppIcon />
+              <ReceiptLongRoundedIcon />
             </Box>
 
             <Box>
@@ -127,7 +148,7 @@ export default function CashierRefundTicketWhatsappDialog({
                   color: "#fff",
                 }}
               >
-                Reenviar ticket
+                Acciones del ticket
               </Typography>
 
               <Typography
@@ -138,14 +159,14 @@ export default function CashierRefundTicketWhatsappDialog({
                   lineHeight: 1.45,
                 }}
               >
-                Envía nuevamente el PDF del ticket por WhatsApp.
+                Reenvía el ticket por WhatsApp o envíalo a impresión térmica.
               </Typography>
             </Box>
           </Stack>
 
           <IconButton
             onClick={onClose}
-            disabled={sending}
+            disabled={busy}
             sx={{
               color: "#fff",
               bgcolor: "rgba(255,255,255,0.08)",
@@ -167,9 +188,9 @@ export default function CashierRefundTicketWhatsappDialog({
         }}
       >
         <Stack spacing={2.5}>
-          {!sale?.ticket?.id ? (
+          {!ticketAvailable ? (
             <Alert severity="warning" sx={{ borderRadius: 1 }}>
-              Esta venta no tiene ticket disponible para reenviar.
+              Esta venta no tiene ticket disponible.
             </Alert>
           ) : null}
 
@@ -250,32 +271,48 @@ export default function CashierRefundTicketWhatsappDialog({
           >
             <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
               <Stack spacing={2}>
-                <Box>
-                  <Typography
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <Box
                     sx={{
-                      fontSize: 18,
-                      fontWeight: 800,
-                      color: "text.primary",
+                      width: 38,
+                      height: 38,
+                      borderRadius: 1.5,
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: "rgba(37, 211, 102, 0.14)",
+                      color: "#25D366",
                     }}
                   >
-                    Datos de envío
-                  </Typography>
+                    <WhatsAppIcon fontSize="small" />
+                  </Box>
 
-                  <Typography
-                    sx={{
-                      mt: 0.5,
-                      fontSize: 13,
-                      color: "text.secondary",
-                      lineHeight: 1.55,
-                    }}
-                  >
-                    {hasSimpleContact
-                      ? "Se precargó el contacto simple guardado en la venta."
-                      : hasFormalCustomer
-                      ? "Se precargó el teléfono del cliente formal."
-                      : "Escribe el número al que deseas reenviar el ticket."}
-                  </Typography>
-                </Box>
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 18,
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      Enviar por WhatsApp
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.35,
+                        fontSize: 13,
+                        color: "text.secondary",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {hasSimpleContact
+                        ? "Se precargó el contacto simple guardado en la venta."
+                        : hasFormalCustomer
+                        ? "Se precargó el teléfono del cliente formal."
+                        : "Escribe el número al que deseas reenviar el ticket."}
+                    </Typography>
+                  </Box>
+                </Stack>
 
                 <FieldBlock
                   label="Teléfono WhatsApp"
@@ -285,7 +322,7 @@ export default function CashierRefundTicketWhatsappDialog({
                       onChange={(e) => handlePhoneChange(e.target.value)}
                       placeholder="Ej. 7441234567"
                       fullWidth
-                      disabled={sending || !sale?.ticket?.id}
+                      disabled={busy || !ticketAvailable}
                       InputProps={{
                         startAdornment: (
                           <Box
@@ -321,7 +358,7 @@ export default function CashierRefundTicketWhatsappDialog({
                         <Checkbox
                           checked={saveContact}
                           onChange={(e) => setSaveContact(e.target.checked)}
-                          disabled={sending}
+                          disabled={busy}
                         />
                       }
                       label={
@@ -357,49 +394,119 @@ export default function CashierRefundTicketWhatsappDialog({
                   </Box>
                 ) : null}
 
-                <Stack
-                  direction={{ xs: "column-reverse", sm: "row" }}
-                  justifyContent="flex-end"
-                  spacing={1.5}
-                  pt={1}
+                <Button
+                  type="button"
+                  onClick={handleSendWhatsapp}
+                  disabled={!canSendWhatsapp}
+                  variant="contained"
+                  startIcon={<SendRoundedIcon />}
+                  sx={{
+                    height: 44,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                    bgcolor: "#25D366",
+                    "&:hover": {
+                      bgcolor: "#1DA851",
+                    },
+                  }}
                 >
-                  <Button
-                    type="button"
-                    onClick={onClose}
-                    disabled={sending}
-                    variant="outlined"
-                    sx={{
-                      minWidth: { xs: "100%", sm: 140 },
-                      height: 44,
-                      borderRadius: 2,
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-
-                  <Button
-                    type="button"
-                    onClick={handleSend}
-                    disabled={!canSend}
-                    variant="contained"
-                    startIcon={<SendRoundedIcon />}
-                    sx={{
-                      minWidth: { xs: "100%", sm: 190 },
-                      height: 44,
-                      borderRadius: 2,
-                      fontWeight: 800,
-                      bgcolor: "#25D366",
-                      "&:hover": {
-                        bgcolor: "#1DA851",
-                      },
-                    }}
-                  >
-                    {sending ? "Enviando…" : "Enviar ticket"}
-                  </Button>
-                </Stack>
+                  {sendingWhatsapp ? "Enviando…" : "Enviar ticket por WhatsApp"}
+                </Button>
               </Stack>
             </CardContent>
           </Card>
+
+          {thermalEnabled ? (
+            <Card
+              sx={{
+                borderRadius: 0,
+                backgroundColor: "background.paper",
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 1.5,
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: "rgba(21, 101, 192, 0.14)",
+                        color: "#1565c0",
+                      }}
+                    >
+                      <PrintRoundedIcon fontSize="small" />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 18,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        Impresión térmica
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.35,
+                          fontSize: 13,
+                          color: "text.secondary",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {thermalConfig?.app_type?.name
+                          ? `Enviar ticket a ${thermalConfig.app_type.name}.`
+                          : "Enviar ticket a la aplicación de impresión térmica."}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Button
+                    type="button"
+                    onClick={handleThermalPrint}
+                    disabled={!canThermalPrint}
+                    variant="outlined"
+                    startIcon={<ReceiptLongRoundedIcon />}
+                    sx={{
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {thermalPrinting ? "Enviando…" : "Imprimir térmico"}
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Stack
+            direction={{ xs: "column-reverse", sm: "row" }}
+            justifyContent="flex-end"
+            spacing={1.5}
+          >
+            <Button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              variant="outlined"
+              sx={{
+                minWidth: { xs: "100%", sm: 140 },
+                height: 44,
+                borderRadius: 2,
+              }}
+            >
+              Cerrar
+            </Button>
+          </Stack>
         </Stack>
       </DialogContent>
     </Dialog>

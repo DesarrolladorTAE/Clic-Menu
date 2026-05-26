@@ -1,12 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Card,
-  CardContent,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
+  Box, Card, CardContent, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 
 export default function CashierRefundHistoryFiltersCard({
@@ -46,7 +40,7 @@ export default function CashierRefundHistoryFiltersCard({
               }}
             >
               Busca ventas ya cobradas y filtra por estado para ubicar rápidamente
-              la operación que quieres revisar.
+              la operación que quieres revisar o cancelar.
             </Typography>
           </Box>
 
@@ -76,10 +70,7 @@ export default function CashierRefundHistoryFiltersCard({
                 >
                   <MenuItem value="all">Todos</MenuItem>
                   <MenuItem value="paid">Pagada</MenuItem>
-                  <MenuItem value="partially_refunded">
-                    Parcialmente devuelta
-                  </MenuItem>
-                  <MenuItem value="refunded">Devuelta</MenuItem>
+                  <MenuItem value="refunded">Devuelta/cancelada</MenuItem>
                 </TextField>
               }
             />

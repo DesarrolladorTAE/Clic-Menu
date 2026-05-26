@@ -1,16 +1,22 @@
 import React from "react";
 import {
-  Box, Button, Card, CardContent, Chip, Stack, Typography,
+  Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
+
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 
 export default function CashierRefundSaleCard({
   sale,
   onOpenDetail,
-  onSendTicket,
+  onOpenCancel,
+  onOpenTicketActions,
+  thermalPrintSaleId = null,
 }) {
   const status = String(sale?.status || "");
+  
 
   return (
     <Card
@@ -123,38 +129,55 @@ export default function CashierRefundSaleCard({
 
           <Box sx={{ flex: 1 }} />
 
-          <Stack spacing={1}>
-            <Button
-              variant="outlined"
-              startIcon={<WhatsAppIcon />}
-              disabled={!sale?.ticket?.id}
-              onClick={() => onSendTicket?.(sale)}
-              sx={{
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-                borderColor: "#25D366",
-                color: "#128C4A",
-                "&:hover": {
-                  borderColor: "#1DA851",
-                  bgcolor: "rgba(37, 211, 102, 0.08)",
-                },
-              }}
-            >
-              Enviar ticket
-            </Button>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Tooltip title="Ver detalle">
+              <span>
+                <IconButton
+                  onClick={() => onOpenDetail?.(sale)}
+                  sx={actionIconButtonSx}
+                >
+                  <VisibilityRoundedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
 
-            <Button
-              variant="contained"
-              onClick={() => onOpenDetail?.(sale)}
-              sx={{
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Ver detalle
-            </Button>
+            <Tooltip title="Cancelaciones/devoluciones">
+              <span>
+                <IconButton
+                  onClick={() => onOpenCancel?.(sale)}
+                  disabled={String(sale?.status || "") === "refunded"}
+                  sx={{
+                    ...actionIconButtonSx,
+                    color: "error.main",
+                    borderColor: "rgba(211, 47, 47, 0.35)",
+                    "&:hover": {
+                      borderColor: "error.main",
+                      bgcolor: "rgba(211, 47, 47, 0.06)",
+                    },
+                  }}
+                >
+                  <ReplayRoundedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+
+            <Tooltip title="Ticket">
+              <span>
+                <IconButton
+                  disabled={
+                    !sale?.ticket?.id ||
+                    Number(thermalPrintSaleId || 0) === Number(sale?.sale_id || 0)
+                  }
+                  onClick={() => onOpenTicketActions?.(sale)}
+                  sx={{
+                    ...actionIconButtonSx,
+                    color: "primary.main",
+                  }}
+                >
+                  <ReceiptLongRoundedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Stack>
         </Stack>
       </CardContent>
@@ -188,6 +211,20 @@ function InfoRow({ label, value, strong = false }) {
     </Stack>
   );
 }
+
+const actionIconButtonSx = {
+  width: 42,
+  height: 42,
+  borderRadius: 1.5,
+  border: "1px solid",
+  borderColor: "divider",
+  color: "text.primary",
+  bgcolor: "background.paper",
+  "&:hover": {
+    borderColor: "primary.main",
+    bgcolor: "rgba(255, 152, 0, 0.08)",
+  },
+};
 
 const helperLabelSx = {
   fontSize: 11,

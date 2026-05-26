@@ -1,9 +1,12 @@
 import React from "react";
 import {
-  Box, Button, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
+  Box, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 
 import PaginationFooter from "../../../common/PaginationFooter";
 import CashierRefundSaleCard from "./CashierRefundSaleCard";
@@ -20,7 +23,9 @@ export default function CashierRefundSalesPanel({
   onPrev,
   onNext,
   onOpenDetail,
-  onSendTicket,
+  onOpenCancel,
+  onOpenTicketActions,
+  thermalPrintSaleId = null,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -63,8 +68,8 @@ export default function CashierRefundSalesPanel({
             lineHeight: 1.55,
           }}
         >
-          Aquí aparecen las ventas cobradas, parcialmente devueltas o totalmente
-          devueltas de la caja.
+          Aquí aparecen las ventas cobradas y las ventas con cancelación o devolución
+          total de la caja.
         </Typography>
       </Box>
 
@@ -116,7 +121,9 @@ export default function CashierRefundSalesPanel({
                   key={sale.sale_id}
                   sale={sale}
                   onOpenDetail={onOpenDetail}
-                  onSendTicket={onSendTicket}
+                  onOpenCancel={onOpenCancel}
+                  onOpenTicketActions={onOpenTicketActions}
+                  thermalPrintSaleId={thermalPrintSaleId}
                 />
               ))}
             </Box>
@@ -183,40 +190,55 @@ export default function CashierRefundSalesPanel({
                       <TableCell>{formatDateTime(sale.paid_at)}</TableCell>
 
                       <TableCell align="right">
-                        <Stack direction="row" justifyContent="flex-end" spacing={1}>
-                          <Button
-                            variant="outlined"
-                            startIcon={<WhatsAppIcon />}
-                            disabled={!sale?.ticket?.id}
-                            onClick={() => onSendTicket?.(sale)}
-                            sx={{
-                              minWidth: 155,
-                              height: 40,
-                              borderRadius: 2,
-                              fontWeight: 800,
-                              borderColor: "#25D366",
-                              color: "#128C4A",
-                              "&:hover": {
-                                borderColor: "#1DA851",
-                                bgcolor: "rgba(37, 211, 102, 0.08)",
-                              },
-                            }}
-                          >
-                            Enviar ticket
-                          </Button>
+                        <Stack direction="row" justifyContent="flex-end" spacing={0.75}>
+                          <Tooltip title="Ver detalle">
+                            <span>
+                              <IconButton
+                                onClick={() => onOpenDetail?.(sale)}
+                                sx={actionIconButtonSx}
+                              >
+                                <VisibilityRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
 
-                          <Button
-                            variant="contained"
-                            onClick={() => onOpenDetail?.(sale)}
-                            sx={{
-                              minWidth: 150,
-                              height: 40,
-                              borderRadius: 2,
-                              fontWeight: 800,
-                            }}
-                          >
-                            Ver detalle
-                          </Button>
+                          <Tooltip title="Cancelaciones/devoluciones">
+                            <span>
+                              <IconButton
+                                onClick={() => onOpenCancel?.(sale)}
+                                disabled={String(sale?.status || "") === "refunded"}
+                                sx={{
+                                  ...actionIconButtonSx,
+                                  color: "error.main",
+                                  borderColor: "rgba(211, 47, 47, 0.35)",
+                                  "&:hover": {
+                                    borderColor: "error.main",
+                                    bgcolor: "rgba(211, 47, 47, 0.06)",
+                                  },
+                                }}
+                              >
+                                <ReplayRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+
+                          <Tooltip title="Ticket">
+                            <span>
+                              <IconButton
+                                disabled={
+                                  !sale?.ticket?.id ||
+                                  Number(thermalPrintSaleId || 0) === Number(sale?.sale_id || 0)
+                                }
+                                onClick={() => onOpenTicketActions?.(sale)}
+                                sx={{
+                                  ...actionIconButtonSx,
+                                  color: "primary.main",
+                                }}
+                              >
+                                <ReceiptLongRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -244,14 +266,26 @@ export default function CashierRefundSalesPanel({
   );
 }
 
+const actionIconButtonSx = {
+  width: 38,
+  height: 38,
+  borderRadius: 1.5,
+  border: "1px solid",
+  borderColor: "divider",
+  color: "text.primary",
+  bgcolor: "background.paper",
+  "&:hover": {
+    borderColor: "primary.main",
+    bgcolor: "rgba(255, 152, 0, 0.08)",
+  },
+};
+
 function getRefundStatusLabel(status) {
   switch (String(status || "").toLowerCase()) {
     case "paid":
       return "Pagada";
-    case "partially_refunded":
-      return "Parcialmente devuelta";
     case "refunded":
-      return "Devuelta";
+      return "Devuelta / cancelada";
     default:
       return status || "—";
   }

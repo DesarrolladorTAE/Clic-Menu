@@ -1,16 +1,10 @@
 // src/components/staff/casher/refunds/CashierRefundsHeroCard.jsx
 import React from "react";
 import {
-  Box,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
-import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 
 export default function CashierRefundsHeroCard({
@@ -18,9 +12,6 @@ export default function CashierRefundsHeroCard({
   rows = [],
 }) {
   const paidCount = rows.filter((row) => String(row?.status) === "paid").length;
-  const partialCount = rows.filter(
-    (row) => String(row?.status) === "partially_refunded"
-  ).length;
   const refundedCount = rows.filter(
     (row) => String(row?.status) === "refunded"
   ).length;
@@ -64,8 +55,8 @@ export default function CashierRefundsHeroCard({
                   maxWidth: 820,
                 }}
               >
-                Consulta ventas cobradas, revisa devoluciones aplicadas y abre el
-                detalle histórico para gestionar refunds.
+                Consulta ventas cobradas, revisa cancelaciones aplicadas y abre el
+                detalle histórico de cada operación.
               </Typography>
             </Box>
 
@@ -86,8 +77,7 @@ export default function CashierRefundsHeroCard({
               gap: 2,
               gridTemplateColumns: {
                 xs: "repeat(1, minmax(0, 1fr))",
-                sm: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(3, minmax(0, 1fr))",
+                md: "repeat(2, minmax(0, 1fr))",
               },
             }}
           >
@@ -95,19 +85,12 @@ export default function CashierRefundsHeroCard({
               icon={<ReceiptLongRoundedIcon />}
               label="Ventas pagadas"
               value={String(paidCount)}
-              helper="Disponibles para refund total o parcial"
-            />
-
-            <MetricCard
-              icon={<ReplayRoundedIcon />}
-              label="Parcialmente devueltas"
-              value={String(partialCount)}
-              helper="Aún pueden tener saldo disponible"
+              helper="Disponibles para cancelación total"
             />
 
             <MetricCard
               icon={<CheckCircleRoundedIcon />}
-              label="Totalmente devueltas"
+              label="Canceladas / devueltas"
               value={String(refundedCount)}
               helper="Solo consulta histórica"
             />
