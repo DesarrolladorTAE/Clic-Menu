@@ -8,6 +8,9 @@ import SystemAdminProtectedRoute from "./SystemAdminProtectedRoute";
 
 import TestMui from "../pages/TestMui";
 
+//Landing
+import HomePage from "../pages/landing/home/HomePage";
+
 //Registro administrador
 import SystemAdminLogin from "../pages/system-admin/SystemAdminLogin";
 
@@ -124,6 +127,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       {/* PUBLIC */}
+      <Route path="/" element={<HomePage />} />
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
 
       <Route path="/test-mui" element={<TestMui />} />
