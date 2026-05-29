@@ -1,4 +1,9 @@
 import React from "react";
+import { Box, Container, Link, Stack, Typography } from "@mui/material";
+import {
+  landingColors,
+  landingTypography,
+} from "../../../theme/landingTheme";
 
 const footerLinks = [
   { label: "Inicio", href: "/" },
@@ -19,214 +24,231 @@ const socialLinks = [
 
 export default function LandingFooter() {
   return (
-    <>
-      <footer className="cm-landing-footer">
-        <div className="cm-landing-footer-wave" />
+    <Box
+      component="footer"
+      sx={{
+        position: "relative",
+        pt: {
+          xs: 10.25,
+          md: 12,
+        },
+        pb: 3.5,
+        overflow: "hidden",
+        bgcolor: landingColors.dark,
+        color: landingColors.white,
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: -1,
+          left: 0,
+          width: "100%",
+          height: 72,
+          bgcolor: landingColors.white,
+          borderRadius: "0 0 50% 50%",
+        }}
+      />
 
-        <div className="landing-container cm-landing-footer-inner">
-          <div className="cm-landing-footer-brand">
-            <div className="cm-landing-footer-logo">
+      <Container
+        sx={{
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "1fr 1fr",
+              lg: "1.4fr 0.8fr 0.8fr 1.2fr",
+            },
+            gap: {
+              xs: 4,
+              md: 5.25,
+            },
+          }}
+        >
+          <Box>
+            <Box
+              sx={{
+                width: 150,
+                height: 54,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                mb: 2.75,
+                border: `1px solid ${landingColors.darkBorder}`,
+                borderRadius: "18px",
+                color: "rgba(255, 255, 255, 0.68)",
+                fontWeight: 800,
+              }}
+            >
               Logo
-            </div>
+            </Box>
 
-            <p className="landing-text cm-landing-footer-description">
+            <Typography
+              sx={{
+                ...landingTypography.landingText,
+                maxWidth: {
+                  xs: "100%",
+                  lg: 340,
+                },
+                color: "rgba(255, 255, 255, 0.72)",
+              }}
+            >
               Clic Menu es una plataforma digital para restaurantes que ayuda a
               controlar pedidos, mesas, cocina, ventas y operación desde un solo
               lugar.
-            </p>
-          </div>
+            </Typography>
+          </Box>
 
-          <div className="cm-landing-footer-column">
-            <h3 className="landing-card-title cm-landing-footer-title">
-              Enlaces
-            </h3>
-
-            <nav className="cm-landing-footer-links">
+          <FooterColumn title="Enlaces">
+            <FooterLinks>
               {footerLinks.map((item) => (
-                <a href={item.href} key={item.label}>
+                <FooterLink href={item.href} key={item.label}>
                   {item.label}
-                </a>
+                </FooterLink>
               ))}
-            </nav>
-          </div>
+            </FooterLinks>
+          </FooterColumn>
 
-          <div className="cm-landing-footer-column">
-            <h3 className="landing-card-title cm-landing-footer-title">
-              Síguenos
-            </h3>
-
-            <div className="cm-landing-footer-links">
+          <FooterColumn title="Síguenos">
+            <FooterLinks>
               {socialLinks.map((item) => (
-                <a href="#" key={item}>
+                <FooterLink href="#" key={item}>
                   {item}
-                </a>
+                </FooterLink>
               ))}
-            </div>
-          </div>
+            </FooterLinks>
+          </FooterColumn>
 
-          <div className="cm-landing-footer-column">
-            <h3 className="landing-card-title cm-landing-footer-title">
-              Contacto
-            </h3>
+          <FooterColumn title="Contacto">
+            <Stack spacing={2}>
+              <ContactItem label="Email" value="contacto@telorecargo.com" />
 
-            <div className="cm-landing-footer-contact">
-              <p>
-                <strong>Email</strong>
-                <span>contacto@telorecargo.com</span>
-              </p>
+              <ContactItem label="Teléfono" value="+52 (744) 218 8925" />
 
-              <p>
-                <strong>Teléfono</strong>
-                <span>+52 (744) 218 8925</span>
-              </p>
+              <ContactItem
+                label="Ubicación"
+                value="Carretera Cayaco Puerto Marques Oficina 106 A, El Coloso, 39810, Acapulco de Juárez, Gro."
+              />
+            </Stack>
+          </FooterColumn>
+        </Box>
 
-              <p>
-                <strong>Ubicación</strong>
-                <span>
-                  Carretera Cayaco Puerto Marques Oficina 106 A, El Coloso,
-                  39810, Acapulco de Juárez, Gro.
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
+        <Box
+          sx={{
+            mt: {
+              xs: 5,
+              md: 7.25,
+            },
+            pt: 2.75,
+            borderTop: `1px solid ${landingColors.darkBorder}`,
+            textAlign: "center",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 14,
+              color: "rgba(255, 255, 255, 0.62)",
+            }}
+          >
+            Clic Menu desarrollado por{" "}
+            <Box
+              component="strong"
+              sx={{
+                color: landingColors.yellow,
+                fontWeight: 800,
+              }}
+            >
+              TAE
+            </Box>
+            .
+          </Typography>
+        </Box>
+      </Container>
+    </Box>
+  );
+}
 
-        <div className="landing-container cm-landing-footer-bottom">
-          <p>
-            Clic Menu desarrollado por <strong>TAE</strong>.
-          </p>
-        </div>
-      </footer>
+function FooterColumn({ title, children }) {
+  return (
+    <Box>
+      <Typography
+        component="h3"
+        sx={{
+          ...landingTypography.landingCardTitle,
+          mb: 2.25,
+          color: landingColors.white,
+        }}
+      >
+        {title}
+      </Typography>
 
-      <style>{`
-        .cm-landing-footer {
-          position: relative;
-          padding: 96px 0 28px;
-          overflow: hidden;
-          background: var(--landing-dark);
-          color: var(--landing-white);
-        }
+      {children}
+    </Box>
+  );
+}
 
-        .cm-landing-footer-wave {
-          position: absolute;
-          top: -1px;
-          left: 0;
-          width: 100%;
-          height: 72px;
-          background: var(--landing-white);
-          border-radius: 0 0 50% 50%;
-        }
+function FooterLinks({ children }) {
+  return (
+    <Stack
+      component="nav"
+      spacing={1.35}
+      alignItems="flex-start"
+    >
+      {children}
+    </Stack>
+  );
+}
 
-        .cm-landing-footer-inner {
-          position: relative;
-          z-index: 1;
-          display: grid;
-          grid-template-columns: 1.4fr 0.8fr 0.8fr 1.2fr;
-          gap: 42px;
-        }
+function FooterLink({ href, children }) {
+  return (
+    <Link
+      href={href}
+      underline="none"
+      sx={{
+        width: "fit-content",
+        color: "rgba(255, 255, 255, 0.7)",
+        fontSize: 15,
+        transition: "color 0.2s ease, transform 0.2s ease",
+        "&:hover": {
+          color: landingColors.yellow,
+          transform: "translateX(3px)",
+        },
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
 
-        .cm-landing-footer-logo {
-          width: 150px;
-          height: 54px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 22px;
-          border: 1px solid var(--landing-dark-border);
-          border-radius: 18px;
-          color: rgba(255, 255, 255, 0.68);
-          font-weight: 800;
-        }
+function ContactItem({ label, value }) {
+  return (
+    <Stack spacing={0.6}>
+      <Typography
+        component="strong"
+        sx={{
+          color: landingColors.white,
+          fontSize: 14,
+          fontWeight: 800,
+        }}
+      >
+        {label}
+      </Typography>
 
-        .cm-landing-footer-description {
-          max-width: 340px;
-          color: rgba(255, 255, 255, 0.72);
-        }
-
-        .cm-landing-footer-title {
-          margin-bottom: 18px;
-          color: var(--landing-white);
-        }
-
-        .cm-landing-footer-links {
-          display: grid;
-          gap: 11px;
-        }
-
-        .cm-landing-footer-links a {
-          width: fit-content;
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 15px;
-          transition: color 0.2s ease, transform 0.2s ease;
-        }
-
-        .cm-landing-footer-links a:hover {
-          color: var(--landing-yellow);
-          transform: translateX(3px);
-        }
-
-        .cm-landing-footer-contact {
-          display: grid;
-          gap: 16px;
-        }
-
-        .cm-landing-footer-contact p {
-          margin: 0;
-          display: grid;
-          gap: 5px;
-        }
-
-        .cm-landing-footer-contact strong {
-          color: var(--landing-white);
-          font-size: 14px;
-        }
-
-        .cm-landing-footer-contact span {
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 15px;
-          line-height: 1.45;
-        }
-
-        .cm-landing-footer-bottom {
-          position: relative;
-          z-index: 1;
-          margin-top: 58px;
-          padding-top: 22px;
-          border-top: 1px solid var(--landing-dark-border);
-          text-align: center;
-        }
-
-        .cm-landing-footer-bottom p {
-          margin: 0;
-          color: rgba(255, 255, 255, 0.62);
-          font-size: 14px;
-        }
-
-        .cm-landing-footer-bottom strong {
-          color: var(--landing-yellow);
-        }
-
-        @media (max-width: 900px) {
-          .cm-landing-footer-inner {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        @media (max-width: 600px) {
-          .cm-landing-footer {
-            padding-top: 82px;
-          }
-
-          .cm-landing-footer-inner {
-            grid-template-columns: 1fr;
-            gap: 32px;
-          }
-
-          .cm-landing-footer-description {
-            max-width: 100%;
-          }
-        }
-      `}</style>
-    </>
+      <Typography
+        component="span"
+        sx={{
+          color: "rgba(255, 255, 255, 0.7)",
+          fontSize: 15,
+          lineHeight: 1.45,
+        }}
+      >
+        {value}
+      </Typography>
+    </Stack>
   );
 }

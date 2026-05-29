@@ -1,127 +1,352 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, Button, Stack, Typography } from "@mui/material";
+import { landingColors, landingTypography } from "../../../theme/landingTheme";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import { useNavigate } from "react-router-dom";
-
-import "../../../styles/landing.css";
 
 import HomeBenefitsSection from "../../../components/landing/home/HomeBenefitsSection";
 import HomeFeaturesSection from "../../../components/landing/home/HomeFeaturesSection";
 import HomeFaqSection from "../../../components/landing/home/HomeFaqSection";
-
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const nextSectionRef = useRef(null);
+  const [scrollLocked, setScrollLocked] = useState(true);
 
   const handleRegister = () => {
     navigate("/auth/register");
   };
 
+  const handleUnlockScroll = () => {
+    setScrollLocked(false);
+
+    document.body.style.overflow = "auto";
+    document.documentElement.style.overflow = "auto";
+
+    setTimeout(() => {
+      nextSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  };
+
+  useEffect(() => {
+    if (scrollLocked) {
+      window.history.scrollRestoration = "manual";
+
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, 0);
+      });
+    }
+
+    document.body.style.overflow = scrollLocked ? "hidden" : "auto";
+    document.documentElement.style.overflow = scrollLocked ? "hidden" : "auto";
+
+    return () => {
+      document.body.style.overflow = "auto";
+      document.documentElement.style.overflow = "auto";
+      window.history.scrollRestoration = "auto";
+    };
+  }, [scrollLocked]);
+
   return (
-    <>
-      <main className="landing-page cm-home-page">
-        {/* Navbar externo después */}
+    <Box
+      component="main"
+      sx={{
+        minHeight: "100vh",
+        bgcolor: landingColors.white,
+        overflowX: "hidden",
+      }}
+    >
+      {/* Navbar externo después */}
 
-        <section className="cm-home-hero">
-          <div className="cm-home-hero-inner">
-            <div className="cm-home-hero-text">
-              <h1 className="landing-title-xl cm-home-hero-title">
-                Todo tu restaurante conectado en una sola plataforma
-              </h1>
+      <Box
+        component="section"
+        sx={{
+          position: "relative",
+          width: "100%",
+          minHeight: "100svh",
+          height: "auto",
+          display: "flex",
+          alignItems: "stretch",
+          bgcolor: landingColors.orangeSoft,
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
+        <Box
+          sx={{
+            width: "100%",
+            minHeight: "100svh",
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "48% 52%",
+              lg: "44% 56%",
+            },
+            gridTemplateRows: {
+              xs: "auto 1fr",
+              md: "1fr",
+            },
+            alignItems: {
+              xs: "start",
+              md: "center",
+            },
+            boxSizing: "border-box",
+            pt: {
+              xs: 4,
+              sm: 5,
+              md: 0,
+            },
+            pb: {
+              xs: 9,
+              sm: 10,
+              md: 8,
+            },
+          }}
+        >
+          <Stack
+            spacing={{ xs: 2, sm: 2.3, md: 3 }}
+            sx={{
+              position: "relative",
+              zIndex: 3,
+              width: "100%",
+              maxWidth: {
+                xs: "100%",
+                md: 560,
+              },
+              px: {
+                xs: 2,
+                sm: 4,
+                md: 0,
+              },
+              ml: {
+                xs: 0,
+                md: "clamp(40px, 5vw, 80px)",
+                lg: "clamp(80px, 9vw, 170px)",
+              },
+              pt: {
+                xs: 1,
+                md: 0,
+              },
+            }}
+          >
+            <Typography
+              component="h1"
+              sx={{
+                ...landingTypography.landingTitleXL,
+                maxWidth: {
+                  xs: 520,
+                  md: 540,
+                },
+                fontSize: {
+                  xs: 31,
+                  sm: 42,
+                  md: "clamp(34px, 4vw, 46px)",
+                  lg: 54,
+                },
+                color: landingColors.text,
+              }}
+            >
+              Todo tu restaurante conectado en una sola plataforma
+            </Typography>
 
-              <p className="landing-text-lg cm-home-hero-subtitle">
-                Controla pedidos, mesas, cocina y ventas en tiempo real desde
-                cualquier dispositivo.
-              </p>
+            <Typography
+              sx={{
+                ...landingTypography.landingTextLG,
+                maxWidth: {
+                  xs: 520,
+                  md: 500,
+                },
+                fontSize: {
+                  xs: 14,
+                  sm: 15,
+                  md: 16,
+                },
+                lineHeight: 1.45,
+                color: landingColors.dark,
+              }}
+            >
+              Controla pedidos, mesas, cocina y ventas en tiempo real desde
+              cualquier dispositivo.
+            </Typography>
 
-              <button
-                type="button"
-                onClick={handleRegister}
-                className="landing-btn landing-btn-primary cm-home-hero-button"
-              >
-                Empezar ahora
-              </button>
-            </div>
-          </div>
-        </section>
+            <Button
+              type="button"
+              onClick={handleRegister}
+              variant="contained"
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: 300,
+                  md: 240,
+                },
+                height: {
+                  xs: 44,
+                  md: 48,
+                },
+                borderRadius: 999,
+                bgcolor: landingColors.white,
+                color: landingColors.dark,
+                boxShadow: "0 14px 28px rgba(62, 49, 35, 0.14)",
+                fontSize: 14,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                mt: {
+                  xs: 0.5,
+                  md: 1.5,
+                },
+                "&:hover": {
+                  bgcolor: landingColors.white,
+                  boxShadow: "0 18px 34px rgba(62, 49, 35, 0.18)",
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              Empezar ahora
+            </Button>
+          </Stack>
 
+          <Box
+            sx={{
+              position: "relative",
+              zIndex: 2,
+              width: "100%",
+              height: {
+                xs: "auto",
+                md: "100%",
+              },
+              minHeight: {
+                xs: 300,
+                sm: 380,
+                md: 420,
+              },
+              display: "flex",
+              alignItems: {
+                xs: "flex-end",
+                md: "center",
+              },
+              justifyContent: "flex-end",
+              overflow: "hidden",
+              pl: {
+                xs: 1,
+                sm: 3,
+                md: 0,
+              },
+              pb: {
+                xs: 1,
+                sm: 1,
+                md: 2,
+              },
+            }}
+          >
+            <Box
+              component="img"
+              src="/images/inicio.png"
+              alt="Clic Menu para restaurantes"
+              sx={{
+                display: "block",
+                width: {
+                  xs: "min(98vw, 420px)",
+                  sm: "min(84vw, 560px)",
+                  md: "min(48vw, 580px)",
+                  lg: "min(54vw, 760px)",
+                },
+                maxHeight: {
+                  xs: 330,
+                  sm: 420,
+                  md: "72svh",
+                  lg: "82svh",
+                },
+                height: "auto",
+                objectFit: "contain",
+                objectPosition: "right bottom",
+                ml: "auto",
+                mr: 0,
+                mb: {
+                  xs: 0,
+                  md: 1,
+                },
+              }}
+            />
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            position: "absolute",
+            left: 0,
+            bottom: 0,
+            width: "100%",
+            height: {
+              xs: 16,
+              md: 22,
+            },
+            bgcolor: "#FF741F",
+            zIndex: 20,
+          }}
+        />
+
+        {scrollLocked && (
+          <Button
+            type="button"
+            onClick={handleUnlockScroll}
+            aria-label="Ver más contenido"
+            sx={{
+              position: "absolute",
+              left: "50%",
+              bottom: 0,
+              zIndex: 30,
+              width: {
+                xs: 50,
+                md: 58,
+              },
+              minWidth: {
+                xs: 50,
+                md: 58,
+              },
+              height: {
+                xs: 50,
+                md: 58,
+              },
+              borderRadius: 999,
+              bgcolor: "#FF741F",
+              color: "#FFFFFF",
+              transform: "translateX(-50%)",
+              p: 0,
+              boxShadow: "none",
+              "&:hover": {
+                bgcolor: "#FF741F",
+                boxShadow: "none",
+              },
+            }}
+          >
+            <KeyboardArrowDownRoundedIcon
+              sx={{
+                width: {
+                  xs: 32,
+                  md: 36,
+                },
+                height: {
+                  xs: 32,
+                  md: 36,
+                },
+                color: "#FFFFFF",
+              }}
+            />
+          </Button>
+        )}
+      </Box>
+
+      <Box ref={nextSectionRef}>
         <HomeBenefitsSection />
-        <HomeFeaturesSection />
-        <HomeFaqSection />
-        <LandingFooter />
-        
+      </Box>
 
-      </main>
-
-      <style>{`
-        .cm-home-page {
-          min-height: 100vh;
-          background: var(--landing-white);
-        }
-
-        .cm-home-hero {
-          width: 100%;
-          min-height: 92vh;
-          background: var(--landing-white);
-        }
-
-        .cm-home-hero-inner {
-          width: min(100% - 96px, var(--landing-max-width));
-          min-height: 92vh;
-          margin: 0 auto;
-          display: flex;
-          align-items: center;
-        }
-
-        .cm-home-hero-text {
-          max-width: 560px;
-          padding-top: 40px;
-        }
-
-        .cm-home-hero-title {
-          max-width: 540px;
-          color: #4a4845;
-        }
-
-        .cm-home-hero-subtitle {
-          max-width: 500px;
-          margin-top: 26px;
-          color: #191919;
-        }
-
-        .cm-home-hero-button {
-          min-width: 240px;
-          height: 48px;
-          margin-top: 36px;
-          padding-inline: 34px;
-          text-transform: uppercase;
-        }
-
-        @media (max-width: 900px) {
-          .cm-home-hero-inner {
-            width: min(100% - 48px, var(--landing-max-width));
-          }
-
-          .cm-home-hero-text {
-            max-width: 520px;
-          }
-        }
-
-        @media (max-width: 600px) {
-          .cm-home-hero,
-          .cm-home-hero-inner {
-            min-height: 760px;
-          }
-
-          .cm-home-hero-inner {
-            width: min(100% - 32px, var(--landing-max-width));
-          }
-
-          .cm-home-hero-button {
-            width: 100%;
-            min-width: 0;
-          }
-        }
-      `}</style>
-    </>
+      <HomeFeaturesSection />
+      <HomeFaqSection />
+      <LandingFooter />
+    </Box>
   );
 }

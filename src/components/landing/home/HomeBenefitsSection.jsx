@@ -1,111 +1,148 @@
 import React from "react";
+import { Box, Container, Stack, Typography } from "@mui/material";
+import {
+  landingColors,
+  landingTypography,
+} from "../../../theme/landingTheme";
 
 const benefits = [
   {
     title: "Pedidos más rápidos",
     text: "Reduce tiempos de atención y mejora el flujo del restaurante.",
-    icon: "📱",
+    image: "/images/home_sec1_1.png",
+    alt: "Pedidos rápidos desde celular",
   },
   {
     title: "Control total",
     text: "Administra mesas, ventas y pedidos desde una sola plataforma.",
-    icon: "▭",
+    image: "/images/home_sec1_2.png",
+    alt: "Control total del restaurante",
   },
   {
     title: "Menos errores en cocina",
     text: "Las órdenes llegan claras y organizadas en tiempo real.",
-    icon: "◉",
+    image: "/images/home_sec1_3.png",
+    alt: "Órdenes claras en cocina",
   },
 ];
 
 export default function HomeBenefitsSection() {
   return (
-    <>
-      <section className="cm-home-benefits">
-        <div className="landing-container">
-          <h2 className="landing-title-lg cm-home-benefits-title">
-            Mejora la operación de tu restaurante
-          </h2>
+    <Box
+      component="section"
+      sx={{
+        width: "100%",
+        py: {
+          xs: 7,
+          sm: 8,
+          md: 10,
+        },
+        bgcolor: landingColors.white,
+      }}
+    >
+      <Container>
+        <Typography
+          component="h2"
+          sx={{
+            ...landingTypography.landingTitleLG,
+            maxWidth: 620,
+            mx: "auto",
+            mb: {
+              xs: 5,
+              md: 7,
+            },
+            textAlign: "center",
+            color: landingColors.dark,
+          }}
+        >
+          Mejora la operación de tu restaurante
+        </Typography>
 
-          <div className="cm-home-benefits-grid">
-            {benefits.map((item) => (
-              <article className="cm-home-benefit-item" key={item.title}>
-                <div className="cm-home-benefit-icon">{item.icon}</div>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(3, minmax(0, 1fr))",
+            },
+            gap: {
+              xs: 5.5,
+              sm: 6,
+              md: 6,
+            },
+            alignItems: "start",
+          }}
+        >
+          {benefits.map((item) => (
+            <Stack
+              component="article"
+              key={item.title}
+              spacing={2}
+              alignItems="center"
+              sx={{
+                textAlign: "center",
+                width: "100%",
+              }}
+            >
+              <Box
+                component="img"
+                src={item.image}
+                alt={item.alt}
+                loading="lazy"
+                sx={{
+                  display: "block",
+                  width: {
+                    xs: 190,
+                    sm: 220,
+                    md: 230,
+                    lg: 250,
+                  },
+                  maxWidth: "100%",
+                  height: "auto",
+                  objectFit: "contain",
+                  mb: {
+                    xs: 0.5,
+                    md: 1,
+                  },
+                }}
+              />
 
-                <h3 className="landing-card-title cm-home-benefit-title">
-                  {item.title}
-                </h3>
+              <Typography
+                component="h3"
+                sx={{
+                  ...landingTypography.landingCardTitle,
+                  color: landingColors.dark,
+                  fontSize: {
+                    xs: 21,
+                    md: 22,
+                  },
+                }}
+              >
+                {item.title}
+              </Typography>
 
-                <p className="landing-text cm-home-benefit-text">
-                  {item.text}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <style>{`
-        .cm-home-benefits {
-          width: 100%;
-          padding: 82px 0 88px;
-          background: var(--landing-white);
-        }
-
-        .cm-home-benefits-title {
-          max-width: 620px;
-          margin: 0 auto 58px;
-          text-align: center;
-          color: #111111;
-        }
-
-        .cm-home-benefits-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 48px;
-          align-items: start;
-        }
-
-        .cm-home-benefit-item {
-          text-align: center;
-        }
-
-        .cm-home-benefit-icon {
-          width: 108px;
-          height: 108px;
-          margin: 0 auto 24px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--landing-terracotta);
-          font-size: 58px;
-          line-height: 1;
-        }
-
-        .cm-home-benefit-title {
-          color: #111111;
-        }
-
-        .cm-home-benefit-text {
-          max-width: 290px;
-          margin: 18px auto 0;
-          color: #111111;
-          line-height: 1.42;
-        }
-
-        @media (max-width: 900px) {
-          .cm-home-benefits-grid {
-            grid-template-columns: 1fr;
-            gap: 46px;
-          }
-        }
-
-        @media (max-width: 600px) {
-          .cm-home-benefits {
-            padding: 70px 0;
-          }
-        }
-      `}</style>
-    </>
+              <Typography
+                sx={{
+                  ...landingTypography.landingText,
+                  maxWidth: {
+                    xs: 320,
+                    md: 300,
+                  },
+                  mx: "auto",
+                  color: landingColors.dark,
+                  lineHeight: 1.42,
+                  fontSize: {
+                    xs: 15,
+                    md: 16,
+                  },
+                }}
+              >
+                {item.text}
+              </Typography>
+            </Stack>
+          ))}
+        </Box>
+      </Container>
+    </Box>
   );
 }

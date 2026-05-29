@@ -1,4 +1,9 @@
 import React from "react";
+import { Box, Container, Stack, Typography } from "@mui/material";
+import {
+  landingColors,
+  landingTypography,
+} from "../../../theme/landingTheme";
 
 const faqs = [
   {
@@ -25,79 +30,127 @@ const faqs = [
 
 export default function HomeFaqSection() {
   return (
-    <>
-      <section className="cm-home-faq">
-        <div className="landing-container">
-          <header className="landing-section-header cm-home-faq-header">
-            <span className="landing-eyebrow">Preguntas frecuentes</span>
+    <Box
+      component="section"
+      sx={{
+        width: "100%",
+        py: {
+          xs: 7,
+          sm: 8,
+          md: 12,
+        },
+        bgcolor: landingColors.white,
+      }}
+    >
+      <Container>
+        <Stack
+          spacing={2}
+          alignItems="center"
+          sx={{
+            mb: {
+              xs: 5,
+              md: 6,
+            },
+            textAlign: "center",
+          }}
+        >
+          <Typography
+            sx={{
+              ...landingTypography.landingEyebrow,
+            }}
+          >
+            Preguntas frecuentes
+          </Typography>
 
-            <h2 className="landing-title-lg">
-              Resolvemos tus dudas antes de empezar
-            </h2>
-          </header>
+          <Typography
+            component="h2"
+            sx={{
+              ...landingTypography.landingTitleLG,
+              maxWidth: 720,
+            }}
+          >
+            Resolvemos tus dudas antes de empezar
+          </Typography>
+        </Stack>
 
-          <div className="cm-home-faq-list">
-            {faqs.map((item) => (
-              <article className="cm-home-faq-card" key={item.question}>
-                <h3 className="landing-card-title cm-home-faq-question">
-                  {item.question}
-                </h3>
+        <Box
+          sx={{
+            display: "grid",
+            gap: 2.5,
+            maxWidth: 920,
+            mx: "auto",
+          }}
+        >
+          {faqs.map((item) => (
+            <Box
+              key={item.question}
+              component="article"
+              sx={{
+                position: "relative",
 
-                <p className="landing-text cm-home-faq-answer">
-                  {item.answer}
-                </p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+                p: {
+                  xs: "26px 24px",
+                  md: "30px 34px",
+                },
 
-      <style>{`
-        .cm-home-faq {
-          width: 100%;
-          padding: 96px 0;
-          background: var(--landing-white);
-        }
+                pl: {
+                  xs: "32px",
+                  md: "42px",
+                },
 
-        .cm-home-faq-header {
-          margin-bottom: 48px;
-        }
+                border: `1px solid ${landingColors.border}`,
 
-        .cm-home-faq-list {
-          display: grid;
-          gap: 18px;
-          max-width: 920px;
-          margin: 0 auto;
-        }
+                borderRadius: {
+                  xs: 3,
+                  md: `${landingColors.radiusLg}px`,
+                },
 
-        .cm-home-faq-card {
-          padding: 30px 34px;
-          border: 1px solid var(--landing-border);
-          border-radius: 28px;
-          --landing-bg: #fff9f0;
-          box-shadow: var(--landing-shadow-soft);
-        }
+                bgcolor: landingColors.white,
 
-        .cm-home-faq-question {
-          color: var(--landing-title);
-        }
+                boxShadow: landingColors.shadowSoft,
 
-        .cm-home-faq-answer {
-          margin-top: 12px;
-          color: var(--landing-muted);
-        }
+                transition: "all 0.25s ease",
 
-        @media (max-width: 600px) {
-          .cm-home-faq {
-            padding: 72px 0;
-          }
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  left: 0,
+                  top: 20,
+                  bottom: 20,
+                  width: 6,
+                  borderRadius: "999px",
+                  bgcolor: landingColors.terracotta,
+                },
 
-          .cm-home-faq-card {
-            padding: 26px 24px;
-            border-radius: 24px;
-          }
-        }
-      `}</style>
-    </>
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: landingColors.shadow,
+                },
+              }}
+            >
+              <Typography
+                component="h3"
+                sx={{
+                  ...landingTypography.landingCardTitle,
+                  color: landingColors.title,
+                }}
+              >
+                {item.question}
+              </Typography>
+
+              <Typography
+                sx={{
+                  ...landingTypography.landingText,
+                  mt: 1.5,
+                  color: landingColors.muted,
+                }}
+              >
+                {item.answer}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </Container>
+    </Box>
   );
 }
