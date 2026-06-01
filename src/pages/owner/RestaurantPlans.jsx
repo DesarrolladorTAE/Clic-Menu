@@ -68,11 +68,13 @@ export default function RestaurantPlans() {
   const isOperational = status?.is_operational === true;
   const currentPlanSlug = status?.subscription?.plan?.slug || null;
   const currentEndsAt = status?.subscription?.ends_at || null;
+  const isDemo = status?.subscription?.is_demo === true;
+  const daysRemaining = status?.subscription?.days_remaining ?? null;
 
   const canChangeNow = useMemo(() => {
-    if (!status?.subscription?.plan?.slug) return true;
-    return status.subscription.plan.slug === "demo";
-  }, [status]);
+    if (!currentPlanSlug) return true;
+    return currentPlanSlug === "demo";
+  }, [currentPlanSlug]);
 
   const load = async () => {
     setLoading(true);
@@ -83,7 +85,9 @@ export default function RestaurantPlans() {
       ]);
 
       const safePlans = Array.isArray(plansRes) ? plansRes : [];
-      setPlans(safePlans);
+      const selectablePlans = safePlans.filter((plan) => plan?.slug !== "demo");
+
+      setPlans(selectablePlans);
       setStatus(stRes || null);
     } catch (e) {
       showAlert({
@@ -151,11 +155,20 @@ export default function RestaurantPlans() {
       }
     } catch (e) {
       const code = e?.response?.data?.code;
+
+      const fallbackMessages = {
+        SUBSCRIPTION_ALREADY_ACTIVE:
+          "Tu restaurante ya cuenta con una suscripción vigente. Podrás contratar otro plan cuando termine el periodo actual.",
+        DEMO_PLAN_NOT_SELECTABLE:
+          "El plan demo solo se asigna al primer restaurante y no puede volver a contratarse.",
+        PLAN_CHANGE_NOT_ALLOWED_UNTIL_EXPIRES:
+          "No puedes cambiar de plan hasta que termine tu suscripción actual.",
+      };
+
       const msg =
         e?.response?.data?.message ||
-        (code === "PLAN_CHANGE_NOT_ALLOWED_UNTIL_EXPIRES"
-          ? "No puedes cambiar de plan hasta que termine tu suscripción actual."
-          : "No se pudo contratar el plan.");
+        fallbackMessages[code] ||
+        "No se pudo contratar el plan.";
 
       showAlert({
         severity: "error",
@@ -212,6 +225,8 @@ export default function RestaurantPlans() {
           currentPlanSlug={currentPlanSlug}
           currentEndsAt={currentEndsAt}
           canChangeNow={canChangeNow}
+          isDemo={isDemo}
+          daysRemaining={daysRemaining}
         />
 
         
@@ -232,7 +247,7 @@ export default function RestaurantPlans() {
             const isDisabled =
               busyPlanId !== null ||
               isCurrent ||
-              (!canChangeNow && currentPlanSlug && currentPlanSlug !== "demo");
+              !canChangeNow;
 
             return (
               <PlanCard

@@ -1,6 +1,6 @@
 import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
 
-// 🔥 función para formatear la fecha
+//función para formatear la fecha
 function formatDate(value) {
   if (!value) return "Sin fecha";
 
@@ -19,7 +19,16 @@ export default function PlansStateCard({
   currentPlanSlug,
   currentEndsAt,
   canChangeNow,
+  isDemo = false,
+  daysRemaining = null,
 }) {
+  const planLabel = isDemo ? "Demo" : currentPlanSlug || "Ninguno";
+
+  const demoDaysLabel =
+    daysRemaining === null || daysRemaining === undefined
+      ? "Sin dato"
+      : `${daysRemaining} día${Number(daysRemaining) === 1 ? "" : "s"}`;
+
   return (
     <Paper
       sx={{
@@ -47,21 +56,29 @@ export default function PlansStateCard({
 
           <StateMiniCard
             title="Plan actual"
-            value={currentPlanSlug || "Ninguno"}
-            chipLabel={currentPlanSlug ? "Asignado" : "Pendiente"}
-            chipColor={currentPlanSlug ? "primary" : "default"}
+            value={planLabel}
+            chipLabel={isDemo ? "Prueba gratuita" : currentPlanSlug ? "Asignado" : "Pendiente"}
+            chipColor={isDemo ? "warning" : currentPlanSlug ? "primary" : "default"}
           />
 
-          {/* 🔥 AQUÍ ESTÁ EL CAMBIO */}
           <StateMiniCard
             title="Vigencia"
             value={currentEndsAt ? formatDate(currentEndsAt) : "Sin fecha"}
             chipLabel={currentEndsAt ? "Con vencimiento" : "Sin registro"}
             chipColor={currentEndsAt ? "primary" : "default"}
           />
+
+          {isDemo ? (
+            <StateMiniCard
+              title="Demo restante"
+              value={demoDaysLabel}
+              chipLabel="Demo activo"
+              chipColor="warning"
+            />
+          ) : null}
         </Stack>
 
-        {!canChangeNow ? (
+        {isDemo ? (
           <Box
             sx={{
               p: 1.5,
@@ -79,8 +96,30 @@ export default function PlansStateCard({
                 fontWeight: 800,
               }}
             >
-              Tu plan actual no es DEMO. Solo podrás cambiar de plan cuando
-              termine la duración.
+              Tu restaurante está usando el plan Demo. Puedes contratar un plan
+              de paga antes de que termine tu periodo de prueba.
+            </Typography>
+          </Box>
+        ) : !canChangeNow ? (
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "#F3D48B",
+              backgroundColor: "#FFF7E8",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 13,
+                color: "#8A5A00",
+                lineHeight: 1.5,
+                fontWeight: 800,
+              }}
+            >
+              Tu restaurante ya cuenta con una suscripción vigente. Solo podrás
+              cambiar de plan cuando termine el periodo actual.
             </Typography>
           </Box>
         ) : null}

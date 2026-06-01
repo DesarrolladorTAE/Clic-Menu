@@ -31,6 +31,14 @@ function getBadgeConfig(st) {
     };
   }
 
+  if (st?.is_operational === true && st?.subscription?.is_demo === true) {
+    return {
+      label: "DEMO ACTIVO",
+      color: "#111111",
+      bg: "#FFB547",
+    };
+  }
+
   if (st?.is_operational === true) {
     return {
       label: "OPERATIVO",
@@ -153,9 +161,17 @@ export default function MyRestaurantsHome() {
     }
   };
 
-  const onSaved = async () => {
+  const onSaved = async (payload) => {
     await load();
     closeModal();
+
+    if (payload?.data?.active_subscription?.plan?.slug === "demo") {
+      showAlert({
+        severity: "success",
+        title: "Demo activo",
+        message: payload?.message || "Restaurante creado con plan demo activo por 7 días.",
+      });
+    }
   };
 
   const onProfileSaved = () => {
@@ -424,6 +440,8 @@ export default function MyRestaurantsHome() {
                 const st = statusMap[r.id];
                 const badge = getBadgeConfig(st);
                 const isOperational = st?.is_operational === true;
+                const isDemo = st?.subscription?.is_demo === true;
+                const demoDays = st?.subscription?.days_remaining;
 
                 return (
                   <Card
@@ -468,6 +486,29 @@ export default function MyRestaurantsHome() {
                           }}
                         />
                       </Stack>
+
+                      {isDemo ? (
+                        <Typography
+                          sx={{
+                            mt: 2,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: "#8A5A00",
+                            backgroundColor: "#FFF7E8",
+                            border: "1px solid #F3D48B",
+                            borderRadius: 1,
+                            px: 1.5,
+                            py: 1,
+                          }}
+                        >
+                          Te quedan{" "}
+                          {demoDays === null || demoDays === undefined
+                            ? "algunos"
+                            : demoDays}{" "}
+                          día
+                          {Number(demoDays) === 1 ? "" : "s"} de demo.
+                        </Typography>
+                      ) : null}
 
                       <Box sx={{ flex: 1 }} />
 
