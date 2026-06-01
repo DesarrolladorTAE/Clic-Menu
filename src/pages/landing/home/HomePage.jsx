@@ -213,7 +213,7 @@ export default function HomePage() {
                   },
                 }}
               >
-                Empezar ahora
+                Registrate
               </Button>
             </Stack>
 

@@ -12,6 +12,7 @@ import TestMui from "../pages/TestMui";
 import HomePage from "../pages/landing/home/HomePage";
 import LandingTermsPage from "../pages/landing/terms/LandingTermsPage";
 import LandingContactPage from "../pages/landing/contact/LandingContactPage";
+import LandingPlansPage from "../pages/landing/plans/LandingPlansPage";
 
 //Registro administrador
 import SystemAdminLogin from "../pages/system-admin/SystemAdminLogin";
@@ -130,6 +131,7 @@ export default function AppRoutes() {
     <Routes>
       {/* PUBLIC */}
       <Route path="/" element={<HomePage />} />
+      <Route path="/planes" element={<LandingPlansPage />} />
       <Route path="/contacto" element={<LandingContactPage />} />
       <Route path="/terminos-y-condiciones" element={<LandingTermsPage />} />
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />

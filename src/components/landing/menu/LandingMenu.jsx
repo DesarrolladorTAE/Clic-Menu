@@ -10,14 +10,19 @@ import { landingColors } from "../../../theme/landingTheme";
 
 const menuItems = [
   { label: "Inicio", path: "/", enabled: true },
-  { label: "Planes", path: "/planes", enabled: false },
+  { label: "Planes", path: "/planes", enabled: true },
   { label: "Sobre nosotros", path: "/sobre-nosotros", enabled: false },
-  { label: "Contactos", path: "/contacto", enabled: true },
+  { label: "Contáctanos", path: "/contacto", enabled: true },
   {
     label: "Términos y condiciones",
     path: "/terminos-y-condiciones",
     enabled: true,
   },
+];
+
+const authItems = [
+  { label: "Iniciar sesión", path: "/auth/login", type: "login" },
+  { label: "Regístrate", path: "/auth/register", type: "register" },
 ];
 
 export default function LandingMenu() {
@@ -27,6 +32,11 @@ export default function LandingMenu() {
   const handleNavigate = (item) => {
     if (!item.enabled) return;
 
+    setMobileOpen(false);
+    navigate(item.path);
+  };
+
+  const handleAuthNavigate = (item) => {
     setMobileOpen(false);
     navigate(item.path);
   };
@@ -118,75 +128,143 @@ export default function LandingMenu() {
             </Box>
 
             <Stack
-              component="nav"
               direction="row"
               spacing={{
-                md: 2,
-                lg: 3.25,
+                lg: 2,
+                xl: 2.6,
               }}
               alignItems="center"
               sx={{
                 display: {
                   xs: "none",
-                  md: "flex",
+                  lg: "flex",
                 },
               }}
             >
-              {menuItems.map((item) => (
-                <Button
-                  key={item.label}
-                  type="button"
-                  onClick={() => handleNavigate(item)}
-                  disabled={!item.enabled}
-                  sx={{
-                    position: "relative",
-                    minHeight: 38,
-                    px: 0,
-                    py: 0.5,
-                    borderRadius: 0,
-                    bgcolor: "transparent",
-                    color: landingColors.dark,
-                    fontSize: {
-                      md: 13,
-                      lg: 15,
-                    },
-                    fontWeight: 900,
-                    textTransform: "none",
-                    whiteSpace: "nowrap",
-                    opacity: item.enabled ? 1 : 0.86,
-                    boxShadow: "none",
-                    "&::after": {
-                      content: '""',
-                      position: "absolute",
-                      left: 0,
-                      right: 0,
-                      bottom: 2,
-                      mx: "auto",
-                      width: item.enabled ? "70%" : 0,
-                      height: 3,
-                      borderRadius: 999,
-                      bgcolor: landingColors.orangeLine,
-                      transition: "width 0.22s ease",
-                    },
-                    "&.Mui-disabled": {
-                      color: landingColors.dark,
-                      opacity: 0.86,
-                      cursor: "default",
-                    },
-                    "&:hover": {
+              <Stack
+                component="nav"
+                direction="row"
+                spacing={{
+                  lg: 1.8,
+                  xl: 2.6,
+                }}
+                alignItems="center"
+              >
+                {menuItems.map((item) => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    onClick={() => handleNavigate(item)}
+                    disabled={!item.enabled}
+                    sx={{
+                      position: "relative",
+                      minHeight: 38,
+                      px: 0,
+                      py: 0.5,
+                      borderRadius: 0,
                       bgcolor: "transparent",
-                      color: landingColors.terracotta,
-                      transform: "translateY(-1px)",
+                      color: landingColors.dark,
+                      fontSize: {
+                        md: 13,
+                        lg: 15,
+                      },
+                      fontWeight: 900,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      opacity: item.enabled ? 1 : 0.86,
                       boxShadow: "none",
-                    },
-                    "&:hover::after": {
-                      width: "70%",
-                    },
-                  }}
-                >
-                  {item.label}
-                </Button>
-              ))}
+                      "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: 2,
+                        mx: "auto",
+                        width: item.enabled ? "70%" : 0,
+                        height: 3,
+                        borderRadius: 999,
+                        bgcolor: landingColors.orangeLine,
+                        transition: "width 0.22s ease",
+                      },
+                      "&.Mui-disabled": {
+                        color: landingColors.dark,
+                        opacity: 0.86,
+                        cursor: "default",
+                      },
+                      "&:hover": {
+                        bgcolor: "transparent",
+                        color: landingColors.terracotta,
+                        transform: "translateY(-1px)",
+                        boxShadow: "none",
+                      },
+                      "&:hover::after": {
+                        width: "70%",
+                      },
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Stack>
+
+              <Stack direction="row" spacing={1} alignItems="center">
+                {authItems.map((item) => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    onClick={() => handleAuthNavigate(item)}
+                    variant={item.type === "register" ? "contained" : "outlined"}
+                    sx={{
+                      minHeight: 40,
+                      height: 40,
+                      px: item.type === "register" ? 2.4 : 2,
+                      borderRadius: 999,
+                      fontSize: 13,
+                      fontWeight: 900,
+                      whiteSpace: "nowrap",
+                      textTransform: "none",
+                      boxShadow: "none",
+                      bgcolor:
+                        item.type === "register"
+                          ? landingColors.orangeLine
+                          : "#FFF7EC",
+                      color:
+                        item.type === "register"
+                          ? landingColors.white
+                          : landingColors.terracotta,
+                      border:
+                        item.type === "register"
+                          ? `1px solid ${landingColors.orangeLine}`
+                          : `1.5px solid ${landingColors.terracotta}`,
+                      boxShadow:
+                        item.type === "register"
+                          ? "none"
+                          : "0 8px 18px rgba(207, 109, 78, 0.12)",
+                      "&:hover": {
+                        bgcolor:
+                          item.type === "register"
+                            ? landingColors.terracotta
+                            : "#FFE8DC",
+                        color:
+                          item.type === "register"
+                            ? landingColors.white
+                            : landingColors.orangeLine,
+                        border:
+                          item.type === "register"
+                            ? `1px solid ${landingColors.terracotta}`
+                            : `1.5px solid ${landingColors.orangeLine}`,
+                        boxShadow:
+                          item.type === "register"
+                            ? "none"
+                            : "0 10px 22px rgba(255, 116, 31, 0.18)",
+                      },
+                      
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Stack>
             </Stack>
 
             <IconButton
@@ -194,7 +272,7 @@ export default function LandingMenu() {
               sx={{
                 display: {
                   xs: "inline-flex",
-                  md: "none",
+                  lg: "none",
                 },
                 width: 44,
                 height: 44,
@@ -402,8 +480,72 @@ export default function LandingMenu() {
                 zIndex: 1,
               }}
             >
+              <Stack spacing={1.4}>
+                {authItems.map((item) => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    fullWidth
+                    onClick={() => handleAuthNavigate(item)}
+                    variant={item.type === "register" ? "contained" : "outlined"}
+                    sx={{
+                      height: 50,
+                      borderRadius: 999,
+                      fontSize: 15,
+                      fontWeight: 900,
+                      textTransform: "none",
+
+                      bgcolor:
+                        item.type === "register"
+                          ? landingColors.orangeLine
+                          : "#FFF7EC",
+
+                      color:
+                        item.type === "register"
+                          ? landingColors.white
+                          : landingColors.terracotta,
+
+                      border:
+                        item.type === "register"
+                          ? `1px solid ${landingColors.orangeLine}`
+                          : `1.5px solid ${landingColors.terracotta}`,
+
+                      boxShadow:
+                        item.type === "register"
+                          ? "0 12px 26px rgba(255, 116, 31, 0.25)"
+                          : "0 8px 18px rgba(207, 109, 78, 0.12)",
+
+                      "&:hover": {
+                        bgcolor:
+                          item.type === "register"
+                            ? landingColors.terracotta
+                            : "#FFE8DC",
+
+                        color:
+                          item.type === "register"
+                            ? landingColors.white
+                            : landingColors.orangeLine,
+
+                        border:
+                          item.type === "register"
+                            ? `1px solid ${landingColors.terracotta}`
+                            : `1.5px solid ${landingColors.orangeLine}`,
+
+                        boxShadow:
+                          item.type === "register"
+                            ? "0 14px 30px rgba(207, 109, 78, 0.28)"
+                            : "0 10px 22px rgba(255, 116, 31, 0.18)",
+                      },
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Stack>
+
               <Box
                 sx={{
+                  mt: 3,
                   width: 92,
                   height: 4,
                   borderRadius: 999,
