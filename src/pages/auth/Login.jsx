@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
 import {
-  Alert, Box, Button, Container, Stack, TextField, Typography,
+  Alert, Box, Button, IconButton, Container, Stack, TextField, Typography,
 } from "@mui/material";
+
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 
 import { useAuth } from "../../context/AuthContext";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
@@ -129,15 +131,46 @@ export default function Login() {
         <Box
           sx={{
             order: { xs: 2, md: 2 },
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             px: { xs: 3, sm: 4, md: 6 },
-            py: { xs: 5, md: 6 },
+            py: { xs: 7, md: 6 },
             bgcolor: "#FFFFFF",
           }}
         >
-          <Container maxWidth="sm">
+          
+        <IconButton
+          type="button"
+          onClick={() => nav("/")}
+          aria-label="Volver al inicio"
+          title="Volver al inicio"
+          sx={{
+            position: "absolute",
+            top: { xs: 18, md: 28 },
+            right: { xs: 18, md: 32 },
+            width: 46,
+            height: 46,
+            borderRadius: "50%",
+            bgcolor: "#FFF3E8",
+            color: "#C75B2A",
+            border: "1px solid rgba(199, 91, 42, 0.22)",
+            boxShadow: "0 10px 24px rgba(199, 91, 42, 0.12)",
+            transition: "all 0.2s ease",
+            "&:hover": {
+              bgcolor: "#FFE6D6",
+              color: "#A9461E",
+              borderColor: "rgba(199, 91, 42, 0.38)",
+              boxShadow: "0 14px 30px rgba(199, 91, 42, 0.18)",
+              transform: "translateY(-1px)",
+            },
+          }}
+        >
+          <ArrowBackRoundedIcon />
+        </IconButton>
+
+        <Container maxWidth="sm">
             <Stack
               spacing={2.5}
               sx={{

@@ -3,16 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Container,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, Checkbox, Container, FormControlLabel, IconButton, Stack, TextField, Typography,
 } from "@mui/material";
+
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 
 import TermsModal from "../../components/auth/TermsModal";
 import AuthBrandPanel from "../../components/auth/AuthBrandPanel";
@@ -254,14 +248,44 @@ export default function Register() {
         <Box
           sx={{
             order: { xs: 2, md: 1 },
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             px: { xs: 3, sm: 4, md: 6 },
-            py: { xs: 5, md: 6 },
+            py: { xs: 7, md: 6 },
             bgcolor: "#FFFFFF",
           }}
         >
+          <IconButton
+            type="button"
+            onClick={() => nav("/")}
+            aria-label="Volver al inicio"
+            title="Volver al inicio"
+            sx={{
+              position: "absolute",
+              top: { xs: 18, md: 28 },
+              left: { xs: 18, md: 32 },
+              width: 46,
+              height: 46,
+              borderRadius: "50%",
+              bgcolor: "#FFF3E8",
+              color: "#C75B2A",
+              border: "1px solid rgba(199, 91, 42, 0.22)",
+              boxShadow: "0 10px 24px rgba(199, 91, 42, 0.12)",
+              transition: "all 0.2s ease",
+              "&:hover": {
+                bgcolor: "#FFE6D6",
+                color: "#A9461E",
+                borderColor: "rgba(199, 91, 42, 0.38)",
+                boxShadow: "0 14px 30px rgba(199, 91, 42, 0.18)",
+                transform: "translateY(-1px)",
+              },
+            }}
+          >
+            <ArrowBackRoundedIcon />
+          </IconButton>
+
           <Container maxWidth="md">
             <Stack
               spacing={2.5}
@@ -533,13 +557,7 @@ export default function Register() {
                     </Button>
 
                     <Box sx={{ textAlign: "center", pt: 0.5 }}>
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontSize: 14,
-                          color: "text.secondary",
-                        }}
-                      >
+                      <Typography component="span" sx={{ fontSize: 14, color: "text.secondary" }}>
                         ¿Ya tienes cuenta?{" "}
                       </Typography>
 
@@ -547,23 +565,12 @@ export default function Register() {
                         type="button"
                         onClick={() => nav("/auth/login")}
                         variant="text"
-                        sx={{
-                          p: 0,
-                          minWidth: "auto",
-                          minHeight: "auto",
-                          color: "primary.main",
-                          fontSize: 14,
-                          fontWeight: 800,
-                          verticalAlign: "baseline",
-                          "&:hover": {
-                            backgroundColor: "transparent",
-                            textDecoration: "underline",
-                          },
-                        }}
+                        sx={authLinkSx}
                       >
                         Iniciar sesión
                       </Button>
                     </Box>
+
                   </Stack>
                 </form>
               )}
@@ -711,6 +718,20 @@ function FieldTitle({ label }) {
     </Typography>
   );
 }
+
+const authLinkSx = {
+  p: 0,
+  minWidth: "auto",
+  minHeight: "auto",
+  color: "primary.main",
+  fontSize: 14,
+  fontWeight: 800,
+  verticalAlign: "baseline",
+  "&:hover": {
+    backgroundColor: "transparent",
+    textDecoration: "underline",
+  },
+};
 
 const fieldSx = {
   "& .MuiOutlinedInput-root": {
