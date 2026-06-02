@@ -19,7 +19,11 @@ export async function upsertRestaurantSettings(restaurantId, payload) {
     settings: data?.data ?? null,
     ui: data?.ui ?? null,
     plan_access: data?.plan_access ?? null,
+
     recipe_mode_forced: Boolean(data?.recipe_mode_forced),
+
+    attention_mode_sync: data?.attention_mode_sync ?? null,
+
     message: data?.message ?? null,
   };
 }

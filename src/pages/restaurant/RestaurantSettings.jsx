@@ -2,23 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Divider,
-  FormControl,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
+  Alert, Box, Button,Card, CardContent, CircularProgress, Divider, FormControl, MenuItem, Select, Stack, Typography,
 } from "@mui/material";
 
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import RuleIcon from "@mui/icons-material/Rule";
-import GroupsIcon from "@mui/icons-material/Groups";
 import StorefrontIcon from "@mui/icons-material/Storefront";
 
 import {
@@ -29,6 +17,11 @@ import {
 const MODES = [
   { value: "global", label: "Global (compartido)" },
   { value: "branch", label: "Por sucursal" },
+];
+
+const ATTENTION_MODES = [
+  { value: "fixed", label: "Con mesas, meseros y atención presencial" },
+  { value: "direct", label: "Atención directa" },
 ];
 
 export default function RestaurantSettings() {
@@ -50,11 +43,14 @@ export default function RestaurantSettings() {
     locked_reason: "",
   });
 
+  const [planAccess, setPlanAccess] = useState(null);
+
   const [form, setForm] = useState({
     inventory_mode: "global",
     products_mode: "global",
     recipe_mode: "global",
     modifiers_mode: "global",
+    attention_mode: "fixed",
   });
 
   const title = useMemo(() => `Configuración del restaurante`, [restaurantId]);
@@ -62,7 +58,15 @@ export default function RestaurantSettings() {
   const productsIsBranch = form.products_mode === "branch";
   const canEditModes = Boolean(uiMeta?.can_edit_modes);
   const selectorsDisabled = Boolean(uiMeta?.selectors_disabled || !canEditModes);
-  const saveDisabled = Boolean(uiMeta?.save_disabled || !canEditModes);
+
+  const canUseRestaurantSettingsPage = Boolean(
+    planAccess?.features?.restaurant_settings_page
+  );
+
+  const attentionDisabled = !canUseRestaurantSettingsPage;
+  const saveDisabled = Boolean(
+    saving || (!canEditModes && !canUseRestaurantSettingsPage)
+  );
 
   const load = async () => {
     setErr("");
@@ -82,6 +86,7 @@ export default function RestaurantSettings() {
       };
 
       setUiMeta(nextUi);
+      setPlanAccess(st?._meta?.plan_access ?? null);
 
       if (st) {
         const next = {
@@ -89,6 +94,7 @@ export default function RestaurantSettings() {
           products_mode: st.products_mode ?? "global",
           recipe_mode: st.recipe_mode ?? "global",
           modifiers_mode: st.modifiers_mode ?? "global",
+          attention_mode: st.attention_mode ?? "fixed",
         };
 
         if (next.products_mode === "branch" && next.recipe_mode !== "branch") {
@@ -118,6 +124,20 @@ export default function RestaurantSettings() {
 
     return () => clearTimeout(t);
   }, [successMsg]);
+
+
+  const onAttentionModeChange = (value) => {
+    if (attentionDisabled) return;
+
+    setErr("");
+    setWarn("");
+    setSuccessMsg("");
+
+    setForm((prev) => ({
+      ...prev,
+      attention_mode: value,
+    }));
+  };
 
   const onChange = (key, value) => {
     if (!canEditModes) return;
@@ -158,10 +178,10 @@ export default function RestaurantSettings() {
   };
 
   const onSave = async () => {
-    if (!canEditModes) {
+    if (!canEditModes && !canUseRestaurantSettingsPage) {
       setErr(
         uiMeta?.locked_reason ||
-          "Tu plan actual no permite modificar la configuración por modo."
+          "Tu plan actual no permite modificar la configuración del restaurante."
       );
       return;
     }
@@ -174,6 +194,7 @@ export default function RestaurantSettings() {
     const payload = {
       ...form,
       recipe_mode: form.products_mode === "branch" ? "branch" : form.recipe_mode,
+      attention_mode: form.attention_mode || "fixed",
     };
 
     try {
@@ -181,6 +202,10 @@ export default function RestaurantSettings() {
 
       if (res?.ui) {
         setUiMeta(res.ui);
+      }
+
+      if (res?.plan_access) {
+        setPlanAccess(res.plan_access);
       }
 
       if (res?.settings) {
@@ -191,6 +216,7 @@ export default function RestaurantSettings() {
           products_mode: st.products_mode ?? "global",
           recipe_mode: st.recipe_mode ?? "global",
           modifiers_mode: st.modifiers_mode ?? "global",
+          attention_mode: st.attention_mode ?? "fixed",
         });
       }
 
@@ -476,6 +502,66 @@ export default function RestaurantSettings() {
             </CardContent>
           </Card>
 
+          <Card
+            sx={{
+              borderRadius: 1,
+              backgroundColor: "background.paper",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2.5, sm: 3.5, md: 4 } }}>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    Modo de operación
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      color: "text.secondary",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Define si el restaurante opera con mesas y meseros o si trabajará con atención directa.
+                  </Typography>
+                </Box>
+
+                <FieldSelect
+                  value={form.attention_mode}
+                  onChange={onAttentionModeChange}
+                  options={ATTENTION_MODES}
+                  disabled={attentionDisabled}
+                  lockMessage={
+                    attentionDisabled
+                      ? "Bloqueado: tu plan actual no permite modificar la configuración del restaurante."
+                      : ""
+                  }
+                />
+
+                {form.attention_mode === "direct" ? (
+                  <Alert severity="info" sx={{ borderRadius: 1 }}>
+                    <Typography sx={{ fontSize: 13, lineHeight: 1.6 }}>
+                      En atención directa se ocultarán los módulos relacionados con mesas, zonas, meseros y QR por mesa. No se eliminarán datos existentes.
+                    </Typography>
+                  </Alert>
+                ) : (
+                  <Alert severity="info" sx={{ borderRadius: 1 }}>
+                    <Typography sx={{ fontSize: 13, lineHeight: 1.6 }}>
+                      En atención con mesas se mostrarán nuevamente los módulos de operación presencial. Los datos desactivados deberán reactivarse manualmente si aplica.
+                    </Typography>
+                  </Alert>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+
           <Stack
             direction={{ xs: "column-reverse", sm: "row" }}
             justifyContent="flex-end"
@@ -483,7 +569,7 @@ export default function RestaurantSettings() {
           >
             <Button
               onClick={onSave}
-              disabled={saving || saveDisabled}
+              disabled={saveDisabled}
               variant="contained"
               sx={{
                 minWidth: { xs: "100%", sm: 220 },
@@ -516,16 +602,18 @@ function FieldSelect({
 
   return (
     <Box>
-      <Typography
-        sx={{
-          fontSize: 15,
-          fontWeight: 800,
-          color: "text.primary",
-          mb: 0.75,
-        }}
-      >
-        {label}
-      </Typography>
+      {label ? (
+        <Typography
+          sx={{
+            fontSize: 15,
+            fontWeight: 800,
+            color: "text.primary",
+            mb: 0.75,
+          }}
+        >
+          {label}
+        </Typography>
+      ) : null}
 
       {help && (
         <Typography

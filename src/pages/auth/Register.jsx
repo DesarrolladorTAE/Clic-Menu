@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
 import {
-  Alert, Box, Button, Checkbox, Container, FormControlLabel, IconButton, Stack, TextField, Typography,
+  Alert, Box, Button, Checkbox, Container, FormControl, FormControlLabel, IconButton, MenuItem, Select, Stack, TextField, Typography,
 } from "@mui/material";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
@@ -39,6 +39,7 @@ export default function Register() {
       email: "",
       password: "",
       password_confirmation: "",
+      default_attention_mode: "fixed",
       terms_accepted: false,
       code: "",
     },
@@ -107,6 +108,7 @@ export default function Register() {
         email: values.email,
         password: values.password,
         password_confirmation: values.password_confirmation,
+        default_attention_mode: values.default_attention_mode || "fixed",
         terms_accepted: true,
       };
 
@@ -422,6 +424,66 @@ export default function Register() {
                         }}
                         sx={fieldSx}
                       />
+                    </Box>
+
+                    <Box>
+                      <FieldTitle label="Modo de operación del restaurante" />
+
+                      <FormControl fullWidth error={!!errors.default_attention_mode}>
+                        <Select
+                          value={watch("default_attention_mode") || "fixed"}
+                          {...register("default_attention_mode", {
+                            required: "Selecciona el modo de operación.",
+                          })}
+                          MenuProps={{
+                            disableScrollLock: true,
+                            PaperProps: {
+                              sx: {
+                                maxWidth: "100%",
+                              },
+                            },
+                          }}
+                          sx={{
+                            bgcolor: "#F4F4F4",
+                            borderRadius: 0,
+                            minHeight: 44,
+                            "& .MuiOutlinedInput-notchedOutline": {
+                              border: "none",
+                            },
+                            "&:hover .MuiOutlinedInput-notchedOutline": {
+                              border: "none",
+                            },
+                            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                              border: "1.5px solid #FF9800",
+                            },
+                            "& .MuiSelect-select": {
+                              py: 1.25,
+                              px: 1.4,
+                              fontSize: 14,
+                            },
+                          }}
+                        >
+                          <MenuItem value="fixed">
+                            Con mesas, meseros y atención presencial
+                          </MenuItem>
+
+                          <MenuItem value="direct">
+                            Atención directa
+                          </MenuItem>
+                        </Select>
+                      </FormControl>
+
+                      <Typography
+                        sx={{
+                          mt: 0.5,
+                          minHeight: 18,
+                          color: errors.default_attention_mode ? "error.main" : "transparent",
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {errors.default_attention_mode?.message || " "}
+                      </Typography>
                     </Box>
 
                     <Box
