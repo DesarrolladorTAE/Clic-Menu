@@ -13,6 +13,7 @@ export default function FloorPlanHeader({
   onEditSettings,
   onManageQr,
   canManageQr = false,
+  isDirectAttentionMode = false,
 }) {
   return (
     <Stack spacing={2.5}>
@@ -70,6 +71,12 @@ export default function FloorPlanHeader({
       >
         <Button
           onClick={onCreateZone}
+          disabled={isDirectAttentionMode}
+          title={
+            isDirectAttentionMode
+              ? "Atención directa no utiliza zonas."
+              : ""
+          }
           variant="contained"
           startIcon={<AddIcon />}
           sx={{
@@ -84,6 +91,12 @@ export default function FloorPlanHeader({
 
         <Button
           onClick={onCreateTable}
+          disabled={isDirectAttentionMode}
+          title={
+            isDirectAttentionMode
+              ? "Atención directa no utiliza mesas."
+              : ""
+          }
           variant="outlined"
           startIcon={<TableRestaurantOutlinedIcon />}
           sx={{

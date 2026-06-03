@@ -7,6 +7,7 @@ export default function FloorZonesPanel({
   zones = [],
   tablesByZone = {},
   isZoneAssignmentEnabled = false,
+  isDirectAttentionMode = false,
   onAssignWaiter,
   onEditZone,
   onDeleteZone,
@@ -173,7 +174,9 @@ export default function FloorZonesPanel({
                           minHeight: 40,
                         }}
                       >
-                        {isZoneAssignmentEnabled
+                        {isDirectAttentionMode
+                          ? "Modo atención directa: esta zona queda disponible solo como historial/consulta."
+                          : isZoneAssignmentEnabled
                           ? "Puedes asignar un mesero a esta zona para distribuir la atención."
                           : "Esta zona ya puede utilizarse para organizar las mesas del salón."}
                       </Typography>
@@ -188,6 +191,12 @@ export default function FloorZonesPanel({
                         {isZoneAssignmentEnabled ? (
                           <Button
                             onClick={() => onAssignWaiter(zone)}
+                            disabled={isDirectAttentionMode}
+                            title={
+                              isDirectAttentionMode
+                                ? "Atención directa no permite asignar meseros por zona."
+                                : ""
+                            }
                             variant="outlined"
                             startIcon={<PersonOutlineOutlinedIcon />}
                             sx={{
@@ -204,6 +213,12 @@ export default function FloorZonesPanel({
 
                         <Button
                           onClick={() => onEditZone(zone)}
+                          disabled={isDirectAttentionMode}
+                          title={
+                            isDirectAttentionMode
+                              ? "Atención directa no permite editar zonas."
+                              : ""
+                          }
                           variant="outlined"
                           startIcon={<EditOutlinedIcon />}
                           sx={{
@@ -219,6 +234,12 @@ export default function FloorZonesPanel({
 
                         <Button
                           onClick={() => onDeleteZone(zone)}
+                          disabled={isDirectAttentionMode}
+                          title={
+                            isDirectAttentionMode
+                              ? "Atención directa no permite eliminar zonas."
+                              : ""
+                          }
                           variant="outlined"
                           startIcon={<DeleteOutlineIcon />}
                           color="error"

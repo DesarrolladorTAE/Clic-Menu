@@ -1,11 +1,5 @@
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Paper,
-  Stack,
-  Typography,
+  Box, Button, Card, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -26,6 +20,7 @@ export default function FloorTablesPanel({
   zoneFilter,
   tables = [],
   total = 0,
+  isDirectAttentionMode = false,
   page = 1,
   totalPages = 1,
   startItem = 0,
@@ -80,7 +75,9 @@ export default function FloorTablesPanel({
               color: "text.secondary",
             }}
           >
-            {zoneFilter === "all"
+            {isDirectAttentionMode
+              ? "Modo atención directa: las mesas quedan solo como historial/consulta."
+              : zoneFilter === "all"
               ? "Vista general de todas las zonas"
               : `Zona seleccionada: ${selectedZone?.name || "Sin zona"}`}
           </Typography>
@@ -122,7 +119,9 @@ export default function FloorTablesPanel({
               fontSize: 14,
             }}
           >
-            Agrega mesas para comenzar a organizar la operación del salón.
+            {isDirectAttentionMode
+              ? "El modo de atención directa no utiliza mesas."
+              : "Agrega mesas para comenzar a organizar la operación del salón."}
           </Typography>
         </Box>
       ) : (
@@ -233,6 +232,12 @@ export default function FloorTablesPanel({
                         >
                           <Button
                             onClick={() => onEditTable(table)}
+                            disabled={isDirectAttentionMode}
+                            title={
+                              isDirectAttentionMode
+                                ? "Atención directa no permite editar mesas."
+                                : ""
+                            }
                             variant="outlined"
                             startIcon={<EditOutlinedIcon />}
                             sx={{
@@ -249,6 +254,12 @@ export default function FloorTablesPanel({
 
                           <Button
                             onClick={() => onDeleteTable(table)}
+                            disabled={isDirectAttentionMode}
+                            title={
+                              isDirectAttentionMode
+                                ? "Atención directa no permite eliminar mesas."
+                                : ""
+                            }
                             variant="outlined"
                             color="error"
                             startIcon={<DeleteOutlineIcon />}

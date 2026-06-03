@@ -9,6 +9,7 @@ export default function FloorPlanContextCard({
   settings,
   settingsSummary,
   contextData,
+  isDirectAttentionMode = false,
 }) {
   return (
     <Paper
@@ -58,7 +59,9 @@ export default function FloorPlanContextCard({
             icon={<SettingsSuggestOutlinedIcon fontSize="small" />}
             title="Modo operativo"
             value={
-              settingsSummary
+              isDirectAttentionMode
+                ? "Atención directa desde caja"
+                : settingsSummary
                 ? `${settingsSummary.tableServiceLabel}${
                     settingsSummary.strategyLabel
                       ? ` · ${settingsSummary.strategyLabel}`
@@ -66,14 +69,24 @@ export default function FloorPlanContextCard({
                   }`
                 : "Sin configuración"
             }
-            chipLabel={settings ? "Configurado" : "Pendiente"}
+            chipLabel={
+              isDirectAttentionMode
+                ? "Directo"
+                : settings
+                ? "Configurado"
+                : "Pendiente"
+            }
             chipColor={settings ? "success" : "default"}
           />
 
           <ContextMiniCard
             icon={<QrCode2OutlinedIcon fontSize="small" />}
-            title="QR para mesas"
-            value={settingsSummary?.qrLabel || "Sin configuración"}
+            title={isDirectAttentionMode ? "QR de menú" : "QR para mesas"}
+            value={
+              isDirectAttentionMode
+                ? settingsSummary?.qrLabel || "Sin configuración"
+                : settingsSummary?.qrLabel || "Sin configuración"
+            }
             chipLabel={contextData?.canManageQr ? "Disponible" : "Bloqueado"}
             chipColor={contextData?.canManageQr ? "success" : "default"}
           />
@@ -87,7 +100,9 @@ export default function FloorPlanContextCard({
           }}
         >
           {selectedBranch?.name
-            ? `La administración que realices aquí se aplicará únicamente a ${selectedBranch.name}.`
+            ? isDirectAttentionMode
+              ? `Esta sucursal opera en atención directa. Las zonas y mesas se muestran solo como consulta histórica.`
+              : `La administración que realices aquí se aplicará únicamente a ${selectedBranch.name}.`
             : "Selecciona una sucursal para continuar."}
         </Typography>
       </Stack>

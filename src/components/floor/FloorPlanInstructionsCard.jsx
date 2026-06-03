@@ -1,6 +1,8 @@
 import { Box, Paper, Stack, Typography } from "@mui/material";
 
-export default function FloorPlanInstructionsCard() {
+export default function FloorPlanInstructionsCard({
+  isDirectAttentionMode = false,
+}) {
   return (
     <Paper
       sx={{
@@ -23,20 +25,41 @@ export default function FloorPlanInstructionsCard() {
           Antes de comenzar
         </Typography>
 
-        <InstructionRow
-          step="1"
-          text="Primero selecciona la sucursal que deseas administrar para ver únicamente sus zonas y mesas."
-        />
+        {isDirectAttentionMode ? (
+          <>
+            <InstructionRow
+              step="1"
+              text="Esta sucursal opera en atención directa. Las zonas y mesas existentes se muestran solo como consulta."
+            />
 
-        <InstructionRow
-          step="2"
-          text="Las zonas sirven para organizar el salón y agrupar las mesas por áreas de atención."
-        />
+            <InstructionRow
+              step="2"
+              text="No se permite crear, editar ni eliminar zonas o mesas mientras el restaurante esté en atención directa."
+            />
 
-        <InstructionRow
-          step="3"
-          text="Si usas asignación por zona, podrás vincular un mesero y el sistema aplicará esa relación a sus mesas."
-        />
+            <InstructionRow
+              step="3"
+              text="Desde Configuración operativa puedes activar la venta directa desde caja y mantener disponible el acceso por QR."
+            />
+          </>
+        ) : (
+          <>
+            <InstructionRow
+              step="1"
+              text="Primero selecciona la sucursal que deseas administrar para ver únicamente sus zonas y mesas."
+            />
+
+            <InstructionRow
+              step="2"
+              text="Las zonas sirven para organizar el salón y agrupar las mesas por áreas de atención."
+            />
+
+            <InstructionRow
+              step="3"
+              text="Si usas asignación por zona, podrás vincular un mesero y el sistema aplicará esa relación a sus mesas."
+            />
+          </>
+        )}
 
       </Stack>
     </Paper>

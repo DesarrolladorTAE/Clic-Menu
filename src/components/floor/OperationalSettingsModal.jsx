@@ -7,20 +7,7 @@ import {
 } from "../../services/floor/operationalSettings.service";
 
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField, Typography,
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
@@ -177,6 +164,7 @@ export default function OperationalSettingsModal({
   restaurantId,
   branchId,
   initialData = null,
+  isDirectAttentionMode = false,
   onClose,
   onSaved,
   showToast,
@@ -395,18 +383,23 @@ export default function OperationalSettingsModal({
           ? "waiter_only"
           : "customer_assisted";
 
-      const payload = {
-        ordering_mode: safeOrderingMode,
-        table_service_mode: effectiveTableServiceMode,
-        is_qr_enabled: !!form.is_qr_enabled,
-        assignment_strategy:
-          String(effectiveTableServiceMode) === "assigned_waiter"
-            ? form.assignment_strategy || "table_only"
-            : null,
-        cashier_direct_mode: form.cashier_direct_mode || "disabled",
-        min_seats: Number(form.min_seats),
-        max_seats: Number(form.max_seats),
-      };
+      const payload = isDirectAttentionMode
+      ? {
+          is_qr_enabled: !!form.is_qr_enabled,
+          cashier_direct_mode: form.cashier_direct_mode || "disabled",
+        }
+      : {
+          ordering_mode: safeOrderingMode,
+          table_service_mode: effectiveTableServiceMode,
+          is_qr_enabled: !!form.is_qr_enabled,
+          assignment_strategy:
+            String(effectiveTableServiceMode) === "assigned_waiter"
+              ? form.assignment_strategy || "table_only"
+              : null,
+          cashier_direct_mode: form.cashier_direct_mode || "disabled",
+          min_seats: Number(form.min_seats),
+          max_seats: Number(form.max_seats),
+        };
 
       const saved =
         mode === "create"
@@ -490,7 +483,9 @@ export default function OperationalSettingsModal({
                 color: "rgba(255,255,255,0.82)",
               }}
             >
-              Define cómo se operará la sucursal antes de usar zonas, mesas y QR.
+              {isDirectAttentionMode
+                ? "Esta sucursal opera con atención directa. Solo puedes configurar la venta desde caja."
+                : "Define cómo se operará la sucursal antes de usar zonas, mesas y QR."}
             </Typography>
           </Box>
 
@@ -569,7 +564,7 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
-                {!qrOrderingAllowed ? (
+               {!isDirectAttentionMode && !qrOrderingAllowed ? (
                   <Box
                     sx={{
                       p: 1.5,
@@ -641,99 +636,105 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
-                <SectionTitle title="Operación de pedidos" />
 
-                <FieldBlock
-                  label="Modo de toma de pedidos"
-                  input={
-                    <Controller
-                      name="ordering_mode"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          select
-                          fullWidth
-                          value={field.value ?? ""}
-                          onChange={field.onChange}
-                          SelectProps={{
-                            IconComponent: KeyboardArrowDownIcon,
-                          }}
-                        >
-                          {orderingModeOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
+               {!isDirectAttentionMode ? (
+                  <>
+                    <SectionTitle title="Operación de pedidos" />
+
+                    <FieldBlock
+                      label="Modo de toma de pedidos"
+                      input={
+                        <Controller
+                          name="ordering_mode"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              select
+                              fullWidth
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              SelectProps={{
+                                IconComponent: KeyboardArrowDownIcon,
+                              }}
+                            >
+                              {orderingModeOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        />
+                      }
+                      help={
+                        !isQrEnabled
+                          ? "Cliente asistido no está disponible si el QR está desactivado."
+                          : orderingHelper
+                      }
+                      error={errors?.ordering_mode?.message}
                     />
-                  }
-                  help={
-                    !isQrEnabled
-                      ? "Cliente asistido no está disponible si el QR está desactivado."
-                      : orderingHelper
-                  }
-                  error={errors?.ordering_mode?.message}
-                />
 
-                <FieldBlock
-                  label="Modo de asignación de personal"
-                  input={
-                    <Controller
-                      name="table_service_mode"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          select
-                          fullWidth
-                          value={field.value ?? ""}
-                          onChange={field.onChange}
-                          SelectProps={{
-                            IconComponent: KeyboardArrowDownIcon,
-                          }}
-                        >
-                          <MenuItem value="free_for_all">Libre</MenuItem>
-                          <MenuItem value="assigned_waiter">
-                            Mesero asignado
-                          </MenuItem>
-                        </TextField>
-                      )}
+                    <FieldBlock
+                      label="Modo de asignación de personal"
+                      input={
+                        <Controller
+                          name="table_service_mode"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              select
+                              fullWidth
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              SelectProps={{
+                                IconComponent: KeyboardArrowDownIcon,
+                              }}
+                            >
+                              <MenuItem value="free_for_all">Libre</MenuItem>
+                              <MenuItem value="assigned_waiter">
+                                Mesero asignado
+                              </MenuItem>
+                            </TextField>
+                          )}
+                        />
+                      }
+                      help={tableServiceHelper}
+                      error={errors?.table_service_mode?.message}
                     />
-                  }
-                  help={tableServiceHelper}
-                  error={errors?.table_service_mode?.message}
-                />
 
-                {showStrategy ? (
-                  <FieldBlock
-                    label="Estrategia de asignación"
-                    input={
-                      <Controller
-                        name="assignment_strategy"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            select
-                            fullWidth
-                            value={field.value ?? ""}
-                            onChange={field.onChange}
-                            SelectProps={{
-                              IconComponent: KeyboardArrowDownIcon,
-                            }}
-                          >
-                            <MenuItem value="table_only">Mesa</MenuItem>
-                            <MenuItem value="zone">Zona</MenuItem>
-                          </TextField>
-                        )}
+                    {showStrategy ? (
+                      <FieldBlock
+                        label="Estrategia de asignación"
+                        input={
+                          <Controller
+                            name="assignment_strategy"
+                            control={control}
+                            render={({ field }) => (
+                              <TextField
+                                select
+                                fullWidth
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                SelectProps={{
+                                  IconComponent: KeyboardArrowDownIcon,
+                                }}
+                              >
+                                <MenuItem value="table_only">Mesa</MenuItem>
+                                <MenuItem value="zone">Zona</MenuItem>
+                              </TextField>
+                            )}
+                          />
+                        }
+                        help={strategyHelper}
+                        error={errors?.assignment_strategy?.message}
                       />
-                    }
-                    help={strategyHelper}
-                    error={errors?.assignment_strategy?.message}
-                  />
+                    ) : null}
+
+                  </>
                 ) : null}
+                
 
                 <SectionTitle title="Acceso por QR" />
-
                 <SwitchInfoCard
                   title="Habilitar QR"
                   description="Si está desactivado, no se debe permitir crear, administrar ni resolver códigos QR."
@@ -765,7 +766,6 @@ export default function OperationalSettingsModal({
                 </SwitchInfoCard>
 
                 <SectionTitle title="Venta directa desde caja" />
-
                 <FieldBlock
                   label="Modo de venta directa"
                   input={
@@ -797,110 +797,116 @@ export default function OperationalSettingsModal({
                   error={errors?.cashier_direct_mode?.message}
                 />
 
-                <SectionTitle title="Capacidad de mesas" />
 
-                <Box
-                  sx={{
-                    p: 1.75,
-                    borderRadius: 1,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    backgroundColor: "#fff",
-                  }}
-                >
-                  <Stack spacing={2}>
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                      <FieldBlock
-                        label="Mínimo"
-                        input={
-                          <Controller
-                            name="min_seats"
-                            control={control}
-                            render={({ field }) => (
-                              <TextField
-                                select
-                                fullWidth
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                SelectProps={{
-                                  IconComponent: KeyboardArrowDownIcon,
-                                }}
-                              >
-                                {SEAT_OPTIONS.map((n) => (
-                                  <MenuItem key={n} value={String(n)}>
-                                    {n}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                            )}
-                          />
-                        }
-                        error={errors?.min_seats?.message}
-                      />
+                {!isDirectAttentionMode ? (
+                  <>
+                    <SectionTitle title="Capacidad de mesas" />
 
-                      <FieldBlock
-                        label="Máximo"
-                        input={
-                          <Controller
-                            name="max_seats"
-                            control={control}
-                            render={({ field }) => (
-                              <TextField
-                                select
-                                fullWidth
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                SelectProps={{
-                                  IconComponent: KeyboardArrowDownIcon,
-                                }}
-                              >
-                                {SEAT_OPTIONS.map((n) => (
-                                  <MenuItem key={n} value={String(n)}>
-                                    {n}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                            )}
-                          />
-                        }
-                        error={errors?.max_seats?.message}
-                      />
-                    </Stack>
-
-                    <Typography
+                    <Box
                       sx={{
-                        fontSize: 12,
-                        color: "text.secondary",
-                        lineHeight: 1.45,
+                        p: 1.75,
+                        borderRadius: 1,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        backgroundColor: "#fff",
                       }}
                     >
-                      No podrás crear mesas con menos de{" "}
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          color: "text.primary",
-                        }}
-                      >
-                        {Number(minSeats) || 1}
-                      </Typography>{" "}
-                      ni más de{" "}
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          color: "text.primary",
-                        }}
-                      >
-                        {Number(maxSeats) || 6}
-                      </Typography>{" "}
-                      asientos.
-                    </Typography>
-                  </Stack>
-                </Box>
+                      <Stack spacing={2}>
+                        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                          <FieldBlock
+                            label="Mínimo"
+                            input={
+                              <Controller
+                                name="min_seats"
+                                control={control}
+                                render={({ field }) => (
+                                  <TextField
+                                    select
+                                    fullWidth
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    SelectProps={{
+                                      IconComponent: KeyboardArrowDownIcon,
+                                    }}
+                                  >
+                                    {SEAT_OPTIONS.map((n) => (
+                                      <MenuItem key={n} value={String(n)}>
+                                        {n}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                )}
+                              />
+                            }
+                            error={errors?.min_seats?.message}
+                          />
 
+                          <FieldBlock
+                            label="Máximo"
+                            input={
+                              <Controller
+                                name="max_seats"
+                                control={control}
+                                render={({ field }) => (
+                                  <TextField
+                                    select
+                                    fullWidth
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    SelectProps={{
+                                      IconComponent: KeyboardArrowDownIcon,
+                                    }}
+                                  >
+                                    {SEAT_OPTIONS.map((n) => (
+                                      <MenuItem key={n} value={String(n)}>
+                                        {n}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                )}
+                              />
+                            }
+                            error={errors?.max_seats?.message}
+                          />
+                        </Stack>
+
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "text.secondary",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          No podrás crear mesas con menos de{" "}
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
+                          >
+                            {Number(minSeats) || 1}
+                          </Typography>{" "}
+                          ni más de{" "}
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: "text.primary",
+                            }}
+                          >
+                            {Number(maxSeats) || 6}
+                          </Typography>{" "}
+                          asientos.
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  </>
+                ) : null}
+
+                
                 <Stack
                   direction={{ xs: "column-reverse", sm: "row" }}
                   justifyContent="flex-end"

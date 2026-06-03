@@ -135,6 +135,14 @@ export default function BranchFloorPlanPage() {
   const [settingsPayload, setSettingsPayload] = useState(null);
   const settings = settingsPayload?.data || null;
 
+  const uiVisibility = settingsPayload?.ui?.ui_visibility || {};
+  const uiAttentionMode = settingsPayload?.ui?.attention_mode;
+
+  const isDirectAttentionMode =
+    uiAttentionMode === "direct" ||
+    settings?.attention_mode === "direct" ||
+    uiVisibility?.table_modules === false;
+
   const [zones, setZones] = useState([]);
   const [tables, setTables] = useState([]);
 
@@ -777,9 +785,10 @@ export default function BranchFloorPlanPage() {
           onEditSettings={openEditSettings}
           onManageQr={onManageQrClick}
           canManageQr={canManageQr}
+          isDirectAttentionMode={isDirectAttentionMode}
         />
 
-        <FloorPlanInstructionsCard />
+        <FloorPlanInstructionsCard isDirectAttentionMode={isDirectAttentionMode} />
 
         <FloorBranchSelectorCard
           branches={branches}
@@ -795,6 +804,7 @@ export default function BranchFloorPlanPage() {
           settings={settings}
           settingsSummary={settingsSummary}
           contextData={contextData}
+          isDirectAttentionMode={isDirectAttentionMode}
         />
 
         <FloorZoneTabs
@@ -808,6 +818,7 @@ export default function BranchFloorPlanPage() {
           zones={zonesForPanel}
           tablesByZone={tablesByZone}
           isZoneAssignmentEnabled={isZoneAssignmentEnabled}
+          isDirectAttentionMode={isDirectAttentionMode}
           onAssignWaiter={openAssignWaiter}
           onEditZone={openEditZone}
           onDeleteZone={onDeleteZone}
@@ -818,6 +829,7 @@ export default function BranchFloorPlanPage() {
           zoneFilter={zoneFilter}
           tables={paginatedItems}
           total={total}
+          isDirectAttentionMode={isDirectAttentionMode}
           page={page}
           totalPages={totalPages}
           startItem={startItem}
@@ -850,6 +862,7 @@ export default function BranchFloorPlanPage() {
         restaurantId={restaurantId}
         branchId={selectedBranchId}
         initialData={settingsModalMode === "edit" ? settingsPayload : null}
+        isDirectAttentionMode={isDirectAttentionMode}
         onClose={() => setSettingsModalOpen(false)}
         onSaved={onSettingsSaved}
         showToast={(message, type = "info") => {
