@@ -18,31 +18,42 @@ const DEFAULT_QR_TYPE_OPTIONS = [
   },
 ];
 
-function isSalonName(name) {
-  const n = String(name || "").trim().toLowerCase();
-  return n === "salón" || n === "salon" || n === "salón " || n === "salon ";
+function isSalonChannel(channel) {
+  const name = String(channel?.name || "").trim().toLowerCase();
+  const code = String(channel?.code || "").trim().toUpperCase();
+
+  return code === "SALON" || name === "salón" || name === "salon";
 }
 
-function getQrNoticeForCreate({ type, tableId, orderingMode }) {
+function getQrNoticeForCreate({
+  type,
+  tableId,
+  orderingMode,
+  isDirectAttentionMode,
+}) {
   const hasTable = !!tableId;
 
   if (type === "delivery") {
-    return "Menú por canal Delivery, solo lectura.";
+    return "Menú por canal Delivery, solo lectura y sin mesa.";
   }
 
   if (type === "web") {
-    return "Menú web, solo lectura. Selecciona el canal a visualizar.";
+    return "Menú web, solo lectura y sin mesa.";
+  }
+
+  if (type === "physical" && isDirectAttentionMode) {
+    return "Modo directo: este QR será físico general, sin mesa, para mostrar el menú del salón.";
   }
 
   if (!hasTable) {
-    return "Menú completo, solo lectura.";
+    return "Menú completo del salón, solo lectura y sin mesa.";
   }
 
   if (String(orderingMode) === "customer_assisted") {
-    return "Menú para pedidos del cliente (cliente asistido).";
+    return "QR físico ligado a mesa para pedidos del cliente.";
   }
 
-  return "Menú para pedidos del mesero (solo mesero).";
+  return "QR físico ligado a mesa para pedidos del mesero.";
 }
 
 function FieldBlock({ label, input, help }) {
@@ -92,6 +103,14 @@ export default function BranchQrCreateModal({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
+
+  const tableSelectorVisible = qrUiMeta?.table_selector_visible !== false;
+  const physicalTableQrAllowed = qrUiMeta?.physical_table_qr_allowed !== false;
+
+  const shouldDisableTableSelector =
+    isDirectAttentionMode || !tableSelectorVisible || !physicalTableQrAllowed;
+
   const qrTypeOptions = useMemo(() => {
     const options = Array.isArray(qrUiMeta?.qr_type_options)
       ? qrUiMeta.qr_type_options
@@ -124,8 +143,10 @@ export default function BranchQrCreateModal({
 
   const { control, watch, reset, setValue, handleSubmit } = useForm({
     defaultValues,
+    mode: "onChange",
   });
 
+  const nameValue = watch("name");
   const type = watch("type");
   const tableId = watch("table_id");
   const salesChannelId = watch("sales_channel_id");
@@ -142,7 +163,7 @@ export default function BranchQrCreateModal({
     }
 
     if (type === "delivery") {
-      return (channelOptionsRaw || []).filter((c) => !isSalonName(c.name));
+      return (channelOptionsRaw || []).filter((c) => !isSalonChannel(c));
     }
 
     if (type === "web") {
@@ -153,18 +174,35 @@ export default function BranchQrCreateModal({
   }, [type, channelOptionsRaw, salonChannel]);
 
   const filteredTableOptions = useMemo(() => {
-    if (type === "delivery" || type === "web") return [];
+    if (type !== "physical") return [];
+    if (shouldDisableTableSelector) return [];
     return tableOptions;
-  }, [type, tableOptions]);
+  }, [type, tableOptions, shouldDisableTableSelector]);
 
   const canSubmit = useMemo(() => {
-    const hasName = String(watch("name") || "").trim().length > 0;
+    const hasName = String(nameValue || "").trim().length > 0;
     const hasType = String(type || "").length > 0;
     const hasChannel = String(salesChannelId || "").length > 0;
     const typeAllowed = qrTypeOptions.some((item) => item.value === type);
 
-    return hasName && hasType && hasChannel && typeAllowed;
-  }, [watch, type, salesChannelId, qrTypeOptions]);
+    const invalidPhysicalTable =
+      type === "physical" && !!tableId && !physicalTableQrAllowed;
+
+    return (
+      hasName &&
+      hasType &&
+      hasChannel &&
+      typeAllowed &&
+      !invalidPhysicalTable
+    );
+  }, [
+    nameValue,
+    type,
+    salesChannelId,
+    tableId,
+    qrTypeOptions,
+    physicalTableQrAllowed,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -182,7 +220,7 @@ export default function BranchQrCreateModal({
       return;
     }
 
-    if (type === "delivery" || type === "web") {
+    if (type !== "physical" || shouldDisableTableSelector) {
       if (tableId) {
         setValue("table_id", "");
       }
@@ -205,7 +243,7 @@ export default function BranchQrCreateModal({
       if (
         currentChannelId &&
         salonChannel?.id &&
-        currentChannelId === salonChannel.id
+        currentChannelId === Number(salonChannel.id)
       ) {
         setValue("sales_channel_id", "");
         return;
@@ -235,6 +273,7 @@ export default function BranchQrCreateModal({
     qrTypeOptions,
     defaultType,
     setValue,
+    shouldDisableTableSelector,
   ]);
 
   return (
@@ -287,7 +326,7 @@ export default function BranchQrCreateModal({
                 color: "rgba(255,255,255,0.82)",
               }}
             >
-              Genera token, imagen PNG y URL pública para{" "}
+              Genera token, imagen SVG y URL pública para{" "}
               {selectedBranch?.name || "la sucursal seleccionada"}.
             </Typography>
           </Box>
@@ -382,7 +421,9 @@ export default function BranchQrCreateModal({
                       />
                     }
                     help={
-                      selectedTypeMeta?.description
+                      isDirectAttentionMode
+                        ? "Modo directo: solo aplica QR físico general, sin mesa."
+                        : selectedTypeMeta?.description
                         ? selectedTypeMeta.description
                         : type === "web" || type === "delivery"
                         ? `${type === "web" ? "Web" : "Delivery"}: se fuerza “General (sin mesa)”.`
@@ -443,7 +484,7 @@ export default function BranchQrCreateModal({
                             fullWidth
                             value={field.value ?? ""}
                             onChange={field.onChange}
-                            disabled={type !== "physical"}
+                            disabled={type !== "physical" || shouldDisableTableSelector}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
@@ -459,8 +500,12 @@ export default function BranchQrCreateModal({
                       />
                     }
                     help={
-                      type !== "physical"
+                      isDirectAttentionMode
+                        ? "Modo directo: no se permite ligar QR físico a una mesa."
+                        : type !== "physical"
                         ? "Solo los QRs físicos pueden ligarse a una mesa."
+                        : !physicalTableQrAllowed
+                        ? "No está permitido crear QRs físicos ligados a mesa."
                         : "Opcional. Si no eliges mesa, será un QR general."
                     }
                   />
@@ -498,6 +543,7 @@ export default function BranchQrCreateModal({
                       type,
                       tableId,
                       orderingMode: settings?.ordering_mode,
+                      isDirectAttentionMode,
                     })}
                   </Typography>
                 </Box>

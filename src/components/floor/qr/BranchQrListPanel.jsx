@@ -1,8 +1,6 @@
 import {
-  Box, Button, Card, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Tooltip, Typography, useMediaQuery,
+  Box, Card, FormControlLabel, IconButton, Paper, Stack, Switch, Tooltip, Typography,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import OpenInNewOutlinedIcon from "@mui/icons-material/OpenInNewOutlined";
@@ -10,11 +8,45 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import PaginationFooter from "../../common/PaginationFooter";
 
-function getQrPlanBlockReason(qr) {
-  return (
-    qr?.blocked_reason ||
-    "Disponible desde Plan Gestión"
-  );
+function getQrBlockReason(qr) {
+  if (qr?.blocked_reason) {
+    return qr.blocked_reason;
+  }
+
+  if (qr?.blocked_by_attention_mode) {
+    return "El modo de atención directa no permite activar QR físico ligado a mesa.";
+  }
+
+  if (qr?.blocked_by_plan) {
+    return "Tu plan actual no permite activar este QR.";
+  }
+
+  return "";
+}
+
+function getQrBlockTitle(qr) {
+  if (qr?.blocked_by_attention_mode) {
+    return "QR bloqueado por modo de atención";
+  }
+
+  if (qr?.blocked_by_plan) {
+    return "QR bloqueado por plan";
+  }
+
+  return "";
+}
+
+function shouldDisableQrToggle({ qr, busy, canManageQr }) {
+  if (busy) return true;
+  if (!canManageQr) return true;
+
+  const nextActive = !qr?.is_active;
+
+  if (!nextActive) {
+    return false;
+  }
+
+  return !!qr?.blocked_by_plan || !!qr?.blocked_by_attention_mode;
 }
 
 export default function BranchQrListPanel({
@@ -38,9 +70,6 @@ export default function BranchQrListPanel({
   manageQrBlockReason = null,
   selectedBranchId = "",
 }) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   return (
     <Paper
       sx={{
@@ -137,352 +166,240 @@ export default function BranchQrListPanel({
               fontSize: 14,
             }}
           >
-            Crea tu primer QR físico, web o delivery para esta sucursal.
+            Crea tu primer QR disponible para esta sucursal según su configuración operativa y plan actual.
           </Typography>
         </Box>
       ) : (
         <>
-          {isMobile ? (
-            <Stack spacing={1.5} sx={{ p: 2 }}>
-              {items.map((qr) => {
-                const channelName = qr?.sales_channel?.name || "—";
-                const tableName = qr?.table?.name || "General";
-                const blockedByPlan = !!qr?.blocked_by_plan;
-                const planBlockReason = getQrPlanBlockReason(qr);
-                const toggleDisabled = busy || !canManageQr || blockedByPlan;
 
-                return (
-                  <Card
-                    key={qr.id}
-                    sx={{
-                      borderRadius: 1,
-                      boxShadow: "none",
-                      border: "1px solid",
-                      borderColor: blockedByPlan ? "#F3D48B" : "divider",
-                      backgroundColor: "#fff",
-                      minHeight: 260,
-                    }}
-                  >
-                    <Box sx={{ p: 2 }}>
-                      <Stack spacing={1.5}>
-                        <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="flex-start"
-                          spacing={1}
-                        >
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography
-                              sx={{
-                                fontSize: 15,
-                                fontWeight: 800,
-                                color: "text.primary",
-                                lineHeight: 1.3,
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              {qr.name}
-                            </Typography>
+          <Box
+            sx={{
+              p: 2,
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+                xl: "repeat(3, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            {items.map((qr) => {
+              const channelName = qr?.sales_channel?.name || "—";
+              const tableName = qr?.table?.name || "General";
+              const blockedByPlan = !!qr?.blocked_by_plan;
+              const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
+              const isBlocked = blockedByPlan || blockedByAttentionMode;
+              const blockReason = getQrBlockReason(qr);
+              const blockTitle = getQrBlockTitle(qr);
+              const toggleDisabled = shouldDisableQrToggle({ qr, busy, canManageQr });
 
-                            <Typography
-                              sx={{
-                                mt: 0.5,
-                                fontSize: 13,
-                                color: "text.secondary",
-                              }}
-                            >
-                              {typeLabelMap[qr.type] || qr.type}
-                            </Typography>
-                          </Box>
+              return (
+                <Card
+                  key={qr.id}
+                  sx={{
+                    borderRadius: 1,
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: isBlocked ? "#F3D48B" : "divider",
+                    backgroundColor: "#fff",
+                    minHeight: 360,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box sx={{ p: 2 }}>
+                    <Stack spacing={1.75}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                        spacing={1}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            sx={{
+                              fontSize: 16,
+                              fontWeight: 900,
+                              color: "text.primary",
+                              lineHeight: 1.3,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {qr.name}
+                          </Typography>
 
                           <Typography
                             sx={{
-                              px: 1.25,
-                              py: 0.5,
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              bgcolor: qr.is_active ? "#EAF8EE" : "#FFF0EE",
-                              color: qr.is_active ? "#0A7A2F" : "#A10000",
-                              border: "1px solid",
-                              borderColor: qr.is_active ? "#B8E2C3" : "#F6C2B8",
+                              mt: 0.5,
+                              fontSize: 13,
+                              color: "text.secondary",
+                              fontWeight: 700,
                             }}
                           >
-                            {qr.is_active ? "Activo" : "Inactivo"}
+                            {typeLabelMap[qr.type] || qr.type}
                           </Typography>
-                        </Stack>
+                        </Box>
 
+                        <Typography
+                          sx={{
+                            px: 1.25,
+                            py: 0.5,
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            bgcolor: qr.is_active ? "#EAF8EE" : "#FFF0EE",
+                            color: qr.is_active ? "#0A7A2F" : "#A10000",
+                            border: "1px solid",
+                            borderColor: qr.is_active ? "#B8E2C3" : "#F6C2B8",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {qr.is_active ? "Activo" : "Inactivo"}
+                        </Typography>
+                      </Stack>
+
+                      <Box
+                        sx={{
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderRadius: 1,
+                          backgroundColor: "background.default",
+                          p: 2,
+                          display: "grid",
+                          placeItems: "center",
+                          minHeight: 190,
+                        }}
+                      >
+                        {qr.qr_image_url ? (
+                          <Box
+                            component="img"
+                            src={qr.qr_image_url}
+                            alt={qr.name || "QR"}
+                            sx={{
+                              width: 170,
+                              height: 170,
+                              objectFit: "contain",
+                              display: "block",
+                            }}
+                          />
+                        ) : (
+                          <Typography
+                            sx={{
+                              fontSize: 13,
+                              color: "text.secondary",
+                              fontWeight: 700,
+                              textAlign: "center",
+                            }}
+                          >
+                            Imagen QR no disponible
+                          </Typography>
+                        )}
+                      </Box>
+
+                      <Stack spacing={1}>
                         <InfoRow label="Canal" value={channelName} />
                         <InfoRow label="Mesa" value={tableName} />
                         <InfoRow label="URL" value={qr.public_url} long />
-
-                        <Tooltip
-                          title={
-                            blockedByPlan
-                              ? planBlockReason
-                              : !canManageQr
-                              ? manageQrBlockReason || "QR desactivado para esta sucursal."
-                              : ""
-                          }
-                        >
-                          <Box sx={{ width: "fit-content" }}>
-                            <FormControlLabel
-                              sx={{ m: 0 }}
-                              control={
-                                <Switch
-                                  checked={!!qr.is_active}
-                                  onChange={() => onToggleActive(qr)}
-                                  disabled={toggleDisabled}
-                                  color="primary"
-                                />
-                              }
-                              label={
-                                <Typography
-                                  sx={{
-                                    fontSize: 14,
-                                    fontWeight: 700,
-                                    color: "text.primary",
-                                  }}
-                                >
-                                  {qr.is_active ? "Activo" : "Inactivo"}
-                                </Typography>
-                              }
-                            />
-                          </Box>
-                        </Tooltip>
-
-                        {!canManageQr ? (
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              color: "#8A5A00",
-                              fontWeight: 800,
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            {manageQrBlockReason ||
-                              "QR desactivado para esta sucursal."}
-                          </Typography>
-                        ) : null}
-
-                        {blockedByPlan ? (
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              color: "#8A5A00",
-                              fontWeight: 800,
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            {planBlockReason}
-                          </Typography>
-                        ) : null}
-
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
-                          <Tooltip title="Copiar URL">
-                            <IconButton
-                              onClick={() => onCopy(qr.public_url)}
-                              sx={iconNeutralSx}
-                            >
-                              <ContentCopyOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          <Tooltip title="Abrir">
-                            <IconButton
-                              onClick={() => onOpen(qr.public_url)}
-                              sx={iconPrimarySx}
-                            >
-                              <OpenInNewOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-
-                          <Tooltip title="Eliminar">
-                            <IconButton
-                              onClick={() => onDelete(qr)}
-                              disabled={busy}
-                              sx={iconDeleteSx}
-                            >
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
                       </Stack>
-                    </Box>
-                  </Card>
-                );
-              })}
-            </Stack>
-          ) : (
-            <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-              <Table sx={{ minWidth: 1100 }}>
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      "& th": {
-                        backgroundColor: "primary.main",
-                        color: "#fff",
-                        fontWeight: 800,
-                        fontSize: 13,
-                        borderBottom: "none",
-                        whiteSpace: "nowrap",
-                      },
-                    }}
-                  >
-                    <TableCell>Nombre</TableCell>
-                    <TableCell>Tipo</TableCell>
-                    <TableCell>Canal</TableCell>
-                    <TableCell>Mesa</TableCell>
-                    <TableCell>URL</TableCell>
-                    <TableCell align="center">Estado</TableCell>
-                    <TableCell align="right">Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
 
-                <TableBody>
-                  {items.map((qr) => {
-                    const channelName = qr?.sales_channel?.name || "—";
-                    const tableName = qr?.table?.name || "General";
-                    const blockedByPlan = !!qr?.blocked_by_plan;
-                    const planBlockReason = getQrPlanBlockReason(qr);
-                    const toggleDisabled = busy || !canManageQr || blockedByPlan;
-
-                    return (
-                      <TableRow
-                        key={qr.id}
-                        hover
-                        sx={{
-                          "& td": {
-                            borderBottom: "1px solid",
-                            borderColor: "divider",
-                            fontSize: 14,
-                            color: "text.primary",
-                            whiteSpace: "nowrap",
-                          },
-                          ...(blockedByPlan
-                            ? {
-                                backgroundColor: "#FFFDF5",
-                              }
-                            : {}),
-                        }}
+                      <Tooltip
+                        title={
+                          toggleDisabled
+                            ? blockReason ||
+                              manageQrBlockReason ||
+                              "QR desactivado para esta sucursal."
+                            : ""
+                        }
                       >
-                        <TableCell>
-                          <Stack spacing={0.5}>
-                            <Typography sx={{ fontWeight: 800 }}>
-                              {qr.name}
-                            </Typography>
-
-                            {blockedByPlan ? (
+                        <Box sx={{ width: "fit-content" }}>
+                          <FormControlLabel
+                            sx={{ m: 0 }}
+                            control={
+                              <Switch
+                                checked={!!qr.is_active}
+                                onChange={() => onToggleActive(qr)}
+                                disabled={toggleDisabled}
+                                color="primary"
+                              />
+                            }
+                            label={
                               <Typography
                                 sx={{
-                                  fontSize: 12,
-                                  color: "#8A5A00",
-                                  fontWeight: 800,
-                                  lineHeight: 1.35,
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  color: "text.primary",
                                 }}
                               >
-                                {planBlockReason}
+                                {qr.is_active ? "Activo" : "Inactivo"}
                               </Typography>
-                            ) : null}
-                          </Stack>
-                        </TableCell>
+                            }
+                          />
+                        </Box>
+                      </Tooltip>
 
-                        <TableCell>{typeLabelMap[qr.type] || qr.type}</TableCell>
-                        <TableCell>{channelName}</TableCell>
-                        <TableCell>{tableName}</TableCell>
-
-                        <TableCell
+                      {!canManageQr ? (
+                        <Typography
                           sx={{
-                            whiteSpace: "normal !important",
-                            minWidth: 280,
-                            wordBreak: "break-all",
+                            fontSize: 12,
+                            color: "#8A5A00",
+                            fontWeight: 800,
+                            lineHeight: 1.45,
                           }}
                         >
-                          {qr.public_url}
-                        </TableCell>
+                          {manageQrBlockReason || "QR desactivado para esta sucursal."}
+                        </Typography>
+                      ) : null}
 
-                        <TableCell align="center">
-                          <Tooltip
-                            title={
-                              blockedByPlan
-                                ? planBlockReason
-                                : !canManageQr
-                                ? manageQrBlockReason || "QR desactivado para esta sucursal."
-                                : ""
-                            }
+                      {isBlocked ? (
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "#8A5A00",
+                            fontWeight: 800,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {blockTitle ? `${blockTitle}: ` : ""}
+                          {blockReason || "Este QR no puede activarse con la configuración actual."}
+                        </Typography>
+                      ) : null}
+
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Tooltip title="Copiar URL">
+                          <IconButton
+                            onClick={() => onCopy(qr.public_url)}
+                            sx={iconNeutralSx}
                           >
-                            <Box sx={{ display: "inline-flex" }}>
-                              <FormControlLabel
-                                sx={{ m: 0 }}
-                                control={
-                                  <Switch
-                                    checked={!!qr.is_active}
-                                    onChange={() => onToggleActive(qr)}
-                                    disabled={toggleDisabled}
-                                    color="primary"
-                                  />
-                                }
-                                label={
-                                  <Typography
-                                    sx={{
-                                      fontSize: 14,
-                                      fontWeight: 700,
-                                      color: "text.primary",
-                                    }}
-                                  >
-                                    {qr.is_active ? "Activo" : "Inactivo"}
-                                  </Typography>
-                                }
-                              />
-                            </Box>
-                          </Tooltip>
-                        </TableCell>
+                            <ContentCopyOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
 
-                        <TableCell align="right">
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            justifyContent="flex-end"
-                            alignItems="center"
-                            flexWrap="nowrap"
+                        <Tooltip title="Abrir">
+                          <IconButton
+                            onClick={() => onOpen(qr.public_url)}
+                            sx={iconPrimarySx}
                           >
-                            <Tooltip title="Copiar URL">
-                              <IconButton
-                                onClick={() => onCopy(qr.public_url)}
-                                sx={iconNeutralSx}
-                              >
-                                <ContentCopyOutlinedIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+                            <OpenInNewOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
 
-                            <Tooltip title="Abrir">
-                              <IconButton
-                                onClick={() => onOpen(qr.public_url)}
-                                sx={iconPrimarySx}
-                              >
-                                <OpenInNewOutlinedIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-
-                            <Tooltip title="Eliminar">
-                              <IconButton
-                                onClick={() => onDelete(qr)}
-                                disabled={busy}
-                                sx={iconDeleteSx}
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-
+                        <Tooltip title="Eliminar">
+                          <IconButton
+                            onClick={() => onDelete(qr)}
+                            disabled={busy}
+                            sx={iconDeleteSx}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                </Card>
+              );
+            })}
+          </Box>
+          
           <PaginationFooter
             page={page}
             totalPages={totalPages}

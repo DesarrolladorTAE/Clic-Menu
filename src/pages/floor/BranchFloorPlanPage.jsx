@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import PageContainer from "../../components/common/PageContainer";
 import AppAlert from "../../components/common/AppAlert";
@@ -125,7 +125,12 @@ function waiterLabel(w) {
 
 export default function BranchFloorPlanPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { restaurantId } = useParams();
+
+  const branchIdFromState = location.state?.branchId
+    ? String(location.state.branchId)
+    : "";
 
   const [loading, setLoading] = useState(true);
 
@@ -430,8 +435,21 @@ export default function BranchFloorPlanPage() {
       loadedBranches = Array.isArray(loadedBranches) ? loadedBranches : [];
       setBranches(loadedBranches);
 
-      setSelectedBranchId("");
-      clearBranchData();
+      if (branchIdFromState) {
+        const exists = loadedBranches.some(
+          (b) => String(b.id) === String(branchIdFromState)
+        );
+
+        if (exists) {
+          setSelectedBranchId(branchIdFromState);
+        } else {
+          setSelectedBranchId("");
+          clearBranchData();
+        }
+      } else {
+        setSelectedBranchId("");
+        clearBranchData();
+      }
     } catch (e) {
       showAlert({
         severity: "error",
@@ -448,7 +466,7 @@ export default function BranchFloorPlanPage() {
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restaurantId]);
+  }, [restaurantId, branchIdFromState]);
 
   useEffect(() => {
     if (!selectedBranchId) {
@@ -651,6 +669,7 @@ export default function BranchFloorPlanPage() {
     navigate(`/owner/restaurants/${restaurantId}/operation/tables/qr-codes`, {
       state: {
         branchId: selectedBranchId,
+        branchName: selectedBranch?.name || "",
       },
     });
   };

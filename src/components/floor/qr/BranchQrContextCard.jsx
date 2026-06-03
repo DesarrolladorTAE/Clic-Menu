@@ -7,7 +7,46 @@ import SettingsSuggestOutlinedIcon from "@mui/icons-material/SettingsSuggestOutl
 export default function BranchQrContextCard({
   selectedBranch,
   contextData,
+  qrUiMeta = null,
 }) {
+  const isDirectAttentionMode =
+    contextData?.isDirectAttentionMode || qrUiMeta?.attention_mode === "direct";
+
+  const readonlyByChannelAllowed =
+    contextData?.qrReadonlyByChannelAllowed ||
+    !!qrUiMeta?.qr_readonly_by_channel_allowed;
+
+  const readonlyByChannelBlockedReason =
+    contextData?.qrReadonlyByChannelBlockedReason ||
+    qrUiMeta?.qr_readonly_by_channel_blocked_reason ||
+    "Disponible desde Plan Gestión.";
+
+  const tableContext = isDirectAttentionMode
+    ? {
+        title: "QR físico general",
+        value: "Sin mesa vinculada",
+        chipLabel: "Modo directo",
+        chipColor: "warning",
+      }
+    : {
+        title: "Mesas disponibles",
+        value: `${contextData?.totalTables || 0} mesa(s)`,
+        chipLabel: "Sucursal",
+        chipColor: "success",
+      };
+
+  const channelContext = readonlyByChannelAllowed
+    ? {
+        value: `${contextData?.totalChannels || 0} canal(es)`,
+        chipLabel: "Web/Delivery permitido",
+        chipColor: "success",
+      }
+    : {
+        value: `${contextData?.totalChannels || 0} canal(es)`,
+        chipLabel: "Web/Delivery bloqueado",
+        chipColor: "warning",
+      };
+
   return (
     <Paper
       sx={{
@@ -46,18 +85,18 @@ export default function BranchQrContextCard({
 
           <ContextMiniCard
             icon={<TableRestaurantOutlinedIcon fontSize="small" />}
-            title="Mesas disponibles"
-            value={`${contextData?.totalTables || 0} mesa(s)`}
-            chipLabel="Sucursal"
-            chipColor="success"
+            title={tableContext.title}
+            value={tableContext.value}
+            chipLabel={tableContext.chipLabel}
+            chipColor={tableContext.chipColor}
           />
 
           <ContextMiniCard
             icon={<CampaignOutlinedIcon fontSize="small" />}
             title="Canales"
-            value={`${contextData?.totalChannels || 0} canal(es)`}
-            chipLabel="Configurados"
-            chipColor={contextData?.totalChannels ? "success" : "default"}
+            value={channelContext.value}
+            chipLabel={channelContext.chipLabel}
+            chipColor={channelContext.chipColor}
           />
 
           <ContextMiniCard
@@ -77,9 +116,25 @@ export default function BranchQrContextCard({
           }}
         >
           {selectedBranch?.name
-            ? `La configuración y administración de códigos QR se aplicará únicamente a ${selectedBranch.name}.`
+            ? isDirectAttentionMode
+              ? `La administración de QRs se aplicará únicamente a ${selectedBranch.name}. En modo directo solo se permite QR físico general, sin mesa vinculada.`
+              : `La configuración y administración de códigos QR se aplicará únicamente a ${selectedBranch.name}.`
             : "Selecciona una sucursal para continuar."}
         </Typography>
+
+        {!readonlyByChannelAllowed ? (
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: "#8A5A00",
+              lineHeight: 1.5,
+              fontWeight: 700,
+            }}
+          >
+            Web y Delivery no están disponibles para este plan.{" "}
+            {readonlyByChannelBlockedReason}
+          </Typography>
+        ) : null}
       </Stack>
     </Paper>
   );

@@ -30,9 +30,11 @@ const TYPE_LABEL = {
   delivery: "Delivery",
 };
 
-function isSalonName(name) {
-  const n = String(name || "").trim().toLowerCase();
-  return n === "salón" || n === "salon" || n === "salón " || n === "salon ";
+function isSalonChannel(channel) {
+  const name = String(channel?.name || "").trim().toLowerCase();
+  const code = String(channel?.code || "").trim().toUpperCase();
+
+  return code === "SALON" || name === "salón" || name === "salon";
 }
 
 function unwrapQrCodesPayload(res) {
@@ -52,6 +54,27 @@ function unwrapQrCodesPayload(res) {
 function unwrapMutationPayload(res) {
   if (!res || typeof res !== "object") return res;
   return res?.data && typeof res.data === "object" ? res.data : res;
+}
+
+function resolveBranchDisplayName({ selectedBranchId, selectedBranchName, settingsRes }) {
+  const fromState = String(selectedBranchName || "").trim();
+
+  if (fromState && fromState !== String(selectedBranchId)) {
+    return fromState;
+  }
+
+  const fromSetting =
+    settingsRes?.data?.branch?.name ||
+    settingsRes?.branch?.name ||
+    settingsRes?.data?.branch_name ||
+    settingsRes?.branch_name ||
+    "";
+
+  if (String(fromSetting).trim()) {
+    return String(fromSetting).trim();
+  }
+
+  return selectedBranchId ? `Sucursal ${selectedBranchId}` : "";
 }
 
 export default function BranchQrCodesPage() {
@@ -105,11 +128,16 @@ export default function BranchQrCodesPage() {
 
   const selectedBranch = useMemo(() => {
     if (!selectedBranchId) return null;
+
     return {
       id: selectedBranchId,
-      name: selectedBranchName || `Sucursal ${selectedBranchId}`,
+      name: resolveBranchDisplayName({
+        selectedBranchId,
+        selectedBranchName,
+        settingsRes,
+      }),
     };
-  }, [selectedBranchId, selectedBranchName]);
+  }, [selectedBranchId, selectedBranchName, settingsRes]);
 
   const settings = settingsRes?.data ?? null;
   const uiMeta = settingsRes?.ui ?? null;
@@ -123,6 +151,18 @@ export default function BranchQrCodesPage() {
   }, [uiMeta, settings]);
 
   const manageQrBlockReason = uiMeta?.manage_qr_block_reason || null;
+
+  const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
+
+  const canCreateQr = !!selectedBranchId && !!settingsLoaded && !!settingsRes && !!settings && canManageQr;
+
+  const createQrBlockReason = !selectedBranchId
+    ? "No se recibió la sucursal. Regresa a la página de mesas y vuelve a entrar."
+    : !settingsLoaded || !settingsRes || !settings
+    ? "No puedes administrar QRs sin Configuración Operativa en esta sucursal."
+    : !canManageQr
+    ? manageQrBlockReason || "No tienes la opción de QR habilitada."
+    : null;
 
   const sortedItems = useMemo(() => {
     return [...(items || [])].sort((a, b) => {
@@ -243,14 +283,23 @@ export default function BranchQrCodesPage() {
         const sc = row?.salesChannel || row?.sales_channel || row;
         const id = row?.sales_channel_id ?? sc?.id ?? row?.id;
         const name = sc?.name ?? row?.name ?? null;
+        const code = sc?.code ?? row?.code ?? null;
+        const status = sc?.status ?? row?.status ?? null;
+
         if (!id || !name) return null;
-        return { id: Number(id), name: String(name) };
+
+        return {
+          id: Number(id),
+          name: String(name),
+          code: code ? String(code) : "",
+          status: status ? String(status) : "",
+        };
       })
       .filter(Boolean);
   }, [channels]);
 
   const salonChannel = useMemo(() => {
-    return channelOptionsRaw.find((c) => isSalonName(c.name)) || null;
+    return channelOptionsRaw.find((c) => isSalonChannel(c)) || null;
   }, [channelOptionsRaw]);
 
   const tableOptions = useMemo(() => {
@@ -284,7 +333,22 @@ export default function BranchQrCodesPage() {
       return;
     }
 
-    if (!qr?.is_active && qr?.blocked_by_plan) {
+    const nextActive = !qr?.is_active;
+    const blockedByPlan = !!qr?.blocked_by_plan;
+    const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
+
+    if (nextActive && blockedByAttentionMode) {
+      showAlert({
+        severity: "warning",
+        title: "QR bloqueado por modo de atención",
+        message:
+          qr?.blocked_reason ||
+          "El modo de atención directa no permite activar QR físico ligado a mesa.",
+      });
+      return;
+    }
+
+    if (nextActive && blockedByPlan) {
       showAlert({
         severity: "warning",
         title: "QR bloqueado por plan",
@@ -302,7 +366,7 @@ export default function BranchQrCodesPage() {
         selectedBranchId,
         qr.id,
         {
-          is_active: !qr.is_active,
+          is_active: nextActive,
         }
       );
 
@@ -315,7 +379,7 @@ export default function BranchQrCodesPage() {
       showAlert({
         severity: "success",
         title: "Hecho",
-        message: `QR ${!qr.is_active ? "activado" : "desactivado"} correctamente.`,
+        message: `QR ${nextActive ? "activado" : "desactivado"} correctamente.`,
       });
     } catch (e) {
       const msg =
@@ -331,7 +395,7 @@ export default function BranchQrCodesPage() {
   };
 
   const onDelete = async (qr) => {
-    const ok = window.confirm("¿Eliminar este QR? Esto también borra la imagen PNG.");
+    const ok = window.confirm("¿Eliminar este QR? Esto también borra la imagen SVG.");
     if (!ok) return;
 
     setBusy(true);
@@ -358,31 +422,11 @@ export default function BranchQrCodesPage() {
   };
 
   const openCreate = () => {
-    if (!selectedBranchId) {
+    if (!canCreateQr) {
       showAlert({
         severity: "warning",
         title: "Nota",
-        message:
-          "No se recibió la sucursal. Regresa a la página de mesas y vuelve a entrar.",
-      });
-      return;
-    }
-
-    if (!settingsLoaded || !settingsRes || !settings) {
-      showAlert({
-        severity: "warning",
-        title: "Nota",
-        message:
-          "No puedes administrar QRs sin Configuración Operativa en esta sucursal.",
-      });
-      return;
-    }
-
-    if (!canManageQr) {
-      showAlert({
-        severity: "warning",
-        title: "Nota",
-        message: manageQrBlockReason || "No tienes la opción de QR habilitada.",
+        message: createQrBlockReason || "No puedes crear QRs en este momento.",
       });
       return;
     }
@@ -417,7 +461,10 @@ export default function BranchQrCodesPage() {
       }
 
       if (payload.type === "physical") {
-        if (payload.table_id) {
+        if (isDirectAttentionMode) {
+          payload.table_id = null;
+          payload.intended_ordering_mode = null;
+        } else if (payload.table_id) {
           payload.intended_ordering_mode = String(
             settings?.ordering_mode || "waiter_only"
           );
@@ -487,6 +534,17 @@ export default function BranchQrCodesPage() {
       };
     }
 
+    if (isDirectAttentionMode) {
+      return {
+        tone: "info",
+        title: "Modo de atención directa",
+        body:
+          "• En este modo no se permite crear ni activar QR físico ligado a mesa.\n" +
+          "• Puedes usar QR físico general para mostrar el menú del salón.\n" +
+          "• Los QRs de mesa existentes pueden aparecer bloqueados y no podrán reactivarse mientras siga activo este modo.",
+      };
+    }
+
     if (notices.length > 0) {
       return {
         tone: "info",
@@ -504,6 +562,7 @@ export default function BranchQrCodesPage() {
     canManageQr,
     manageQrBlockReason,
     notices,
+    isDirectAttentionMode,
   ]);
 
   const contextData = useMemo(() => {
@@ -513,8 +572,22 @@ export default function BranchQrCodesPage() {
       totalChannels: channelOptionsRaw.length,
       enabledLabel: settings ? (canManageQr ? "Sí" : "No") : "Sin config",
       orderingMode: settings?.ordering_mode || "Sin definir",
+      attentionMode: qrUiMeta?.attention_mode || uiMeta?.attention_mode || "fixed",
+      isDirectAttentionMode,
+      qrReadonlyByChannelAllowed: !!qrUiMeta?.qr_readonly_by_channel_allowed,
+      qrReadonlyByChannelBlockedReason:
+        qrUiMeta?.qr_readonly_by_channel_blocked_reason || null,
     };
-  }, [items.length, tables.length, channelOptionsRaw.length, settings, canManageQr]);
+  }, [
+    items.length,
+    tables.length,
+    channelOptionsRaw.length,
+    settings,
+    canManageQr,
+    qrUiMeta,
+    uiMeta,
+    isDirectAttentionMode,
+  ]);
 
   if (loading) {
     return (
@@ -543,6 +616,9 @@ export default function BranchQrCodesPage() {
         <BranchQrHeader
           selectedBranch={selectedBranch}
           busy={busy}
+          canCreateQr={canCreateQr}
+          createQrBlockReason={createQrBlockReason}
+          qrUiMeta={qrUiMeta}
           onCreate={openCreate}
           onBack={() =>
             nav(`/owner/restaurants/${restaurantId}/operation/tables`, {
@@ -554,11 +630,12 @@ export default function BranchQrCodesPage() {
           }
         />
 
-        <BranchQrInstructionsCard />
+        <BranchQrInstructionsCard qrUiMeta={qrUiMeta} />
 
         <BranchQrContextCard
           selectedBranch={selectedBranch}
           contextData={contextData}
+          qrUiMeta={qrUiMeta}
         />
 
         {banner ? (

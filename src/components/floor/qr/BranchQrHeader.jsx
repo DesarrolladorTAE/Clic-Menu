@@ -1,14 +1,20 @@
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Button, Stack, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
 
 export default function BranchQrHeader({
   selectedBranch,
   busy = false,
+  canCreateQr = true,
+  createQrBlockReason = null,
   onCreate,
   onBack,
 }) {
+  const createDisabled = busy || !canCreateQr;
+  const createTooltip = createDisabled
+    ? createQrBlockReason || "No puedes crear QRs en este momento."
+    : "";
+
   return (
     <Stack
       direction={{ xs: "column", md: "row" }}
@@ -48,20 +54,25 @@ export default function BranchQrHeader({
         spacing={1.5}
         sx={{ width: { xs: "100%", md: "auto" } }}
       >
-        <Button
-          onClick={onCreate}
-          variant="contained"
-          startIcon={<AddIcon />}
-          disabled={busy}
-          sx={{
-            minWidth: { xs: "100%", sm: 180 },
-            height: 44,
-            borderRadius: 2,
-            fontWeight: 800,
-          }}
-        >
-          Crear QR
-        </Button>
+        <Tooltip title={createTooltip}>
+          <Box sx={{ width: { xs: "100%", sm: "auto" } }}>
+            <Button
+              onClick={onCreate}
+              variant="contained"
+              startIcon={<AddIcon />}
+              disabled={createDisabled}
+              fullWidth
+              sx={{
+                minWidth: { xs: "100%", sm: 180 },
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
+            >
+              Crear QR
+            </Button>
+          </Box>
+        </Tooltip>
 
         <Button
           onClick={onBack}
