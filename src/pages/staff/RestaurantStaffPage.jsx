@@ -15,6 +15,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import TuneIcon from "@mui/icons-material/Tune";
 
 import { getStaff, deleteStaff } from "../../services/staff/staff.service";
+import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 
 import StaffUpsertModal from "../../components/staff/StaffUpsertModal";
 import StaffAssignmentsModal from "../../components/staff/StaffAssignmentsModal";
@@ -38,6 +39,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [items, setItems] = useState([]);
+  const [attentionMode, setAttentionMode] = useState(null);
 
   // modales
   const [upsertOpen, setUpsertOpen] = useState(false);
@@ -63,9 +65,15 @@ export default function StaffPage() {
   const load = async () => {
     setErr("");
     setLoading(true);
+
     try {
-      const list = await getStaff(restaurantId);
+      const [list, settings] = await Promise.all([
+        getStaff(restaurantId),
+        getRestaurantSettings(restaurantId),
+      ]);
+
       setItems(list);
+      setAttentionMode(settings?.attention_mode ?? "fixed");
     } catch (e) {
       setErr(e?.response?.data?.message || "No se pudieron cargar los empleados");
     } finally {
@@ -543,6 +551,7 @@ export default function StaffPage() {
         onClose={() => setUpsertOpen(false)}
         restaurantId={restaurantId}
         editing={editing}
+        attentionMode={attentionMode}
         onSaved={async () => {
           setUpsertOpen(false);
           await load();
@@ -555,6 +564,7 @@ export default function StaffPage() {
         onClose={() => setAssignOpen(false)}
         restaurantId={restaurantId}
         user={assignUser}
+        attentionMode={attentionMode}
       />
     </Box>
   );

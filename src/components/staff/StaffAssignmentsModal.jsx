@@ -31,7 +31,13 @@ import PaginationFooter from "../../components/common/PaginationFooter";
 
 const PAGE_SIZE = 5;
 
-export default function StaffAssignmentsModal({ open, onClose, restaurantId, user }) {
+export default function StaffAssignmentsModal({
+  open,
+  onClose,
+  restaurantId,
+  user,
+  attentionMode = "fixed",
+}) {
   const userId = user?.id;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -47,6 +53,14 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
   const [items, setItems] = useState([]);
   const [branches, setBranches] = useState([]);
   const [rolesOp, setRolesOp] = useState([]);
+
+  const availableRolesOp = useMemo(() => {
+    if (attentionMode !== "direct") {
+      return rolesOp;
+    }
+
+    return rolesOp.filter((role) => role?.name !== "waiter");
+  }, [rolesOp, attentionMode]);
 
   const [editing, setEditing] = useState(null);
 
@@ -231,6 +245,9 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
 
   const bannerText = conflictText || msg;
 
+  const isWaiterAssignmentLocked = (assignment) =>
+    attentionMode === "direct" && assignment?.role?.name === "waiter";
+  
   return (
     <Dialog
       open={open}
@@ -402,7 +419,7 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
                                 sx={selectSx}
                               >
                                 <MenuItem value="">Selecciona</MenuItem>
-                                {rolesOp.map((r) => (
+                                {availableRolesOp.map((r) => (
                                   <MenuItem key={r.id} value={String(r.id)}>
                                     {r.description || r.name}
                                   </MenuItem>
@@ -619,13 +636,23 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
                             justifyContent="flex-end"
                             alignItems="center"
                           >
-                            <Tooltip title="Editar">
-                              <IconButton
-                                onClick={() => onEdit(a)}
-                                sx={iconEditSx}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
+
+                            <Tooltip
+                              title={
+                                isWaiterAssignmentLocked(a)
+                                  ? "En modo directo no se puede editar una asignación de mesero."
+                                  : "Editar"
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  onClick={() => onEdit(a)}
+                                  disabled={isWaiterAssignmentLocked(a)}
+                                  sx={iconEditSx}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
 
                             <Tooltip title="Eliminar">
@@ -707,13 +734,23 @@ export default function StaffAssignmentsModal({ open, onClose, restaurantId, use
                                 alignItems="center"
                                 flexWrap="nowrap"
                               >
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    onClick={() => onEdit(a)}
-                                    sx={iconEditSx}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
+
+                                <Tooltip
+                                  title={
+                                    isWaiterAssignmentLocked(a)
+                                      ? "En modo directo no se puede editar una asignación de mesero."
+                                      : "Editar"
+                                  }
+                                >
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onEdit(a)}
+                                      disabled={isWaiterAssignmentLocked(a)}
+                                      sx={iconEditSx}
+                                    >
+                                      <EditIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
 
                                 <Tooltip title="Eliminar">
@@ -822,6 +859,10 @@ const iconEditSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "#C9AA39",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
   },
 };
 

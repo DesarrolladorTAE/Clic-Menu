@@ -21,7 +21,14 @@ import SaveIcon from "@mui/icons-material/Save";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
-export default function StaffUpsertModal({ open, onClose, restaurantId, editing, onSaved }) {
+export default function StaffUpsertModal({
+  open,
+  onClose,
+  restaurantId,
+  editing,
+  attentionMode = "fixed",
+  onSaved,
+}) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -36,6 +43,14 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
   const [rolesOp, setRolesOp] = useState([]);
 
   const title = useMemo(() => (isEdit ? "Editar empleado" : "Crear empleado"), [isEdit]);
+
+  const availableRolesOp = useMemo(() => {
+    if (attentionMode !== "direct") {
+      return rolesOp;
+    }
+
+    return rolesOp.filter((role) => role?.name !== "waiter");
+  }, [rolesOp, attentionMode]);
 
   const {
     control,
@@ -621,7 +636,7 @@ export default function StaffUpsertModal({ open, onClose, restaurantId, editing,
                                       sx={selectSx}
                                     >
                                       <MenuItem value="">Selecciona</MenuItem>
-                                      {rolesOp.map((r) => (
+                                      {availableRolesOp.map((r) => (
                                         <MenuItem key={r.id} value={String(r.id)}>
                                           {r.description || r.name}
                                         </MenuItem>
