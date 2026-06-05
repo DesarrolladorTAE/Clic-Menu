@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
@@ -12,10 +12,16 @@ import PlansCarouselControls from "../../components/owner/PlansCarouselControls"
 import PlanCard from "../../components/owner/PlanCard";
 
 import { getPlans } from "../../services/owner/plan.service";
+
 import {
   getRestaurantSubscriptionStatus,
-  subscribeRestaurant,
 } from "../../services/restaurant/restaurant.service";
+
+import {
+  getPayPalConfig,
+} from "../../services/paypal/paypal.service";
+
+import PayPalCheckoutDialog from "../../components/paypal/PayPalCheckoutDialog";
 
 function chunkArray(arr, size) {
   const out = [];
@@ -35,6 +41,13 @@ export default function RestaurantPlans() {
   const [loading, setLoading] = useState(true);
   const [busyPlanId, setBusyPlanId] = useState(null);
   const [visibleGroupIndex, setVisibleGroupIndex] = useState(0);
+  const [confirmingPayPal, setConfirmingPayPal] = useState(false);
+
+  const [paypalConfig, setPaypalConfig] = useState(null);
+  const [paypalDialogOpen, setPaypalDialogOpen] = useState(false);
+  const [selectedPaypalPlan, setSelectedPaypalPlan] = useState(null);
+
+  const paypalCaptureStartedRef = useRef(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -79,9 +92,10 @@ export default function RestaurantPlans() {
   const load = async () => {
     setLoading(true);
     try {
-      const [plansRes, stRes] = await Promise.all([
+      const [plansRes, stRes, paypalCfg] = await Promise.all([
         getPlans(),
         getRestaurantSubscriptionStatus(restaurantId),
+        getPayPalConfig(),
       ]);
 
       const safePlans = Array.isArray(plansRes) ? plansRes : [];
@@ -89,6 +103,7 @@ export default function RestaurantPlans() {
 
       setPlans(selectablePlans);
       setStatus(stRes || null);
+      setPaypalConfig(paypalCfg || null);
     } catch (e) {
       showAlert({
         severity: "error",
@@ -104,6 +119,34 @@ export default function RestaurantPlans() {
   useEffect(() => {
     load();
   }, [restaurantId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    const paypalStatus = params.get("paypal");
+    const orderId = params.get("token");
+
+    if (paypalStatus === "success" && orderId) {
+      if (paypalCaptureStartedRef.current) return;
+
+      paypalCaptureStartedRef.current = true;
+      handlePayPalSuccess(orderId);
+    }
+
+    if (paypalStatus === "cancel") {
+      showAlert({
+        severity: "warning",
+        title: "Pago cancelado",
+        message: "El pago fue cancelado. No se activó ningún plan.",
+      });
+
+      nav(location.pathname, {
+        replace: true,
+      });
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (notice) {
@@ -126,6 +169,45 @@ export default function RestaurantPlans() {
     }
   }, [planGroups, visibleGroupIndex]);
 
+
+  const handlePayPalSuccess = async (orderId) => {
+    setConfirmingPayPal(true);
+    setLoading(false);
+
+    try {
+      await capturePayPalOrder(
+        restaurantId,
+        orderId
+      );
+
+      await load();
+
+      showAlert({
+        severity: "success",
+        title: "Pago confirmado",
+        message: "Tu suscripción fue activada correctamente.",
+      });
+
+      nav("/owner/restaurants-home", {
+        replace: true,
+      });
+
+    } catch (e) {
+
+      showAlert({
+        severity: "error",
+        title: "Error PayPal",
+        message:
+          e?.response?.data?.message ||
+          "No fue posible confirmar el pago.",
+      });
+
+    } finally {
+      setConfirmingPayPal(false);
+      setLoading(false);
+    }
+  };
+
   const handlePrevGroup = () => {
     setVisibleGroupIndex((prev) => Math.max(prev - 1, 0));
   };
@@ -136,49 +218,118 @@ export default function RestaurantPlans() {
     );
   };
 
-  const onSubscribe = async (planId) => {
-    setBusyPlanId(planId);
-
-    try {
-      await subscribeRestaurant(restaurantId, {
-        plan_id: planId,
-        provider: "manual",
-        months_paid: 1,
-        months_granted: 1,
-      });
-
-      await load();
-
-      const newStatus = await getRestaurantSubscriptionStatus(restaurantId);
-      if (newStatus?.is_operational) {
-        nav("/owner/restaurants-home", { replace: true });
-      }
-    } catch (e) {
-      const code = e?.response?.data?.code;
-
-      const fallbackMessages = {
-        SUBSCRIPTION_ALREADY_ACTIVE:
-          "Tu restaurante ya cuenta con una suscripción vigente. Podrás contratar otro plan cuando termine el periodo actual.",
-        DEMO_PLAN_NOT_SELECTABLE:
-          "El plan demo solo se asigna al primer restaurante y no puede volver a contratarse.",
-        PLAN_CHANGE_NOT_ALLOWED_UNTIL_EXPIRES:
-          "No puedes cambiar de plan hasta que termine tu suscripción actual.",
-      };
-
-      const msg =
-        e?.response?.data?.message ||
-        fallbackMessages[code] ||
-        "No se pudo contratar el plan.";
-
+  const onSubscribe = async (planId, months) => {
+    if (!paypalConfig?.client_id) {
       showAlert({
         severity: "error",
-        title: "Error",
-        message: msg,
+        title: "PayPal no disponible",
+        message: "No se pudo cargar la configuración de PayPal.",
+      });
+
+      return;
+    }
+
+    setSelectedPaypalPlan({
+      planId,
+      months,
+    });
+
+    setPaypalDialogOpen(true);
+  };
+
+  const handlePayPalDialogClose = () => {
+    if (confirmingPayPal) return;
+
+    setPaypalDialogOpen(false);
+    setSelectedPaypalPlan(null);
+    setBusyPlanId(null);
+  };
+
+  const handlePayPalModalSuccess = async () => {
+    setPaypalDialogOpen(false);
+    setConfirmingPayPal(true);
+
+    try {
+      await load();
+
+      showAlert({
+        severity: "success",
+        title: "Pago confirmado",
+        message: "Tu suscripción fue activada correctamente.",
+      });
+
+      nav("/owner/restaurants-home", {
+        replace: true,
       });
     } finally {
+      setConfirmingPayPal(false);
       setBusyPlanId(null);
+      setSelectedPaypalPlan(null);
     }
   };
+
+  const handlePayPalModalError = (error) => {
+    const code = error?.response?.data?.code;
+
+    const fallbackMessages = {
+      SUBSCRIPTION_ALREADY_ACTIVE:
+        "Tu restaurante ya cuenta con una suscripción vigente.",
+      DEMO_NOT_ALLOWED:
+        "El plan demo no puede comprarse.",
+      RESTAURANT_SUSPENDED:
+        "El restaurante está suspendido.",
+    };
+
+    showAlert({
+      severity: "error",
+      title: "Error PayPal",
+      message:
+        error?.response?.data?.message ||
+        fallbackMessages[code] ||
+        "No se pudo completar el pago con PayPal.",
+    });
+
+    setBusyPlanId(null);
+  };
+
+
+  if (confirmingPayPal) {
+    return (
+      <PageContainer>
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Stack spacing={2} alignItems="center" textAlign="center">
+            <CircularProgress color="primary" />
+
+            <Typography
+              sx={{
+                fontSize: 20,
+                fontWeight: 900,
+                color: "text.primary",
+              }}
+            >
+              Confirmando pago con PayPal
+            </Typography>
+
+            <Typography
+              sx={{
+                color: "text.secondary",
+                fontSize: 14,
+                maxWidth: 420,
+              }}
+            >
+              Estamos validando tu pago y activando tu suscripción. No cierres esta ventana.
+            </Typography>
+          </Stack>
+        </Box>
+      </PageContainer>
+    );
+  }
 
   if (loading) {
     return (
@@ -305,6 +456,17 @@ export default function RestaurantPlans() {
         />
         
       </Stack>
+
+      <PayPalCheckoutDialog
+        open={paypalDialogOpen}
+        onClose={handlePayPalDialogClose}
+        restaurantId={restaurantId}
+        planId={selectedPaypalPlan?.planId}
+        months={selectedPaypalPlan?.months}
+        paypalClientId={paypalConfig?.client_id}
+        onSuccess={handlePayPalModalSuccess}
+        onError={handlePayPalModalError}
+      />
 
       <AppAlert
         open={alertState.open}

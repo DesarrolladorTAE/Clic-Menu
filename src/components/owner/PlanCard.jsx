@@ -1,11 +1,7 @@
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
+import { useState } from "react";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 
 export default function PlanCard({
@@ -15,7 +11,30 @@ export default function PlanCard({
   busy = false,
   onSubscribe,
 }) {
+  const [selectedMonths, setSelectedMonths] = useState(1);
   const includes = Array.isArray(plan?.includes) ? plan.includes : [];
+
+  const monthOptions = [
+    {
+      value: 1,
+      label: "1 mes",
+      helper: "Pagas 1 mes",
+    },
+    {
+      value: 6,
+      label: "6 meses",
+      helper: "Pagas 5 y obtienes 6",
+    },
+    {
+      value: 12,
+      label: "12 meses",
+      helper: "Pagas 10 y obtienes 12",
+    },
+  ];
+
+  const selectedOption =
+    monthOptions.find((option) => option.value === selectedMonths) ||
+    monthOptions[0];
 
   return (
     <Card
@@ -147,8 +166,41 @@ export default function PlanCard({
             </Typography>
           </Stack>
 
+          <Box>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Periodo"
+              value={selectedMonths}
+              disabled={isDisabled || busy}
+              onChange={(event) => setSelectedMonths(Number(event.target.value))}
+              helperText={selectedOption.helper}
+              sx={{
+                "& .MuiInputBase-root": {
+                  borderRadius: 2,
+                  backgroundColor: isCurrent ? "rgba(255,255,255,0.12)" : "background.paper",
+                  color: isCurrent ? "#fff" : "text.primary",
+                },
+                "& .MuiInputLabel-root": {
+                  color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
+                },
+                "& .MuiFormHelperText-root": {
+                  color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
+                  fontWeight: 700,
+                },
+              }}
+            >
+              {monthOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+
           <Button
-            onClick={() => onSubscribe(plan.id)}
+            onClick={() => onSubscribe(plan.id, selectedMonths)}
             disabled={isDisabled}
             variant={isCurrent ? "contained" : "outlined"}
             sx={{
