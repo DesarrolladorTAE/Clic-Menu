@@ -147,7 +147,7 @@ export default function HomeDemoSection() {
                   lineHeight: 1.04,
                 }}
               >
-                Vive la experiencia durante 15 días
+                Vive la experiencia durante 7 días
               </Typography>
 
               <Stack

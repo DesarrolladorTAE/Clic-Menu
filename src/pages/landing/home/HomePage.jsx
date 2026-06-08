@@ -233,7 +233,7 @@ export default function HomePage() {
                   whiteSpace: "nowrap",
                 }}
               >
-                Probar gratis por 15 días
+                Probar gratis por 7 días
               </Button>
 
               <Button

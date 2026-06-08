@@ -32,7 +32,7 @@ export default function HomeBusinessTypesSection() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % businessTypes.length);
-    }, 5000);
+    }, 3000);
 
     return () => {
       window.clearInterval(intervalId);
