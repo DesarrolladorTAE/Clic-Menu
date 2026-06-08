@@ -98,8 +98,8 @@ export default function HomeDemoSection() {
                 >
                   <Box
                     component="img"
-                    src="/images/demo-qr.png"
-                    alt="QR demo de Clic Menu"
+                    src="/images/menu-qr-demo-restaurante-clic-menu.png"
+                    alt="Menú QR digital para restaurantes creado con Clic Menu"
                     sx={{
                       width: "100%",
                       height: "100%",

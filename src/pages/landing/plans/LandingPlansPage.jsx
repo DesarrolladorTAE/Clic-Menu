@@ -12,6 +12,7 @@ import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 import LandingMenu from "../../../components/landing/menu/LandingMenu";
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
+import SEO from "../../../components/seo/SEO";
 
 import {
   landingColors,
@@ -73,6 +74,52 @@ export default function LandingPlansPage() {
 
   if (loading) {
     return (
+      <>
+        <SEO
+          title="Planes Clic Menu | Software para Restaurantes a tu Medida"
+          description="Conoce los planes de Clic Menu y elige las herramientas que necesita tu restaurante: menú QR, ventas, inventarios, reportes y más."
+          keywords="planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio"
+          url="https://clicmenu.com.mx/planes"
+        />
+
+        <Box
+          component="main"
+          sx={{
+            minHeight: "100vh",
+            bgcolor: landingColors.bg,
+            overflowX: "hidden",
+          }}
+        >
+          <LandingMenu />
+
+          <Box
+            sx={{
+              minHeight: {
+                xs: "calc(100vh - 72px)",
+                md: "calc(100vh - 84px)",
+              },
+              display: "grid",
+              placeItems: "center",
+              px: 2,
+              bgcolor: landingColors.bg,
+            }}
+          >
+            <LoadingCard />
+          </Box>
+        </Box>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SEO
+        title="Planes Clic Menu | Software para Restaurantes a tu Medida"
+        description="Conoce los planes de Clic Menu y elige las herramientas que necesita tu restaurante: menú QR, ventas, inventarios, reportes y más."
+        keywords="planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio"
+        url="https://clicmenu.com.mx/planes"
+      />
+
       <Box
         component="main"
         sx={{
@@ -84,285 +131,257 @@ export default function LandingPlansPage() {
         <LandingMenu />
 
         <Box
+          component="section"
           sx={{
-            minHeight: {
-              xs: "calc(100vh - 72px)",
-              md: "calc(100vh - 84px)",
+            position: "relative",
+            overflow: "hidden",
+            bgcolor: landingColors.bg,
+            py: {
+              xs: 5,
+              sm: 6,
+              md: 7,
             },
-            display: "grid",
-            placeItems: "center",
-            px: 2,
+          }}
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: -140,
+              right: -150,
+              width: { xs: 280, md: 460 },
+              height: { xs: 280, md: 460 },
+              borderRadius: "50%",
+              bgcolor: "rgba(246, 199, 122, 0.38)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: -160,
+              left: -160,
+              width: { xs: 280, md: 430 },
+              height: { xs: 280, md: 430 },
+              borderRadius: "50%",
+              bgcolor: "rgba(207, 109, 78, 0.12)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <Container sx={{ position: "relative", zIndex: 1 }}>
+            <Stack
+              spacing={2.5}
+              alignItems="center"
+              sx={{
+                maxWidth: 860,
+                mx: "auto",
+                textAlign: "center",
+              }}
+            >
+              <Box
+                sx={{
+                  width: "fit-content",
+                  px: 2,
+                  py: 0.8,
+                  borderRadius: 999,
+                  border: `1px solid rgba(207, 109, 78, 0.24)`,
+                  bgcolor: "rgba(255, 241, 232, 0.78)",
+                  color: landingColors.terracotta,
+                  fontSize: 13,
+                  fontWeight: 900,
+                }}
+              >
+                Planes Clic Menu
+              </Box>
+
+              <Typography
+                component="h1"
+                sx={{
+                  ...landingTypography.landingTitleXL,
+                  maxWidth: 850,
+                  color: landingColors.title,
+                  fontSize: {
+                    xs: 42,
+                    sm: 54,
+                    md: 72,
+                  },
+                  lineHeight: 0.98,
+                }}
+              >
+                Elige cómo quieres operar tu restaurante
+              </Typography>
+
+              <Typography
+                sx={{
+                  ...landingTypography.landingTextLG,
+                  maxWidth: 720,
+                  color: landingColors.text,
+                }}
+              >
+                Tenemos opciones para empezar fácil, vender mejor y crecer con control.
+                Revisa cada plan y elige el que se adapta a tu forma de trabajar.
+              </Typography>
+            </Stack>
+          </Container>
+        </Box>
+
+        <Box
+          component="section"
+          sx={{
+            pt: {
+              xs: 2,
+              sm: 3,
+              md: 4,
+            },
+            pb: {
+              xs: 6,
+              sm: 7,
+              md: 9,
+            },
             bgcolor: landingColors.bg,
           }}
         >
-          <LoadingCard />
-        </Box>
-      </Box>
-    );
-  }
-
-  return (
-    <Box
-      component="main"
-      sx={{
-        minHeight: "100vh",
-        bgcolor: landingColors.bg,
-        overflowX: "hidden",
-      }}
-    >
-      <LandingMenu />
-
-      <Box
-        component="section"
-        sx={{
-          position: "relative",
-          overflow: "hidden",
-          bgcolor: landingColors.bg,
-          py: {
-            xs: 5,
-            sm: 6,
-            md: 7,
-          },
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            top: -140,
-            right: -150,
-            width: { xs: 280, md: 460 },
-            height: { xs: 280, md: 460 },
-            borderRadius: "50%",
-            bgcolor: "rgba(246, 199, 122, 0.38)",
-            pointerEvents: "none",
-          }}
-        />
-
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: -160,
-            left: -160,
-            width: { xs: 280, md: 430 },
-            height: { xs: 280, md: 430 },
-            borderRadius: "50%",
-            bgcolor: "rgba(207, 109, 78, 0.12)",
-            pointerEvents: "none",
-          }}
-        />
-
-        <Container sx={{ position: "relative", zIndex: 1 }}>
-          <Stack
-            spacing={2.5}
-            alignItems="center"
-            sx={{
-              maxWidth: 860,
-              mx: "auto",
-              textAlign: "center",
-            }}
-          >
-            <Box
-              sx={{
-                width: "fit-content",
-                px: 2,
-                py: 0.8,
-                borderRadius: 999,
-                border: `1px solid rgba(207, 109, 78, 0.24)`,
-                bgcolor: "rgba(255, 241, 232, 0.78)",
-                color: landingColors.terracotta,
-                fontSize: 13,
-                fontWeight: 900,
-              }}
-            >
-              Planes Clic Menu
-            </Box>
-
-            <Typography
-              component="h1"
-              sx={{
-                ...landingTypography.landingTitleXL,
-                maxWidth: 850,
-                color: landingColors.title,
-                fontSize: {
-                  xs: 42,
-                  sm: 54,
-                  md: 72,
-                },
-                lineHeight: 0.98,
-              }}
-            >
-              Elige cómo quieres operar tu restaurante
-            </Typography>
-
-            <Typography
-              sx={{
-                ...landingTypography.landingTextLG,
-                maxWidth: 720,
-                color: landingColors.text,
-              }}
-            >
-              Tenemos opciones para empezar fácil, vender mejor y crecer con control.
-              Revisa cada plan y elige el que se adapta a tu forma de trabajar.
-            </Typography>
-          </Stack>
-        </Container>
-      </Box>
-
-      <Box
-        component="section"
-        sx={{
-          pt: {
-            xs: 2,
-            sm: 3,
-            md: 4,
-          },
-          pb: {
-            xs: 6,
-            sm: 7,
-            md: 9,
-          },
-          bgcolor: landingColors.bg,
-        }}
-      >
-        <Container>
-          {plansError ? (
-            <ErrorCard message={plansError} />
-          ) : (
-            <>
-              
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    md: "repeat(3, minmax(0, 1fr))",
-                  },
-                  gap: {
-                    xs: 2.5,
-                    md: 3,
-                  },
-                  alignItems: "stretch",
-                }}
-              >
-                {orderedPlans.map((plan) => (
-                  <LandingPlanCard
-                    key={plan.id || plan.slug}
-                    plan={plan}
-                    recommended={plan.slug === recommendedSlug}
-                  />
-                ))}
-              </Box>
-
-              <Paper
-                sx={{
-                  mt: {
-                    xs: 4,
-                    md: 5,
-                  },
-                  p: {
-                    xs: 3,
-                    md: 4,
-                  },
-                  borderRadius: {
-                    xs: `${landingColors.radiusMd}px`,
-                    md: `${landingColors.radiusLg}px`,
-                  },
-                  border: `1px solid rgba(207, 109, 78, 0.18)`,
-                  bgcolor: landingColors.dark,
-                  color: landingColors.white,
-                  boxShadow: landingColors.shadow,
-                  overflow: "hidden",
-                  position: "relative",
-                }}
-              >
+          <Container>
+            {plansError ? (
+              <ErrorCard message={plansError} />
+            ) : (
+              <>
+                
                 <Box
                   sx={{
-                    position: "absolute",
-                    top: -80,
-                    right: -80,
-                    width: 220,
-                    height: 220,
-                    borderRadius: "50%",
-                    bgcolor: "rgba(255, 116, 31, 0.18)",
-                    pointerEvents: "none",
-                  }}
-                />
-
-                <Stack
-                  direction={{
-                    xs: "column",
-                    md: "row",
-                  }}
-                  spacing={3}
-                  alignItems={{
-                    xs: "flex-start",
-                    md: "center",
-                  }}
-                  justifyContent="space-between"
-                  sx={{
-                    position: "relative",
-                    zIndex: 1,
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      md: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: {
+                      xs: 2.5,
+                      md: 3,
+                    },
+                    alignItems: "stretch",
                   }}
                 >
-                  <Box>
-                    <Typography
-                      component="h2"
-                      sx={{
-                        ...landingTypography.landingTitleMD,
-                        color: landingColors.white,
-                      }}
-                    >
-                      ¿No sabes qué plan elegir?
-                    </Typography>
+                  {orderedPlans.map((plan) => (
+                    <LandingPlanCard
+                      key={plan.id || plan.slug}
+                      plan={plan}
+                      recommended={plan.slug === recommendedSlug}
+                    />
+                  ))}
+                </Box>
 
-                    <Typography
-                      sx={{
-                        ...landingTypography.landingText,
-                        mt: 1,
-                        maxWidth: 640,
-                        color: "rgba(255,255,255,0.72)",
-                      }}
-                    >
-                      Escríbenos y te ayudamos a identificar el plan adecuado
-                      según el tamaño y operación de tu restaurante.
-                    </Typography>
-                  </Box>
-
-                  <Button
-                    component="a"
-                    href="https://api.whatsapp.com/send/?phone=527442188925&text&type=phone_number&app_absent=0"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    startIcon={<WhatsAppIcon />}
+                <Paper
+                  sx={{
+                    mt: {
+                      xs: 4,
+                      md: 5,
+                    },
+                    p: {
+                      xs: 3,
+                      md: 4,
+                    },
+                    borderRadius: {
+                      xs: `${landingColors.radiusMd}px`,
+                      md: `${landingColors.radiusLg}px`,
+                    },
+                    border: `1px solid rgba(207, 109, 78, 0.18)`,
+                    bgcolor: landingColors.dark,
+                    color: landingColors.white,
+                    boxShadow: landingColors.shadow,
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  <Box
                     sx={{
-                      minWidth: {
-                        xs: "100%",
-                        sm: 250,
-                      },
-                      height: 48,
-                      borderRadius: 999,
-                      bgcolor: landingColors.orangeLine,
-                      color: landingColors.white,
-                      fontWeight: 900,
-                      textTransform: "none",
-                      boxShadow: "0 14px 28px rgba(255, 116, 31, 0.28)",
-                      "&:hover": {
-                        bgcolor: landingColors.terracotta,
-                        boxShadow: "0 18px 34px rgba(207, 109, 78, 0.34)",
-                      },
+                      position: "absolute",
+                      top: -80,
+                      right: -80,
+                      width: 220,
+                      height: 220,
+                      borderRadius: "50%",
+                      bgcolor: "rgba(255, 116, 31, 0.18)",
+                      pointerEvents: "none",
+                    }}
+                  />
+
+                  <Stack
+                    direction={{
+                      xs: "column",
+                      md: "row",
+                    }}
+                    spacing={3}
+                    alignItems={{
+                      xs: "flex-start",
+                      md: "center",
+                    }}
+                    justifyContent="space-between"
+                    sx={{
+                      position: "relative",
+                      zIndex: 1,
                     }}
                   >
-                    Hablar por WhatsApp
-                  </Button>
-                </Stack>
-              </Paper>
-            </>
-          )}
-        </Container>
-      </Box>
+                    <Box>
+                      <Typography
+                        component="h2"
+                        sx={{
+                          ...landingTypography.landingTitleMD,
+                          color: landingColors.white,
+                        }}
+                      >
+                        ¿No sabes qué plan elegir?
+                      </Typography>
 
-      <LandingFooter />
-    </Box>
+                      <Typography
+                        sx={{
+                          ...landingTypography.landingText,
+                          mt: 1,
+                          maxWidth: 640,
+                          color: "rgba(255,255,255,0.72)",
+                        }}
+                      >
+                        Escríbenos y te ayudamos a identificar el plan adecuado
+                        según el tamaño y operación de tu restaurante.
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      component="a"
+                      href="https://api.whatsapp.com/send/?phone=527442188925&text&type=phone_number&app_absent=0"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      startIcon={<WhatsAppIcon />}
+                      sx={{
+                        minWidth: {
+                          xs: "100%",
+                          sm: 250,
+                        },
+                        height: 48,
+                        borderRadius: 999,
+                        bgcolor: landingColors.orangeLine,
+                        color: landingColors.white,
+                        fontWeight: 900,
+                        textTransform: "none",
+                        boxShadow: "0 14px 28px rgba(255, 116, 31, 0.28)",
+                        "&:hover": {
+                          bgcolor: landingColors.terracotta,
+                          boxShadow: "0 18px 34px rgba(207, 109, 78, 0.34)",
+                        },
+                      }}
+                    >
+                      Hablar por WhatsApp
+                    </Button>
+                  </Stack>
+                </Paper>
+              </>
+            )}
+          </Container>
+        </Box>
+
+        <LandingFooter />
+      </Box>
+    </>
   );
 }
 

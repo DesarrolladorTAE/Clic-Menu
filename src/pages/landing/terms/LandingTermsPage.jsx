@@ -9,6 +9,7 @@ import VerifiedUserRoundedIcon from "@mui/icons-material/VerifiedUserRounded";
 
 import LandingMenu from "../../../components/landing/menu/LandingMenu";
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
+import SEO from "../../../components/seo/SEO";
 
 import {
   landingColors,
@@ -59,381 +60,401 @@ export default function LandingTermsPage() {
     }, []);
 
     if (loading) {
-        return (
-        <Box
+      return (
+        <>
+          <SEO
+            title="Términos y Condiciones | Clic Menu"
+            description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
+            keywords="terminos clic menu, condiciones servicio clic menu"
+            url="https://clicmenu.com.mx/terminos-y-condiciones"
+            robots="index, follow"
+          />
+
+          <Box
             component="main"
             sx={{
-            minHeight: "100vh",
-            bgcolor: landingColors.bg,
-            overflowX: "hidden",
+                minHeight: "100vh",
+                bgcolor: landingColors.bg,
+                overflowX: "hidden",
             }}
-        >
+          >
             <LandingMenu />
 
             <Box
-            sx={{
-                minHeight: {
-                xs: "calc(100vh - 72px)",
-                md: "calc(100vh - 84px)",
-                },
-                display: "grid",
-                placeItems: "center",
-                px: 2,
-                bgcolor: landingColors.bg,
-            }}
+              sx={{
+                  minHeight: {
+                  xs: "calc(100vh - 72px)",
+                  md: "calc(100vh - 84px)",
+                  },
+                  display: "grid",
+                  placeItems: "center",
+                  px: 2,
+                  bgcolor: landingColors.bg,
+              }}
             >
-            <LoadingCard />
+              <LoadingCard />
             </Box>
-        </Box>
-        );
+          </Box>
+        </>
+      );
     }
 
   return (
-    <Box
-      component="main"
-      sx={{
-        minHeight: "100vh",
-        bgcolor: landingColors.bg,
-        overflowX: "hidden",
-      }}
-    >
-      <LandingMenu />
+    <>
+      <SEO
+        title="Términos y Condiciones | Clic Menu"
+        description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
+        keywords="terminos clic menu, condiciones servicio clic menu"
+        url="https://clicmenu.com.mx/terminos-y-condiciones"
+        robots="index, follow"
+      />
 
       <Box
-        component="section"
+        component="main"
         sx={{
-          position: "relative",
-          overflow: "hidden",
-          bgcolor: landingColors.dark,
-          color: landingColors.white,
-          py: {
-            xs: 7,
-            sm: 8,
-            md: 10,
-          },
+          minHeight: "100vh",
+          bgcolor: landingColors.bg,
+          overflowX: "hidden",
         }}
       >
-        <Box
-          sx={{
-            position: "absolute",
-            top: -120,
-            right: -120,
-            width: {
-              xs: 260,
-              md: 420,
-            },
-            height: {
-              xs: 260,
-              md: 420,
-            },
-            borderRadius: "50%",
-            bgcolor: "rgba(246, 199, 122, 0.14)",
-            pointerEvents: "none",
-          }}
-        />
+        <LandingMenu />
 
         <Box
-          sx={{
-            position: "absolute",
-            bottom: -150,
-            left: -150,
-            width: {
-              xs: 280,
-              md: 460,
-            },
-            height: {
-              xs: 280,
-              md: 460,
-            },
-            borderRadius: "50%",
-            bgcolor: "rgba(207, 109, 78, 0.16)",
-            pointerEvents: "none",
-          }}
-        />
-
-        <Container
+          component="section"
           sx={{
             position: "relative",
-            zIndex: 1,
+            overflow: "hidden",
+            bgcolor: landingColors.dark,
+            color: landingColors.white,
+            py: {
+              xs: 7,
+              sm: 8,
+              md: 10,
+            },
           }}
         >
-          <Stack
-            spacing={2.5}
-            alignItems="center"
+          <Box
             sx={{
-              maxWidth: 820,
-              mx: "auto",
-              textAlign: "center",
+              position: "absolute",
+              top: -120,
+              right: -120,
+              width: {
+                xs: 260,
+                md: 420,
+              },
+              height: {
+                xs: 260,
+                md: 420,
+              },
+              borderRadius: "50%",
+              bgcolor: "rgba(246, 199, 122, 0.14)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: -150,
+              left: -150,
+              width: {
+                xs: 280,
+                md: 460,
+              },
+              height: {
+                xs: 280,
+                md: 460,
+              },
+              borderRadius: "50%",
+              bgcolor: "rgba(207, 109, 78, 0.16)",
+              pointerEvents: "none",
+            }}
+          />
+
+          <Container
+            sx={{
+              position: "relative",
+              zIndex: 1,
             }}
           >
-            <Box
-              sx={{
-                width: 62,
-                height: 62,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                bgcolor: landingColors.orangeLine,
-                color: landingColors.white,
-                boxShadow: "0 16px 32px rgba(255, 116, 31, 0.28)",
-              }}
-            >
-              <GavelRoundedIcon sx={{ fontSize: 32 }} />
-            </Box>
-
-            <Typography
-              sx={{
-                ...landingTypography.landingEyebrow,
-                color: landingColors.yellow,
-              }}
-            >
-              Documento legal
-            </Typography>
-
-            <Typography
-              component="h1"
-              sx={{
-                ...landingTypography.landingTitleXL,
-                color: landingColors.white,
-                maxWidth: 760,
-              }}
-            >
-              {terms?.title || "Términos y Condiciones"}
-            </Typography>
-
-            <Typography
-              sx={{
-                ...landingTypography.landingTextLG,
-                color: "rgba(255,255,255,0.74)",
-                maxWidth: 720,
-              }}
-            >
-              Consulta las condiciones de uso de Clic Menu. Esta página es
-              únicamente informativa.
-            </Typography>
-
             <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.5}
-              justifyContent="center"
-              useFlexGap
-              flexWrap="wrap"
-              sx={{ pt: 1 }}
-            >
-              <HeroBadge
-                icon={<ArticleRoundedIcon fontSize="small" />}
-                label={terms?.version ? `Versión ${terms.version}` : "Versión vigente"}
-              />
-
-              <HeroBadge
-                icon={<VerifiedUserRoundedIcon fontSize="small" />}
-                label="Uso de plataforma"
-              />
-            </Stack>
-          </Stack>
-        </Container>
-      </Box>
-
-      <Box
-        component="section"
-        sx={{
-          py: {
-            xs: 6,
-            sm: 7,
-            md: 9,
-          },
-          bgcolor: landingColors.bg,
-        }}
-      >
-        <Container>
-          {termsError ? (
-            <ErrorCard message={termsError} />
-          ) : (
-            <Paper
+              spacing={2.5}
+              alignItems="center"
               sx={{
-                position: "relative",
-                overflow: "hidden",
-                borderRadius: {
-                  xs: `${landingColors.radiusMd}px`,
-                  md: `${landingColors.radiusLg}px`,
-                },
-                border: `1px solid ${landingColors.border}`,
-                bgcolor: landingColors.white,
-                boxShadow: landingColors.shadow,
+                maxWidth: 820,
+                mx: "auto",
+                textAlign: "center",
               }}
             >
               <Box
                 sx={{
-                  height: 6,
-                  width: "100%",
-                  background: `linear-gradient(90deg, ${landingColors.orangeLine}, ${landingColors.yellow}, ${landingColors.terracotta})`,
+                  width: 62,
+                  height: 62,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  bgcolor: landingColors.orangeLine,
+                  color: landingColors.white,
+                  boxShadow: "0 16px 32px rgba(255, 116, 31, 0.28)",
                 }}
-              />
+              >
+                <GavelRoundedIcon sx={{ fontSize: 32 }} />
+              </Box>
 
-              <Box
+              <Typography
                 sx={{
-                  p: {
-                    xs: 2.5,
-                    sm: 4,
-                    md: 5,
+                  ...landingTypography.landingEyebrow,
+                  color: landingColors.yellow,
+                }}
+              >
+                Documento legal
+              </Typography>
+
+              <Typography
+                component="h1"
+                sx={{
+                  ...landingTypography.landingTitleXL,
+                  color: landingColors.white,
+                  maxWidth: 760,
+                }}
+              >
+                {terms?.title || "Términos y Condiciones"}
+              </Typography>
+
+              <Typography
+                sx={{
+                  ...landingTypography.landingTextLG,
+                  color: "rgba(255,255,255,0.74)",
+                  maxWidth: 720,
+                }}
+              >
+                Consulta las condiciones de uso de Clic Menu. Esta página es
+                únicamente informativa.
+              </Typography>
+
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                justifyContent="center"
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ pt: 1 }}
+              >
+                <HeroBadge
+                  icon={<ArticleRoundedIcon fontSize="small" />}
+                  label={terms?.version ? `Versión ${terms.version}` : "Versión vigente"}
+                />
+
+                <HeroBadge
+                  icon={<VerifiedUserRoundedIcon fontSize="small" />}
+                  label="Uso de plataforma"
+                />
+              </Stack>
+            </Stack>
+          </Container>
+        </Box>
+
+        <Box
+          component="section"
+          sx={{
+            py: {
+              xs: 6,
+              sm: 7,
+              md: 9,
+            },
+            bgcolor: landingColors.bg,
+          }}
+        >
+          <Container>
+            {termsError ? (
+              <ErrorCard message={termsError} />
+            ) : (
+              <Paper
+                sx={{
+                  position: "relative",
+                  overflow: "hidden",
+                  borderRadius: {
+                    xs: `${landingColors.radiusMd}px`,
+                    md: `${landingColors.radiusLg}px`,
                   },
-                  borderBottom: `1px solid ${landingColors.border}`,
+                  border: `1px solid ${landingColors.border}`,
                   bgcolor: landingColors.white,
+                  boxShadow: landingColors.shadow,
                 }}
               >
-                <Stack spacing={1.2}>
-                  <Typography
-                    component="h2"
-                    sx={{
-                      ...landingTypography.landingTitleMD,
-                      color: landingColors.title,
-                    }}
-                  >
-                    Revisión del documento
-                  </Typography>
+                <Box
+                  sx={{
+                    height: 6,
+                    width: "100%",
+                    background: `linear-gradient(90deg, ${landingColors.orangeLine}, ${landingColors.yellow}, ${landingColors.terracotta})`,
+                  }}
+                />
 
-                  <Typography
-                    sx={{
-                      ...landingTypography.landingText,
-                      maxWidth: 820,
-                      color: landingColors.muted,
-                    }}
-                  >
-                    Lee cuidadosamente la información. El contenido se muestra
-                    desde el documento legal vigente configurado para la
-                    plataforma.
-                  </Typography>
-                </Stack>
-              </Box>
+                <Box
+                  sx={{
+                    p: {
+                      xs: 2.5,
+                      sm: 4,
+                      md: 5,
+                    },
+                    borderBottom: `1px solid ${landingColors.border}`,
+                    bgcolor: landingColors.white,
+                  }}
+                >
+                  <Stack spacing={1.2}>
+                    <Typography
+                      component="h2"
+                      sx={{
+                        ...landingTypography.landingTitleMD,
+                        color: landingColors.title,
+                      }}
+                    >
+                      Revisión del documento
+                    </Typography>
 
-              <Box
-                sx={{
-                  p: {
-                    xs: 2.5,
-                    sm: 4,
-                    md: 5,
-                  },
-                }}
-              >
-                {Array.isArray(terms?.intro) && terms.intro.length > 0 ? (
-                  <Box
-                    sx={{
-                      mb: {
-                        xs: 4,
-                        md: 5,
-                      },
-                      p: {
-                        xs: 2,
-                        sm: 2.5,
-                        md: 3,
-                      },
-                      borderRadius: `${landingColors.radiusMd}px`,
-                      border: `1px solid rgba(207, 109, 78, 0.18)`,
-                      bgcolor: "#FFF1E8",
-                    }}
-                  >
-                    {terms.intro.map((paragraph, index) => (
-                      <Typography key={`intro-${index}`} sx={introParagraphSx}>
-                        {paragraph}
-                      </Typography>
-                    ))}
-                  </Box>
-                ) : null}
+                    <Typography
+                      sx={{
+                        ...landingTypography.landingText,
+                        maxWidth: 820,
+                        color: landingColors.muted,
+                      }}
+                    >
+                      Lee cuidadosamente la información. El contenido se muestra
+                      desde el documento legal vigente configurado para la
+                      plataforma.
+                    </Typography>
+                  </Stack>
+                </Box>
 
-                <Stack spacing={{ xs: 3, md: 3.5 }}>
-                  {Array.isArray(terms?.sections) &&
-                    terms.sections.map((section) => (
-                      <Box
-                        key={section.number}
-                        component="section"
-                        sx={sectionSx}
-                      >
-                        <Stack
-                          direction="row"
-                          spacing={1.5}
-                          alignItems="flex-start"
+                <Box
+                  sx={{
+                    p: {
+                      xs: 2.5,
+                      sm: 4,
+                      md: 5,
+                    },
+                  }}
+                >
+                  {Array.isArray(terms?.intro) && terms.intro.length > 0 ? (
+                    <Box
+                      sx={{
+                        mb: {
+                          xs: 4,
+                          md: 5,
+                        },
+                        p: {
+                          xs: 2,
+                          sm: 2.5,
+                          md: 3,
+                        },
+                        borderRadius: `${landingColors.radiusMd}px`,
+                        border: `1px solid rgba(207, 109, 78, 0.18)`,
+                        bgcolor: "#FFF1E8",
+                      }}
+                    >
+                      {terms.intro.map((paragraph, index) => (
+                        <Typography key={`intro-${index}`} sx={introParagraphSx}>
+                          {paragraph}
+                        </Typography>
+                      ))}
+                    </Box>
+                  ) : null}
+
+                  <Stack spacing={{ xs: 3, md: 3.5 }}>
+                    {Array.isArray(terms?.sections) &&
+                      terms.sections.map((section) => (
+                        <Box
+                          key={section.number}
+                          component="section"
+                          sx={sectionSx}
                         >
-                          <Box
-                            sx={{
-                              width: {
-                                xs: 34,
-                                sm: 40,
-                              },
-                              height: {
-                                xs: 34,
-                                sm: 40,
-                              },
-                              borderRadius: "50%",
-                              bgcolor: landingColors.orangeLine,
-                              color: landingColors.white,
-                              display: "grid",
-                              placeItems: "center",
-                              fontSize: {
-                                xs: 13,
-                                sm: 14,
-                              },
-                              fontWeight: 900,
-                              flexShrink: 0,
-                              mt: 0.2,
-                            }}
+                          <Stack
+                            direction="row"
+                            spacing={1.5}
+                            alignItems="flex-start"
                           >
-                            {section.number}
-                          </Box>
+                            <Box
+                              sx={{
+                                width: {
+                                  xs: 34,
+                                  sm: 40,
+                                },
+                                height: {
+                                  xs: 34,
+                                  sm: 40,
+                                },
+                                borderRadius: "50%",
+                                bgcolor: landingColors.orangeLine,
+                                color: landingColors.white,
+                                display: "grid",
+                                placeItems: "center",
+                                fontSize: {
+                                  xs: 13,
+                                  sm: 14,
+                                },
+                                fontWeight: 900,
+                                flexShrink: 0,
+                                mt: 0.2,
+                              }}
+                            >
+                              {section.number}
+                            </Box>
 
-                          <Box sx={{ minWidth: 0, flex: 1 }}>
-                            <Typography component="h3" sx={sectionTitleSx}>
-                              {section.title}
-                            </Typography>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography component="h3" sx={sectionTitleSx}>
+                                {section.title}
+                              </Typography>
 
-                            {Array.isArray(section.content) &&
-                              section.content.map((block, index) => {
-                                if (block?.type === "paragraph") {
-                                  return (
-                                    <Typography
-                                      key={`block-${section.number}-${index}`}
-                                      sx={paragraphSx}
-                                    >
-                                      {block.text}
-                                    </Typography>
-                                  );
-                                }
+                              {Array.isArray(section.content) &&
+                                section.content.map((block, index) => {
+                                  if (block?.type === "paragraph") {
+                                    return (
+                                      <Typography
+                                        key={`block-${section.number}-${index}`}
+                                        sx={paragraphSx}
+                                      >
+                                        {block.text}
+                                      </Typography>
+                                    );
+                                  }
 
-                                if (block?.type === "list") {
-                                  return (
-                                    <Box
-                                      key={`block-${section.number}-${index}`}
-                                      component="ul"
-                                      sx={listSx}
-                                    >
-                                      {Array.isArray(block.items) &&
-                                        block.items.map((item, itemIndex) => (
-                                          <Box
-                                            key={`item-${section.number}-${index}-${itemIndex}`}
-                                            component="li"
-                                            sx={listItemSx}
-                                          >
-                                            {item}
-                                          </Box>
-                                        ))}
-                                    </Box>
-                                  );
-                                }
+                                  if (block?.type === "list") {
+                                    return (
+                                      <Box
+                                        key={`block-${section.number}-${index}`}
+                                        component="ul"
+                                        sx={listSx}
+                                      >
+                                        {Array.isArray(block.items) &&
+                                          block.items.map((item, itemIndex) => (
+                                            <Box
+                                              key={`item-${section.number}-${index}-${itemIndex}`}
+                                              component="li"
+                                              sx={listItemSx}
+                                            >
+                                              {item}
+                                            </Box>
+                                          ))}
+                                      </Box>
+                                    );
+                                  }
 
-                                return null;
-                              })}
-                          </Box>
-                        </Stack>
-                      </Box>
-                    ))}
-                </Stack>
-              </Box>
-            </Paper>
-          )}
-        </Container>
+                                  return null;
+                                })}
+                            </Box>
+                          </Stack>
+                        </Box>
+                      ))}
+                  </Stack>
+                </Box>
+              </Paper>
+            )}
+          </Container>
+        </Box>
+
+        <LandingFooter />
       </Box>
-
-      <LandingFooter />
-    </Box>
+    </>
   );
 }
 
