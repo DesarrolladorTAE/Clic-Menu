@@ -1,7 +1,10 @@
+// src/components/landing/home/HomeFaqSection.jsx
 import React from "react";
 import { Box, Chip, Container, Stack, Typography } from "@mui/material";
+
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+
 import {
   landingColors,
   landingTypography,
@@ -9,14 +12,24 @@ import {
 
 const faqs = [
   {
-    question: "¿Clic Menu funciona para restaurantes pequeños?",
+    question: "¿Necesito comprar equipo especial?",
     answer:
-      "Sí, Clic Menu se adapta tanto a negocios pequeños como a restaurantes con mayor operación.",
+      "No necesariamente. Puedes usar Clic Menu desde computadora, tablet o celular. Si tu operación requiere impresión, puedes conectarlo con impresoras compatibles.",
   },
   {
-    question: "¿Necesito instalar equipos especiales?",
+    question: "¿Clic Menu funciona para restaurantes pequeños?",
     answer:
-      "No. Puedes utilizar Clic Menu desde computadora, tablet o celular.",
+      "Sí. Puedes iniciar con funciones básicas y crecer conforme tu restaurante necesite más control.",
+  },
+  {
+    question: "¿Puedo probar antes de pagar?",
+    answer:
+      "Sí. Puedes iniciar una prueba gratuita para conocer el sistema y validar si se adapta a tu operación.",
+  },
+  {
+    question: "¿El sistema incluye menú QR y punto de venta?",
+    answer:
+      "Sí. Clic Menu integra menú digital QR, gestión de pedidos, caja, mesas y módulos operativos según el plan contratado.",
   },
   {
     question: "¿Puedo administrar mi menú fácilmente?",
@@ -24,10 +37,11 @@ const faqs = [
       "Sí, podrás agregar productos, categorías, precios e imágenes desde tu panel administrativo.",
   },
   {
-    question: "¿El sistema incluye cocina y caja?",
+    question: "¿Qué pasa si necesito ayuda?",
     answer:
-      "Sí, dependiendo del plan podrás gestionar cocina, pedidos, caja y flujo operativo.",
+      "Puedes contactar al equipo de soporte para recibir orientación sobre configuración, uso del sistema y selección del plan adecuado.",
   },
+  
 ];
 
 export default function HomeFaqSection() {
@@ -40,62 +54,12 @@ export default function HomeFaqSection() {
         py: {
           xs: 7,
           sm: 8,
-          md: 12,
+          md: 10,
         },
-        bgcolor: landingColors.white,
+        bgcolor: landingColors.bgSoft,
         overflow: "hidden",
       }}
     >
-      <Box
-        sx={{
-          position: "absolute",
-          top: {
-            xs: 24,
-            md: 60,
-          },
-          right: {
-            xs: -90,
-            md: -120,
-          },
-          width: {
-            xs: 220,
-            md: 340,
-          },
-          height: {
-            xs: 220,
-            md: 340,
-          },
-          borderRadius: "50%",
-          bgcolor: "rgba(246, 199, 122, 0.24)",
-          zIndex: 0,
-        }}
-      />
-
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: {
-            xs: 40,
-            md: 80,
-          },
-          left: {
-            xs: -110,
-            md: -150,
-          },
-          width: {
-            xs: 240,
-            md: 380,
-          },
-          height: {
-            xs: 240,
-            md: 380,
-          },
-          borderRadius: "50%",
-          bgcolor: "rgba(207, 109, 78, 0.12)",
-          zIndex: 0,
-        }}
-      />
-
       <Container>
         <Box
           sx={{
@@ -104,12 +68,12 @@ export default function HomeFaqSection() {
           }}
         >
           <Stack
-            spacing={2}
+            spacing={1.5}
             alignItems="center"
             sx={{
               mb: {
-                xs: 5,
-                md: 6,
+                xs: 4,
+                md: 5,
               },
               textAlign: "center",
             }}
@@ -119,10 +83,11 @@ export default function HomeFaqSection() {
               label="Preguntas frecuentes"
               sx={{
                 px: 1,
-                bgcolor: "#FFF1E8",
+                bgcolor: landingColors.white,
                 color: landingColors.terracotta,
                 border: `1px solid rgba(207, 109, 78, 0.18)`,
                 fontWeight: 900,
+                boxShadow: "0 10px 26px rgba(21, 25, 29, 0.05)",
                 "& .MuiChip-icon": {
                   color: landingColors.terracotta,
                 },
@@ -155,8 +120,8 @@ export default function HomeFaqSection() {
           <Box
             sx={{
               display: "grid",
-              gap: 2.5,
-              maxWidth: 920,
+              gap: 2,
+              maxWidth: 940,
               mx: "auto",
             }}
           >
@@ -176,17 +141,15 @@ export default function HomeFaqSection() {
                     sm: 2.25,
                   },
                   p: {
-                    xs: "26px 24px",
-                    md: "30px 34px",
+                    xs: "24px 22px",
+                    md: "28px 32px",
                   },
-                  border: `1px solid rgba(246, 199, 122, 0.9)`,
-                  borderRadius: {
-                    xs: 3,
-                    md: `${landingColors.radiusLg}px`,
-                  },
+                  border: `1px solid rgba(201, 90, 59, 0.16)`,
+                  borderRadius: 1,
                   bgcolor: "rgba(255, 255, 255, 0.92)",
                   boxShadow: landingColors.shadowSoft,
-                  transition: "all 0.25s ease",
+                  transition:
+                    "transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease",
                   overflow: "hidden",
                   "&::before": {
                     content: '""',
@@ -194,24 +157,14 @@ export default function HomeFaqSection() {
                     left: 0,
                     top: 18,
                     bottom: 18,
-                    width: 6,
+                    width: 5,
                     borderRadius: "999px",
                     bgcolor: landingColors.orangeLine,
                   },
-                  "&::after": {
-                    content: '""',
-                    position: "absolute",
-                    right: -34,
-                    top: -34,
-                    width: 96,
-                    height: 96,
-                    borderRadius: "50%",
-                    bgcolor: "rgba(246, 199, 122, 0.18)",
-                  },
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    boxShadow: landingColors.shadow,
-                    borderColor: landingColors.orangeSoft,
+                    boxShadow: landingColors.shadowMedium,
+                    borderColor: "rgba(201, 90, 59, 0.30)",
                   },
                 }}
               >
@@ -221,10 +174,10 @@ export default function HomeFaqSection() {
                     zIndex: 1,
                     width: 46,
                     height: 46,
-                    borderRadius: 2,
+                    borderRadius: 1,
                     display: "grid",
                     placeItems: "center",
-                    bgcolor: "#FFF1E8",
+                    bgcolor: landingColors.orangePale,
                     color: landingColors.terracotta,
                     border: `1px solid rgba(207, 109, 78, 0.16)`,
                   }}
@@ -238,6 +191,10 @@ export default function HomeFaqSection() {
                     sx={{
                       ...landingTypography.landingCardTitle,
                       color: landingColors.title,
+                      fontSize: {
+                        xs: 20,
+                        md: 22,
+                      },
                     }}
                   >
                     {item.question}
@@ -246,8 +203,12 @@ export default function HomeFaqSection() {
                   <Typography
                     sx={{
                       ...landingTypography.landingText,
-                      mt: 1.5,
+                      mt: 1.25,
                       color: landingColors.muted,
+                      fontSize: {
+                        xs: 14.5,
+                        md: 15,
+                      },
                     }}
                   >
                     {item.answer}
@@ -255,7 +216,7 @@ export default function HomeFaqSection() {
 
                   <Typography
                     sx={{
-                      mt: 2,
+                      mt: 1.8,
                       fontSize: 12,
                       fontWeight: 900,
                       color: landingColors.terracotta,

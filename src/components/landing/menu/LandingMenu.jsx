@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import {
-  AppBar, Box, Button, Container, Drawer, IconButton, Stack,
+  AppBar,
+  Box,
+  Button,
+  Container,
+  Drawer,
+  IconButton,
+  Stack,
 } from "@mui/material";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -11,7 +17,6 @@ import { landingColors } from "../../../theme/landingTheme";
 const menuItems = [
   { label: "Inicio", path: "/", enabled: true },
   { label: "Planes", path: "/planes", enabled: true },
-  { label: "Sobre nosotros", path: "/sobre-nosotros", enabled: false },
   { label: "Contáctanos", path: "/contacto", enabled: true },
   {
     label: "Términos y condiciones",
@@ -22,7 +27,7 @@ const menuItems = [
 
 const authItems = [
   { label: "Iniciar sesión", path: "/auth/login", type: "login" },
-  { label: "Regístrate", path: "/auth/register", type: "register" },
+  { label: "Probar gratis", path: "/auth/register", type: "register" },
 ];
 
 export default function LandingMenu() {
@@ -44,46 +49,36 @@ export default function LandingMenu() {
   return (
     <>
       <AppBar
-        position="relative"
+        position="sticky"
         elevation={0}
         sx={{
-          bgcolor: landingColors.white,
+          top: 0,
+          bgcolor: "rgba(255, 255, 255, 0.94)",
           color: landingColors.dark,
-          borderBottom: `1px solid rgba(63, 61, 58, 0.08)`,
-          boxShadow: "0 8px 26px rgba(62, 49, 35, 0.055)",
-          zIndex: 100,
+          borderBottom: `1px solid ${landingColors.borderSoft}`,
+          boxShadow: "0 6px 22px rgba(17, 24, 32, 0.06)",
+          backdropFilter: "blur(14px)",
+          zIndex: 1200,
         }}
       >
-        <Box
-          sx={{
-            position: "absolute",
-            left: 0,
-            bottom: 0,
-            width: "100%",
-            height: 3,
-            background: `linear-gradient(90deg, ${landingColors.orangeLine}, ${landingColors.yellow}, ${landingColors.terracotta})`,
-            pointerEvents: "none",
-          }}
-        />
-
         <Container
-            maxWidth={false}
-            disableGutters
-            sx={{
-                width: "100%",
-                px: {
-                xs: 2,
-                sm: 2.5,
-                md: 4,
-                lg: 5,
-                },
-            }}
+          maxWidth={false}
+          disableGutters
+          sx={{
+            width: "100%",
+            px: {
+              xs: 2,
+              sm: 2.5,
+              md: 4,
+              lg: 5,
+            },
+          }}
         >
           <Box
             sx={{
               height: {
-                xs: 72,
-                md: 84,
+                xs: 68,
+                md: 76,
               },
               display: "flex",
               alignItems: "center",
@@ -95,6 +90,7 @@ export default function LandingMenu() {
               component="button"
               type="button"
               onClick={() => navigate("/")}
+              aria-label="Ir al inicio"
               sx={{
                 p: 0,
                 m: 0,
@@ -107,7 +103,7 @@ export default function LandingMenu() {
                 transition: "transform 0.2s ease, opacity 0.2s ease",
                 "&:hover": {
                   transform: "translateY(-1px)",
-                  opacity: 0.92,
+                  opacity: 0.94,
                 },
               }}
             >
@@ -118,9 +114,9 @@ export default function LandingMenu() {
                 sx={{
                   display: "block",
                   width: {
-                    xs: 132,
-                    sm: 152,
-                    md: 178,
+                    xs: 130,
+                    sm: 148,
+                    md: 170,
                   },
                   height: "auto",
                 }}
@@ -130,8 +126,8 @@ export default function LandingMenu() {
             <Stack
               direction="row"
               spacing={{
-                lg: 2,
-                xl: 2.6,
+                lg: 2.6,
+                xl: 3.2,
               }}
               alignItems="center"
               sx={{
@@ -145,7 +141,7 @@ export default function LandingMenu() {
                 component="nav"
                 direction="row"
                 spacing={{
-                  lg: 1.8,
+                  lg: 2,
                   xl: 2.6,
                 }}
                 alignItems="center"
@@ -163,37 +159,34 @@ export default function LandingMenu() {
                       py: 0.5,
                       borderRadius: 0,
                       bgcolor: "transparent",
-                      color: landingColors.dark,
-                      fontSize: {
-                        md: 13,
-                        lg: 15,
-                      },
-                      fontWeight: 900,
+                      color: landingColors.title,
+                      fontSize: 14,
+                      fontWeight: 800,
                       textTransform: "none",
                       whiteSpace: "nowrap",
-                      opacity: item.enabled ? 1 : 0.86,
+                      opacity: item.enabled ? 1 : 0.55,
                       boxShadow: "none",
                       "&::after": {
                         content: '""',
                         position: "absolute",
                         left: 0,
                         right: 0,
-                        bottom: 2,
+                        bottom: 1,
                         mx: "auto",
-                        width: item.enabled ? "70%" : 0,
-                        height: 3,
+                        width: 0,
+                        height: 2,
                         borderRadius: 999,
-                        bgcolor: landingColors.orangeLine,
+                        bgcolor: landingColors.primary,
                         transition: "width 0.22s ease",
                       },
                       "&.Mui-disabled": {
-                        color: landingColors.dark,
-                        opacity: 0.86,
+                        color: landingColors.title,
+                        opacity: 0.55,
                         cursor: "default",
                       },
                       "&:hover": {
                         bgcolor: "transparent",
-                        color: landingColors.terracotta,
+                        color: landingColors.primary,
                         transform: "translateY(-1px)",
                         boxShadow: "none",
                       },
@@ -207,68 +200,63 @@ export default function LandingMenu() {
                 ))}
               </Stack>
 
-              <Stack direction="row" spacing={1} alignItems="center">
-                {authItems.map((item) => (
-                  <Button
-                    key={item.label}
-                    type="button"
-                    onClick={() => handleAuthNavigate(item)}
-                    variant={item.type === "register" ? "contained" : "outlined"}
-                    sx={{
-                      minHeight: 40,
-                      height: 40,
-                      px: item.type === "register" ? 2.4 : 2,
-                      borderRadius: 999,
-                      fontSize: 13,
-                      fontWeight: 900,
-                      whiteSpace: "nowrap",
-                      textTransform: "none",
-                      boxShadow: "none",
-                      bgcolor:
-                        item.type === "register"
-                          ? landingColors.orangeLine
-                          : "#FFF7EC",
-                      color:
-                        item.type === "register"
+              <Stack direction="row" spacing={1.1} alignItems="center">
+                {authItems.map((item) => {
+                  const isRegister = item.type === "register";
+
+                  return (
+                    <Button
+                      key={item.label}
+                      type="button"
+                      onClick={() => handleAuthNavigate(item)}
+                      variant={isRegister ? "contained" : "outlined"}
+                      sx={{
+                        minHeight: 42,
+                        height: 42,
+                        px: isRegister ? 2.5 : 2.2,
+                        borderRadius: landingColors.radiusXs,
+                        fontSize: 13,
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                        textTransform: "none",
+                        bgcolor: isRegister
+                          ? landingColors.primary
+                          : landingColors.white,
+                        color: isRegister
                           ? landingColors.white
-                          : landingColors.terracotta,
-                      border:
-                        item.type === "register"
-                          ? `1px solid ${landingColors.orangeLine}`
-                          : `1.5px solid ${landingColors.terracotta}`,
-                      boxShadow:
-                        item.type === "register"
-                          ? "none"
-                          : "0 8px 18px rgba(207, 109, 78, 0.12)",
-                      "&:hover": {
-                        bgcolor:
-                          item.type === "register"
-                            ? landingColors.terracotta
-                            : "#FFE8DC",
-                        color:
-                          item.type === "register"
+                          : landingColors.blue,
+                        border: isRegister
+                          ? `1px solid ${landingColors.primary}`
+                          : `1.5px solid ${landingColors.blue}`,
+                        boxShadow: isRegister
+                          ? landingColors.shadowButton
+                          : "none",
+                        "&:hover": {
+                          bgcolor: isRegister
+                            ? landingColors.primaryHover
+                            : landingColors.blueSoft,
+                          color: isRegister
                             ? landingColors.white
-                            : landingColors.orangeLine,
-                        border:
-                          item.type === "register"
-                            ? `1px solid ${landingColors.terracotta}`
-                            : `1.5px solid ${landingColors.orangeLine}`,
-                        boxShadow:
-                          item.type === "register"
-                            ? "none"
-                            : "0 10px 22px rgba(255, 116, 31, 0.18)",
-                      },
-                      
-                    }}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
+                            : landingColors.blueHover,
+                          border: isRegister
+                            ? `1px solid ${landingColors.primaryHover}`
+                            : `1.5px solid ${landingColors.blueHover}`,
+                          boxShadow: isRegister
+                            ? "0 16px 30px rgba(201, 90, 59, 0.34)"
+                            : "none",
+                        },
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  );
+                })}
               </Stack>
             </Stack>
 
             <IconButton
               onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú"
               sx={{
                 display: {
                   xs: "inline-flex",
@@ -276,13 +264,13 @@ export default function LandingMenu() {
                 },
                 width: 44,
                 height: 44,
-                borderRadius: 2,
-                color: landingColors.dark,
-                bgcolor: "#FFF7EC",
-                border: `1px solid rgba(207, 109, 78, 0.18)`,
-                boxShadow: "0 8px 18px rgba(62, 49, 35, 0.08)",
+                borderRadius: landingColors.radiusXs,
+                color: landingColors.title,
+                bgcolor: landingColors.primarySoft,
+                border: `1px solid rgba(201, 90, 59, 0.16)`,
+                boxShadow: "0 8px 18px rgba(17, 24, 32, 0.08)",
                 "&:hover": {
-                  bgcolor: "#FFF1E8",
+                  bgcolor: landingColors.terracottaSoft,
                 },
               }}
             >
@@ -300,11 +288,11 @@ export default function LandingMenu() {
           sx: {
             width: {
               xs: "86vw",
-              sm: 360,
+              sm: 370,
             },
-            maxWidth: 380,
+            maxWidth: 390,
             bgcolor: landingColors.white,
-            borderRadius: "24px 0 0 24px",
+            borderRadius: "26px 0 0 26px",
             overflow: "hidden",
           },
         }}
@@ -320,8 +308,8 @@ export default function LandingMenu() {
           <Box
             sx={{
               width: "100%",
-              height: 4,
-              background: `linear-gradient(90deg, ${landingColors.orangeLine}, ${landingColors.yellow}, ${landingColors.terracotta})`,
+              height: 5,
+              background: `linear-gradient(90deg, ${landingColors.primary}, ${landingColors.orangeSoft}, ${landingColors.brownSoft})`,
             }}
           />
 
@@ -339,12 +327,12 @@ export default function LandingMenu() {
             <Box
               sx={{
                 position: "absolute",
-                right: -80,
-                top: 80,
-                width: 190,
-                height: 190,
+                right: -90,
+                top: 84,
+                width: 210,
+                height: 210,
                 borderRadius: "50%",
-                bgcolor: "rgba(246, 199, 122, 0.22)",
+                bgcolor: "rgba(201, 90, 59, 0.10)",
                 pointerEvents: "none",
               }}
             />
@@ -352,12 +340,12 @@ export default function LandingMenu() {
             <Box
               sx={{
                 position: "absolute",
-                left: -110,
+                left: -120,
                 bottom: -90,
-                width: 220,
-                height: 220,
+                width: 240,
+                height: 240,
                 borderRadius: "50%",
-                bgcolor: "rgba(207, 109, 78, 0.10)",
+                bgcolor: "rgba(244, 163, 127, 0.16)",
                 pointerEvents: "none",
               }}
             />
@@ -376,6 +364,7 @@ export default function LandingMenu() {
                 component="button"
                 type="button"
                 onClick={() => handleNavigate(menuItems[0])}
+                aria-label="Ir al inicio"
                 sx={{
                   p: 0,
                   m: 0,
@@ -390,7 +379,7 @@ export default function LandingMenu() {
                   src="/images/clicmenu-naranja.png"
                   alt="Clic Menu"
                   sx={{
-                    width: 146,
+                    width: 148,
                     height: "auto",
                   }}
                 />
@@ -398,15 +387,16 @@ export default function LandingMenu() {
 
               <IconButton
                 onClick={() => setMobileOpen(false)}
+                aria-label="Cerrar menú"
                 sx={{
                   width: 42,
                   height: 42,
-                  borderRadius: 2,
-                  color: landingColors.dark,
-                  bgcolor: "#FFF7EC",
-                  border: `1px solid rgba(207, 109, 78, 0.16)`,
+                  borderRadius: landingColors.radiusXs,
+                  color: landingColors.title,
+                  bgcolor: landingColors.primarySoft,
+                  border: `1px solid rgba(201, 90, 59, 0.14)`,
                   "&:hover": {
-                    bgcolor: "#FFF1E8",
+                    bgcolor: landingColors.terracottaSoft,
                   },
                 }}
               >
@@ -416,7 +406,7 @@ export default function LandingMenu() {
 
             <Stack
               component="nav"
-              spacing={1.3}
+              spacing={1.35}
               sx={{
                 position: "relative",
                 zIndex: 1,
@@ -432,32 +422,32 @@ export default function LandingMenu() {
                   sx={{
                     position: "relative",
                     justifyContent: "flex-start",
-                    minHeight: 48,
+                    minHeight: 50,
                     px: 0,
                     borderRadius: 0,
-                    color: landingColors.dark,
+                    color: landingColors.title,
                     bgcolor: "transparent",
                     fontSize: 16,
                     fontWeight: 900,
                     textTransform: "none",
                     boxShadow: "none",
-                    opacity: item.enabled ? 1 : 0.62,
+                    opacity: item.enabled ? 1 : 0.55,
                     "&::before": {
                       content: '""',
                       width: item.enabled ? 8 : 0,
                       height: 8,
                       borderRadius: "50%",
-                      bgcolor: landingColors.orangeLine,
+                      bgcolor: landingColors.primary,
                       mr: item.enabled ? 1.4 : 0,
                       transition: "all 0.2s ease",
                     },
                     "&.Mui-disabled": {
-                      color: landingColors.dark,
-                      opacity: 0.62,
+                      color: landingColors.title,
+                      opacity: 0.55,
                     },
                     "&:hover": {
                       bgcolor: "transparent",
-                      color: landingColors.terracotta,
+                      color: landingColors.primary,
                       transform: "translateX(4px)",
                       boxShadow: "none",
                     },
@@ -481,75 +471,63 @@ export default function LandingMenu() {
               }}
             >
               <Stack spacing={1.4}>
-                {authItems.map((item) => (
-                  <Button
-                    key={item.label}
-                    type="button"
-                    fullWidth
-                    onClick={() => handleAuthNavigate(item)}
-                    variant={item.type === "register" ? "contained" : "outlined"}
-                    sx={{
-                      height: 50,
-                      borderRadius: 999,
-                      fontSize: 15,
-                      fontWeight: 900,
-                      textTransform: "none",
+                {authItems.map((item) => {
+                  const isRegister = item.type === "register";
 
-                      bgcolor:
-                        item.type === "register"
-                          ? landingColors.orangeLine
-                          : "#FFF7EC",
-
-                      color:
-                        item.type === "register"
+                  return (
+                    <Button
+                      key={item.label}
+                      type="button"
+                      fullWidth
+                      onClick={() => handleAuthNavigate(item)}
+                      variant={isRegister ? "contained" : "outlined"}
+                      sx={{
+                        height: 50,
+                        borderRadius: landingColors.radiusXs,
+                        fontSize: 15,
+                        fontWeight: 900,
+                        textTransform: "none",
+                        bgcolor: isRegister
+                          ? landingColors.primary
+                          : landingColors.white,
+                        color: isRegister
                           ? landingColors.white
-                          : landingColors.terracotta,
-
-                      border:
-                        item.type === "register"
-                          ? `1px solid ${landingColors.orangeLine}`
-                          : `1.5px solid ${landingColors.terracotta}`,
-
-                      boxShadow:
-                        item.type === "register"
-                          ? "0 12px 26px rgba(255, 116, 31, 0.25)"
-                          : "0 8px 18px rgba(207, 109, 78, 0.12)",
-
-                      "&:hover": {
-                        bgcolor:
-                          item.type === "register"
-                            ? landingColors.terracotta
-                            : "#FFE8DC",
-
-                        color:
-                          item.type === "register"
+                          : landingColors.blue,
+                        border: isRegister
+                          ? `1px solid ${landingColors.primary}`
+                          : `1.5px solid ${landingColors.blue}`,
+                        boxShadow: isRegister
+                          ? landingColors.shadowButton
+                          : "none",
+                        "&:hover": {
+                          bgcolor: isRegister
+                            ? landingColors.primaryHover
+                            : landingColors.blueSoft,
+                          color: isRegister
                             ? landingColors.white
-                            : landingColors.orangeLine,
-
-                        border:
-                          item.type === "register"
-                            ? `1px solid ${landingColors.terracotta}`
-                            : `1.5px solid ${landingColors.orangeLine}`,
-
-                        boxShadow:
-                          item.type === "register"
-                            ? "0 14px 30px rgba(207, 109, 78, 0.28)"
-                            : "0 10px 22px rgba(255, 116, 31, 0.18)",
-                      },
-                    }}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
+                            : landingColors.blueHover,
+                          border: isRegister
+                            ? `1px solid ${landingColors.primaryHover}`
+                            : `1.5px solid ${landingColors.blueHover}`,
+                          boxShadow: isRegister
+                            ? "0 16px 30px rgba(201, 90, 59, 0.34)"
+                            : "none",
+                        },
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  );
+                })}
               </Stack>
 
               <Box
                 sx={{
                   mt: 3,
-                  width: 92,
+                  width: 96,
                   height: 4,
-                  borderRadius: 999,
-                  bgcolor: landingColors.orangeLine,
+                  borderRadius: landingColors.radiusXs,
+                  bgcolor: landingColors.primary,
                 }}
               />
             </Box>

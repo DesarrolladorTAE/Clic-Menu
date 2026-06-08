@@ -270,7 +270,7 @@ export default function LandingFooter() {
             <Stack spacing={2.25}>
               <ContactItem
                 label="Email"
-                value="contacto@tecnologiasadministrativas.com"
+                value="soporte@clicmenu.com.mx"
               />
 
               <ContactItem label="Teléfono" value="+52 (744) 218 8925" />
@@ -311,28 +311,10 @@ export default function LandingFooter() {
               color: "rgba(255, 255, 255, 0.62)",
             }}
           >
-            © {new Date().getFullYear()} Clic Menu. Todos los derechos
+            © {new Date().getFullYear()} Clic Menu & Tecnologías Administrativas ELAD. Todos los derechos
             reservados.
           </Typography>
 
-          <Typography
-            sx={{
-              fontSize: 14,
-              color: "rgba(255, 255, 255, 0.62)",
-            }}
-          >
-            Desarrollado por{" "}
-            <Box
-              component="strong"
-              sx={{
-                color: landingColors.yellow,
-                fontWeight: 900,
-              }}
-            >
-              TAE
-            </Box>
-            .
-          </Typography>
         </Box>
       </Container>
     </Box>

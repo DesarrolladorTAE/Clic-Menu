@@ -2,34 +2,125 @@
 import { createTheme } from "@mui/material/styles";
 
 const landingColors = {
-  bg: "#FFF9F0",
+  bg: "#F7FAFC",
+  bgSoft: "#F3F6F8",
+  bgWarm: "#FFF7F1",
   white: "#FFFFFF",
 
-  text: "#3F3D3A",
-  title: "#2F2D2A",
-  muted: "#6F6A64",
+  text: "#2F3438",
+  title: "#15191D",
+  muted: "#6F757B",
+  softText: "#8A9096",
 
-  yellow: "#EFC84A",
-  yellowHover: "#DDB62F",
+  primary: "#C95A3B",
+  primaryHover: "#AF482F",
+  primarySoft: "#FFF0E9",
+  primaryLight: "#E8A18C",
 
-  terracotta: "#CF6D4E",
-  orangeSoft: "#F6C77A",
-  orangeLine: "#FF741F",
+  primaryInverse: "#FFFFFF",
+  primaryInverseText: "#C95A3B",
+  primaryInverseHover: "#FFF0E9",
 
-  dark: "#12100E",
-  darkCard: "#1B1917",
+  terracotta: "#C95A3B",
+  terracottaDark: "#9E3E29",
+  terracottaSoft: "#F8DED5",
 
-  border: "rgba(63, 61, 58, 0.1)",
-  darkBorder: "rgba(255, 255, 255, 0.1)",
+  orange: "#D76845",
+  orangeLine: "#C95A3B",
+  orangeSoft: "#F4A37F",
+  orangePale: "#FFF3EC",
 
-  shadow: "0 18px 40px rgba(62, 49, 35, 0.08)",
-  shadowSoft: "0 10px 28px rgba(62, 49, 35, 0.06)",
+  brown: "#7A3E2E",
+  brownSoft: "#A9583D",
 
-  radiusSm: 16,
-  radiusMd: 24,
-  radiusLg: 32,
+  blue: "#123F6D",
+  blueHover: "#0D3156",
+  blueSoft: "#EAF2FA",
+
+  yellow: "#F2C14E",
+  yellowHover: "#DFAE38",
+
+  dark: "#111820",
+  darkCard: "#18212B",
+  darkSoft: "#202B36",
+
+  border: "rgba(21, 25, 29, 0.10)",
+  borderSoft: "rgba(21, 25, 29, 0.07)",
+  darkBorder: "rgba(255, 255, 255, 0.12)",
+
+  shadow: "0 22px 60px rgba(17, 24, 32, 0.12)",
+  shadowMedium: "0 16px 38px rgba(17, 24, 32, 0.10)",
+  shadowSoft: "0 10px 28px rgba(17, 24, 32, 0.07)",
+  shadowCard: "0 12px 30px rgba(21, 25, 29, 0.08)",
+  shadowButton: "0 12px 24px rgba(201, 90, 59, 0.28)",
+  shadowButtonInverse: "0 12px 24px rgba(255, 255, 255, 0.20)",
+
+  radiusXs: 6,
+  radiusSm: 6,
+  radiusMd: 6,
+  radiusLg: 6,
+  radiusXl: 6,
+  buttonRadius: 12,
 
   maxWidth: 1180,
+};
+
+const landingButtonSx = {
+  primary: {
+    borderRadius: `${landingColors.buttonRadius}px`,
+    color: landingColors.white,
+    backgroundColor: landingColors.primary,
+    boxShadow: landingColors.shadowButton,
+
+    "&:hover": {
+      backgroundColor: landingColors.primaryHover,
+      boxShadow: "0 16px 30px rgba(201, 90, 59, 0.34)",
+    },
+  },
+
+  primaryInverse: {
+    borderRadius: `${landingColors.buttonRadius}px`,
+    color: landingColors.primary,
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    border: `1.5px solid rgba(201, 90, 59, 0.72)`,
+    boxShadow:
+      "0 10px 24px rgba(255, 255, 255, 0.16), 0 10px 22px rgba(201, 90, 59, 0.14)",
+    backdropFilter: "blur(10px)",
+
+    "&:hover": {
+      color: landingColors.white,
+      backgroundColor: landingColors.primary,
+      borderColor: landingColors.primary,
+      boxShadow: "0 16px 30px rgba(201, 90, 59, 0.30)",
+    },
+  },
+
+  secondary: {
+    borderRadius: `${landingColors.buttonRadius}px`,
+    color: landingColors.primary,
+    backgroundColor: landingColors.white,
+    border: `1.5px solid ${landingColors.primary}`,
+    boxShadow: "none",
+
+    "&:hover": {
+      color: landingColors.primaryHover,
+      backgroundColor: landingColors.primarySoft,
+      borderColor: landingColors.primaryHover,
+      boxShadow: "none",
+    },
+  },
+
+  dark: {
+    borderRadius: `${landingColors.buttonRadius}px`,
+    color: landingColors.white,
+    backgroundColor: landingColors.dark,
+    boxShadow: "0 12px 24px rgba(17, 24, 32, 0.22)",
+
+    "&:hover": {
+      backgroundColor: landingColors.darkSoft,
+      boxShadow: "0 16px 30px rgba(17, 24, 32, 0.28)",
+    },
+  },
 };
 
 const landingTheme = createTheme({
@@ -37,14 +128,16 @@ const landingTheme = createTheme({
     mode: "light",
 
     primary: {
-      main: landingColors.yellow,
-      dark: landingColors.yellowHover,
-      contrastText: "#111111",
+      main: landingColors.primary,
+      dark: landingColors.primaryHover,
+      light: landingColors.primaryLight,
+      contrastText: landingColors.white,
     },
 
     secondary: {
-      main: landingColors.terracotta,
-      contrastText: landingColors.white,
+      main: landingColors.primaryInverse,
+      dark: landingColors.primaryInverseHover,
+      contrastText: landingColors.primaryInverseText,
     },
 
     background: {
@@ -66,50 +159,50 @@ const landingTheme = createTheme({
     fontFamily: '"Poppins", Arial, sans-serif',
 
     h1: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.05,
-      fontSize: "clamp(38px, 5vw, 58px)",
+      letterSpacing: "-0.045em",
+      lineHeight: 0.98,
+      fontSize: "clamp(42px, 5.8vw, 72px)",
       margin: 0,
     },
 
     h2: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.12,
-      fontSize: "clamp(30px, 4vw, 44px)",
+      letterSpacing: "-0.035em",
+      lineHeight: 1.06,
+      fontSize: "clamp(32px, 4.2vw, 52px)",
       margin: 0,
     },
 
     h3: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.18,
-      fontSize: "clamp(24px, 3vw, 34px)",
+      letterSpacing: "-0.025em",
+      lineHeight: 1.14,
+      fontSize: "clamp(24px, 3vw, 36px)",
       margin: 0,
     },
 
     h4: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.2,
-      fontSize: 22,
+      letterSpacing: "-0.018em",
+      lineHeight: 1.18,
+      fontSize: 24,
       margin: 0,
     },
 
     h5: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
+      letterSpacing: "-0.014em",
       lineHeight: 1.2,
       fontSize: 20,
       margin: 0,
@@ -117,114 +210,122 @@ const landingTheme = createTheme({
 
     body1: {
       fontSize: 16,
-      lineHeight: 1.55,
+      lineHeight: 1.65,
       color: landingColors.muted,
       margin: 0,
     },
 
     body2: {
       fontSize: 15,
-      lineHeight: 1.55,
+      lineHeight: 1.6,
       color: landingColors.muted,
       margin: 0,
     },
 
     subtitle1: {
-      fontSize: "clamp(16px, 2vw, 18px)",
-      lineHeight: 1.55,
+      fontSize: "clamp(16px, 2vw, 19px)",
+      lineHeight: 1.6,
       color: landingColors.muted,
       margin: 0,
     },
 
     subtitle2: {
-      fontSize: 13,
-      fontWeight: 800,
+      fontSize: 12,
+      fontWeight: 900,
       letterSpacing: "0.12em",
       textTransform: "uppercase",
-      color: landingColors.terracotta,
+      color: landingColors.primary,
       margin: 0,
     },
 
     button: {
       fontSize: 14,
-      fontWeight: 800,
+      fontWeight: 900,
       lineHeight: 1,
       textTransform: "none",
     },
 
     landingEyebrow: {
-      fontSize: 13,
-      fontWeight: 800,
+      fontSize: 12,
+      fontWeight: 900,
       letterSpacing: "0.12em",
       textTransform: "uppercase",
-      color: landingColors.terracotta,
+      color: landingColors.primary,
       margin: 0,
     },
 
     landingTitleXL: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.05,
-      fontSize: "clamp(38px, 5vw, 58px)",
+      letterSpacing: "-0.045em",
+      lineHeight: 0.98,
+      fontSize: "clamp(42px, 5.8vw, 72px)",
       margin: 0,
     },
 
     landingTitleLG: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.12,
-      fontSize: "clamp(30px, 4vw, 44px)",
+      letterSpacing: "-0.035em",
+      lineHeight: 1.06,
+      fontSize: "clamp(32px, 4.2vw, 52px)",
       margin: 0,
     },
 
     landingTitleMD: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.18,
-      fontSize: "clamp(24px, 3vw, 34px)",
+      letterSpacing: "-0.025em",
+      lineHeight: 1.14,
+      fontSize: "clamp(24px, 3vw, 36px)",
       margin: 0,
     },
 
     landingCardTitle: {
-      fontFamily: '"Bree Serif", Georgia, serif',
-      fontWeight: 400,
+      fontFamily: '"Poppins", Arial, sans-serif',
+      fontWeight: 900,
       color: landingColors.title,
-      letterSpacing: "-0.02em",
-      lineHeight: 1.2,
+      letterSpacing: "-0.018em",
+      lineHeight: 1.18,
       fontSize: 22,
       margin: 0,
     },
 
     landingText: {
       fontSize: 16,
-      lineHeight: 1.55,
+      lineHeight: 1.65,
       color: landingColors.muted,
       margin: 0,
     },
 
     landingTextLG: {
-      fontSize: "clamp(16px, 2vw, 18px)",
-      lineHeight: 1.55,
+      fontSize: "clamp(16px, 2vw, 19px)",
+      lineHeight: 1.6,
       color: landingColors.muted,
+      margin: 0,
+    },
+
+    landingSmall: {
+      fontSize: 13,
+      lineHeight: 1.5,
+      color: landingColors.softText,
       margin: 0,
     },
   },
 
   shape: {
-    borderRadius: landingColors.radiusSm,
+    borderRadius: 6,
   },
 
   shadows: [
     "none",
     landingColors.shadowSoft,
+    landingColors.shadowMedium,
     landingColors.shadow,
-    ...Array(22).fill(landingColors.shadow),
+    ...Array(21).fill(landingColors.shadow),
   ],
 
   components: {
@@ -253,6 +354,11 @@ const landingTheme = createTheme({
           color: "inherit",
           textDecoration: "none",
         },
+
+        "::selection": {
+          color: landingColors.white,
+          backgroundColor: landingColors.primary,
+        },
       },
     },
 
@@ -278,46 +384,35 @@ const landingTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          minHeight: 46,
-          borderRadius: 999,
-          paddingLeft: 28,
-          paddingRight: 28,
+          minHeight: 44,
+          borderRadius: landingColors.buttonRadius,
+          paddingLeft: 24,
+          paddingRight: 24,
           fontSize: 14,
-          fontWeight: 800,
+          fontWeight: 900,
           lineHeight: 1,
           boxShadow: "none",
           textTransform: "none",
           transition:
-            "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
+            "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease",
 
           "&:hover": {
             transform: "translateY(-1px)",
             boxShadow: "none",
           },
-        },
 
-        containedPrimary: {
-          color: "#111111",
-          backgroundColor: landingColors.yellow,
-          boxShadow: "0 12px 24px rgba(239, 200, 74, 0.28)",
-
-          "&:hover": {
-            backgroundColor: landingColors.yellowHover,
-            boxShadow: "0 14px 28px rgba(239, 200, 74, 0.34)",
+          "&.Mui-disabled": {
+            opacity: 0.55,
           },
         },
 
-        outlinedSecondary: {
-          color: landingColors.text,
-          borderWidth: 1.5,
-          borderColor: landingColors.terracotta,
+        containedPrimary: landingButtonSx.primary,
 
-          "&:hover": {
-            borderWidth: 1.5,
-            borderColor: landingColors.terracotta,
-            backgroundColor: "#FFF1E8",
-          },
-        },
+        containedSecondary: landingButtonSx.primaryInverse,
+
+        outlinedPrimary: landingButtonSx.secondary,
+
+        outlinedSecondary: landingButtonSx.secondary,
       },
     },
 
@@ -325,6 +420,11 @@ const landingTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
+          borderRadius: 1,
+        },
+
+        rounded: {
+          borderRadius: 1,
         },
       },
     },
@@ -333,10 +433,21 @@ const landingTheme = createTheme({
       styleOverrides: {
         root: {
           border: `1px solid ${landingColors.border}`,
-          borderRadius: landingColors.radiusMd,
+          borderRadius: 1,
           backgroundColor: landingColors.white,
           backgroundImage: "none",
-          boxShadow: landingColors.shadowSoft,
+          boxShadow: landingColors.shadowCard,
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          height: 32,
+          borderRadius: 1,
+          fontSize: 12,
+          fontWeight: 900,
         },
       },
     },
@@ -354,4 +465,4 @@ const landingTheme = createTheme({
 const landingTypography = landingTheme.typography;
 
 export default landingTheme;
-export { landingColors, landingTypography };
+export { landingColors, landingTypography, landingButtonSx };

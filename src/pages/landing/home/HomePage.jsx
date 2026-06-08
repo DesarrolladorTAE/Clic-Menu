@@ -1,56 +1,33 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Button, Stack, Typography } from "@mui/material";
-import { landingColors, landingTypography } from "../../../theme/landingTheme";
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
+import React from "react";
+import { Box, Button, Container, Stack, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
+import {
+  landingButtonSx,
+  landingColors,
+  landingTypography,
+} from "../../../theme/landingTheme";
+
 import LandingMenu from "../../../components/landing/menu/LandingMenu";
-import HomeBenefitsSection from "../../../components/landing/home/HomeBenefitsSection";
-import HomeFeaturesSection from "../../../components/landing/home/HomeFeaturesSection";
+import HomeSolutionsSection from "../../../components/landing/home/HomeSolutionsSection";
+import HomeDemoSection from "../../../components/landing/home/HomeDemoSection";
+import HomeBusinessTypesSection from "../../../components/landing/home/HomeBusinessTypesSection";
+import HomePlansPreviewSection from "../../../components/landing/home/HomePlansPreviewSection";
+import HomeTestimonialsSection from "../../../components/landing/home/HomeTestimonialsSection";
+
 import HomeFaqSection from "../../../components/landing/home/HomeFaqSection";
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const nextSectionRef = useRef(null);
-  const [scrollLocked, setScrollLocked] = useState(true);
 
   const handleRegister = () => {
     navigate("/auth/register");
   };
 
-  const handleUnlockScroll = () => {
-    setScrollLocked(false);
-
-    document.body.style.overflow = "auto";
-    document.documentElement.style.overflow = "auto";
-
-    setTimeout(() => {
-      nextSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 80);
+  const handleDemo = () => {
+    navigate("/contacto");
   };
-
-  useEffect(() => {
-    if (scrollLocked) {
-      window.history.scrollRestoration = "manual";
-
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, 0);
-      });
-    }
-
-    document.body.style.overflow = scrollLocked ? "hidden" : "auto";
-    document.documentElement.style.overflow = scrollLocked ? "hidden" : "auto";
-
-    return () => {
-      document.body.style.overflow = "auto";
-      document.documentElement.style.overflow = "auto";
-      window.history.scrollRestoration = "auto";
-    };
-  }, [scrollLocked]);
 
   return (
     <Box
@@ -61,285 +38,279 @@ export default function HomePage() {
         overflowX: "hidden",
       }}
     >
+      <LandingMenu />
+
       <Box
+        component="section"
         sx={{
-          height: "100svh",
-          minHeight: 0,
+          position: "relative",
+          width: "100%",
+          minHeight: {
+            xs: "auto",
+            md: "calc(100vh - 76px)",
+          },
           display: "flex",
-          flexDirection: "column",
+          alignItems: "center",
           overflow: "hidden",
+          bgcolor: landingColors.orangeSoft,
+          backgroundImage: "url('/images/hero-restaurant-bg.webp')",
+          backgroundSize: "cover",
+          backgroundPosition: {
+            xs: "center center",
+            md: "center center",
+          },
+          backgroundRepeat: "no-repeat",
+          py: {
+            xs: 6,
+            sm: 7,
+            md: 8,
+            lg: 8.5,
+          },
         }}
       >
-        <LandingMenu />
-
         <Box
-          component="section"
+          sx={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(90deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.45) 48%, rgba(0,0,0,0.20) 100%)",
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+        />
+
+        <Container
           sx={{
             position: "relative",
-            width: "100%",
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            alignItems: "stretch",
-            bgcolor: landingColors.orangeSoft,
-            overflow: "hidden",
-            boxSizing: "border-box",
+            zIndex: 2,
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "minmax(0, 1.08fr) minmax(0, 0.92fr)",
+            },
+            gap: {
+              xs: 4,
+              md: 4,
+              lg: 5,
+            },
+            alignItems: "center",
           }}
         >
-          <Box
+          <Stack
+            spacing={{
+              xs: 1.8,
+              sm: 2,
+              md: 2.2,
+            }}
             sx={{
-              width: "100%",
-              height: "100%",
-              minHeight: 0,
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "48% 52%",
-                lg: "44% 56%",
+              maxWidth: {
+                xs: 680,
+                md: 640,
+                lg: 690,
               },
-              gridTemplateRows: {
-                xs: "auto minmax(0, 1fr)",
-                md: "1fr",
+              textAlign: {
+                xs: "center",
+                md: "left",
               },
               alignItems: {
-                xs: "start",
-                md: "center",
-              },
-              boxSizing: "border-box",
-              pt: {
-                xs: 2.5,
-                sm: 3,
-                md: 0,
-              },
-              pb: {
-                xs: 3.5,
-                sm: 4,
-                md: 3,
+                xs: "center",
+                md: "flex-start",
               },
             }}
           >
-            <Stack
-              spacing={{ xs: 1.6, sm: 2, md: 3 }}
+            <Box
               sx={{
-                position: "relative",
-                zIndex: 3,
-                width: "100%",
+                width: "fit-content",
+                px: 1.6,
+                py: 0.75,
+                borderRadius: landingColors.radiusXs,
+                bgcolor: "rgba(255, 255, 255, 0.92)",
+                color: landingColors.primary,
+                border: "1px solid rgba(255, 255, 255, 0.55)",
+                fontSize: {
+                  xs: 11,
+                  sm: 12,
+                },
+                fontWeight: 900,
+                letterSpacing: "0.11em",
+                textTransform: "uppercase",
+              }}
+            >
+              Lanzamiento oficial en México
+            </Box>
+
+            <Typography
+              component="h1"
+              sx={{
+                ...landingTypography.landingTitleXL,
                 maxWidth: {
+                  xs: 610,
+                  md: 650,
+                  lg: 680,
+                },
+                color: landingColors.white,
+                fontSize: {
+                  xs: "clamp(32px, 9vw, 44px)",
+                  sm: "clamp(40px, 6vw, 52px)",
+                  md: "clamp(42px, 4vw, 56px)",
+                  lg: "clamp(46px, 3.7vw, 60px)",
+                },
+                lineHeight: {
+                  xs: 1.05,
+                  md: 1.04,
+                },
+                letterSpacing: "-0.045em",
+              }}
+            >
+              El control total
+              <Box component="br" />
+              de tu restaurante
+              <Box component="br" />
+              en un solo Clic.
+            </Typography>
+
+            <Typography
+              sx={{
+                ...landingTypography.landingTextLG,
+                maxWidth: {
+                  xs: 570,
+                  md: 620,
+                },
+                color: "rgba(255, 255, 255, 0.92)",
+                fontSize: {
+                  xs: 15,
+                  sm: 16,
+                  md: 17,
+                },
+                lineHeight: 1.55,
+              }}
+            >
+              Unifica tu Punto de Venta (POS), Menú Digital QR, comandas,
+              inventarios y reportes en una plataforma diseñada para
+              restaurantes modernos.
+            </Typography>
+
+            <Stack
+              direction={{
+                xs: "column",
+                sm: "row",
+              }}
+              spacing={1.4}
+              sx={{
+                width: {
                   xs: "100%",
-                  md: 560,
+                  sm: "auto",
                 },
-                px: {
-                  xs: 2,
-                  sm: 4,
-                  md: 0,
-                },
-                ml: {
-                  xs: 0,
-                  md: "clamp(40px, 5vw, 80px)",
-                  lg: "clamp(80px, 9vw, 170px)",
+                pt: {
+                  xs: 0.8,
+                  md: 1,
                 },
               }}
             >
-              <Typography
-                component="h1"
-                sx={{
-                  ...landingTypography.landingTitleXL,
-                  maxWidth: {
-                    xs: 520,
-                    md: 540,
-                  },
-                  fontSize: {
-                    xs: "clamp(26px, 8vw, 34px)",
-                    sm: 42,
-                    md: "clamp(34px, 4vw, 46px)",
-                    lg: 54,
-                  },
-                  lineHeight: 1.05,
-                  color: landingColors.text,
-                }}
-              >
-                Todo tu restaurante conectado en una sola plataforma
-              </Typography>
-
-              <Typography
-                sx={{
-                  ...landingTypography.landingTextLG,
-                  maxWidth: {
-                    xs: 520,
-                    md: 500,
-                  },
-                  fontSize: {
-                    xs: 14,
-                    sm: 15,
-                    md: 16,
-                  },
-                  lineHeight: 1.45,
-                  color: landingColors.dark,
-                }}
-              >
-                Controla pedidos, mesas, cocina y ventas en tiempo real desde
-                cualquier dispositivo.
-              </Typography>
-
               <Button
                 type="button"
                 onClick={handleRegister}
                 variant="contained"
                 sx={{
+                  ...landingButtonSx.primary,
                   width: {
                     xs: "100%",
-                    sm: 300,
-                    md: 240,
+                    sm: "auto",
+                  },
+                  minWidth: {
+                    sm: 240,
                   },
                   height: {
                     xs: 44,
-                    md: 48,
+                    md: 46,
                   },
-                  borderRadius: 999,
-                  bgcolor: landingColors.white,
-                  color: landingColors.dark,
-                  boxShadow: "0 14px 28px rgba(62, 49, 35, 0.14)",
+                  px: {
+                    xs: 2,
+                    sm: 3,
+                  },
                   fontSize: 14,
                   fontWeight: 900,
-                  textTransform: "uppercase",
-                  mt: {
-                    xs: 0.4,
-                    md: 1.5,
-                  },
-                  "&:hover": {
-                    bgcolor: landingColors.white,
-                    boxShadow: "0 18px 34px rgba(62, 49, 35, 0.18)",
-                    transform: "translateY(-1px)",
-                  },
+                  whiteSpace: "nowrap",
                 }}
               >
-                Registrate
+                Probar gratis por 15 días
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleDemo}
+                variant="contained"
+                sx={{
+                  ...landingButtonSx.primaryInverse,
+                  width: {
+                    xs: "100%",
+                    sm: "auto",
+                  },
+                  minWidth: {
+                    sm: 165,
+                  },
+                  height: {
+                    xs: 44,
+                    md: 46,
+                  },
+                  fontSize: 14,
+                  fontWeight: 900,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Agendar demo
               </Button>
             </Stack>
-
-            <Box
-              sx={{
-                position: "relative",
-                zIndex: 2,
-                width: "100%",
-                height: "100%",
-                minHeight: 0,
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "flex-end",
-                overflow: "hidden",
-                pl: {
-                  xs: 1,
-                  sm: 3,
-                  md: 0,
-                },
-                pb: {
-                  xs: 2.25,
-                  sm: 2.25,
-                  md: 2,
-                },
-              }}
-            >
-              <Box
-                component="img"
-                src="/images/inicio.png"
-                alt="Clic Menu para restaurantes"
-                sx={{
-                  display: "block",
-                  width: {
-                    xs: "min(98vw, 420px)",
-                    sm: "min(84vw, 560px)",
-                    md: "min(48vw, 580px)",
-                    lg: "min(54vw, 760px)",
-                  },
-                  maxHeight: {
-                    xs: "44svh",
-                    sm: "48svh",
-                    md: "72svh",
-                    lg: "82svh",
-                  },
-                  height: "auto",
-                  objectFit: "contain",
-                  objectPosition: "right bottom",
-                  ml: "auto",
-                  mr: 0,
-                }}
-              />
-            </Box>
-          </Box>
+          </Stack>
 
           <Box
             sx={{
-              position: "absolute",
-              left: 0,
-              bottom: 0,
-              width: "100%",
-              height: {
-                xs: 16,
-                md: 22,
+              position: "relative",
+              display: {
+                xs: "none",
+                md: "flex",
               },
-              bgcolor: "#FF741F",
-              zIndex: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: {
+                md: 400,
+                lg: 480,
+              },
+              overflow: "visible",
             }}
-          />
-
-          {scrollLocked && (
-            <Button
-              type="button"
-              onClick={handleUnlockScroll}
-              aria-label="Ver más contenido"
+          >
+            <Box
+              component="img"
+              src="/images/hero-devices-mockup.png"
+              alt="Clic Menu en laptop, tablet y celular"
+              loading="eager"
               sx={{
-                position: "absolute",
-                left: "50%",
-                bottom: 0,
-                zIndex: 30,
+                display: "block",
                 width: {
-                  xs: 50,
-                  md: 58,
+                  md: "540px",
+                  lg: "680px",
+                  xl: "760px",
                 },
-                minWidth: {
-                  xs: 50,
-                  md: 58,
-                },
-                height: {
-                  xs: 50,
-                  md: 58,
-                },
-                borderRadius: 999,
-                bgcolor: "#FF741F",
-                color: "#FFFFFF",
-                transform: "translateX(-50%)",
-                p: 0,
-                boxShadow: "none",
-                "&:hover": {
-                  bgcolor: "#FF741F",
-                  boxShadow: "none",
+                maxWidth: "none",
+                height: "auto",
+                objectFit: "contain",
+                filter: "drop-shadow(0 26px 42px rgba(0, 0, 0, 0.30))",
+                transform: {
+                  md: "translateX(18px)",
+                  lg: "translateX(38px)",
                 },
               }}
-            >
-              <KeyboardArrowDownRoundedIcon
-                sx={{
-                  width: {
-                    xs: 32,
-                    md: 36,
-                  },
-                  height: {
-                    xs: 32,
-                    md: 36,
-                  },
-                  color: "#FFFFFF",
-                }}
-              />
-            </Button>
-          )}
-        </Box>
+            />
+          </Box>
+        </Container>
       </Box>
 
-      <Box ref={nextSectionRef}>
-        <HomeBenefitsSection />
-      </Box>
+      <HomeSolutionsSection />
+      <HomeBusinessTypesSection />
+      <HomeDemoSection />
+      <HomePlansPreviewSection />
 
-      <HomeFeaturesSection />
+
       <HomeFaqSection />
       <LandingFooter />
     </Box>
