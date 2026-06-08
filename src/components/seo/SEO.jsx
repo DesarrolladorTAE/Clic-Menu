@@ -6,7 +6,7 @@ export default function SEO({
   title = "Clic Menu | Sistema para restaurantes con menú QR y punto de venta",
   description = "Digitaliza tu restaurante con Clic Menu. Menú digital QR, punto de venta, control de pedidos, caja, inventario y herramientas para mejorar tu operación.",
   keywords = "clic menu, menú digital, menú QR, punto de venta restaurante, software restaurante, sistema restaurante, POS restaurante",
-  image = "/images/seo/clic-menu-preview.png",
+  image = "https://clicmenu.com.mx/images/seo/clic-menu-preview.png",
   url = "https://clicmenu.com.mx",
   robots = "index, follow",
 }) {
