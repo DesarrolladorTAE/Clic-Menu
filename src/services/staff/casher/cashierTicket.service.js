@@ -181,6 +181,24 @@ function injectPrintScript(html) {
   return `${html}${printScript}`;
 }
 
+
+//Impresiones Windows/Android
+export function isWindowsPrintTarget(code) {
+  const normalizedCode = String(code || "").trim().toLowerCase();
+
+  return normalizedCode === "windows_usb" || normalizedCode === "windows_tcp";
+}
+
+export function isAndroidPrintTarget(code) {
+  const normalizedCode = String(code || "").trim().toLowerCase();
+
+  return normalizedCode === "android_usb" || normalizedCode === "android_tcp";
+}
+
+export function resolveCashierThermalPrintTarget(config) {
+  return String(config?.app_type?.code || "").trim().toLowerCase();
+}
+
 export async function sendCashierThermalPrintPayloadToWindows(payload) {
   if (!payload) {
     throw new Error("No se recibió payload de impresión.");
@@ -191,13 +209,74 @@ export async function sendCashierThermalPrintPayloadToWindows(payload) {
     typeof window.sendPrintPayloadToWindows !== "function"
   ) {
     throw new Error(
-      "La aplicación de impresión térmica no está instalada o no está disponible."
+      "La aplicación de impresión térmica de Windows no está instalada o no está disponible."
     );
   }
 
   const response = await window.sendPrintPayloadToWindows(payload);
 
   return response;
+}
+
+export async function sendCashierThermalPrintPayloadToAndroid(payload) {
+  if (!payload) {
+    throw new Error("No se recibió payload de impresión.");
+  }
+
+  if (
+    typeof window === "undefined" ||
+    !window.AndroidBridge ||
+    typeof window.AndroidBridge.printTicket !== "function"
+  ) {
+    throw new Error(
+      "La aplicación Android de Clic Menu no está disponible o no expuso el puente de impresión."
+    );
+  }
+
+  const payloadJson = JSON.stringify(payload);
+  const response = await window.AndroidBridge.printTicket(payloadJson);
+
+  if (typeof response === "string") {
+    try {
+      const parsed = JSON.parse(response);
+
+      if (parsed && parsed.ok === false) {
+        throw new Error(parsed.message || "Android no pudo imprimir el ticket.");
+      }
+
+      return parsed;
+    } catch (error) {
+      if (error?.message && error.message !== "Unexpected token") {
+        throw error;
+      }
+
+      return response;
+    }
+  }
+
+  return response;
+}
+
+export async function sendCashierThermalPrintPayload(payload, config) {
+  if (!payload) {
+    throw new Error("No se recibió payload de impresión.");
+  }
+
+  const code = resolveCashierThermalPrintTarget(config);
+
+  if (isWindowsPrintTarget(code)) {
+    return await sendCashierThermalPrintPayloadToWindows(payload);
+  }
+
+  if (isAndroidPrintTarget(code)) {
+    return await sendCashierThermalPrintPayloadToAndroid(payload);
+  }
+
+  throw new Error(
+    config?.app_type?.name
+      ? `El tipo de impresión "${config.app_type.name}" no está soportado en este dispositivo.`
+      : "No se pudo identificar el tipo de aplicación de impresión configurado."
+  );
 }
 
 

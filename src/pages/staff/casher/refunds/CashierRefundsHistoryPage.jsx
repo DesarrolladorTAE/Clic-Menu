@@ -20,7 +20,7 @@ import {
   sendCashierSaleTicketWhatsapp,
   fetchCashierSaleTicketPrintConfig,
   fetchCashierSaleTicketPrintPayload,
-  sendCashierThermalPrintPayloadToWindows,
+  sendCashierThermalPrintPayload,
 } from "../../../../services/staff/casher/cashierTicket.service";
 
 import CashierRefundsHeroCard from "../../../../components/staff/casher/refunds/CashierRefundsHeroCard";
@@ -389,7 +389,7 @@ export default function CashierRefundsHistoryPage() {
         throw new Error("No se recibió el payload de impresión térmica.");
       }
 
-      await sendCashierThermalPrintPayloadToWindows(payload);
+      await sendCashierThermalPrintPayload(payload, config);
 
       showAlert({
         severity: "success",

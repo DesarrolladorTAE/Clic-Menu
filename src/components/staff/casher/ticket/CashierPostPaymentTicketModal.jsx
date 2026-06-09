@@ -36,8 +36,11 @@ export default function CashierPostPaymentTicketModal({
   const ticketAvailable = Boolean(ticket?.id);
 
   const thermalPrintEnabled =
-    Boolean(printConfig?.enabled) &&
-    Boolean(printConfig?.show_print_button);
+  Boolean(printConfig?.enabled) &&
+  Boolean(printConfig?.show_print_button);
+
+  const thermalPrintAppName =
+    printConfig?.app_type?.name || "la aplicación de impresión térmica";
 
   return (
     <Dialog
@@ -179,7 +182,7 @@ export default function CashierPostPaymentTicketModal({
                     lineHeight: 1.5,
                   }}
                 >
-                  Esta sucursal tiene habilitada la impresión directa mediante la aplicación local de Windows.
+                  {`Esta sucursal tiene habilitada la impresión directa mediante ${thermalPrintAppName}.`}
                 </Typography>
               </Box>
             ) : null}
