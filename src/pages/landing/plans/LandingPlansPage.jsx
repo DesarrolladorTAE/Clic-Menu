@@ -29,10 +29,48 @@ const planIcons = {
   total: <InsightsRoundedIcon />,
 };
 
+
+const billingOptions = [
+  {
+    key: "monthly",
+    label: "Mensual",
+    helper: "Pagas 1 mes",
+  },
+  {
+    key: "semester",
+    label: "Semestral",
+    helper: "Pagas 5 y recibes 6",
+  },
+  {
+    key: "annual",
+    label: "Anual",
+    helper: "Pagas 10 y recibes 12",
+  },
+];
+
+const billingConfig = {
+  monthly: {
+    suffix: "/ mes",
+    note: "Pago mensual",
+    multiplier: 1,
+  },
+  semester: {
+    suffix: "/ semestre",
+    note: "Paga 5 meses y recibe 6",
+    multiplier: 5,
+  },
+  annual: {
+    suffix: "/ año",
+    note: "Paga 10 meses y recibe 12",
+    multiplier: 10,
+  },
+};
+
 export default function LandingPlansPage() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [plansError, setPlansError] = useState("");
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
 
   useEffect(() => {
     let mounted = true;
@@ -69,7 +107,9 @@ export default function LandingPlansPage() {
   }, []);
 
   const orderedPlans = useMemo(() => {
-    return [...plans].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    return [...plans]
+      .filter((plan) => plan?.slug !== "demo")
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
   }, [plans]);
 
   if (loading) {
@@ -247,7 +287,94 @@ export default function LandingPlansPage() {
               <ErrorCard message={plansError} />
             ) : (
               <>
-                
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    mb: {
+                      xs: 3,
+                      md: 4,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.75,
+                      p: 0.75,
+                      borderRadius: 3,
+                      border: `1px solid ${landingColors.border}`,
+                      bgcolor: landingColors.white,
+                      boxShadow: "0 14px 34px rgba(15,23,42,0.10)",
+                    }}
+                  >
+                    {billingOptions.map((option) => {
+                      const selected = billingPeriod === option.key;
+
+                      return (
+                        <Box
+                          key={option.key}
+                          component="button"
+                          type="button"
+                          onClick={() => setBillingPeriod(option.key)}
+                          sx={{
+                            border: 0,
+                            minWidth: {
+                              xs: 92,
+                              sm: 132,
+                            },
+                            cursor: "pointer",
+                            px: {
+                              xs: 1.5,
+                              sm: 2,
+                            },
+                            py: 1.15,
+                            borderRadius: 2,
+                            bgcolor: selected ? landingColors.orangeLine : "transparent",
+                            color: selected ? landingColors.white : landingColors.muted,
+                            fontWeight: 900,
+                            fontSize: {
+                              xs: 12,
+                              sm: 14,
+                            },
+                            lineHeight: 1,
+                            transform: selected ? "translateY(-1px)" : "translateY(0)",
+                            boxShadow: selected
+                              ? "0 10px 22px rgba(255,116,31,0.28)"
+                              : "none",
+                            transition:
+                              "background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease",
+                            "&:hover": {
+                              bgcolor: selected ? landingColors.terracotta : "#FFF1E8",
+                              transform: "translateY(-1px)",
+                            },
+                          }}
+                        >
+                          <Stack spacing={0.35} alignItems="center">
+                            <Box component="span">{option.label}</Box>
+
+                            <Box
+                              component="span"
+                              sx={{
+                                display: {
+                                  xs: "none",
+                                  sm: "block",
+                                },
+                                fontSize: 10,
+                                fontWeight: 800,
+                                opacity: 0.78,
+                              }}
+                            >
+                              {option.helper}
+                            </Box>
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+
                 <Box
                   sx={{
                     display: "grid",
@@ -267,6 +394,7 @@ export default function LandingPlansPage() {
                       key={plan.id || plan.slug}
                       plan={plan}
                       recommended={plan.slug === recommendedSlug}
+                      billingPeriod={billingPeriod}
                     />
                   ))}
                 </Box>
@@ -385,10 +513,15 @@ export default function LandingPlansPage() {
   );
 }
 
-function LandingPlanCard({ plan, recommended = false }) {
+function LandingPlanCard({ plan, recommended = false, billingPeriod = "monthly" }) {
   const features = Array.isArray(plan?.features) ? plan.features : [];
-  const amount = Number(plan?.price?.amount || 0);
-  const currency = plan?.price?.currency || "MXN";
+  const baseAmount = Number(plan?.price?.amount || plan?.monthly_price || 0);
+  const selectedBilling = billingConfig[billingPeriod] || billingConfig.monthly;
+  const amount =
+    plan?.billing_prices?.[billingPeriod] ??
+    baseAmount * selectedBilling.multiplier;
+
+  const currency = plan?.price?.currency || plan?.currency || "MXN";
   const icon = planIcons[plan?.slug] || <RestaurantRoundedIcon />;
 
   return (
@@ -528,8 +661,21 @@ function LandingPlanCard({ plan, recommended = false }) {
                   : landingColors.muted,
               }}
             >
-              {currency} / mes
+              {currency} {selectedBilling.suffix}
             </Typography>
+          </Typography>
+          
+          <Typography
+            sx={{
+              mt: 1,
+              fontSize: 13,
+              fontWeight: 900,
+              color: recommended
+                ? landingColors.yellow
+                : landingColors.terracotta,
+            }}
+          >
+            {selectedBilling.note}
           </Typography>
         </Box>
 

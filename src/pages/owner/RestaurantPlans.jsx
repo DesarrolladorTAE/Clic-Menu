@@ -42,6 +42,7 @@ export default function RestaurantPlans() {
   const [busyPlanId, setBusyPlanId] = useState(null);
   const [visibleGroupIndex, setVisibleGroupIndex] = useState(0);
   const [confirmingPayPal, setConfirmingPayPal] = useState(false);
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
 
   const [paypalConfig, setPaypalConfig] = useState(null);
   const [paypalDialogOpen, setPaypalDialogOpen] = useState(false);
@@ -88,6 +89,25 @@ export default function RestaurantPlans() {
     if (!currentPlanSlug) return true;
     return currentPlanSlug === "demo";
   }, [currentPlanSlug]);
+
+
+  const billingOptions = [
+    {
+      key: "monthly",
+      label: "Mensual",
+      helper: "Pagas 1 mes",
+    },
+    {
+      key: "semester",
+      label: "Semestral",
+      helper: "Pagas 5 y recibes 6",
+    },
+    {
+      key: "annual",
+      label: "Anual",
+      helper: "Pagas 10 y recibes 12",
+    },
+  ];
 
   const load = async () => {
     setLoading(true);
@@ -228,6 +248,8 @@ export default function RestaurantPlans() {
 
       return;
     }
+
+    setBusyPlanId(planId);
 
     setSelectedPaypalPlan({
       planId,
@@ -380,7 +402,92 @@ export default function RestaurantPlans() {
           daysRemaining={daysRemaining}
         />
 
-        
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.75,
+              p: 0.75,
+              borderRadius: 3,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "background.paper",
+              boxShadow: "0 14px 34px rgba(15,23,42,0.10)",
+            }}
+          >
+            {billingOptions.map((option) => {
+              const selected = billingPeriod === option.key;
+
+              return (
+                <Box
+                  key={option.key}
+                  component="button"
+                  type="button"
+                  onClick={() => setBillingPeriod(option.key)}
+                  disabled={busyPlanId !== null || confirmingPayPal}
+                  sx={{
+                    border: 0,
+                    minWidth: {
+                      xs: 92,
+                      sm: 132,
+                    },
+                    cursor: busyPlanId !== null || confirmingPayPal ? "not-allowed" : "pointer",
+                    px: {
+                      xs: 1.5,
+                      sm: 2,
+                    },
+                    py: 1.15,
+                    borderRadius: 2,
+                    bgcolor: selected ? "primary.main" : "transparent",
+                    color: selected ? "#fff" : "text.secondary",
+                    fontWeight: 900,
+                    fontSize: {
+                      xs: 12,
+                      sm: 14,
+                    },
+                    lineHeight: 1,
+                    transform: selected ? "translateY(-1px)" : "translateY(0)",
+                    boxShadow: selected ? "0 10px 22px rgba(25,118,210,0.28)" : "none",
+                    transition:
+                      "background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease",
+                    opacity: busyPlanId !== null || confirmingPayPal ? 0.7 : 1,
+                    "&:hover": {
+                      bgcolor: selected ? "primary.dark" : "action.hover",
+                      transform:
+                        busyPlanId !== null || confirmingPayPal ? "none" : "translateY(-1px)",
+                    },
+                  }}
+                >
+                  <Stack spacing={0.35} alignItems="center">
+                    <Box component="span">{option.label}</Box>
+
+                    <Box
+                      component="span"
+                      sx={{
+                        display: {
+                          xs: "none",
+                          sm: "block",
+                        },
+                        fontSize: 10,
+                        fontWeight: 800,
+                        opacity: 0.78,
+                      }}
+                    >
+                      {option.helper}
+                    </Box>
+                  </Stack>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+
         <Box
           sx={{
             display: "grid",
@@ -407,6 +514,7 @@ export default function RestaurantPlans() {
                 isCurrent={isCurrent}
                 isDisabled={isDisabled}
                 busy={busyPlanId === p.id}
+                billingPeriod={billingPeriod}
                 onSubscribe={onSubscribe}
               />
             );

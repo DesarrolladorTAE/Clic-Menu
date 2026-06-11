@@ -1,7 +1,6 @@
 import {
-  Box, Button, Card, CardContent, MenuItem, Stack, TextField, Typography,
+  Box, Button, Card, CardContent, Stack, Typography,
 } from "@mui/material";
-import { useState } from "react";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 
 export default function PlanCard({
@@ -9,32 +8,35 @@ export default function PlanCard({
   isCurrent = false,
   isDisabled = false,
   busy = false,
+  billingPeriod = "monthly",
   onSubscribe,
 }) {
-  const [selectedMonths, setSelectedMonths] = useState(1);
   const includes = Array.isArray(plan?.includes) ? plan.includes : [];
 
-  const monthOptions = [
-    {
-      value: 1,
-      label: "1 mes",
-      helper: "Pagas 1 mes",
+ const billingConfig = {
+    monthly: {
+      months: 1,
+      label: "Plan mensual",
+      suffix: "/ mes",
     },
-    {
-      value: 6,
-      label: "6 meses",
-      helper: "Pagas 5 y obtienes 6",
+    semester: {
+      months: 6,
+      label: "Plan semestral",
+      suffix: "/ semestre",
     },
-    {
-      value: 12,
-      label: "12 meses",
-      helper: "Pagas 10 y obtienes 12",
+    annual: {
+      months: 12,
+      label: "Plan anual",
+      suffix: "/ año",
     },
-  ];
+ };
 
-  const selectedOption =
-    monthOptions.find((option) => option.value === selectedMonths) ||
-    monthOptions[0];
+  const selectedBilling = billingConfig[billingPeriod] || billingConfig.monthly;
+
+  const displayPrice =
+    plan?.billing_prices?.[billingPeriod] ??
+    Number(plan?.monthly_price || 0);
+
 
   return (
     <Card
@@ -140,7 +142,9 @@ export default function PlanCard({
                 color: isCurrent ? "#fff" : "text.primary",
               }}
             >
-              {plan.monthly_price === null ? "Desde" : `$${plan.monthly_price}`}
+              {plan.monthly_price === null
+                ? "Desde"
+                : `$${Number(displayPrice).toLocaleString("es-MX")}`}
               <Typography
                 component="span"
                 sx={{
@@ -156,6 +160,17 @@ export default function PlanCard({
 
             <Typography
               sx={{
+                mt: -0.5,
+                fontSize: 13,
+                fontWeight: 800,
+                color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
+              }}
+            >
+              {selectedBilling.label} {selectedBilling.suffix}
+            </Typography>
+
+            <Typography
+              sx={{
                 fontSize: 14,
                 lineHeight: 1.55,
                 color: isCurrent ? "rgba(255,255,255,0.88)" : "text.secondary",
@@ -166,42 +181,9 @@ export default function PlanCard({
             </Typography>
           </Stack>
 
-          <Box>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Periodo"
-              value={selectedMonths}
-              disabled={isDisabled || busy}
-              onChange={(event) => setSelectedMonths(Number(event.target.value))}
-              helperText={selectedOption.helper}
-              sx={{
-                "& .MuiInputBase-root": {
-                  borderRadius: 2,
-                  backgroundColor: isCurrent ? "rgba(255,255,255,0.12)" : "background.paper",
-                  color: isCurrent ? "#fff" : "text.primary",
-                },
-                "& .MuiInputLabel-root": {
-                  color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
-                },
-                "& .MuiFormHelperText-root": {
-                  color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
-                  fontWeight: 700,
-                },
-              }}
-            >
-              {monthOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-
           <Button
-            onClick={() => onSubscribe(plan.id, selectedMonths)}
-            disabled={isDisabled}
+            onClick={() => onSubscribe(plan.id, selectedBilling.months)}
+            disabled={isDisabled || busy}
             variant={isCurrent ? "contained" : "outlined"}
             sx={{
               height: 46,
