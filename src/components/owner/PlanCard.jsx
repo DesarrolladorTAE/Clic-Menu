@@ -315,7 +315,7 @@ function FeatureRow({ text, isCurrent, variant = "included" }) {
               : "#fff"
             : isExcluded
             ? "error.main"
-            : "primary.main",
+            : "#2eae18",
           flexShrink: 0,
         }}
       />

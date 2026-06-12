@@ -779,10 +779,10 @@ function FeatureRow({ text, recommended, variant = "included" }) {
           color: recommended
             ? isExcluded
               ? "rgba(255,255,255,0.45)"
-              : landingColors.yellow
+              : "#2eae18"
             : isExcluded
             ? "#D14343"
-            : landingColors.orangeLine,
+            : "#2eae18",
           flexShrink: 0,
         }}
       />
