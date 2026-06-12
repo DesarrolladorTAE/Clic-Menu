@@ -2,6 +2,7 @@ import {
   Box, Button, Card, CardContent, Stack, Typography,
 } from "@mui/material";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 
 export default function PlanCard({
   plan,
@@ -11,25 +12,33 @@ export default function PlanCard({
   billingPeriod = "monthly",
   onSubscribe,
 }) {
-  const includes = Array.isArray(plan?.includes) ? plan.includes : [];
+  const includedFeatures = Array.isArray(plan?.features?.included)
+    ? plan.features.included
+    : Array.isArray(plan?.includes)
+    ? plan.includes
+    : [];
 
- const billingConfig = {
-    monthly: {
-      months: 1,
-      label: "Plan mensual",
-      suffix: "/ mes",
-    },
-    semester: {
-      months: 6,
-      label: "Plan semestral",
-      suffix: "/ semestre",
-    },
-    annual: {
-      months: 12,
-      label: "Plan anual",
-      suffix: "/ año",
-    },
- };
+  const excludedFeatures = Array.isArray(plan?.features?.excluded)
+    ? plan.features.excluded
+    : [];
+
+  const billingConfig = {
+      monthly: {
+        months: 1,
+        label: "Plan mensual",
+        suffix: "/ mes",
+      },
+      semester: {
+        months: 6,
+        label: "Plan semestral",
+        suffix: "/ semestre",
+      },
+      annual: {
+        months: 12,
+        label: "Plan anual",
+        suffix: "/ año",
+      },
+  };
 
   const selectedBilling = billingConfig[billingPeriod] || billingConfig.monthly;
 
@@ -218,44 +227,95 @@ export default function PlanCard({
                 : "divider",
             }}
           >
-            <Stack spacing={1.2}>
-              <FeatureRow
-                text={`Sucursales: ${
-                  plan.max_branches === null ? "Ilimitadas" : plan.max_branches
-                }`}
-                isCurrent={isCurrent}
-              />
+            <Stack spacing={2}>
+              <FeatureSectionTitle text="Incluye" isCurrent={isCurrent} />
 
-              {includes.length > 0 ? (
-                includes.map((item, idx) => (
+              <Stack spacing={1.2}>
+                {includedFeatures.length > 0 ? (
+                  includedFeatures.map((item, idx) => (
+                    <FeatureRow
+                      key={`${plan.id}-included-${idx}`}
+                      text={item}
+                      isCurrent={isCurrent}
+                      variant="included"
+                    />
+                  ))
+                ) : (
                   <FeatureRow
-                    key={`${plan.id}-${idx}`}
-                    text={item}
+                    text="Sin beneficios listados"
                     isCurrent={isCurrent}
+                    variant="included"
                   />
-                ))
-              ) : (
-                <FeatureRow
-                  text="Sin beneficios listados"
-                  isCurrent={isCurrent}
-                />
-              )}
+                )}
+              </Stack>
+
+              {excludedFeatures.length > 0 ? (
+                <Box
+                  sx={{
+                    pt: 1.5,
+                    borderTop: "1px solid",
+                    borderColor: isCurrent
+                      ? "rgba(255,255,255,0.18)"
+                      : "divider",
+                  }}
+                >
+                  <Stack spacing={1.2}>
+                    <FeatureSectionTitle text="No incluye" isCurrent={isCurrent} />
+
+                    {excludedFeatures.map((item, idx) => (
+                      <FeatureRow
+                        key={`${plan.id}-excluded-${idx}`}
+                        text={item}
+                        isCurrent={isCurrent}
+                        variant="excluded"
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              ) : null}
             </Stack>
           </Box>
+
+
         </Stack>
       </CardContent>
     </Card>
   );
 }
 
-function FeatureRow({ text, isCurrent }) {
+function FeatureSectionTitle({ text, isCurrent }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 13,
+        fontWeight: 900,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
+      }}
+    >
+      {text}
+    </Typography>
+  );
+}
+
+function FeatureRow({ text, isCurrent, variant = "included" }) {
+  const isExcluded = variant === "excluded";
+  const Icon = isExcluded ? CancelRoundedIcon : CheckCircleRoundedIcon;
+
   return (
     <Stack direction="row" spacing={1.2} alignItems="flex-start">
-      <CheckCircleRoundedIcon
+      <Icon
         sx={{
           fontSize: 18,
           mt: "2px",
-          color: isCurrent ? "#fff" : "primary.main",
+          color: isCurrent
+            ? isExcluded
+              ? "rgba(255,255,255,0.62)"
+              : "#fff"
+            : isExcluded
+            ? "error.main"
+            : "primary.main",
           flexShrink: 0,
         }}
       />
@@ -264,7 +324,13 @@ function FeatureRow({ text, isCurrent }) {
         sx={{
           fontSize: 14,
           lineHeight: 1.5,
-          color: isCurrent ? "rgba(255,255,255,0.92)" : "text.primary",
+          color: isCurrent
+            ? isExcluded
+              ? "rgba(255,255,255,0.62)"
+              : "rgba(255,255,255,0.92)"
+            : isExcluded
+            ? "text.secondary"
+            : "text.primary",
         }}
       >
         {text}

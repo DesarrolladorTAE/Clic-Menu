@@ -5,6 +5,7 @@ import {
 } from "@mui/material";
 
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
@@ -514,7 +515,15 @@ export default function LandingPlansPage() {
 }
 
 function LandingPlanCard({ plan, recommended = false, billingPeriod = "monthly" }) {
-  const features = Array.isArray(plan?.features) ? plan.features : [];
+  const includedFeatures = Array.isArray(plan?.features?.included)
+    ? plan.features.included
+    : Array.isArray(plan?.includes)
+    ? plan.includes
+    : [];
+
+  const excludedFeatures = Array.isArray(plan?.features?.excluded)
+    ? plan.features.excluded
+    : [];
   const baseAmount = Number(plan?.price?.amount || plan?.monthly_price || 0);
   const selectedBilling = billingConfig[billingPeriod] || billingConfig.monthly;
   const amount =
@@ -681,31 +690,6 @@ function LandingPlanCard({ plan, recommended = false, billingPeriod = "monthly" 
 
         <Box
           sx={{
-            p: 1.5,
-            borderRadius: 2,
-            bgcolor: recommended ? "rgba(255,255,255,0.08)" : "#FFF9F0",
-            border: recommended
-              ? "1px solid rgba(255,255,255,0.12)"
-              : `1px solid ${landingColors.border}`,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 900,
-              color: recommended ? landingColors.yellow : landingColors.terracotta,
-            }}
-          >
-            Sucursales:{" "}
-            {plan?.max_branches === null
-              ? "Ilimitadas"
-              : plan?.max_branches || 1}
-          </Typography>
-        </Box>
-
-        <Stack
-          spacing={1.15}
-          sx={{
             pt: 2,
             mt: "auto",
             borderTop: recommended
@@ -713,28 +697,92 @@ function LandingPlanCard({ plan, recommended = false, billingPeriod = "monthly" 
               : `1px solid ${landingColors.border}`,
           }}
         >
-          {features.map((item, index) => (
-            <FeatureRow
-              key={`${plan?.slug}-${index}`}
-              text={item}
-              recommended={recommended}
-            />
-          ))}
-        </Stack>
+          <Stack spacing={2}>
+            <FeatureSectionTitle text="Incluye" recommended={recommended} />
+
+            <Stack spacing={1.15}>
+              {includedFeatures.length > 0 ? (
+                includedFeatures.map((item, index) => (
+                  <FeatureRow
+                    key={`${plan?.slug}-included-${index}`}
+                    text={item}
+                    recommended={recommended}
+                    variant="included"
+                  />
+                ))
+              ) : (
+                <FeatureRow
+                  text="Sin beneficios listados"
+                  recommended={recommended}
+                  variant="included"
+                />
+              )}
+            </Stack>
+
+            {excludedFeatures.length > 0 ? (
+              <Box
+                sx={{
+                  pt: 1.5,
+                  borderTop: recommended
+                    ? "1px solid rgba(255,255,255,0.12)"
+                    : `1px solid ${landingColors.border}`,
+                }}
+              >
+                <Stack spacing={1.15}>
+                  <FeatureSectionTitle text="No incluye" recommended={recommended} />
+
+                  {excludedFeatures.map((item, index) => (
+                    <FeatureRow
+                      key={`${plan?.slug}-excluded-${index}`}
+                      text={item}
+                      recommended={recommended}
+                      variant="excluded"
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            ) : null}
+          </Stack>
+        </Box>
 
       </Stack>
     </Paper>
   );
 }
 
-function FeatureRow({ text, recommended }) {
+function FeatureSectionTitle({ text, recommended }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 13,
+        fontWeight: 900,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        color: recommended ? "rgba(255,255,255,0.72)" : landingColors.muted,
+      }}
+    >
+      {text}
+    </Typography>
+  );
+}
+
+function FeatureRow({ text, recommended, variant = "included" }) {
+  const isExcluded = variant === "excluded";
+  const Icon = isExcluded ? CancelRoundedIcon : CheckCircleRoundedIcon;
+
   return (
     <Stack direction="row" spacing={1.15} alignItems="flex-start">
-      <CheckCircleRoundedIcon
+      <Icon
         sx={{
           fontSize: 18,
           mt: "2px",
-          color: recommended ? landingColors.yellow : landingColors.orangeLine,
+          color: recommended
+            ? isExcluded
+              ? "rgba(255,255,255,0.45)"
+              : landingColors.yellow
+            : isExcluded
+            ? "#D14343"
+            : landingColors.orangeLine,
           flexShrink: 0,
         }}
       />
@@ -743,7 +791,13 @@ function FeatureRow({ text, recommended }) {
         sx={{
           fontSize: 14,
           lineHeight: 1.5,
-          color: recommended ? "rgba(255,255,255,0.84)" : landingColors.text,
+          color: recommended
+            ? isExcluded
+              ? "rgba(255,255,255,0.56)"
+              : "rgba(255,255,255,0.84)"
+            : isExcluded
+            ? landingColors.muted
+            : landingColors.text,
         }}
       >
         {text}
