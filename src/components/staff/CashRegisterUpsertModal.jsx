@@ -68,6 +68,22 @@ export default function CashRegisterUpsertModal({
     });
   }, [warehouses]);
 
+  const availableWarehouses = useMemo(() => {
+    if (!branchId) return activeWarehouses;
+
+    return activeWarehouses.filter((warehouse) => {
+      const warehouseBranchId = warehouse?.branch_id;
+
+      return (
+        warehouseBranchId === null ||
+        warehouseBranchId === undefined ||
+        Number(warehouseBranchId) === Number(branchId) ||
+        warehouse?.scope === "global" ||
+        warehouse?.is_global === true
+      );
+    });
+  }, [activeWarehouses, branchId]);
+
   const selectedBranchLabel = useMemo(() => {
     if (!editing?.branch_id) return "—";
     const branch = activeBranches.find(
@@ -132,7 +148,6 @@ export default function CashRegisterUpsertModal({
 
       try {
         const response = await getWarehouses(restaurantId, {
-          branch_id: Number(selectedBranchId),
           status: "active",
         });
 
@@ -412,7 +427,7 @@ export default function CashRegisterUpsertModal({
                           helperText={
                             loadingWarehouses
                               ? "Cargando almacenes..."
-                              : activeWarehouses.length === 0
+                              : availableWarehouses.length === 0
                                 ? "No hay almacenes activos disponibles para esta sucursal."
                                 : ""
                           }
@@ -422,7 +437,7 @@ export default function CashRegisterUpsertModal({
                             ) : null,
                           }}
                         >
-                          {activeWarehouses.map((warehouse) => (
+                          {availableWarehouses.map((warehouse) => (
                             <MenuItem key={warehouse.id} value={String(warehouse.id)}>
                               {warehouse.name}
                             </MenuItem>
