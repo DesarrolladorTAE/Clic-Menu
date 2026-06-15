@@ -49,6 +49,10 @@ function shouldDisableQrToggle({ qr, busy, canManageQr }) {
   return !!qr?.blocked_by_plan || !!qr?.blocked_by_attention_mode;
 }
 
+function buildShareUrl(qr) {
+  return `https://api.clicmenu.com.mx/share/menu/${qr.token}`;
+}
+
 export default function BranchQrListPanel({
   items = [],
   total = 0,
@@ -365,9 +369,9 @@ export default function BranchQrListPanel({
                       ) : null}
 
                       <Stack direction="row" spacing={1} flexWrap="wrap">
-                        <Tooltip title="Copiar URL">
+                        <Tooltip title="Copiar URL para compartir">
                           <IconButton
-                            onClick={() => onCopy(qr.public_url)}
+                            onClick={() => onCopy(buildShareUrl(qr))}
                             sx={iconNeutralSx}
                           >
                             <ContentCopyOutlinedIcon fontSize="small" />
