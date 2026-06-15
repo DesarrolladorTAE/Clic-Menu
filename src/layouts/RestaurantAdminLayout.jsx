@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box } from "@mui/material";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import RestaurantAdminSidebar from "../components/layout/RestaurantAdminSidebar";
@@ -55,6 +55,31 @@ export default function RestaurantAdminLayout() {
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const loadBranches = useCallback(async () => {
+    if (!restaurantId) return [];
+
+    setBranchesLoading(true);
+
+    try {
+      const res = await getBranchesByRestaurant(restaurantId);
+
+      const rows = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+        ? res.data
+        : [];
+
+      setBranches(rows);
+
+      return rows;
+    } catch (error) {
+      setBranches([]);
+      return [];
+    } finally {
+      setBranchesLoading(false);
+    }
+  }, [restaurantId]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -96,41 +121,8 @@ export default function RestaurantAdminLayout() {
   }, [restaurantId]);
 
   useEffect(() => {
-    let mounted = true;
-
-    const loadBranches = async () => {
-      if (!restaurantId) return;
-
-      setBranchesLoading(true);
-
-      try {
-        const res = await getBranchesByRestaurant(restaurantId);
-
-        if (!mounted) return;
-
-        const rows = Array.isArray(res)
-          ? res
-          : Array.isArray(res?.data)
-          ? res.data
-          : [];
-
-        setBranches(rows);
-      } catch (error) {
-        if (!mounted) return;
-        setBranches([]);
-      } finally {
-        if (mounted) {
-          setBranchesLoading(false);
-        }
-      }
-    };
-
     loadBranches();
-
-    return () => {
-      mounted = false;
-    };
-  }, [restaurantId]);
+  }, [loadBranches]);
 
   const currentKey = useMemo(() => {
     if (pathname.includes("/edit-info")) return "edit-info";
@@ -205,7 +197,7 @@ export default function RestaurantAdminLayout() {
     restaurantName,
   ]);
 
-  const handleNavigate = (key) => {
+  const handleNavigate = async (key) => {
 
     if (!canAccessKey(key)) {
       nav(`${base}/edit-info`, {
@@ -242,16 +234,13 @@ export default function RestaurantAdminLayout() {
     }
 
     if (key === "operation") {
-      if (branchesLoading) {
-        showAlert({
-          severity: "info",
-          title: "Validando sucursales",
-          message: "Estamos revisando si el restaurante tiene una sucursal activa.",
-        });
-        return;
-      }
+      const freshBranches = await loadBranches();
 
-      if (!hasActiveBranch) {
+      const hasFreshActiveBranch = freshBranches.some(
+        (branch) => String(branch?.status) === "active"
+      );
+
+      if (!hasFreshActiveBranch) {
         showAlert({
           severity: "warning",
           title: "Sucursal requerida",
