@@ -191,6 +191,15 @@ export default function BranchQrListPanel({
             {items.map((qr) => {
               const channelName = qr?.sales_channel?.name || "—";
               const tableName = qr?.table?.name || "General";
+              const typeLabel = typeLabelMap[qr.type] || qr.type;
+
+              const typeDescription =
+                qr.type === "web"
+                  ? "Pedido por WhatsApp"
+                  : qr.type === "delivery"
+                  ? "Menú solo lectura"
+                  : "Menú físico";
+
               const blockedByPlan = !!qr?.blocked_by_plan;
               const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
               const isBlocked = blockedByPlan || blockedByAttentionMode;
@@ -240,7 +249,7 @@ export default function BranchQrListPanel({
                               fontWeight: 700,
                             }}
                           >
-                            {typeLabelMap[qr.type] || qr.type}
+                            {typeLabel} · {typeDescription}
                           </Typography>
                         </Box>
 

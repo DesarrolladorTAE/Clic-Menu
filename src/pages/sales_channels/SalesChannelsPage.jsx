@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Box,
-  CircularProgress,
-  Stack,
-  Typography,
-  useMediaQuery,
+  Box, CircularProgress, Stack, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -31,9 +27,10 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 5;
 const SALON_CODE = "SALON";
+const WHATSAPP_CODE = "WHATSAPP";
 
 const PLAN_CHANNEL_MESSAGE =
-  "Tu plan actual solo permite el canal SALÓN. Para crear o activar canales adicionales, cambia al Plan Gestión o Plan Total.";
+  "Tu plan actual permite trabajar con los canales base SALÓN y WHATSAPP. Para crear o activar canales adicionales, cambia al Plan Gestión o Plan Total.";
 
 function normalizeCode(v) {
   return (v || "")
@@ -44,9 +41,18 @@ function normalizeCode(v) {
     .replace(/[^A-Z0-9_]/g, "");
 }
 
-function isSalonChannel(it) {
+function isSystemChannel(it) {
   const code = normalizeCode(it?.code);
-  return code === SALON_CODE;
+  return code === SALON_CODE || code === WHATSAPP_CODE;
+}
+
+function getSystemChannelLabel(it) {
+  const code = normalizeCode(it?.code);
+
+  if (code === WHATSAPP_CODE) return "WhatsApp";
+  if (code === SALON_CODE) return "Salón";
+
+  return "Este canal";
 }
 
 export default function SalesChannelsPage() {
@@ -131,8 +137,8 @@ export default function SalesChannelsPage() {
   };
 
   const openEdit = (it) => {
-    if (isSalonChannel(it)) {
-      setErr('El canal "Salón" es fijo y no puede editarse.');
+    if (isSystemChannel(it)) {
+      setErr(`El canal "${getSystemChannelLabel(it)}" es fijo y no puede editarse.`);
       return;
     }
 
@@ -167,8 +173,8 @@ export default function SalesChannelsPage() {
   const onSubmit = async () => {
     setModalErr("");
 
-    if (editing?.id && isSalonChannel(editing)) {
-      setModalErr('El canal "Salón" es fijo y no puede modificarse.');
+    if (editing?.id && isSystemChannel(editing)) {
+      setModalErr(`El canal "${getSystemChannelLabel(editing)}" es fijo y no puede modificarse.`);
       return;
     }
 
@@ -193,8 +199,8 @@ export default function SalesChannelsPage() {
       return;
     }
 
-    if (!editing?.id && payload.code === SALON_CODE) {
-      setModalErr('El code "SALON" está reservado y se crea automáticamente.');
+    if (!editing?.id && (payload.code === SALON_CODE || payload.code === WHATSAPP_CODE)) {
+      setModalErr(`El code "${payload.code}" está reservado y se crea automáticamente.`);
       return;
     }
 
@@ -218,8 +224,8 @@ export default function SalesChannelsPage() {
   };
 
   const onToggleStatus = async (it) => {
-    if (isSalonChannel(it)) {
-      setErr('El canal "Salón" es fijo y no puede desactivarse.');
+    if (isSystemChannel(it)) {
+      setErr(`El canal "${getSystemChannelLabel(it)}" es fijo y no puede desactivarse.`);
       return;
     }
 
@@ -242,8 +248,8 @@ export default function SalesChannelsPage() {
   };
 
   const onDelete = async (it) => {
-    if (isSalonChannel(it)) {
-      setErr('El canal "Salón" es fijo y no puede eliminarse.');
+    if (isSystemChannel(it)) {
+      setErr(`El canal "${getSystemChannelLabel(it)}" es fijo y no puede eliminarse.`);
       return;
     }
 
@@ -323,7 +329,7 @@ export default function SalesChannelsPage() {
             hasNext={hasNext}
             prevPage={prevPage}
             nextPage={nextPage}
-            isSalonChannel={isSalonChannel}
+            isSystemChannel={isSystemChannel}
             onCreate={openCreate}
             onEdit={openEdit}
             onDelete={onDelete}

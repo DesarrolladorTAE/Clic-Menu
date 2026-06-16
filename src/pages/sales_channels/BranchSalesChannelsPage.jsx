@@ -28,6 +28,26 @@ import AppAlert from "../../components/common/AppAlert";
 
 const PAGE_SIZE = 5;
 
+const SYSTEM_CHANNEL_CODES = ["SALON", "WHATSAPP"];
+
+function normalizeCode(value) {
+  return (value || "").toString().trim().toUpperCase();
+}
+
+function isSystemChannel(row) {
+  const code = normalizeCode(row?.sales_channel?.code || row?.code);
+  return SYSTEM_CHANNEL_CODES.includes(code);
+}
+
+function getSystemChannelLabel(row) {
+  const code = normalizeCode(row?.sales_channel?.code || row?.code);
+
+  if (code === "WHATSAPP") return "WHATSAPP";
+  if (code === "SALON") return "SALON";
+
+  return "CANAL";
+}
+
 export default function BranchSalesChannelsPage() {
   const nav = useNavigate();
   const location = useLocation();
@@ -252,6 +272,26 @@ export default function BranchSalesChannelsPage() {
     if (!salesChannelId || !selectedBranchId) return;
 
     if (isSaving(salesChannelId)) return;
+
+    if (isSystemChannel(row)) {
+      showAlert({
+        severity: "warning",
+        title: "Canal fijo",
+        message: `El canal ${getSystemChannelLabel(row)} es fijo y no puede desactivarse en sucursal.`,
+      });
+      return;
+    }
+
+    if (br?.blocked_by_plan) {
+      showAlert({
+        severity: "warning",
+        title: "Canal bloqueado por plan",
+        message:
+          br?.blocked_reason ||
+          "Tu plan actual no permite activar este canal de venta en la sucursal.",
+      });
+      return;
+    }
 
     if (ch?.status !== "active") {
       showAlert({
@@ -622,6 +662,8 @@ export default function BranchSalesChannelsPage() {
                           const restaurantActive = ch?.status === "active";
                           const enabled = !!br?.effective_is_active;
                           const busy = isSaving(ch?.id);
+                          const systemChannel = isSystemChannel(r);
+                          const blockedByPlan = !!br?.blocked_by_plan;
 
                           return (
                             <Card
@@ -685,6 +727,23 @@ export default function BranchSalesChannelsPage() {
                                           minWidth: 110,
                                         }}
                                       />
+
+                                      {systemChannel && (
+                                        <Chip
+                                          label="FIJO"
+                                          size="small"
+                                          sx={{ fontWeight: 800 }}
+                                        />
+                                      )}
+
+                                      {blockedByPlan && (
+                                        <Chip
+                                          label="BLOQUEADO POR PLAN"
+                                          color="warning"
+                                          size="small"
+                                          sx={{ fontWeight: 800 }}
+                                        />
+                                      )}
                                     </Stack>
                                   </Stack>
 
@@ -755,7 +814,7 @@ export default function BranchSalesChannelsPage() {
                                           control={
                                             <Switch
                                               checked={enabled}
-                                              disabled={busy || !restaurantActive}
+                                              disabled={busy || !restaurantActive || systemChannel || blockedByPlan}
                                               onChange={() => onToggle(r)}
                                               color="primary"
                                             />
@@ -828,6 +887,8 @@ export default function BranchSalesChannelsPage() {
                               const restaurantActive = ch?.status === "active";
                               const enabled = !!br?.effective_is_active;
                               const busy = isSaving(ch?.id);
+                              const systemChannel = isSystemChannel(r);
+                              const blockedByPlan = !!br?.blocked_by_plan;
 
                               return (
                                 <TableRow
@@ -844,10 +905,35 @@ export default function BranchSalesChannelsPage() {
                                   }}
                                 >
                                   <TableCell>
-                                    <Stack spacing={0.5}>
+                                    <Stack spacing={0.5} alignItems="flex-start">
                                       <Typography sx={{ fontWeight: 800 }}>
                                         {ch?.name || "Canal sin nombre"}
                                       </Typography>
+
+                                      {systemChannel && (
+                                        <Chip
+                                          label="FIJO"
+                                          size="small"
+                                          sx={{
+                                            mt: 0.5,
+                                            fontWeight: 800,
+                                            width: "fit-content",
+                                          }}
+                                        />
+                                      )}
+
+                                      {blockedByPlan && (
+                                        <Chip
+                                          label="BLOQUEADO POR PLAN"
+                                          color="warning"
+                                          size="small"
+                                          sx={{
+                                            mt: 0.5,
+                                            fontWeight: 800,
+                                            width: "fit-content",
+                                          }}
+                                        />
+                                      )}
 
                                       {!restaurantActive && (
                                         <Typography
@@ -900,7 +986,7 @@ export default function BranchSalesChannelsPage() {
                                     >
                                       <Switch
                                         checked={enabled}
-                                        disabled={busy || !restaurantActive}
+                                        disabled={busy || !restaurantActive || systemChannel || blockedByPlan}
                                         onChange={() => onToggle(r)}
                                         color="primary"
                                       />

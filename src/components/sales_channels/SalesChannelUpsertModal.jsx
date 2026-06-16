@@ -19,8 +19,9 @@ function normalizeCode(v) {
     .replace(/[^A-Z0-9_]/g, "");
 }
 
-function isSalonChannel(it) {
-  return normalizeCode(it?.code) === "SALON";
+function isSystemChannel(it) {
+  const code = normalizeCode(it?.code);
+  return code === "SALON" || code === "WHATSAPP";
 }
 
 export default function SalesChannelUpsertModal({
@@ -37,7 +38,7 @@ export default function SalesChannelUpsertModal({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const editingIsSalon = isSalonChannel(editing);
+  const editingIsSystemChannel = isSystemChannel(editing);
 
   if (!open) return null;
 
@@ -89,7 +90,7 @@ export default function SalesChannelUpsertModal({
               Codes recomendados: COMEDOR, DELIVERY, PICKUP, UBER_EATS
             </Typography>
 
-            {editingIsSalon && (
+            {editingIsSystemChannel && (
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                 <LockOutlineIcon sx={{ fontSize: 16, color: "#fff" }} />
                 <Typography
@@ -163,7 +164,7 @@ export default function SalesChannelUpsertModal({
                     value={form.code}
                     onChange={(e) => onChange("code", e.target.value)}
                     placeholder="DELIVERY"
-                    disabled={saving || editingIsSalon}
+                    disabled={saving || editingIsSystemChannel}
                   />
                 }
               />
@@ -175,7 +176,7 @@ export default function SalesChannelUpsertModal({
                     value={form.name}
                     onChange={(e) => onChange("name", e.target.value)}
                     placeholder="Delivery"
-                    disabled={saving || editingIsSalon}
+                    disabled={saving || editingIsSystemChannel}
                   />
                 }
               />
@@ -187,7 +188,7 @@ export default function SalesChannelUpsertModal({
                     <Select
                       value={form.status}
                       onChange={(e) => onChange("status", e.target.value)}
-                      disabled={saving || editingIsSalon}
+                      disabled={saving || editingIsSystemChannel}
                       IconComponent={KeyboardArrowDownIcon}
                       sx={selectSx}
                       MenuProps={{
@@ -230,7 +231,7 @@ export default function SalesChannelUpsertModal({
 
             <Button
               onClick={onSubmit}
-              disabled={saving || editingIsSalon}
+              disabled={saving || editingIsSystemChannel}
               variant="contained"
               startIcon={editing ? <SaveIcon /> : <AddIcon />}
               sx={{

@@ -25,6 +25,18 @@ function isSalonChannel(channel) {
   return code === "SALON" || name === "salón" || name === "salon";
 }
 
+function isWhatsappChannel(channel) {
+  const name = String(channel?.name || "").trim().toLowerCase();
+  const code = String(channel?.code || "").trim().toUpperCase();
+
+  return (
+    code === "WHATSAPP" ||
+    name === "whatsapp" ||
+    name === "whats app" ||
+    name === "whatssapp"
+  );
+}
+
 function getQrNoticeForCreate({
   type,
   tableId,
@@ -38,7 +50,7 @@ function getQrNoticeForCreate({
   }
 
   if (type === "web") {
-    return "Menú web, solo lectura y sin mesa.";
+    return "Menú web para que el cliente seleccione productos y envíe el pedido por WhatsApp. No usa mesa ni comanda interna.";
   }
 
   if (type === "physical" && isDirectAttentionMode) {
@@ -96,6 +108,7 @@ export default function BranchQrCreateModal({
   selectedBranch,
   settings,
   salonChannel,
+  whatsappChannel,
   channelOptionsRaw = [],
   tableOptions = [],
   qrUiMeta = null,
@@ -132,14 +145,19 @@ export default function BranchQrCreateModal({
   }, [qrTypeOptions]);
 
   const defaultValues = useMemo(() => {
+    const defaultChannelId =
+      defaultType === "web"
+        ? whatsappChannel?.id
+        : salonChannel?.id;
+
     return {
       name: "",
       type: defaultType,
-      sales_channel_id: salonChannel?.id ? String(salonChannel.id) : "",
+      sales_channel_id: defaultChannelId ? String(defaultChannelId) : "",
       table_id: "",
       is_active: true,
     };
-  }, [defaultType, salonChannel]);
+  }, [defaultType, salonChannel, whatsappChannel]);
 
   const { control, watch, reset, setValue, handleSubmit } = useForm({
     defaultValues,
@@ -162,16 +180,18 @@ export default function BranchQrCreateModal({
       return salonChannel ? [salonChannel] : [];
     }
 
-    if (type === "delivery") {
-      return (channelOptionsRaw || []).filter((c) => !isSalonChannel(c));
+    if (type === "web") {
+      return whatsappChannel ? [whatsappChannel] : [];
     }
 
-    if (type === "web") {
-      return salonChannel ? [salonChannel] : [];
+    if (type === "delivery") {
+      return (channelOptionsRaw || []).filter(
+        (c) => !isSalonChannel(c) && !isWhatsappChannel(c)
+      );
     }
 
     return channelOptionsRaw || [];
-  }, [type, channelOptionsRaw, salonChannel]);
+  }, [type, channelOptionsRaw, salonChannel, whatsappChannel]);
 
   const filteredTableOptions = useMemo(() => {
     if (type !== "physical") return [];
@@ -228,14 +248,31 @@ export default function BranchQrCreateModal({
 
     const currentChannelId = salesChannelId ? Number(salesChannelId) : null;
 
-    if (type === "physical" || type === "web") {
+    if (type === "physical") {
       const wanted = salonChannel?.id ? String(salonChannel.id) : "";
+
       if (wanted && salesChannelId !== wanted) {
         setValue("sales_channel_id", wanted);
       }
+
       if (!wanted && salesChannelId) {
         setValue("sales_channel_id", "");
       }
+
+      return;
+    }
+
+    if (type === "web") {
+      const wanted = whatsappChannel?.id ? String(whatsappChannel.id) : "";
+
+      if (wanted && salesChannelId !== wanted) {
+        setValue("sales_channel_id", wanted);
+      }
+
+      if (!wanted && salesChannelId) {
+        setValue("sales_channel_id", "");
+      }
+
       return;
     }
 
@@ -269,6 +306,7 @@ export default function BranchQrCreateModal({
     tableId,
     salesChannelId,
     salonChannel,
+    whatsappChannel,
     filteredChannelOptions,
     qrTypeOptions,
     defaultType,
@@ -445,6 +483,7 @@ export default function BranchQrCreateModal({
                             fullWidth
                             value={field.value ?? ""}
                             onChange={field.onChange}
+                            disabled={type === "physical" || type === "web"}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
@@ -467,8 +506,8 @@ export default function BranchQrCreateModal({
                       type === "physical"
                         ? "Físico: solo permite Salón."
                         : type === "delivery"
-                        ? "Delivery: permite todos los canales menos Salón."
-                        : "Web: solo permite Salón."
+                        ? "Delivery: permite canales externos. No permite Salón ni WhatsApp."
+                        : "Web: solo permite WhatsApp."
                     }
                   />
 

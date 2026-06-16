@@ -35,17 +35,13 @@ export default function BranchQrContextCard({
         chipColor: "success",
       };
 
-  const channelContext = readonlyByChannelAllowed
-    ? {
-        value: `${contextData?.totalChannels || 0} canal(es)`,
-        chipLabel: "Web/Delivery permitido",
-        chipColor: "success",
-      }
-    : {
-        value: `${contextData?.totalChannels || 0} canal(es)`,
-        chipLabel: "Web/Delivery bloqueado",
-        chipColor: "warning",
-      };
+  const channelContext = {
+    value: `${contextData?.totalChannels || 0} canal(es)`,
+    chipLabel: readonlyByChannelAllowed
+      ? "Web WhatsApp + Delivery"
+      : "Web WhatsApp permitido",
+    chipColor: "success",
+  };
 
   return (
     <Paper
@@ -131,7 +127,7 @@ export default function BranchQrContextCard({
               fontWeight: 700,
             }}
           >
-            Web y Delivery no están disponibles para este plan.{" "}
+            Web para pedidos por WhatsApp está disponible. Delivery no está disponible para este plan.{" "}
             {readonlyByChannelBlockedReason}
           </Typography>
         ) : null}

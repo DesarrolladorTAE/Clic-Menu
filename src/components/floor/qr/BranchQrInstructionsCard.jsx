@@ -36,7 +36,7 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           text={
             isDirectAttentionMode
               ? "En modo directo solo puedes crear QR físico general, sin mesa vinculada."
-              : "Los QRs físicos pueden ser generales o ligarse a una mesa. Los web y delivery siempre se generan sin mesa."
+              : "Los QRs físicos pueden ser generales o ligarse a una mesa. Los QR Web y Delivery siempre se generan sin mesa."
           }
         />
 
@@ -44,9 +44,9 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           step="3"
           text={
             readonlyByChannelAllowed
-              ? "Web y Delivery estarán disponibles como QRs de solo lectura por canal cuando el plan y canal seleccionado lo permitan."
-              : "Web y Delivery pueden no estar disponibles si el plan actual no permite QRs de solo lectura por canal."
-          }
+              ? "Web se usa para pedidos por WhatsApp. Delivery se usa como QR de solo lectura para canales externos permitidos por el plan."
+              : "Web se usa para pedidos por WhatsApp. Delivery puede no estar disponible si el plan actual no permite QRs de solo lectura por canal."
+        }
         />
 
         <InstructionRow

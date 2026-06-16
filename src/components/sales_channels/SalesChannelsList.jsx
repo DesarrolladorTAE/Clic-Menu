@@ -26,28 +26,28 @@ export default function SalesChannelsList({
   hasNext,
   prevPage,
   nextPage,
-  isSalonChannel,
+  isSystemChannel,
   onCreate,
   onEdit,
   onDelete,
   onToggleStatus,
 }) {
   const getChannelBlockedByPlan = (it) => {
-    return !isSalonChannel(it) && !canUseAdditionalSalesChannels;
+    return !isSystemChannel(it) && !canUseAdditionalSalesChannels;
   };
 
   const getStatusTooltip = (it) => {
-    const locked = isSalonChannel(it);
+    const locked = isSystemChannel(it);
     const blockedByPlan = getChannelBlockedByPlan(it);
     const active = it.status === "active";
 
-    if (locked) return 'El canal "Salón" no se puede desactivar';
+    if (locked) return 'Este canal es fijo y no se puede desactivar';
     if (blockedByPlan) return planMessage;
     return active ? "Desactivar" : "Activar";
   };
 
   const getActionDisabled = (it) => {
-    return saving || isSalonChannel(it) || getChannelBlockedByPlan(it);
+    return saving || isSystemChannel(it) || getChannelBlockedByPlan(it);
   };
 
   return (
@@ -115,7 +115,7 @@ export default function SalesChannelsList({
             <Stack spacing={1.5} sx={{ p: 2 }}>
               {paginatedItems.map((it) => {
                 const active = it.status === "active";
-                const locked = isSalonChannel(it);
+                const locked = isSystemChannel(it);
                 const blockedByPlan = getChannelBlockedByPlan(it);
 
                 return (
@@ -224,7 +224,7 @@ export default function SalesChannelsList({
                             <Tooltip
                               title={
                                 locked
-                                  ? 'El canal "Salón" no se puede editar'
+                                  ? "Este canal es fijo y no se puede editar"
                                   : blockedByPlan
                                   ? planMessage
                                   : "Editar"
@@ -244,7 +244,7 @@ export default function SalesChannelsList({
                             <Tooltip
                               title={
                                 locked
-                                  ? 'El canal "Salón" no se puede eliminar'
+                                  ? "Este canal es fijo y no se puede eliminar"
                                   : "Eliminar"
                               }
                             >
@@ -292,7 +292,7 @@ export default function SalesChannelsList({
                 <TableBody>
                   {paginatedItems.map((it) => {
                     const active = it.status === "active";
-                    const locked = isSalonChannel(it);
+                    const locked = isSystemChannel(it);
                     const blockedByPlan = getChannelBlockedByPlan(it);
 
                     return (
@@ -387,7 +387,7 @@ export default function SalesChannelsList({
                             <Tooltip
                               title={
                                 locked
-                                  ? 'El canal "Salón" no se puede editar'
+                                  ? "Este canal es fijo y no se puede editar"
                                   : blockedByPlan
                                   ? planMessage
                                   : "Editar"
@@ -407,7 +407,7 @@ export default function SalesChannelsList({
                             <Tooltip
                               title={
                                 locked
-                                  ? 'El canal "Salón" no se puede eliminar'
+                                  ? "Este canal es fijo y no se puede eliminar"
                                   : "Eliminar"
                               }
                             >

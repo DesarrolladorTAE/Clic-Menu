@@ -37,6 +37,18 @@ function isSalonChannel(channel) {
   return code === "SALON" || name === "salón" || name === "salon";
 }
 
+function isWhatsappChannel(channel) {
+  const name = String(channel?.name || "").trim().toLowerCase();
+  const code = String(channel?.code || "").trim().toUpperCase();
+
+  return (
+    code === "WHATSAPP" ||
+    name === "whatsapp" ||
+    name === "whats app" ||
+    name === "whatssapp"
+  );
+}
+
 function unwrapQrCodesPayload(res) {
   if (!res || typeof res !== "object") {
     return {
@@ -302,6 +314,10 @@ export default function BranchQrCodesPage() {
     return channelOptionsRaw.find((c) => isSalonChannel(c)) || null;
   }, [channelOptionsRaw]);
 
+  const whatsappChannel = useMemo(() => {
+    return channelOptionsRaw.find((c) => isWhatsappChannel(c)) || null;
+  }, [channelOptionsRaw]);
+
   const tableOptions = useMemo(() => {
     return (tables || []).map((t) => ({ id: Number(t.id), name: t.name }));
   }, [tables]);
@@ -455,7 +471,25 @@ export default function BranchQrCodesPage() {
         intended_ordering_mode: null,
       };
 
-      if (payload.type === "web" || payload.type === "delivery") {
+      if (payload.type === "web") {
+        if (!whatsappChannel?.id) {
+          showAlert({
+            severity: "error",
+            title: "Canal WHATSAPP no encontrado",
+            message:
+              "No se encontró el canal WHATSAPP activo para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
+          });
+
+          setBusy(false);
+          return;
+        }
+
+        payload.sales_channel_id = Number(whatsappChannel.id);
+        payload.table_id = null;
+        payload.intended_ordering_mode = null;
+      }
+
+      if (payload.type === "delivery") {
         payload.table_id = null;
         payload.intended_ordering_mode = null;
       }
@@ -481,7 +515,24 @@ export default function BranchQrCodesPage() {
 
       const created = unwrapMutationPayload(res);
 
-      setItems((prev) => [created, ...prev]);
+      const selectedChannel =
+        payload.type === "web"
+          ? whatsappChannel
+          : channelOptionsRaw.find(
+              (channel) => Number(channel.id) === Number(payload.sales_channel_id)
+            ) || null;
+
+      const createdWithRelations = {
+        ...created,
+        sales_channel: created?.sales_channel || selectedChannel,
+        table:
+          created?.table ||
+          (payload.table_id
+            ? tableOptions.find((table) => Number(table.id) === Number(payload.table_id)) || null
+            : null),
+      };
+
+      setItems((prev) => [createdWithRelations, ...prev]);
       setCreateOpen(false);
 
       showAlert({
@@ -678,6 +729,7 @@ export default function BranchQrCodesPage() {
         selectedBranch={selectedBranch}
         settings={settings}
         salonChannel={salonChannel}
+        whatsappChannel={whatsappChannel}
         channelOptionsRaw={channelOptionsRaw}
         tableOptions={tableOptions}
         qrUiMeta={qrUiMeta}
