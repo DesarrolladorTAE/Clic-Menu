@@ -10,6 +10,7 @@ import PublicSendOrderModal from "../../../components/menu/public/PublicSendOrde
 
 export default function PublicMenuModals({
   cartOrder,
+  confirmAndCreateOrder,
   allowBaseSend,
   pending,
   canAppend,
@@ -60,7 +61,7 @@ export default function PublicMenuModals({
         cartTotal={cartOrder.cartTotal}
         sendToast={cartOrder.sendToast}
         onClose={() => cartOrder.setSendOpen(false)}
-        onSubmit={cartOrder.submitOrderOrAppend}
+        onSubmit={confirmAndCreateOrder}
       />
 
       <CompositeProductModal

@@ -58,12 +58,7 @@ export default function PublicMenuCartDrawerBlock({
         }
         onEmpty={() => cartOrder.setCart([])}
         onSubmit={() => {
-          if (canAppend) {
-            cartOrder.submitOrderOrAppend();
-            return;
-          }
-
-          cartOrder.setSendOpen(true);
+          cartOrder.submitOrderOrAppend();
         }}
         onQtyChange={cartOrder.setCartQty}
         onNotesChange={cartOrder.setCartNotes}

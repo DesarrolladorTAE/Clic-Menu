@@ -179,3 +179,23 @@ export async function requestPublicOrderBill({ orderId, token }) {
   const { data } = await publicApi.post(`/public/orders/${orderId}/request-bill`, payload);
   return data;
 }
+
+
+/**
+ * =========================================================
+ * 7) WhatsApp (carrito sin orden)
+ * =========================================================
+ */
+export async function sendPublicWhatsapp({ token, items }) {
+  const payload = {
+    token: String(token || ""),
+    items: Array.isArray(items) ? items : [],
+  };
+
+  const { data } = await publicApi.post(
+    `/public/web/send-whatsapp`,
+    payload,
+  );
+
+  return data;
+}

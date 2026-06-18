@@ -3,6 +3,7 @@ import {
   appendPublicOrderItems,
   createPublicOrder,
   getPublicOrder,
+  sendPublicWhatsapp
 } from "../../services/public/publicMenu.service";
 import {
   buildAvailabilityErrorMessage,
@@ -101,16 +102,19 @@ export function useCartAndOrder({
   orderingMode,
   sessionBusy,
   sessionUnavailable,
+  activeMenuType,
+  activeMenuPayload,
+  isWebMenu,
 }) {
-  const isWebMenu = String(orderingMode || "") === "web";
+  const isWebType = activeMenuType === "web";
   /**
    * NUEVA FUENTE DE VERDAD SOLO PARA PUBLIC MENU WEB
    * (no afecta otros sistemas)
    */
   const isPublicWebMenu =
     typeof window !== "undefined" &&
-    (window.location.pathname.includes("/menu") ||
-    window.location.pathname.includes("/public"));
+    activeMenuType === "web" &&
+    !!activeMenuPayload;
 
   const [cart, setCart] = useState([]);
   const [sendOpen, setSendOpen] = useState(false);
@@ -128,29 +132,34 @@ export function useCartAndOrder({
   const lastOrderIdRef = useRef(null);
 
   const sendWhatsAppOrder = useCallback(async () => {
-    const payload = buildWhatsAppPayload(cart);
-
     try {
-      const res = await fetch("/api/public/whatsapp/send-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token || ""}`,
-        },
-        body: JSON.stringify({
-          message: payload,
-        }),
+      if (activeMenuType !== "web") {
+        setSendToast("Este menú no permite envío por WhatsApp.");
+        return { ok: false };
+      }
+
+      const res = await sendPublicWhatsapp({
+        token,
+        items: cart,
       });
 
-      if (!res.ok) throw new Error("send_failed");
+      if (res?.ok === false) {
+        setSendToast(res?.message || "No se pudo enviar el mensaje.");
+        return { ok: false };
+      }
 
-      // limpieza SOLO aquí, sin condicional
+      const url = res?.whatsapp_url;
+
       setCart([]);
       setSendOpen(false);
       setCustomerName("");
       setPartySize("");
       setAdultCount("");
       setChildCount("");
+
+      if (url) {
+        window.open(url, "_blank");
+      }
 
       setSendToast("Pedido enviado por WhatsApp");
 
@@ -394,6 +403,10 @@ export function useCartAndOrder({
     !!pendingOrder?.id &&
     String(pendingOrder?.status || "pending").toLowerCase() === "pending";
 
+  const isPublicRoute =
+  typeof window !== "undefined" &&
+  window.location.pathname.startsWith("/menu");
+
   const allowBase =
     (isWebMenu || isPublicWebMenu)
       ? selectableOk && hasItems && orderUiOk && payingOk
@@ -580,18 +593,22 @@ export function useCartAndOrder({
       : "⚠️ No se puede enviar en este momento.";
   }
 
+  // ==========================================
+  // 1. CONTROLADOR PRINCIPAL DEL BOTÓN ENVIAR
+  // ==========================================
   async function submitOrderOrAppend() {
-    if (isWebMenu || isPublicWebMenu) {
+    if (sending) return;
+
+    // A. FLUJO WEB (WHATSAPP)
+    if (activeMenuType === "web") {
       const res = await sendWhatsAppOrder();
       if (!res.ok) return;
-
       setTimeout(() => setSendToast(""), 4000);
       return;
     }
 
-    if (sending) return;
-
-    if (!isWebMenu && canAppend && activeOrder?.id) {
+    // B. APPEND A ORDEN EXISTENTE (No necesita modal)
+    if (canAppend && activeOrder?.id) {
       setSending(true);
       setSendToast("");
       try {
@@ -603,7 +620,8 @@ export function useCartAndOrder({
       return;
     }
 
-    if (!isWebMenu && !allowBase) {
+    // C. VALIDACIÓN BASE ANTES DE ABRIR MODAL
+    if (!allowBase) {
       setSendToast(buildBlockerMessage());
       setTimeout(() => setSendToast(""), 5000);
       return;
@@ -614,6 +632,16 @@ export function useCartAndOrder({
       setTimeout(() => setSendToast(""), 5000);
       return;
     }
+
+    // Si todo está bien y es una orden nueva, abrimos el modal
+    setSendOpen(true);
+  }
+
+  // ==========================================
+  // 2. CONTROLADOR PARA EL BOTÓN "MANDAR" DEL MODAL
+  // ==========================================
+  async function confirmAndCreateOrder() {
+    if (sending) return;
 
     const name = String(customerName || "").trim();
     if (!name) {
@@ -656,6 +684,7 @@ export function useCartAndOrder({
       return;
     }
 
+    // EJECUCIÓN DE LA ORDEN
     setSending(true);
     setSendToast("");
 
@@ -915,6 +944,7 @@ export function useCartAndOrder({
     allowSendNow,
     canAppend,
     submitOrderOrAppend,
+    confirmAndCreateOrder,
 
     resetOnChannelChange,
   };

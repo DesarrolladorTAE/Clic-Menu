@@ -150,11 +150,17 @@ export default function PublicMenuEntryPage() {
   const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
 
   const uiFlags = ui || {};
-  const isWebMenu = ui?.ui_mode === "whatsapp_order";
-  const canSelect =
-    isWebMenu ||
-    (!!ui?.can_select_products && ui?.ui_mode === "selectable");
 
+  const isWebMenu = uiFlags?.ui_mode === "whatsapp_order";
+  const uiMode = uiFlags?.ui_mode;
+  
+  const canSelect =
+    uiMode === "whatsapp_order"
+      ? true
+      : uiMode === "selectable"
+        ? !!uiFlags?.can_select_products
+        : !!uiFlags?.can_select_products;
+  
   const showSelectBtn =
     isWebMenu || (!!ui?.show_select_button && canSelect);
     
@@ -174,6 +180,9 @@ export default function PublicMenuEntryPage() {
     orderingMode,
     sessionBusy: qr.sessionBusy,
     sessionUnavailable: qr.sessionUnavailable,
+    activeMenuType: activeMenuPayload?.type,
+    activeMenuPayload,
+    isWebMenu,
   });
 
   useEffect(() => {
@@ -484,12 +493,17 @@ export default function PublicMenuEntryPage() {
 
   const allowBaseSend =
     canSelect &&
-    hasTable &&
-    qr.sessionActive &&
-    orderingMode === "customer_assisted" &&
     cartOrder.cart.length > 0 &&
     !qr.sessionBusy &&
-    !qr.sessionUnavailable;
+    !qr.sessionUnavailable &&
+    (
+      isWebMenu ||
+      (
+        hasTable &&
+        qr.sessionActive &&
+        orderingMode === "customer_assisted"
+      )
+    );
 
   const hasPending =
     !!cartOrder.pendingOrder?.id &&
@@ -1048,6 +1062,7 @@ export default function PublicMenuEntryPage() {
 
         <PublicMenuModals
           cartOrder={cartOrder}
+          confirmAndCreateOrder={cartOrder.confirmAndCreateOrder}
           allowBaseSend={allowBaseSend}
           pending={pending}
           canAppend={canAppend}
