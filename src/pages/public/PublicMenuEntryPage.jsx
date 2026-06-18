@@ -150,10 +150,19 @@ export default function PublicMenuEntryPage() {
   const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
 
   const uiFlags = ui || {};
-  const canSelect = !!ui?.can_select_products && ui?.ui_mode === "selectable";
-  const showSelectBtn = !!ui?.show_select_button && canSelect;
+  const isWebMenu = ui?.ui_mode === "whatsapp_order";
+  const canSelect =
+    isWebMenu ||
+    (!!ui?.can_select_products && ui?.ui_mode === "selectable");
+
+  const showSelectBtn =
+    isWebMenu || (!!ui?.show_select_button && canSelect);
+    
   const showCallBtn =
-    !!ui?.show_call_waiter_button && !!ui?.call_waiter_enabled && hasTable;
+    !isWebMenu &&
+    !!ui?.show_call_waiter_button &&
+    !!ui?.call_waiter_enabled &&
+    hasTable;
 
   const orderingMode = String(header?.orderingMode || "");
 
@@ -891,7 +900,7 @@ export default function PublicMenuEntryPage() {
     },
   ];
 
-  if (hasTable && String(activeMenuPayload?.type) === "physical") {
+  if (!isWebMenu && hasTable && String(activeMenuPayload?.type) === "physical") {
     headerBadges.push({
       tone: qr.sessionActive ? "ok" : "warn",
       label: `⏳ ${fmtMMSS(qr.remainingSec)}`,
@@ -975,7 +984,7 @@ export default function PublicMenuEntryPage() {
         </PillButton>
       ) : null}
 
-      {hasTable && String(activeMenuPayload?.type) === "physical" ? (
+      {!isWebMenu && hasTable && String(activeMenuPayload?.type) === "physical" ? (
         <PillButton
           onClick={() => qr.startScanSession()}
           disabled={qr.sessionLoading || !!qr.sessionBusy}
@@ -1162,7 +1171,7 @@ export default function PublicMenuEntryPage() {
           />
         </div>
 
-        {canSelect ? (
+        {(isWebMenu || canSelect) ? (
           <MenuCartFloatingButton
             itemCount={cartDrawerItemCount}
             total={cartOrder.totalGlobal}

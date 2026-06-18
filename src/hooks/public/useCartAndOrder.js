@@ -63,6 +63,20 @@ function normalizeItemsForApi(cart) {
   });
 }
 
+function buildWhatsAppPayload(cart) {
+  const items = Array.isArray(cart) ? cart : [];
+
+  const lines = items.map((it) => {
+    const name = it.name || "Producto";
+    const qty = it.quantity || 1;
+
+    return `• ${qty} x ${name}`;
+  });
+
+  return lines.join("\n");
+}
+
+
 function isActiveOrderStatus(status) {
   return ["open", "ready", "paying", "paid"].includes(String(status || "").toLowerCase());
 }
@@ -88,6 +102,16 @@ export function useCartAndOrder({
   sessionBusy,
   sessionUnavailable,
 }) {
+  const isWebMenu = String(orderingMode || "") === "web";
+  /**
+   * NUEVA FUENTE DE VERDAD SOLO PARA PUBLIC MENU WEB
+   * (no afecta otros sistemas)
+   */
+  const isPublicWebMenu =
+    typeof window !== "undefined" &&
+    (window.location.pathname.includes("/menu") ||
+    window.location.pathname.includes("/public"));
+
   const [cart, setCart] = useState([]);
   const [sendOpen, setSendOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
@@ -102,6 +126,40 @@ export function useCartAndOrder({
   const [oldItems, setOldItems] = useState([]);
 
   const lastOrderIdRef = useRef(null);
+
+  const sendWhatsAppOrder = useCallback(async () => {
+    const payload = buildWhatsAppPayload(cart);
+
+    try {
+      const res = await fetch("/api/public/whatsapp/send-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token || ""}`,
+        },
+        body: JSON.stringify({
+          message: payload,
+        }),
+      });
+
+      if (!res.ok) throw new Error("send_failed");
+
+      // limpieza SOLO aquí, sin condicional
+      setCart([]);
+      setSendOpen(false);
+      setCustomerName("");
+      setPartySize("");
+      setAdultCount("");
+      setChildCount("");
+
+      setSendToast("Pedido enviado por WhatsApp");
+
+      return { ok: true };
+    } catch (e) {
+      setSendToast("No se pudo enviar el mensaje, intente más tarde.");
+      return { ok: false };
+    }
+  }, [cart, token]);
 
   const currentOrderId = useMemo(() => {
     return Number(
@@ -308,9 +366,12 @@ export function useCartAndOrder({
     return Math.round((safeNum(oldTotal, 0) + safeNum(cartTotal, 0)) * 100) / 100;
   }, [oldTotal, cartTotal]);
 
-  const tableOk = !!hasTable;
-  const sessionOk = !!sessionActive;
-  const modeOk = String(orderingMode || "") === "customer_assisted";
+  const tableOk = isWebMenu || isPublicWebMenu ? true : !!hasTable;
+  const sessionOk = isWebMenu || isPublicWebMenu ? true : !!sessionActive;
+  const modeOk =
+    isWebMenu || isPublicWebMenu
+      ? true
+      : String(orderingMode || "") === "customer_assisted";
   const selectableOk = !!canSelect;
   const busyOk = !sessionBusy;
   const unavailableOk = !sessionUnavailable;
@@ -323,26 +384,33 @@ export function useCartAndOrder({
     !!activeOrder?.id &&
     ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
-  const orderUiOk = canAppend
-    ? orderUi?.can_add_items !== false && orderUi?.can_send_items !== false
-    : true;
+  const orderUiOk = isWebMenu
+    ? true
+    : canAppend
+      ? orderUi?.can_add_items !== false && orderUi?.can_send_items !== false
+      : true;
 
   const hasPending =
     !!pendingOrder?.id &&
     String(pendingOrder?.status || "pending").toLowerCase() === "pending";
 
   const allowBase =
-    tableOk &&
-    sessionOk &&
-    modeOk &&
-    selectableOk &&
-    busyOk &&
-    unavailableOk &&
-    hasItems &&
-    orderUiOk &&
-    payingOk;
+    (isWebMenu || isPublicWebMenu)
+      ? selectableOk && hasItems && orderUiOk && payingOk
+      : tableOk &&
+        sessionOk &&
+        modeOk &&
+        selectableOk &&
+        busyOk &&
+        unavailableOk &&
+        hasItems &&
+        orderUiOk &&
+        payingOk;
 
-  const allowSendNow = allowBase && (canAppend || !hasPending);
+  const allowSendNow =
+    (isWebMenu || isPublicWebMenu)
+      ? allowBase
+      : allowBase && (canAppend || !hasPending);
 
   const refreshOrder = useCallback(
     async (orderId) => {
@@ -455,6 +523,7 @@ export function useCartAndOrder({
       const items = normalizeItemsForApi(cart);
 
       try {
+
         const res = await appendPublicOrderItems({
           orderId: Number(orderId),
           token: String(token || ""),
@@ -496,8 +565,8 @@ export function useCartAndOrder({
   function buildBlockerMessage() {
     const reasons = [];
 
-    if (!tableOk) reasons.push("mesa no detectada");
-    if (!sessionOk) reasons.push("sesión no activa");
+    if (!isWebMenu && !sessionOk) reasons.push("sesión no activa");
+    if (!isWebMenu && !tableOk) reasons.push("mesa no detectada");
     if (!modeOk) reasons.push("modo no permitido");
     if (!selectableOk) reasons.push("menú no seleccionable");
     if (!busyOk) reasons.push("mesa ocupada por otro dispositivo");
@@ -512,9 +581,17 @@ export function useCartAndOrder({
   }
 
   async function submitOrderOrAppend() {
+    if (isWebMenu || isPublicWebMenu) {
+      const res = await sendWhatsAppOrder();
+      if (!res.ok) return;
+
+      setTimeout(() => setSendToast(""), 4000);
+      return;
+    }
+
     if (sending) return;
 
-    if (canAppend && activeOrder?.id) {
+    if (!isWebMenu && canAppend && activeOrder?.id) {
       setSending(true);
       setSendToast("");
       try {
@@ -526,7 +603,7 @@ export function useCartAndOrder({
       return;
     }
 
-    if (!allowBase) {
+    if (!isWebMenu && !allowBase) {
       setSendToast(buildBlockerMessage());
       setTimeout(() => setSendToast(""), 5000);
       return;
