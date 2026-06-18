@@ -42,7 +42,7 @@ import PublicMenuEmptyState from "./public-menu-entry/PublicMenuEmptyState";
 import PublicMenuOverlays from "./public-menu-entry/PublicMenuOverlays";
 import PublicMenuModals from "./public-menu-entry/PublicMenuModals";
 import PublicMenuCartDrawerBlock from "./public-menu-entry/PublicMenuCartDrawerBlock";
-import PublicMenuWebChannelSelector from "./public-menu-entry/PublicMenuWebChannelSelector";
+
 import PublicMenuCallToast from "./public-menu-entry/PublicMenuCallToast";
 import PublicMenuWarningBlock from "./public-menu-entry/PublicMenuWarningBlock";
 import PublicMenuProductsGrid from "./public-menu-entry/PublicMenuProductsGrid";
@@ -183,12 +183,6 @@ export default function PublicMenuEntryPage() {
       mounted = false;
     };
   }, [token]);
-
-  useEffect(() => {
-    if (!isWeb) return;
-    cartOrder.resetOnChannelChange?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWeb, activeWebChannelId]);
 
   const { categoryNameById, categoryOptions, filteredProducts } =
     useMenuProducts({
@@ -1124,13 +1118,6 @@ export default function PublicMenuEntryPage() {
             }
           />
         </div>
-
-        <PublicMenuWebChannelSelector
-          show={isWeb}
-          activeWebChannelId={activeWebChannelId}
-          webChannels={webChannels}
-          onChange={setWebChannelId}
-        />
 
         <PublicMenuCallToast message={qr.callToast} />
 

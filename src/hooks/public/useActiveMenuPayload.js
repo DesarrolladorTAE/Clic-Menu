@@ -27,43 +27,51 @@ export function useActiveMenuPayload({
   }, [isWeb, webChannelId, data]);
 
   const activeMenuPayload = useMemo(() => {
-    if (!data) return null;
-    if (!isWeb) return data;
+      if (!data) return null;
+      if (!isWeb) return data;
 
-    const by = data?.menus_by_channel || {};
-    const picked = by?.[String(activeWebChannelId)] || null;
+      const by = data?.menus_by_channel || {};
+      const picked = by?.[String(activeWebChannelId)] || null;
 
-    if (picked)
-      return {
-        ...picked,
-        ui: data?.ui,
-        table: data?.table,
-        ordering_mode: data?.ordering_mode,
-        table_service_mode: data?.table_service_mode,
-        type: data?.type,
-      };
+      // ✅ Si picked tiene secciones, usarlo
+      if (picked && picked.sections?.length > 0) {
+          return {
+              ...picked,
+              ui: data?.ui,
+              table: data?.table,
+              ordering_mode: data?.ordering_mode,
+              table_service_mode: data?.table_service_mode,
+              type: data?.type,
+          };
+      }
 
-    const def = data?.default_channel_id ? String(data.default_channel_id) : "";
-    const fallback = def ? by?.[def] : null;
+      // ✅ Si es web y picked no tiene secciones, usar data.sections
+      if (isWeb && (!picked || !picked.sections?.length)) {
+          return {
+              ...data,
+              sections: data.sections || [],
+              ui: data?.ui,
+              table: data?.table,
+              ordering_mode: data?.ordering_mode,
+              table_service_mode: data?.table_service_mode,
+              type: data?.type,
+          };
+      }
 
-    return fallback
-      ? {
-          ...fallback,
-          ui: data?.ui,
-          table: data?.table,
-          ordering_mode: data?.ordering_mode,
-          table_service_mode: data?.table_service_mode,
-          type: data?.type,
-        }
-      : { ...data, sections: [] };
+      const def = data?.default_channel_id ? String(data.default_channel_id) : "";
+      const fallback = def ? by?.[def] : null;
+
+      return fallback
+        ? {
+            ...fallback,
+            ui: data?.ui,
+            table: data?.table,
+            ordering_mode: data?.ordering_mode,
+            table_service_mode: data?.table_service_mode,
+            type: data?.type,
+          }
+        : { ...data, sections: [] };
   }, [data, isWeb, activeWebChannelId]);
-
-  // limpiar filtros / carrito al cambiar canal WEB (igual que antes)
-  useEffect(() => {
-    if (!isWeb) return;
-    resetOnChannelChange?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWebChannelId]);
 
   const header = useMemo(() => {
     if (!activeMenuPayload) return null;
