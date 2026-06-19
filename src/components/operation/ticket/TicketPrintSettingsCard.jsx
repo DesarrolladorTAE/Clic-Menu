@@ -14,6 +14,9 @@ import AndroidOutlinedIcon from "@mui/icons-material/AndroidOutlined";
 const WINDOWS_PRINTER_APP_URL =
   "https://clicmenu.com.mx/downloads/ClicMenuPrinter_Setup_v1.0.0.exe";
 
+const ANDROID_PRINTER_APP_URL =
+  "https://clicmenu.com.mx/downloads/clic-menu-printer.apk";
+
 export default function TicketPrintSettingsCard({
   form,
   options = [],
@@ -301,9 +304,10 @@ export default function TicketPrintSettingsCard({
                 icon={<AndroidOutlinedIcon />}
                 title="Clic Menu Printer Android"
                 subtitle="Para tablets o celulares compatibles con USB OTG."
-                status="Próximamente"
-                buttonText="Próximamente"
-                disabled
+                status="Disponible"
+                buttonText="Descargar app Android"
+                href={ANDROID_PRINTER_APP_URL}
+                disabled={disabled}
               />
             </Stack>
           </Stack>
