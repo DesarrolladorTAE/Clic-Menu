@@ -1,12 +1,18 @@
 import { useMemo } from "react";
 
 import {
-  Box, Button, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Switch, Typography,
+  Box, Button, Chip, Divider, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Switch, Typography,
 } from "@mui/material";
 
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import DesktopWindowsOutlinedIcon from "@mui/icons-material/DesktopWindowsOutlined";
+import AndroidOutlinedIcon from "@mui/icons-material/AndroidOutlined";
+
+const WINDOWS_PRINTER_APP_URL =
+  "https://clicmenu.com.mx/downloads/ClicMenuPrinter_Setup_v1.0.0.exe";
 
 export default function TicketPrintSettingsCard({
   form,
@@ -222,8 +228,210 @@ export default function TicketPrintSettingsCard({
             Restablecer
           </Button>
         </Stack>
+        
+        <Divider />
+
+        <Box
+          sx={{
+            border: "1px solid",
+            borderColor: "rgba(199,102,24,0.18)",
+            borderRadius: 0,
+            bgcolor: "#FFF7F3",
+            p: { xs: 1.75, sm: 2 },
+          }}
+        >
+          <Stack spacing={2}>
+            <Box>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                justifyContent="space-between"
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 15,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    Aplicaciones necesarias
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 12.5,
+                      color: "text.secondary",
+                      lineHeight: 1.55,
+                      maxWidth: 760,
+                    }}
+                  >
+                    Para imprimir tickets térmicos, instala la app correspondiente al
+                    tipo de impresión que elegiste para esta sucursal.
+                  </Typography>
+                </Box>
+
+                <Chip
+                  label="Después de guardar"
+                  size="small"
+                  sx={{
+                    fontWeight: 800,
+                    color: "#9A4F1A",
+                    bgcolor: "rgba(199,102,24,0.12)",
+                    borderRadius: 1,
+                  }}
+                />
+              </Stack>
+            </Box>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+              <PrinterAppDownloadItem
+                icon={<DesktopWindowsOutlinedIcon />}
+                title="Clic Menu Printer Windows"
+                subtitle="Para cajas o computadoras con impresoras térmicas USB o TCP/IP."
+                status="Disponible"
+                buttonText="Descargar app Windows"
+                href={WINDOWS_PRINTER_APP_URL}
+                disabled={disabled}
+              />
+
+              <PrinterAppDownloadItem
+                icon={<AndroidOutlinedIcon />}
+                title="Clic Menu Printer Android"
+                subtitle="Para tablets o celulares compatibles con USB OTG."
+                status="Próximamente"
+                buttonText="Próximamente"
+                disabled
+              />
+            </Stack>
+          </Stack>
+        </Box>
+
+
+
       </Stack>
     </Paper>
+  );
+}
+
+
+function PrinterAppDownloadItem({
+  icon,
+  title,
+  subtitle,
+  status,
+  buttonText,
+  href,
+  disabled = false,
+}) {
+  const available = Boolean(href) && !disabled;
+
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        border: "1px solid",
+        borderColor: available ? "rgba(199,102,24,0.24)" : "divider",
+        borderRadius: 2,
+        bgcolor: "background.paper",
+        p: 1.5,
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1.25} alignItems="flex-start">
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 1.5,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: available
+                ? "rgba(199,102,24,0.12)"
+                : "rgba(0,0,0,0.05)",
+              color: available ? "#9A4F1A" : "text.disabled",
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </Box>
+
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+            >
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 900,
+                  color: "text.primary",
+                }}
+              >
+                {title}
+              </Typography>
+
+              <Chip
+                label={status}
+                size="small"
+                sx={{
+                  height: 22,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: available ? "#9A4F1A" : "text.secondary",
+                  bgcolor: available
+                    ? "rgba(199,102,24,0.12)"
+                    : "rgba(0,0,0,0.06)",
+                }}
+              />
+            </Stack>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 12,
+                color: "text.secondary",
+                lineHeight: 1.45,
+              }}
+            >
+              {subtitle}
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Button
+          variant={available ? "contained" : "outlined"}
+          startIcon={<DownloadOutlinedIcon />}
+          disabled={!available}
+          onClick={() => {
+            if (!href) return;
+            window.open(href, "_blank", "noopener,noreferrer");
+          }}
+          sx={{
+            alignSelf: { xs: "stretch", sm: "flex-start" },
+            height: 38,
+            borderRadius: 2,
+            fontWeight: 800,
+            px: 2,
+            ...(available && {
+              bgcolor: "#B65F2A",
+              color: "#fff",
+              boxShadow: "none",
+              "&:hover": {
+                bgcolor: "#9A4F1A",
+                boxShadow: "none",
+              },
+            }),
+          }}
+        >
+          {buttonText}
+        </Button>
+      </Stack>
+    </Box>
   );
 }
 
