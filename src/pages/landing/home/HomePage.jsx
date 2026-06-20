@@ -14,6 +14,7 @@ import HomeDemoSection from "../../../components/landing/home/HomeDemoSection";
 import HomeBusinessTypesSection from "../../../components/landing/home/HomeBusinessTypesSection";
 import HomePlansPreviewSection from "../../../components/landing/home/HomePlansPreviewSection";
 import HomeTestimonialsSection from "../../../components/landing/home/HomeTestimonialsSection";
+import HomeThermalPrintingSection from "../../../components/landing/home/HomeThermalPrintingSection";
 
 import HomeFaqSection from "../../../components/landing/home/HomeFaqSection";
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
@@ -317,6 +318,7 @@ export default function HomePage() {
         <HomeSolutionsSection />
         <HomeBusinessTypesSection />
         <HomeDemoSection />
+        <HomeThermalPrintingSection />
         <HomePlansPreviewSection />
 
 

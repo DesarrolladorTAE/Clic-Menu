@@ -56,7 +56,7 @@ export default function HomeFaqSection() {
           sm: 8,
           md: 10,
         },
-        bgcolor: landingColors.bgSoft,
+        bgcolor: landingColors.white,
         overflow: "hidden",
       }}
     >

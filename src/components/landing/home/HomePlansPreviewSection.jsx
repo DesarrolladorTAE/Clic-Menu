@@ -39,7 +39,7 @@ export default function HomePlansPreviewSection() {
     <Box
       component="section"
       sx={{
-        bgcolor: landingColors.white,
+        bgcolor: landingColors.bgSoft,
         py: { xs: 7, sm: 8, md: 10 },
       }}
     >
