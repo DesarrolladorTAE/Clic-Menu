@@ -1062,6 +1062,8 @@ export default function PublicMenuEntryPage() {
 
         <PublicMenuModals
           cartOrder={cartOrder}
+          tableName={header?.tableName || ""}
+          tableSeats={header?.tableSeats || null}
           confirmAndCreateOrder={cartOrder.confirmAndCreateOrder}
           allowBaseSend={allowBaseSend}
           pending={pending}

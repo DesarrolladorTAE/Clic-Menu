@@ -4,6 +4,7 @@ import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 export default function PublicSendOrderModal({
   open,
   sending,
+  tableSeats,
   allowBaseSend,
   pending,
   canAppend,
@@ -63,10 +64,27 @@ export default function PublicSendOrderModal({
           Escribe tu nombre y captura cuántas personas están ocupando la mesa.
         </div>
 
+        {tableSeats ? (
+          <div
+            style={{
+              border: "1px solid rgba(255,122,0,0.24)",
+              borderRadius: 14,
+              padding: "10px 12px",
+              background: "rgba(255,122,0,0.08)",
+              fontSize: 13,
+              fontWeight: 900,
+              color: "#2F2A3D",
+              lineHeight: 1.45,
+            }}
+          >
+            Capacidad: {tableSeats} personas
+          </div>
+        ) : null}
+
         <input
           value={customerName}
           onChange={(e) => setCustomerName(e.target.value)}
-          placeholder="Ej: Juan (Mesa 5)"
+          placeholder="Ej: Juan"
           style={{
             padding: "12px 14px",
             borderRadius: 12,

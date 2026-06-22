@@ -2,6 +2,7 @@
 // Componentes UI puros (no conocen servicios ni lógica de negocio)
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 const MENU_UI = {
   orange: "#FF7A00",
@@ -497,12 +498,12 @@ export function Modal({
 }) {
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 1000,
+        zIndex: 2147483000,
         background: "rgba(17,24,39,0.58)",
         display: "grid",
         placeItems: "center",
@@ -604,6 +605,7 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

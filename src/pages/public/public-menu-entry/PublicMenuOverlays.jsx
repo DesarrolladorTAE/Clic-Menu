@@ -16,24 +16,14 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
           "Si se desocupa (o expira), podrás entrar."
         }
         actions={
-          <>
-            <PillButton
-              tone="soft"
-              onClick={() => qr.startScanSession()}
-              disabled={qr.sessionLoading}
-              title="Reintentar scan"
-            >
-              {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
-            </PillButton>
-
-            <PillButton
-              tone="default"
-              onClick={() => qr.setSessionBusy(null)}
-              title="Cerrar aviso"
-            >
-              Entendido
-            </PillButton>
-          </>
+          <PillButton
+            tone="soft"
+            onClick={() => qr.startScanSession()}
+            disabled={qr.sessionLoading}
+            title="Reintentar scan"
+          >
+            {qr.sessionLoading ? "⏳ Reintentando..." : "🔄 Reintentar"}
+          </PillButton>
         }
       />
 

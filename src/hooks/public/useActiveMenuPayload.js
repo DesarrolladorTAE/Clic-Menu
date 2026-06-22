@@ -33,7 +33,7 @@ export function useActiveMenuPayload({
       const by = data?.menus_by_channel || {};
       const picked = by?.[String(activeWebChannelId)] || null;
 
-      // ✅ Si picked tiene secciones, usarlo
+      // Si picked tiene secciones, usarlo
       if (picked && picked.sections?.length > 0) {
           return {
               ...picked,
@@ -45,7 +45,7 @@ export function useActiveMenuPayload({
           };
       }
 
-      // ✅ Si es web y picked no tiene secciones, usar data.sections
+      // Si es web y picked no tiene secciones, usar data.sections
       if (isWeb && (!picked || !picked.sections?.length)) {
           return {
               ...data,
@@ -87,6 +87,7 @@ export function useActiveMenuPayload({
       branchStatus: b?.status,
       channelName: sc?.name || "Canal",
       tableName: t?.name || null,
+      tableSeats: t?.seats ? Number(t.seats) : null,
       orderingMode: activeMenuPayload.ordering_mode || null,
       tableServiceMode: activeMenuPayload.table_service_mode || null,
     };
@@ -107,7 +108,7 @@ export function useActiveMenuPayload({
 
   const sections = useMemo(() => activeMenuPayload?.sections || [], [activeMenuPayload]);
 
-  // ✅ esto lo tenías en load(), aquí lo dejamos “listo” para el Page: desbloqueo de callLocked si UI ya habilitó
+  // esto lo tenías en load(), aquí lo dejamos “listo” para el Page: desbloqueo de callLocked si UI ya habilitó
   useEffect(() => {
     if (!activeMenuPayload) return;
     // en web, la ui viene global en data.ui (ya incluida arriba)

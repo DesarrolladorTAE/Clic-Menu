@@ -10,6 +10,8 @@ import PublicSendOrderModal from "../../../components/menu/public/PublicSendOrde
 
 export default function PublicMenuModals({
   cartOrder,
+  tableName,
+  tableSeats,
   confirmAndCreateOrder,
   allowBaseSend,
   pending,
@@ -46,6 +48,8 @@ export default function PublicMenuModals({
       <PublicSendOrderModal
         open={cartOrder.sendOpen}
         sending={cartOrder.sending}
+        tableName={tableName}
+        tableSeats={tableSeats}
         allowBaseSend={allowBaseSend}
         pending={pending}
         canAppend={canAppend}
