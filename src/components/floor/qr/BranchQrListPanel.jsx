@@ -1,5 +1,5 @@
 import {
-  Box, Card, FormControlLabel, IconButton, Paper, Stack, Switch, Tooltip, Typography,
+  Box, Card, FormControlLabel, IconButton, Paper, Stack, Switch, Tooltip, Typography, Button
 } from "@mui/material";
 
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
@@ -68,6 +68,7 @@ export default function BranchQrListPanel({
   onToggleActive,
   onDelete,
   onOpen,
+  onExport, // 🔥 NUEVO
   typeLabelMap = {},
   busy = false,
   canManageQr = false,
@@ -96,25 +97,44 @@ export default function BranchQrListPanel({
           flexWrap: "wrap",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: 18,
-            fontWeight: 800,
-            color: "text.primary",
-          }}
-        >
-          Lista de QRs
-        </Typography>
+        <Box>
+          <Typography
+            sx={{
+              fontSize: 18,
+              fontWeight: 800,
+              color: "text.primary",
+            }}
+          >
+            Lista de QRs
+          </Typography>
 
-        <Typography
-          sx={{
-            fontSize: 13,
-            color: "text.secondary",
-            fontWeight: 700,
-          }}
-        >
-          {total} resultado(s)
-        </Typography>
+          <Typography
+            sx={{
+              fontSize: 13,
+              color: "text.secondary",
+              fontWeight: 700,
+            }}
+          >
+            {total} resultado(s)
+          </Typography>
+        </Box>
+
+        <Box>
+          <Tooltip title="Descargar QRs">
+            <Button
+              variant="contained"
+              onClick={onExport}
+              disabled={!selectedBranchId}
+              sx={{
+                height: 36,
+                fontWeight: 800,
+                borderRadius: 1.5,
+              }}
+            >
+              Descargar
+            </Button>
+          </Tooltip>
+        </Box>
       </Box>
 
       {!selectedBranchId ? (

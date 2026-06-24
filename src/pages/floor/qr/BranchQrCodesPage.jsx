@@ -12,6 +12,7 @@ import BranchQrContextCard from "../../../components/floor/qr/BranchQrContextCar
 import BranchQrStatusBanner from "../../../components/floor/qr/BranchQrStatusBanner";
 import BranchQrListPanel from "../../../components/floor/qr/BranchQrListPanel";
 import BranchQrCreateModal from "../../../components/floor/qr/BranchQrCreateModal";
+import BranchQrExportModal from "../../../components/floor/qr/BranchQrExportModal";
 
 import {
   getBranchQrCodes,
@@ -112,6 +113,7 @@ export default function BranchQrCodesPage() {
   const [qrUiMeta, setQrUiMeta] = useState(null);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -450,6 +452,20 @@ export default function BranchQrCodesPage() {
     setCreateOpen(true);
   };
 
+
+  const openExport = () => {
+    if (!selectedBranchId) {
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message: "Selecciona una sucursal primero.",
+      });
+      return;
+    }
+
+    setExportOpen(true);
+  };
+
   const submitCreate = async (formValues) => {
     if (!canManageQr) {
       showAlert({
@@ -712,6 +728,7 @@ export default function BranchQrCodesPage() {
           onToggleActive={onToggleActive}
           onDelete={onDelete}
           onOpen={(url) => window.open(url, "_blank")}
+          onExport={openExport} 
           typeLabelMap={TYPE_LABEL}
           busy={busy}
           canManageQr={canManageQr}
@@ -733,6 +750,15 @@ export default function BranchQrCodesPage() {
         channelOptionsRaw={channelOptionsRaw}
         tableOptions={tableOptions}
         qrUiMeta={qrUiMeta}
+      />
+
+      <BranchQrExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        restaurantId={restaurantId}
+        branchId={selectedBranchId}
+        items={sortedItems}
+        busy={busy}
       />
 
       <AppAlert

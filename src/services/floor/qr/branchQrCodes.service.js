@@ -33,3 +33,15 @@ export async function deleteBranchQrCode(restaurantId, branchId, qrId) {
 
   return data;
 }
+
+export async function exportBranchQrCodesPdf(restaurantId, branchId, payload) {
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/branches/${branchId}/qr/export`,
+    payload,
+    {
+      responseType: "blob",
+    }
+  );
+
+  return data;
+}
