@@ -85,6 +85,10 @@ export default function RestaurantOperationLayout() {
       return "customer-loyalty-settings";
     }
 
+    if (pathname.includes("/connections/taeconta")) {
+      return "taeconta";
+    }
+
     return "staff";
   }, [pathname]);
 
@@ -248,6 +252,12 @@ export default function RestaurantOperationLayout() {
       case "profit-report":
         nav(`${base}/reports/profit`, { state: { restaurantName } });
         break;
+
+      case "taeconta":
+        nav(`${base}/connections/taeconta`, {
+          state: { restaurantName },
+        });
+        break;  
 
       default:
         nav(`${base}/staff`, { state: { restaurantName } });

@@ -12,10 +12,20 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 export default function TicketSettingsFormCard({
   form,
+  invoiceQrContext = null,
   onChange,
   disabled = false,
 }) {
   const isPattern = form.folio_mode === "pattern";
+
+  const canEnableInvoiceQr = Boolean(
+    invoiceQrContext?.can_enable_invoice_qr
+  );
+
+  const invoiceQrDescription = canEnableInvoiceQr
+    ? "Inserta el QR para que el cliente pueda auto-facturar este ticket."
+    : invoiceQrContext?.reason ||
+      "Conecta tu cuenta Taeconta y activa la auto-facturación para mostrar el QR de facturación.";
 
   return (
     <Paper
@@ -108,6 +118,14 @@ export default function TicketSettingsFormCard({
               checked={form.show_qr}
               onChange={(val) => onChange("show_qr", val)}
               disabled={disabled}
+            />
+
+            <SwitchCard
+              title="Mostrar QR Facturación"
+              description={invoiceQrDescription}
+              checked={form.show_invoice_qr}
+              onChange={(val) => onChange("show_invoice_qr", val)}
+              disabled={disabled || !canEnableInvoiceQr}
             />
 
             <SwitchCard

@@ -36,6 +36,7 @@ import {
 const DEFAULT_FORM = {
   show_logo: true,
   show_qr: false,
+  show_invoice_qr: false,
   show_iva: true,
   address: "",
   message_1: "",
@@ -139,6 +140,7 @@ export default function TicketSettingsPage() {
     setForm({
       show_logo: Boolean(setting.show_logo),
       show_qr: Boolean(setting.show_qr),
+      show_invoice_qr: Boolean(setting.show_invoice_qr),
       show_iva: Boolean(setting.show_iva),
 
       address: setting.address || "",
@@ -555,6 +557,7 @@ export default function TicketSettingsPage() {
     const payload = {
       show_logo: Boolean(form.show_logo),
       show_qr: Boolean(form.show_qr),
+      show_invoice_qr: Boolean(form.show_invoice_qr),
       show_iva: Boolean(form.show_iva),
 
       address: form.address?.trim() || null,
@@ -648,6 +651,7 @@ export default function TicketSettingsPage() {
 
         <TicketSettingsFormCard
           form={form}
+          invoiceQrContext={ticketData?.invoice_qr_context || null}
           onChange={handleChangeField}
           disabled={!selectedBranch || saving}
         />

@@ -156,6 +156,18 @@ export default function RestaurantOperationSidebar({
           },
         ],
       },
+      {
+        key: "connections",
+        label: "Conexiones",
+        icon: <SettingsSuggestRoundedIcon />,
+        items: [
+          {
+            key: "taeconta",
+            label: "Taeconta",
+            icon: <WebAssetOutlinedIcon />,
+          },
+        ],
+      },
     ],
     []
   );
