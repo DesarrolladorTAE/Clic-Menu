@@ -19,6 +19,7 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 
 const GENERAL_ERROR_KEYS = [
+  "resico_retention",
   "sat",
   "sat_product_service",
   "sat_unit",
