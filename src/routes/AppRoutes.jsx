@@ -117,11 +117,15 @@ import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
 import SalesReportPage from "../pages/reports/sales/SalesReportPage";
 import ProfitReportPage from "../pages/reports/profit/ProfitReportPage";
 
+//Conexiones
+import TaecontaAccountPage from "../pages/connection/tae/TaecontaAccountPage";
+
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
+import PublicInvoicePage from "../pages/public/invoice/PublicInvoicePage";
 
 import TestEventPage from "../realtime/TestEventPage";
 
@@ -135,7 +139,8 @@ export default function AppRoutes() {
       <Route path="/contacto" element={<LandingContactPage />} />
       <Route path="/terminos-y-condiciones" element={<LandingTermsPage />} />
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
-
+      <Route path="/invoice/:token" element={<PublicInvoicePage />} />
+      
       <Route path="/test-mui" element={<TestMui />} />
 
       <Route path="/test-event" element={<TestEventPage />} />
@@ -238,7 +243,8 @@ export default function AppRoutes() {
 
           <Route path="reports/sales" element={<SalesReportPage />} />
           <Route path="reports/profit" element={<ProfitReportPage />} />
-
+          
+          <Route path="connections/taeconta" element={<TaecontaAccountPage />} />
         </Route>
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />

@@ -13,6 +13,8 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductSatMapping,
+  updateProductSatMapping,
   getProductImages,
   uploadProductImage,
   deleteProductImage,
@@ -576,6 +578,8 @@ export default function ProductsPage() {
         getProduct={getProduct}
         createProduct={createProduct}
         updateProduct={updateProduct}
+        getProductSatMapping={getProductSatMapping}
+        updateProductSatMapping={updateProductSatMapping}
         getProductImages={getProductImages}
         uploadProductImage={uploadProductImage}
         deleteProductImage={deleteProductImage}

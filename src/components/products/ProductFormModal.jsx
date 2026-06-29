@@ -1,26 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, MenuItem,
+  Select, Stack, Switch, TextField, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -150,6 +132,30 @@ function apiErrorToMessage(e, fallback = "Ocurrió un error") {
   );
 }
 
+function cleanSatField(value) {
+  return String(value || "").trim();
+}
+
+function hasIncompleteSatPair(form) {
+  const satProductService = cleanSatField(form?.sat_product_service);
+  const satUnit = cleanSatField(form?.sat_unit);
+
+  return (
+    (satProductService && !satUnit) ||
+    (!satProductService && satUnit)
+  );
+}
+
+function buildSatPayload(form) {
+  const satProductService = cleanSatField(form?.sat_product_service);
+  const satUnit = cleanSatField(form?.sat_unit);
+
+  return {
+    sat_product_service: satProductService || null,
+    sat_unit: satUnit || null,
+  };
+}
+
 export default function ProductFormModal({
   open,
   onClose,
@@ -163,6 +169,8 @@ export default function ProductFormModal({
   getProduct,
   createProduct,
   updateProduct,
+  getProductSatMapping,
+  updateProductSatMapping,
   getProductImages,
   uploadProductImage,
   deleteProductImage,
@@ -175,6 +183,7 @@ export default function ProductFormModal({
   const isEdit = !!initialData?.id;
   const fileInputRef = useRef(null);
   const imageReqRef = useRef(0);
+  const satReqRef = useRef(0);
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -187,11 +196,14 @@ export default function ProductFormModal({
     status: "active",
     product_type: "simple",
     inventory_type: "none",
+    sat_product_service: "",
+    sat_unit: "",
     plan_meta: null,
   });
 
   const [images, setImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [satLoading, setSatLoading] = useState(false);
 
   const maxImages = 6;
   const canUploadMore = images.length < maxImages;
@@ -241,17 +253,69 @@ export default function ProductFormModal({
       status: initialData?.status || "active",
       product_type: initialProductType,
       inventory_type: initialInventoryType,
+      sat_product_service: "",
+      sat_unit: "",
       plan_meta: initialData?.plan_meta || null,
     });
 
     setImages([]);
     setImagesLoading(!!initialData?.id);
+    setSatLoading(!!initialData?.id);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.id, categories, allowedProducts]);
+
+
+  useEffect(() => {
+    if (!open) return;
+
+    satReqRef.current += 1;
+    const reqId = satReqRef.current;
+
+    const productId = currentInitialId;
+
+    if (!productId) {
+      setSatLoading(false);
+      setForm((prev) => ({
+        ...prev,
+        sat_product_service: "",
+        sat_unit: "",
+      }));
+      return;
+    }
+
+    setSatLoading(true);
+
+    (async () => {
+      try {
+        const sat = await getProductSatMapping(restaurantId, productId);
+
+        if (reqId !== satReqRef.current) return;
+
+        setForm((prev) => ({
+          ...prev,
+          sat_product_service: sat?.sat_product_service || "",
+          sat_unit: sat?.sat_unit || "",
+        }));
+      } catch (e) {
+        if (reqId !== satReqRef.current) return;
+
+        setErr(apiErrorToMessage(e, "No se pudieron cargar las claves fiscales SAT"));
+
+        setForm((prev) => ({
+          ...prev,
+          sat_product_service: "",
+          sat_unit: "",
+        }));
+      } finally {
+        if (reqId !== satReqRef.current) return;
+        setSatLoading(false);
+      }
+    })();
+  }, [open, currentInitialId, restaurantId, getProductSatMapping]);
 
   useEffect(() => {
     if (!open) return;
@@ -428,6 +492,15 @@ export default function ProductFormModal({
       return;
     }
 
+    if (hasIncompleteSatPair(form)) {
+      setErr(
+        "Completa ambos campos fiscales: clave producto/servicio SAT y clave unidad SAT, o deja ambos vacíos."
+      );
+      return;
+    }
+
+    const satPayload = buildSatPayload(form);
+
     const pt = form.product_type || defaultProductType(allowedProducts);
     const it = normalizeInventoryForProductType(
       pt,
@@ -453,7 +526,7 @@ export default function ProductFormModal({
         };
 
         saved = await updateProduct(restaurantId, form.id, updatePayload);
-
+        await updateProductSatMapping(restaurantId, form.id, satPayload);
         const fresh = await getProduct(restaurantId, form.id);
 
         setForm((prev) => ({
@@ -471,8 +544,11 @@ export default function ProductFormModal({
               prev.inventory_type,
               allowedProducts
             ),
+          sat_product_service: satPayload.sat_product_service || "",
+          sat_unit: satPayload.sat_unit || "",
           plan_meta: fresh.plan_meta || prev.plan_meta,
         }));
+
       } else {
         const createPayload = {
           category_id: Number(form.category_id),
@@ -487,6 +563,10 @@ export default function ProductFormModal({
 
         saved = await createProduct(restaurantId, createPayload);
 
+        if (saved?.id) {
+          await updateProductSatMapping(restaurantId, saved.id, satPayload);
+        }
+
         setForm((prev) => ({
           ...prev,
           id: saved.id,
@@ -496,6 +576,8 @@ export default function ProductFormModal({
           status: saved.status || prev.status,
           product_type: saved.product_type || prev.product_type,
           inventory_type: saved.inventory_type || prev.inventory_type,
+          sat_product_service: satPayload.sat_product_service || "",
+          sat_unit: satPayload.sat_unit || "",
           plan_meta: saved.plan_meta || prev.plan_meta,
         }));
       }
@@ -898,6 +980,106 @@ export default function ProductFormModal({
                     </Typography>
                   </Alert>
 
+                  <Box
+                    sx={{
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      backgroundColor: "background.default",
+                      borderLeft: "5px solid",
+                      borderLeftColor: "primary.main",
+                      p: { xs: 1.5, sm: 2 },
+                    }}
+                  >
+                    <Stack spacing={1.75}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        spacing={1}
+                      >
+                        <Box>
+                          <SectionTitle title="Claves fiscales" />
+
+                          <Typography
+                            sx={{
+                              mt: 0.5,
+                              fontSize: 13,
+                              color: "text.secondary",
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            Configura las claves SAT que se usarán cuando el producto se facture
+                            de forma individual.
+                          </Typography>
+                        </Box>
+
+                        {satLoading ? (
+                          <Chip
+                            label="Cargando claves..."
+                            size="small"
+                            sx={{ fontWeight: 800 }}
+                          />
+                        ) : null}
+                      </Stack>
+
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                        <FieldBlock
+                          label="Clave producto/servicio SAT"
+                          help="Ejemplo común para consumo de alimentos: 90101501."
+                          input={
+                            <TextField
+                              fullWidth
+                              value={form.sat_product_service}
+                              disabled={saving || satLoading}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  sat_product_service: e.target.value,
+                                }))
+                              }
+                              placeholder="Ej. 90101501"
+                            />
+                          }
+                        />
+
+                        <FieldBlock
+                          label="Clave unidad SAT"
+                          help="Ejemplo común: E48."
+                          input={
+                            <TextField
+                              fullWidth
+                              value={form.sat_unit}
+                              disabled={saving || satLoading}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  sat_unit: e.target.value,
+                                }))
+                              }
+                              placeholder="Ej. E48"
+                            />
+                          }
+                        />
+                      </Stack>
+
+                      <Alert
+                        severity="info"
+                        sx={{
+                          borderRadius: 1,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <Typography variant="body2">
+                          Si capturas claves fiscales, debes llenar ambos campos. También puedes
+                          dejarlos vacíos y completarlos después.
+                        </Typography>
+                      </Alert>
+                    </Stack>
+                  </Box>
+
+                  
+
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Alcance del catálogo"
@@ -1297,6 +1479,20 @@ export default function ProductFormModal({
         </Stack>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SectionTitle({ title }) {
+  return (
+    <Typography
+      sx={{
+        fontSize: 15,
+        fontWeight: 900,
+        color: "primary.main",
+      }}
+    >
+      {title}
+    </Typography>
   );
 }
 

@@ -48,6 +48,29 @@ export async function deleteProduct(restaurantId, productId) {
   return data;
 }
 
+
+// ========= CLAVES FISCALES SAT =========
+export async function getProductSatMapping(restaurantId, productId) {
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/products/${productId}/sat`
+  );
+
+  return {
+    product_id: data?.product_id ?? productId,
+    sat_product_service: data?.sat_product_service ?? "",
+    sat_unit: data?.sat_unit ?? "",
+  };
+}
+
+export async function updateProductSatMapping(restaurantId, productId, payload) {
+  const { data } = await api.put(
+    `/restaurants/${restaurantId}/products/${productId}/sat`,
+    payload
+  );
+
+  return data;
+}
+
 // ========= IMÁGENES =========
 export async function getProductImages(restaurantId, productId) {
   const { data } = await api.get(
