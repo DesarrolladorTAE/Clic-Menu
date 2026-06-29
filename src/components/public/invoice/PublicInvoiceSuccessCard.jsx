@@ -6,7 +6,8 @@ import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import TagOutlinedIcon from "@mui/icons-material/TagOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 
 function formatDate(value) {
   if (!value) return "Sin datos";
@@ -26,16 +27,13 @@ function formatDate(value) {
   });
 }
 
-function billingModeLabel(value) {
-  if (value === "global") return "Facturación global";
-  if (value === "per_product") return "Facturación por producto";
-  return "Sin datos";
-}
-
 export default function PublicInvoiceSuccessCard({ data }) {
   const [copied, setCopied] = useState(false);
 
   const uuid = data?.uuid || "";
+  const pdfUrl = data?.pdf_url || "";
+  const xmlUrl = data?.xml_url || "";
+  const hasDocuments = !!pdfUrl || !!xmlUrl;
 
   const copyUuid = async () => {
     if (!uuid) return;
@@ -134,6 +132,119 @@ export default function PublicInvoiceSuccessCard({ data }) {
               p: 1.75,
               borderRadius: 1,
               border: "1px solid",
+              borderColor: "success.light",
+              backgroundColor: "rgba(46, 125, 50, 0.08)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: "success.dark",
+                lineHeight: 1.5,
+              }}
+            >
+              El XML fiscal y el PDF se descargaron automáticamente al timbrar.
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.35,
+                fontSize: 12.5,
+                color: "text.secondary",
+                lineHeight: 1.5,
+              }}
+            >
+              También puedes volver a abrirlos desde este mismo enlace del ticket.
+            </Typography>
+          </Box>
+
+          {hasDocuments ? (
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.default",
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 900,
+                      color: "text.primary",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Documentos fiscales
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 12.5,
+                      color: "text.secondary",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Puedes abrir el PDF o descargar el XML de tu factura.
+                  </Typography>
+                </Box>
+
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1}
+                  alignItems="stretch"
+                >
+                  {pdfUrl ? (
+                    <Button
+                      component="a"
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="contained"
+                      startIcon={<PictureAsPdfOutlinedIcon />}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 160 },
+                        height: 42,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Abrir PDF
+                    </Button>
+                  ) : null}
+
+                  {xmlUrl ? (
+                    <Button
+                      component="a"
+                      href={xmlUrl}
+                      download={data?.xml_filename || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="outlined"
+                      startIcon={<FileDownloadOutlinedIcon />}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 170 },
+                        height: 42,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Descargar XML
+                    </Button>
+                  ) : null}
+                </Stack>
+              </Stack>
+            </Box>
+          ) : null}
+
+          <Box
+            sx={{
+              p: 1.75,
+              borderRadius: 1,
+              border: "1px solid",
               borderColor: "divider",
               borderLeft: "5px solid",
               borderLeftColor: "primary.main",
@@ -209,27 +320,9 @@ export default function PublicInvoiceSuccessCard({ data }) {
             />
 
             <SuccessItem
-              icon={<TagOutlinedIcon fontSize="small" />}
-              label="ID factura"
-              value={data?.invoice_id ? `#${data.invoice_id}` : "Sin datos"}
-            />
-
-            <SuccessItem
-              icon={<SettingsOutlinedIcon fontSize="small" />}
-              label="Modo"
-              value={billingModeLabel(data?.billing_mode)}
-            />
-
-            <SuccessItem
               icon={<CalendarMonthOutlinedIcon fontSize="small" />}
               label="Timbrada el"
               value={formatDate(data?.stamped_at)}
-            />
-
-            <SuccessItem
-              icon={<ReceiptLongOutlinedIcon fontSize="small" />}
-              label="Venta"
-              value={data?.sale_id ? `#${data.sale_id}` : "Sin datos"}
             />
 
             <SuccessItem
@@ -238,6 +331,9 @@ export default function PublicInvoiceSuccessCard({ data }) {
               value={data?.taeconta_factura_id || "Sin datos"}
             />
           </Box>
+
+
+
         </Stack>
       </Box>
     </Paper>

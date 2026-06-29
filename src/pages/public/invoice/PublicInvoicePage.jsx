@@ -18,18 +18,87 @@ import PublicInvoiceSuccessCard from "../../../components/public/invoice/PublicI
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 
-function apiErrorToMessage(e, fallback = "Ocurrió un error") {
+const GENERAL_ERROR_KEYS = [
+  "sat",
+  "sat_product_service",
+  "sat_unit",
+  "global_product",
+  "global_sat_product_service",
+  "global_sat_unit",
+  "global_description",
+  "products",
+  "sale",
+  "setting",
+  "account",
+  "tax_profile",
+  "forma_pago",
+  "payments",
+  "billing_mode",
+];
+
+function isGenericValidationMessage(message) {
+  const text = String(message || "").trim().toLowerCase();
+
   return (
-    e?.response?.data?.message ||
-    (e?.response?.data?.errors
-      ? Object.values(e.response.data.errors)
-          .flat()
-          .filter(Boolean)
-          .join("\n")
-      : "") ||
-    e?.message ||
-    fallback
+    text === "the given data was invalid." ||
+    text === "the given data was invalid" ||
+    text === "los datos proporcionados no son válidos." ||
+    text === "los datos proporcionados no son válidos"
   );
+}
+
+function errorValueToMessages(value) {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flat().filter(Boolean).map((item) => String(item));
+  }
+
+  return [String(value)];
+}
+
+function collectErrorMessages(errors, keys = null) {
+  if (!errors || typeof errors !== "object") return [];
+
+  const entries = keys
+    ? keys.map((key) => [key, errors[key]]).filter(([, value]) => value)
+    : Object.entries(errors);
+
+  return entries
+    .flatMap(([, value]) => errorValueToMessages(value))
+    .map((message) => message.trim())
+    .filter(Boolean);
+}
+
+function apiErrorToMessage(e, fallback = "Ocurrió un error") {
+  const responseData = e?.response?.data;
+
+  if (!responseData || typeof responseData !== "object") {
+    return e?.message || fallback;
+  }
+
+  const errors = responseData?.errors || {};
+
+  const generalMessages = collectErrorMessages(errors, GENERAL_ERROR_KEYS);
+
+  if (generalMessages.length > 0) {
+    return generalMessages.join("\n");
+  }
+
+  const allErrorMessages = collectErrorMessages(errors);
+
+  if (allErrorMessages.length > 0) {
+    return allErrorMessages.join("\n");
+  }
+
+  if (
+    responseData?.message &&
+    !isGenericValidationMessage(responseData.message)
+  ) {
+    return String(responseData.message);
+  }
+
+  return e?.message || fallback;
 }
 
 function normalizeErrors(errors) {
@@ -72,6 +141,106 @@ function buildFallbackPayload(e, token) {
   };
 }
 
+function downloadXmlFile(xml, filename = "factura.xml") {
+  if (!xml || typeof xml !== "string") {
+    return false;
+  }
+
+  try {
+    const safeFilename =
+      typeof filename === "string" && filename.trim()
+        ? filename.trim()
+        : "factura.xml";
+
+    const blob = new Blob([xml], {
+      type: "application/xml;charset=utf-8",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = safeFilename.endsWith(".xml")
+      ? safeFilename
+      : `${safeFilename}.xml`;
+
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 1000);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function downloadPdfBase64File(pdfBase64, filename = "factura.pdf") {
+  if (!pdfBase64 || typeof pdfBase64 !== "string") {
+    return false;
+  }
+
+  try {
+    const safeFilename =
+      typeof filename === "string" && filename.trim()
+        ? filename.trim()
+        : "factura.pdf";
+
+    const cleanBase64 = pdfBase64.includes(",")
+      ? pdfBase64.split(",").pop()
+      : pdfBase64;
+
+    const binaryString = window.atob(cleanBase64);
+    const length = binaryString.length;
+    const bytes = new Uint8Array(length);
+
+    for (let i = 0; i < length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const blob = new Blob([bytes], {
+      type: "application/pdf",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = safeFilename.endsWith(".pdf")
+      ? safeFilename
+      : `${safeFilename}.pdf`;
+
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 1000);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function cleanSuccessData(data) {
+  if (!data || typeof data !== "object") {
+    return data || null;
+  }
+
+  const { xml, pdf_base64, pdf_error_message, ...cleanData } = data;
+
+  return cleanData;
+}
+
 export default function PublicInvoicePage() {
   const { token } = useParams();
 
@@ -107,6 +276,25 @@ export default function PublicInvoicePage() {
     if (reason === "clickaway") return;
     setAlertState((prev) => ({ ...prev, open: false }));
   };
+
+  /**
+   * Cierre automático de la alerta superior.
+   * Lo dejamos aquí para garantizar que cierre aunque AppAlert no respete autoHideDuration.
+   */
+  useEffect(() => {
+    if (!alertState.open) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setAlertState((prev) => ({
+        ...prev,
+        open: false,
+      }));
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [alertState.open, alertState.severity, alertState.title, alertState.message]);
 
   const invoiceData = useMemo(() => {
     return invoicePayload?.data || null;
@@ -145,6 +333,12 @@ export default function PublicInvoicePage() {
         if (!alive) return;
 
         setInvoicePayload(payload);
+
+        const payloadStatus = payload?.status || payload?.data?.status;
+
+        if (payloadStatus === "already_invoiced") {
+          setSuccessData(cleanSuccessData(payload?.data || null));
+        }
       } catch (e) {
         if (!alive) return;
 
@@ -171,7 +365,19 @@ export default function PublicInvoicePage() {
       const response = await stampPublicInvoice(token, payload);
 
       if (response?.ok && response?.status === "stamped") {
-        setSuccessData(response?.data || null);
+        const rawSuccessData = response?.data || null;
+
+        const xmlDownloaded = downloadXmlFile(
+          rawSuccessData?.xml,
+          rawSuccessData?.xml_filename
+        );
+
+        const pdfDownloaded = downloadPdfBase64File(
+          rawSuccessData?.pdf_base64,
+          rawSuccessData?.pdf_filename
+        );
+
+        setSuccessData(cleanSuccessData(rawSuccessData));
 
         setInvoicePayload((prev) => ({
           ...(prev || {}),
@@ -186,10 +392,27 @@ export default function PublicInvoicePage() {
           },
         }));
 
+        let successMessage = "Factura timbrada correctamente.";
+
+        if (xmlDownloaded && pdfDownloaded) {
+          successMessage =
+            "Factura timbrada correctamente. El XML y PDF se descargaron automáticamente.";
+        } else if (xmlDownloaded && !pdfDownloaded) {
+          successMessage =
+            rawSuccessData?.pdf_error_message ||
+            "Factura timbrada correctamente. El XML se descargó, pero no fue posible generar el PDF.";
+        } else if (!xmlDownloaded && pdfDownloaded) {
+          successMessage =
+            "Factura timbrada correctamente. El PDF se descargó, pero no se recibió el XML para descarga.";
+        } else {
+          successMessage =
+            "Factura timbrada correctamente, pero no se recibieron archivos para descarga.";
+        }
+
         showAlert({
           severity: "success",
           title: "Factura timbrada",
-          message: response?.message || "Factura timbrada correctamente.",
+          message: successMessage,
         });
 
         return;
@@ -199,12 +422,6 @@ export default function PublicInvoicePage() {
         response?.message || "No fue posible timbrar la factura.";
 
       setSubmitError(message);
-
-      showAlert({
-        severity: "error",
-        title: "No se pudo timbrar",
-        message,
-      });
     } catch (e) {
       const responseData = e?.response?.data;
       const errors = normalizeErrors(responseData?.errors);
@@ -223,12 +440,6 @@ export default function PublicInvoicePage() {
       ) {
         setInvoicePayload(responseData);
       }
-
-      showAlert({
-        severity: "error",
-        title: "No se pudo timbrar",
-        message,
-      });
     } finally {
       setSubmitting(false);
     }
@@ -436,7 +647,7 @@ export default function PublicInvoicePage() {
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4500}
+        autoHideDuration={3000}
       />
     </PageContainer>
   );

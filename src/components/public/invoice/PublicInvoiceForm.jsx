@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, CircularProgress, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 
@@ -98,42 +89,113 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function isValidRfc(value) {
+  const rfc = clean(value).toUpperCase();
+
+  if (!rfc) return false;
+
+  if (![12, 13].includes(rfc.length)) {
+    return false;
+  }
+
+  if (!/^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$/u.test(rfc)) {
+    return false;
+  }
+
+  const dateStart = rfc.length === 12 ? 3 : 4;
+  const datePart = rfc.slice(dateStart, dateStart + 6);
+
+  const year = Number(datePart.slice(0, 2));
+  const month = Number(datePart.slice(2, 4));
+  const day = Number(datePart.slice(4, 6));
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return false;
+  }
+
+  if (month < 1 || month > 12) {
+    return false;
+  }
+
+  if (day < 1 || day > 31) {
+    return false;
+  }
+
+  const testDate = new Date(2000 + year, month - 1, day);
+
+  return (
+    testDate.getFullYear() === 2000 + year &&
+    testDate.getMonth() === month - 1 &&
+    testDate.getDate() === day
+  );
+}
+
+function isKnownOption(options, value) {
+  const cleanValue = clean(value);
+
+  return options.some((option) => option.value === cleanValue);
+}
+
 function validate(form, invoiceMode) {
   const errors = {};
 
-  if (!clean(form.clienteRFC)) {
+  const clienteRFC = clean(form.clienteRFC).toUpperCase();
+  const nombre = clean(form.Nombre);
+  const regimenFiscal = clean(form.RegimenFiscalReceptor);
+  const codigoPostal = clean(form.DomicilioFiscalReceptor);
+  const usoCfdi = clean(form.usoCfdi).toUpperCase();
+  const correo = clean(form.clienteCorreo);
+  const billingMode = clean(form.billing_mode);
+
+  if (!clienteRFC) {
     errors.clienteRFC = "Debes ingresar el RFC.";
-  } else if (clean(form.clienteRFC).length > 13) {
-    errors.clienteRFC = "El RFC no puede exceder 13 caracteres.";
+  } else if (![12, 13].includes(clienteRFC.length)) {
+    errors.clienteRFC = "El RFC debe tener 12 o 13 caracteres.";
+  } else if (!isValidRfc(clienteRFC)) {
+    errors.clienteRFC =
+      "El RFC no tiene un formato válido. Revisa letras iniciales, fecha y homoclave.";
   }
 
-  if (!clean(form.Nombre)) {
+  if (!nombre) {
     errors.Nombre = "Debes ingresar la razón social o nombre fiscal.";
-  } else if (clean(form.Nombre).length > 255) {
+  } else if (nombre.length > 255) {
     errors.Nombre = "El nombre fiscal no puede exceder 255 caracteres.";
   }
 
-  if (!clean(form.RegimenFiscalReceptor)) {
+  if (!regimenFiscal) {
     errors.RegimenFiscalReceptor = "Debes seleccionar el régimen fiscal.";
+  } else if (!isKnownOption(REGIMEN_OPTIONS, regimenFiscal)) {
+    errors.RegimenFiscalReceptor = "El régimen fiscal seleccionado no es válido.";
   }
 
-  if (!clean(form.DomicilioFiscalReceptor)) {
+  if (!codigoPostal) {
     errors.DomicilioFiscalReceptor = "Debes ingresar el código postal fiscal.";
-  } else if (clean(form.DomicilioFiscalReceptor).length !== 5) {
+  } else if (!/^[0-9]{5}$/.test(codigoPostal)) {
     errors.DomicilioFiscalReceptor =
-      "El código postal fiscal debe tener 5 caracteres.";
+      "El código postal fiscal debe contener solo números y tener 5 dígitos.";
   }
 
-  if (!clean(form.usoCfdi)) {
+  if (!usoCfdi) {
     errors.usoCfdi = "Debes seleccionar el uso CFDI.";
+  } else if (!isKnownOption(USO_CFDI_OPTIONS, usoCfdi)) {
+    errors.usoCfdi = "El uso CFDI seleccionado no es válido.";
   }
 
-  if (clean(form.clienteCorreo) && !isValidEmail(clean(form.clienteCorreo))) {
+  if (correo && !isValidEmail(correo)) {
     errors.clienteCorreo = "El correo no tiene un formato válido.";
   }
 
-  if (invoiceMode === "both" && !clean(form.billing_mode)) {
+  if (correo.length > 190) {
+    errors.clienteCorreo = "El correo no puede exceder 190 caracteres.";
+  }
+
+  if (invoiceMode === "both" && !billingMode) {
     errors.billing_mode = "Debes seleccionar el modo de facturación.";
+  } else if (
+    invoiceMode === "both" &&
+    !isKnownOption(BILLING_MODE_OPTIONS, billingMode)
+  ) {
+    errors.billing_mode = "El modo de facturación seleccionado no es válido.";
   }
 
   return errors;
@@ -188,7 +250,7 @@ export default function PublicInvoiceForm({
 
     const payload = {
       clienteRFC: clean(form.clienteRFC).toUpperCase(),
-      Nombre: clean(form.Nombre),
+      Nombre: clean(form.Nombre).replace(/\s+/g, " "),
       RegimenFiscalReceptor: clean(form.RegimenFiscalReceptor),
       DomicilioFiscalReceptor: clean(form.DomicilioFiscalReceptor),
       usoCfdi: clean(form.usoCfdi).toUpperCase(),
@@ -316,143 +378,168 @@ export default function PublicInvoiceForm({
                     </Typography>
                   </Box>
 
-                  <TextField
-                    select
-                    fullWidth
-                    label="Modo de facturación"
-                    value={form.billing_mode}
-                    disabled={submitting}
-                    onChange={(e) => setField("billing_mode", e.target.value)}
-                    error={!!getError(mergedErrors, "billing_mode")}
-                    helperText={getError(mergedErrors, "billing_mode")}
-                    SelectProps={{
-                      IconComponent: KeyboardArrowDownIcon,
-                    }}
-                  >
-                    <MenuItem value="">Selecciona una opción</MenuItem>
-                    {BILLING_MODE_OPTIONS.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <FieldBlock
+                    label="Modo de facturación *"
+                    input={
+                      <TextField
+                        select
+                        value={form.billing_mode}
+                        disabled={submitting}
+                        onChange={(e) => setField("billing_mode", e.target.value)}
+                        error={!!getError(mergedErrors, "billing_mode")}
+                        helperText={getError(mergedErrors, "billing_mode")}
+                      >
+                        <MenuItem value="">Selecciona una opción</MenuItem>
+                        {BILLING_MODE_OPTIONS.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    }
+                  />
                 </Stack>
               </Box>
             ) : null}
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                fullWidth
-                label="RFC"
-                value={form.clienteRFC}
-                disabled={submitting}
-                onChange={(e) =>
-                  setField(
-                    "clienteRFC",
-                    e.target.value.toUpperCase().slice(0, 13)
-                  )
+              <FieldBlock
+                label="RFC *"
+                help={
+                  !getError(mergedErrors, "clienteRFC")
+                    ? "Debe tener 12 o 13 caracteres, con fecha y homoclave."
+                    : ""
                 }
-                error={!!getError(mergedErrors, "clienteRFC")}
-                helperText={
-                  getError(mergedErrors, "clienteRFC") ||
-                  "Máximo 13 caracteres."
+                input={
+                  <TextField
+                    value={form.clienteRFC}
+                    disabled={submitting}
+                    placeholder="Ej. XAXX010101000"
+                    onChange={(e) =>
+                      setField(
+                        "clienteRFC",
+                        e.target.value
+                          .toUpperCase()
+                          .replace(/\s/g, "")
+                          .slice(0, 13)
+                      )
+                    }
+                    error={!!getError(mergedErrors, "clienteRFC")}
+                    helperText={getError(mergedErrors, "clienteRFC")}
+                  />
                 }
               />
 
-              <TextField
-                fullWidth
-                label="Código postal fiscal"
-                value={form.DomicilioFiscalReceptor}
-                disabled={submitting}
-                inputProps={{
-                  inputMode: "numeric",
-                  maxLength: 5,
-                }}
-                onChange={(e) =>
-                  setField(
-                    "DomicilioFiscalReceptor",
-                    e.target.value.replace(/\D/g, "").slice(0, 5)
-                  )
+              <FieldBlock
+                label="Código postal fiscal *"
+                help={
+                  !getError(mergedErrors, "DomicilioFiscalReceptor")
+                    ? "Debe contener exactamente 5 dígitos."
+                    : ""
                 }
-                error={!!getError(mergedErrors, "DomicilioFiscalReceptor")}
-                helperText={
-                  getError(mergedErrors, "DomicilioFiscalReceptor") ||
-                  "Debe contener 5 dígitos."
+                input={
+                  <TextField
+                    value={form.DomicilioFiscalReceptor}
+                    disabled={submitting}
+                    placeholder="Ej. 39300"
+                    inputProps={{
+                      inputMode: "numeric",
+                      maxLength: 5,
+                    }}
+                    onChange={(e) =>
+                      setField(
+                        "DomicilioFiscalReceptor",
+                        e.target.value.replace(/\D/g, "").slice(0, 5)
+                      )
+                    }
+                    error={!!getError(mergedErrors, "DomicilioFiscalReceptor")}
+                    helperText={getError(mergedErrors, "DomicilioFiscalReceptor")}
+                  />
                 }
               />
             </Stack>
 
-            <TextField
-              fullWidth
-              label="Razón social / Nombre fiscal"
-              value={form.Nombre}
-              disabled={submitting}
-              onChange={(e) => setField("Nombre", e.target.value)}
-              error={!!getError(mergedErrors, "Nombre")}
-              helperText={getError(mergedErrors, "Nombre")}
+            <FieldBlock
+              label="Razón social / Nombre fiscal *"
+              input={
+                <TextField
+                  value={form.Nombre}
+                  disabled={submitting}
+                  placeholder="Ej. TECNOLOGIAS ADMINISTRATIVAS"
+                  onChange={(e) => setField("Nombre", e.target.value)}
+                  error={!!getError(mergedErrors, "Nombre")}
+                  helperText={getError(mergedErrors, "Nombre")}
+                />
+              }
             />
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                select
-                fullWidth
-                label="Régimen fiscal"
-                value={form.RegimenFiscalReceptor}
-                disabled={submitting}
-                onChange={(e) =>
-                  setField("RegimenFiscalReceptor", e.target.value)
+              <FieldBlock
+                label="Régimen fiscal *"
+                input={
+                  <TextField
+                    select
+                    value={form.RegimenFiscalReceptor}
+                    disabled={submitting}
+                    onChange={(e) =>
+                      setField("RegimenFiscalReceptor", e.target.value)
+                    }
+                    error={!!getError(mergedErrors, "RegimenFiscalReceptor")}
+                    helperText={getError(mergedErrors, "RegimenFiscalReceptor")}
+                  >
+                    <MenuItem value="">Selecciona régimen fiscal</MenuItem>
+                    {REGIMEN_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 }
-                error={!!getError(mergedErrors, "RegimenFiscalReceptor")}
-                helperText={getError(mergedErrors, "RegimenFiscalReceptor")}
-                SelectProps={{
-                  IconComponent: KeyboardArrowDownIcon,
-                }}
-              >
-                <MenuItem value="">Selecciona régimen fiscal</MenuItem>
-                {REGIMEN_OPTIONS.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
+              />
 
-              <TextField
-                select
-                fullWidth
-                label="Uso CFDI"
-                value={form.usoCfdi}
-                disabled={submitting}
-                onChange={(e) => setField("usoCfdi", e.target.value)}
-                error={!!getError(mergedErrors, "usoCfdi")}
-                helperText={getError(mergedErrors, "usoCfdi")}
-                SelectProps={{
-                  IconComponent: KeyboardArrowDownIcon,
-                }}
-              >
-                <MenuItem value="">Selecciona uso CFDI</MenuItem>
-                {USO_CFDI_OPTIONS.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <FieldBlock
+                label="Uso CFDI *"
+                input={
+                  <TextField
+                    select
+                    value={form.usoCfdi}
+                    disabled={submitting}
+                    onChange={(e) => setField("usoCfdi", e.target.value)}
+                    error={!!getError(mergedErrors, "usoCfdi")}
+                    helperText={getError(mergedErrors, "usoCfdi")}
+                  >
+                    <MenuItem value="">Selecciona uso CFDI</MenuItem>
+                    {USO_CFDI_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                }
+              />
             </Stack>
 
-            <TextField
-              fullWidth
-              label="Correo electrónico opcional"
-              value={form.clienteCorreo}
-              disabled={submitting}
-              inputProps={{
-                inputMode: "email",
-              }}
-              onChange={(e) =>
-                setField("clienteCorreo", e.target.value.toLowerCase())
+            <FieldBlock
+              label="Correo electrónico"
+              help={
+                !getError(mergedErrors, "clienteCorreo")
+                  ? "Opcional. Lo usaremos solo como referencia del timbrado."
+                  : ""
               }
-              error={!!getError(mergedErrors, "clienteCorreo")}
-              helperText={
-                getError(mergedErrors, "clienteCorreo") ||
-                "Lo usaremos solo como referencia del timbrado."
+              input={
+                <TextField
+                  value={form.clienteCorreo}
+                  disabled={submitting}
+                  placeholder="Ej. correo@dominio.com"
+                  inputProps={{
+                    inputMode: "email",
+                  }}
+                  onChange={(e) =>
+                    setField("clienteCorreo", e.target.value.toLowerCase())
+                  }
+                  error={!!getError(mergedErrors, "clienteCorreo")}
+                  helperText={getError(mergedErrors, "clienteCorreo")}
+                />
               }
             />
 
@@ -464,8 +551,10 @@ export default function PublicInvoiceForm({
               }}
             >
               <Typography variant="body2">
-                Antes de timbrar, revisa que RFC, nombre fiscal, régimen y
-                código postal coincidan con tu constancia fiscal.
+                Antes de timbrar, revisa que RFC, nombre fiscal, régimen fiscal,
+                código postal y uso CFDI coincidan con tu constancia fiscal. Si
+                algún dato es incorrecto, el SAT o el PAC pueden rechazar el
+                timbrado.
               </Typography>
             </Alert>
 
@@ -491,5 +580,37 @@ export default function PublicInvoiceForm({
         </form>
       </Box>
     </Paper>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }

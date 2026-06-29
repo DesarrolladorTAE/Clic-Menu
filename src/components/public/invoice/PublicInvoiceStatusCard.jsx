@@ -18,13 +18,38 @@ function statusTitle(status) {
     taeconta_tax_profile_missing: "Perfil fiscal no sincronizado",
     invoice_setting_disabled: "Auto-facturación desactivada",
     not_available: "Ticket no disponible",
+    invoice_inconsistent: "Revisión requerida",
   };
 
   return titles[status] || "No es posible facturar este ticket";
 }
 
+function statusLabel(status) {
+  const labels = {
+    not_found: "No encontrado",
+    expired: "Vencido",
+    used: "Utilizado",
+    cancelled: "Cancelado",
+    sale_not_found: "Venta no encontrada",
+    sale_not_paid: "Venta no pagada",
+    already_invoiced: "Facturado",
+    taeconta_not_connected: "Taeconta no conectado",
+    taeconta_tax_profile_missing: "Perfil fiscal faltante",
+    invoice_setting_disabled: "Facturación desactivada",
+    not_available: "No disponible",
+    invoice_inconsistent: "Revisión requerida",
+  };
+
+  return labels[status] || "No disponible";
+}
+
+
 function statusColor(status) {
-  if (["expired", "used", "already_invoiced"].includes(status)) {
+  if (
+    ["expired", "used", "already_invoiced", "invoice_inconsistent"].includes(
+      status
+    )
+  ) {
     return "warning";
   }
 
@@ -117,7 +142,7 @@ export default function PublicInvoiceStatusCard({
         </Box>
 
         <Chip
-          label={status || "no_disponible"}
+          label={statusLabel(status)}
           color={color}
           variant={color === "default" ? "outlined" : "filled"}
           size="small"
