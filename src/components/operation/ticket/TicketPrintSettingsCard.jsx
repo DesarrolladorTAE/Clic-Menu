@@ -12,7 +12,7 @@ import DesktopWindowsOutlinedIcon from "@mui/icons-material/DesktopWindowsOutlin
 import AndroidOutlinedIcon from "@mui/icons-material/AndroidOutlined";
 
 const WINDOWS_PRINTER_APP_URL =
-  "https://clicmenu.com.mx/downloads/ClicMenuPrinter_Setup_v1.0.0.exe";
+  "https://clicmenu.com.mx/downloads/ClicMenuPrinter_Setup_v1.0.1.exe";
 
 const ANDROID_PRINTER_APP_URL =
   "https://clicmenu.com.mx/downloads/clic-menu-printer.apk";

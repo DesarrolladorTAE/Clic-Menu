@@ -15,7 +15,7 @@ import {
 } from "../../../theme/landingTheme";
 
 const downloadLinks = {
-  windows: "#",
+  windows: "https://clicmenu.com.mx/downloads/ClicMenuPrinter_Setup_v1.0.1.exe",
   android: "https://clicmenu.com.mx/downloads/clic-menu-printer.apk",
 };
 
