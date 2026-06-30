@@ -1,8 +1,16 @@
 import {
-  Box, Button, Card, CardContent, Stack, Typography,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Stack,
+  Typography,
+  Chip,
 } from "@mui/material";
+
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
+import PercentRoundedIcon from "@mui/icons-material/PercentRounded";
 
 export default function PlanCard({
   plan,
@@ -23,29 +31,39 @@ export default function PlanCard({
     : [];
 
   const billingConfig = {
-      monthly: {
-        months: 1,
-        label: "Plan mensual",
-        suffix: "/ mes",
-      },
-      semester: {
-        months: 6,
-        label: "Plan semestral",
-        suffix: "/ semestre",
-      },
-      annual: {
-        months: 12,
-        label: "Plan anual",
-        suffix: "/ año",
-      },
+    monthly: {
+      months: 1,
+      label: "Plan mensual",
+      suffix: "/ mes",
+    },
+    semester: {
+      months: 6,
+      label: "Plan semestral",
+      suffix: "/ semestre",
+    },
+    annual: {
+      months: 12,
+      label: "Plan anual",
+      suffix: "/ año",
+    },
   };
 
   const selectedBilling = billingConfig[billingPeriod] || billingConfig.monthly;
 
-  const displayPrice =
-    plan?.billing_prices?.[billingPeriod] ??
-    Number(plan?.monthly_price || 0);
+  const finalPrice =
+    plan?.billing_prices?.[billingPeriod] ?? Number(plan?.monthly_price || 0);
 
+  const originalPrice =
+    plan?.billing_original_prices?.[billingPeriod] ?? finalPrice;
+
+  const discountData = plan?.billing_discounts?.[billingPeriod] || null;
+
+  const discountAmount = Number(discountData?.discount_amount || 0);
+
+  const hasReferralDiscount =
+    plan?.referral_discount?.applies === true && discountAmount > 0;
+
+  const discountPercent = Number(plan?.referral_discount?.percent || 5);
 
   return (
     <Card
@@ -62,7 +80,6 @@ export default function PlanCard({
         height: "100%",
         transition:
           "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
-        transform: isCurrent ? "translateY(0)" : "translateY(0)",
         "&:hover": {
           transform:
             !isCurrent && !isDisabled ? "translateY(-8px)" : "translateY(0)",
@@ -70,8 +87,7 @@ export default function PlanCard({
             !isCurrent && !isDisabled
               ? "0 10px 24px rgba(0,0,0,0.10)"
               : "none",
-          borderColor:
-            !isCurrent && !isDisabled ? "primary.main" : undefined,
+          borderColor: !isCurrent && !isDisabled ? "primary.main" : undefined,
         },
       }}
     >
@@ -118,7 +134,9 @@ export default function PlanCard({
                     mt: 0.5,
                     fontSize: 12,
                     fontWeight: 800,
-                    color: isCurrent ? "rgba(255,255,255,0.85)" : "text.secondary",
+                    color: isCurrent
+                      ? "rgba(255,255,255,0.85)"
+                      : "text.secondary",
                   }}
                 >
                   {plan.slug}
@@ -143,6 +161,39 @@ export default function PlanCard({
               ) : null}
             </Stack>
 
+            {hasReferralDiscount ? (
+              <Chip
+                icon={<PercentRoundedIcon />}
+                label={`${discountPercent}% referido aplicado`}
+                sx={{
+                  alignSelf: "flex-start",
+                  bgcolor: isCurrent ? "rgba(255,255,255,0.18)" : "#dcfce7",
+                  color: isCurrent ? "#fff" : "#166534",
+                  fontWeight: 900,
+                  borderRadius: 999,
+                  "& .MuiChip-icon": {
+                    color: isCurrent ? "#fff" : "#166534",
+                  },
+                }}
+              />
+            ) : null}
+
+            {hasReferralDiscount ? (
+              <Typography
+                sx={{
+                  fontSize: 15,
+                  fontWeight: 800,
+                  color: isCurrent
+                    ? "rgba(255,255,255,0.72)"
+                    : "text.secondary",
+                  textDecoration: "line-through",
+                }}
+              >
+                Antes: ${Number(originalPrice).toLocaleString("es-MX")}{" "}
+                {plan.currency || "MXN"}
+              </Typography>
+            ) : null}
+
             <Typography
               sx={{
                 fontSize: { xs: 42, sm: 52 },
@@ -153,26 +204,44 @@ export default function PlanCard({
             >
               {plan.monthly_price === null
                 ? "Desde"
-                : `$${Number(displayPrice).toLocaleString("es-MX")}`}
+                : `$${Number(finalPrice).toLocaleString("es-MX")}`}
               <Typography
                 component="span"
                 sx={{
                   ml: 0.5,
                   fontSize: 20,
                   fontWeight: 700,
-                  color: isCurrent ? "rgba(255,255,255,0.88)" : "text.secondary",
+                  color: isCurrent
+                    ? "rgba(255,255,255,0.88)"
+                    : "text.secondary",
                 }}
               >
                 {plan.currency || "MXN"}
               </Typography>
             </Typography>
 
+            {hasReferralDiscount ? (
+              <Typography
+                sx={{
+                  mt: -0.5,
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: isCurrent ? "#fff" : "#166534",
+                }}
+              >
+                Ahorras ${Number(discountAmount).toLocaleString("es-MX")} en
+                este periodo.
+              </Typography>
+            ) : null}
+
             <Typography
               sx={{
                 mt: -0.5,
                 fontSize: 13,
                 fontWeight: 800,
-                color: isCurrent ? "rgba(255,255,255,0.78)" : "text.secondary",
+                color: isCurrent
+                  ? "rgba(255,255,255,0.78)"
+                  : "text.secondary",
               }}
             >
               {selectedBilling.label} {selectedBilling.suffix}
@@ -182,7 +251,9 @@ export default function PlanCard({
               sx={{
                 fontSize: 14,
                 lineHeight: 1.55,
-                color: isCurrent ? "rgba(255,255,255,0.88)" : "text.secondary",
+                color: isCurrent
+                  ? "rgba(255,255,255,0.88)"
+                  : "text.secondary",
                 minHeight: 44,
               }}
             >
@@ -210,11 +281,7 @@ export default function PlanCard({
                 : undefined,
             }}
           >
-            {isCurrent
-              ? "Plan actual"
-              : busy
-              ? "Contratando..."
-              : "Contratar"}
+            {isCurrent ? "Plan actual" : busy ? "Contratando..." : "Contratar"}
           </Button>
 
           <Box
@@ -222,9 +289,7 @@ export default function PlanCard({
               pt: 1,
               mt: "auto",
               borderTop: "1px solid",
-              borderColor: isCurrent
-                ? "rgba(255,255,255,0.24)"
-                : "divider",
+              borderColor: isCurrent ? "rgba(255,255,255,0.24)" : "divider",
             }}
           >
             <Stack spacing={2}>
@@ -260,7 +325,10 @@ export default function PlanCard({
                   }}
                 >
                   <Stack spacing={1.2}>
-                    <FeatureSectionTitle text="No incluye" isCurrent={isCurrent} />
+                    <FeatureSectionTitle
+                      text="No incluye"
+                      isCurrent={isCurrent}
+                    />
 
                     {excludedFeatures.map((item, idx) => (
                       <FeatureRow
@@ -275,8 +343,6 @@ export default function PlanCard({
               ) : null}
             </Stack>
           </Box>
-
-
         </Stack>
       </CardContent>
     </Card>

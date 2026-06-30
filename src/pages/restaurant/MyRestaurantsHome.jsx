@@ -3,7 +3,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Container, IconButton, Stack, Typography,
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  IconButton,
+  Stack,
+  Typography,
 } from "@mui/material";
 
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
@@ -21,6 +32,8 @@ import RestaurantFormModal from "../../components/restaurant/RestaurantFormModal
 import OwnerProfileModal from "../../components/owner/profile/OwnerProfileModal";
 import OwnerUserMenu from "../../components/layout/OwnerUserMenu";
 import AppAlert from "../../components/common/AppAlert";
+
+import ReferralDiscountModal from "../../components/referrals/ReferralDiscountModal";
 
 function getBadgeConfig(st) {
   if (!st) {
@@ -64,7 +77,7 @@ function getBadgeConfig(st) {
 
 export default function MyRestaurantsHome() {
   const nav = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, referralDiscount } = useAuth();
 
   const [items, setItems] = useState([]);
   const [statusMap, setStatusMap] = useState({});
@@ -77,6 +90,8 @@ export default function MyRestaurantsHome() {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+
+  const [referralModalOpen, setReferralModalOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -94,7 +109,11 @@ export default function MyRestaurantsHome() {
 
   const userMenuOpen = Boolean(userMenuAnchor);
 
-  const showAlert = ({ severity = "success", title = "Hecho", message = "" }) => {
+  const showAlert = ({
+    severity = "success",
+    title = "Hecho",
+    message = "",
+  }) => {
     setAlertState({
       open: true,
       severity,
@@ -125,7 +144,7 @@ export default function MyRestaurantsHome() {
 
     try {
       const res = await getMyRestaurants();
-      const list = Array.isArray(res) ? res : res?.data ?? [];
+      const list = Array.isArray(res) ? res : (res?.data ?? []);
       setItems(list);
 
       try {
@@ -133,17 +152,19 @@ export default function MyRestaurantsHome() {
           list.map(async (r) => {
             const st = await getRestaurantSubscriptionStatus(r.id);
             return [r.id, st];
-          })
+          }),
         );
         setStatusMap(Object.fromEntries(pairs));
       } catch (e) {
         console.log(
           "No se pudieron cargar estados de suscripción",
-          e?.response?.data || e?.message
+          e?.response?.data || e?.message,
         );
       }
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudieron cargar restaurantes.");
+      setErr(
+        e?.response?.data?.message || "No se pudieron cargar restaurantes.",
+      );
     } finally {
       setLoading(false);
     }
@@ -152,6 +173,26 @@ export default function MyRestaurantsHome() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!referralDiscount?.applies) return;
+
+    setReferralModalOpen(true);
+  }, [user?.id, referralDiscount?.applies]);
+
+  const onGoReferralPlans = () => {
+    const firstRestaurant = items?.[0];
+
+    setReferralModalOpen(false);
+
+    if (!firstRestaurant?.id) {
+      openCreate();
+      return;
+    }
+
+    nav(`/owner/restaurants/${firstRestaurant.id}/plans`);
+  };
 
   const onLogout = async () => {
     try {
@@ -169,7 +210,9 @@ export default function MyRestaurantsHome() {
       showAlert({
         severity: "success",
         title: "Demo activo",
-        message: payload?.message || "Restaurante creado con plan demo activo por 7 días.",
+        message:
+          payload?.message ||
+          "Restaurante creado con plan demo activo por 7 días.",
       });
     }
   };
@@ -192,7 +235,8 @@ export default function MyRestaurantsHome() {
     if (st?.is_operational !== true) {
       nav(`/owner/restaurants/${restaurantId}/plans`, {
         state: {
-          notice: "Este restaurante necesita un plan vigente para poder administrarse.",
+          notice:
+            "Este restaurante necesita un plan vigente para poder administrarse.",
           code: st?.code || "SUBSCRIPTION_REQUIRED",
         },
       });
@@ -214,7 +258,9 @@ export default function MyRestaurantsHome() {
       await deleteRestaurant(restaurantId);
       await load();
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo eliminar el restaurante.");
+      setErr(
+        e?.response?.data?.message || "No se pudo eliminar el restaurante.",
+      );
     }
   };
 
@@ -293,7 +339,12 @@ export default function MyRestaurantsHome() {
               />
             </Stack>
 
-            <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={2}
+              flexWrap="wrap"
+            >
               <Typography
                 sx={{
                   fontWeight: 800,
@@ -406,8 +457,8 @@ export default function MyRestaurantsHome() {
                 </Typography>
 
                 <Typography sx={{ maxWidth: 560, color: "text.secondary" }}>
-                  Registra tu primer restaurante para comenzar con la configuración
-                  y operación.
+                  Registra tu primer restaurante para comenzar con la
+                  configuración y operación.
                 </Typography>
 
                 <Button
@@ -530,7 +581,9 @@ export default function MyRestaurantsHome() {
                             fontWeight: 800,
                           }}
                         >
-                          {isOperational ? "Cambiar plan" : "Ver planes / Contratar"}
+                          {isOperational
+                            ? "Cambiar plan"
+                            : "Ver planes / Contratar"}
                         </Button>
 
                         <Button
@@ -548,7 +601,11 @@ export default function MyRestaurantsHome() {
                         </Button>
                       </Stack>
 
-                      <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="flex-end"
+                        sx={{ mt: 2 }}
+                      >
                         <IconButton
                           onClick={() => onDelete(r.id)}
                           sx={{
@@ -572,6 +629,15 @@ export default function MyRestaurantsHome() {
           )}
         </Stack>
       </Container>
+
+      <ReferralDiscountModal
+        open={referralModalOpen}
+        code={referralDiscount?.code}
+        percent={referralDiscount?.percent || 5}
+        hasRestaurant={items.length > 0}
+        onClose={() => setReferralModalOpen(false)}
+        onGoPlans={onGoReferralPlans}
+      />
 
       <AppAlert
         open={alertState.open}

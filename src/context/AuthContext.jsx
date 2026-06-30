@@ -7,6 +7,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [referralDiscount, setReferralDiscount] = useState(null);
 
   const syncUserSession = (nextUser) => {
     if (nextUser?.id) {
@@ -23,9 +24,11 @@ export function AuthProvider({ children }) {
         const nextUser = res.user || null;
 
         setUser(nextUser);
+        setReferralDiscount(res.referral_discount || null);
         syncUserSession(nextUser);
       } catch {
         setUser(null);
+        setReferralDiscount(null);
         sessionStorage.removeItem("auth_user_id");
       } finally {
         setLoading(false);
@@ -38,6 +41,7 @@ export function AuthProvider({ children }) {
       user,
       loading,
       isAuthenticated: !!user,
+      referralDiscount,
 
       updateUser(nextUser) {
         const normalizedUser = nextUser || null;
@@ -50,6 +54,7 @@ export function AuthProvider({ children }) {
         sessionStorage.removeItem("auth_user_id");
         sessionStorage.removeItem("auth_from");
         setUser(null);
+        setReferralDiscount(null);
       },
 
       async login(email, password) {
@@ -61,6 +66,7 @@ export function AuthProvider({ children }) {
         const nextUserId = nextUser?.id ? String(nextUser.id) : "";
 
         setUser(nextUser);
+        setReferralDiscount(res.referral_discount || null);
         syncUserSession(nextUser);
 
         const userChanged =
@@ -71,13 +77,16 @@ export function AuthProvider({ children }) {
 
       async logout() {
         await authService.logout();
+
         localStorage.removeItem("auth_token");
         sessionStorage.removeItem("auth_user_id");
         sessionStorage.removeItem("auth_from");
+
         setUser(null);
+        setReferralDiscount(null);
       },
     };
-  }, [user, loading]);
+  }, [user, loading, referralDiscount]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

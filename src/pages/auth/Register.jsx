@@ -3,7 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 
 import {
-  Alert, Box, Button, Checkbox, Container, FormControl, FormControlLabel, IconButton, MenuItem, Select, Stack, TextField, Typography,
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  Container,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
@@ -18,6 +30,8 @@ import {
   verifyRegisterCode,
   resendRegisterCode,
 } from "../../services/auth/auth.service";
+import { checkReferralCode } from "../../services/referrals/referral.service";
+import ReferralWelcomeModal from "./ReferralWelcomeModal";
 
 export default function Register() {
   const nav = useNavigate();
@@ -30,6 +44,11 @@ export default function Register() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
+  const [refStatus, setRefStatus] = useState("idle");
+  // idle | checking | valid | invalid | error
+
+  const [showReferralModal, setShowReferralModal] = useState(false);
+
   const form = useForm({
     defaultValues: {
       name: "",
@@ -41,6 +60,7 @@ export default function Register() {
       password_confirmation: "",
       default_attention_mode: "fixed",
       terms_accepted: false,
+      codigo_ref: "",
       code: "",
     },
     mode: "onSubmit",
@@ -60,6 +80,7 @@ export default function Register() {
 
   const phone = watch("phone");
   const termsAccepted = watch("terms_accepted");
+  const codigoRef = watch("codigo_ref");
 
   const title = useMemo(() => {
     return step === 1 ? "Crea tu cuenta" : "Verifica tu teléfono";
@@ -71,6 +92,66 @@ export default function Register() {
     return () => clearInterval(t);
   }, [cooldown]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+
+    if (!ref) return;
+
+    const cleanRef = String(ref).trim().slice(-4);
+
+    if (cleanRef) {
+      setValue("codigo_ref", cleanRef, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+
+      setShowReferralModal(true);
+    }
+  }, [setValue]);
+
+  useEffect(() => {
+    const cleanCodigoRef = String(codigoRef || "").trim();
+
+    if (!cleanCodigoRef) {
+      setRefStatus("idle");
+      clearErrors("codigo_ref");
+      return;
+    }
+
+    if (cleanCodigoRef.length < 4) {
+      setRefStatus("idle");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setRefStatus("checking");
+
+      try {
+        const check = await checkReferralCode(cleanCodigoRef);
+
+        if (check?.exists) {
+          setRefStatus("valid");
+          clearErrors("codigo_ref");
+        } else {
+          setRefStatus("invalid");
+          setError("codigo_ref", {
+            type: "client",
+            message: "Este código no existe. Bórralo para continuar.",
+          });
+        }
+      } catch (err) {
+        setRefStatus("error");
+        setError("codigo_ref", {
+          type: "client",
+          message: "No se pudo validar el código. Bórralo para continuar.",
+        });
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [codigoRef, clearErrors, setError]);
+
   const goToCodeStep = (expiresInSeconds) => {
     setStep(2);
     setCooldown(Number(expiresInSeconds || 180));
@@ -81,6 +162,7 @@ export default function Register() {
     setBusy(true);
 
     const normalized = normalizePhone(values.phone);
+
     if (normalized.length !== 10) {
       setError("phone", {
         type: "client",
@@ -99,7 +181,48 @@ export default function Register() {
       return;
     }
 
+    const cleanCodigoRef = String(values.codigo_ref || "").trim();
+
+    // Si el código está siendo validado o ya sabemos que es inválido,
+    // no permitimos continuar.
+    if (
+      cleanCodigoRef &&
+      (refStatus === "checking" ||
+        refStatus === "invalid" ||
+        refStatus === "error")
+    ) {
+      setError("codigo_ref", {
+        type: "client",
+        message:
+          refStatus === "checking"
+            ? "Espera a que termine la validación del código."
+            : "El código de referido no es válido. Elimínalo o utiliza uno válido.",
+      });
+
+      setBusy(false);
+      return;
+    }
+
     try {
+      // Validación final por seguridad
+      if (cleanCodigoRef) {
+        const check = await checkReferralCode(cleanCodigoRef);
+
+        if (!check?.exists) {
+          setRefStatus("invalid");
+
+          setError("codigo_ref", {
+            type: "client",
+            message: "El código de referido no existe.",
+          });
+
+          setBusy(false);
+          return;
+        }
+
+        setRefStatus("valid");
+      }
+
       const payload = {
         name: values.name,
         last_name_paternal: values.last_name_paternal,
@@ -110,17 +233,24 @@ export default function Register() {
         password_confirmation: values.password_confirmation,
         default_attention_mode: values.default_attention_mode || "fixed",
         terms_accepted: true,
+        codigo_ref: cleanCodigoRef || null,
       };
 
       const res = await requestRegisterCode(payload);
 
       setGlobalMsg(res?.message || "Código enviado.");
+
       goToCodeStep(res?.expires_in_seconds);
 
-      reset({ ...values, phone: normalized, code: "" });
+      reset({
+        ...values,
+        phone: normalized,
+        code: "",
+      });
     } catch (err) {
       const status = err?.response?.status;
-      const msg = err?.response?.data?.message || "No se pudo enviar el código.";
+      const msg =
+        err?.response?.data?.message || "No se pudo enviar el código.";
 
       const handled = handleFormApiError(err, setError, {
         onMessage: (m) => setGlobalMsg(m),
@@ -153,7 +283,10 @@ export default function Register() {
 
     const code = String(values.code || "").trim();
     if (!code) {
-      setError("code", { type: "client", message: "El código es obligatorio." });
+      setError("code", {
+        type: "client",
+        message: "El código es obligatorio.",
+      });
       setBusy(false);
       return;
     }
@@ -169,7 +302,8 @@ export default function Register() {
       setTimeout(() => nav("/owner/restaurants-home", { replace: true }), 900);
     } catch (err) {
       const status = err?.response?.status;
-      const msg = err?.response?.data?.message || "No se pudo verificar el código.";
+      const msg =
+        err?.response?.data?.message || "No se pudo verificar el código.";
 
       if (status === 422) {
         const handled = handleFormApiError(err, setError, {
@@ -213,7 +347,8 @@ export default function Register() {
       setCooldown(Number(res?.expires_in_seconds || 180));
     } catch (err) {
       const status = err?.response?.status;
-      const msg = err?.response?.data?.message || "No se pudo reenviar el código.";
+      const msg =
+        err?.response?.data?.message || "No se pudo reenviar el código.";
 
       setGlobalMsg(msg);
 
@@ -228,7 +363,10 @@ export default function Register() {
 
   const handleAcceptedTermsFromModal = () => {
     clearErrors("terms_accepted");
-    setValue("terms_accepted", true, { shouldValidate: true, shouldDirty: true });
+    setValue("terms_accepted", true, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
     setTermsOpen(false);
   };
 
@@ -427,9 +565,76 @@ export default function Register() {
                     </Box>
 
                     <Box>
+                      <FieldTitle label="Código de referido" />
+                      <TextField
+                        fullWidth
+                        placeholder="Ej. 7450"
+                        inputMode="numeric"
+                        value={codigoRef || ""}
+                        {...register("codigo_ref")}
+                        onChange={(e) => {
+                          const clean = e.target.value
+                            .replace(/\D/g, "")
+                            .slice(-4);
+
+                          setValue("codigo_ref", clean, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          });
+
+                          if (!clean) {
+                            setRefStatus("idle");
+                            clearErrors("codigo_ref");
+                          }
+                        }}
+                        error={!!errors.codigo_ref}
+                        helperText={
+                          errors.codigo_ref?.message ||
+                          (refStatus === "checking"
+                            ? "Validando código..."
+                            : refStatus === "valid"
+                              ? "Código válido. Se aplicará tu beneficio."
+                              : codigoRef
+                                ? "Validaremos tu código de referido."
+                                : "Opcional")
+                        }
+                        slotProps={{
+                          formHelperText: {
+                            sx: {
+                              ml: 0,
+                              mt: 0.5,
+                              color:
+                                refStatus === "valid"
+                                  ? "#15803d"
+                                  : refStatus === "checking"
+                                    ? "#92400e"
+                                    : undefined,
+                            },
+                          },
+                        }}
+                        sx={{
+                          ...fieldSx,
+                          "& .MuiOutlinedInput-root": {
+                            ...(fieldSx?.["& .MuiOutlinedInput-root"] || {}),
+                            border:
+                              refStatus === "valid"
+                                ? "1px solid #22c55e"
+                                : refStatus === "invalid" ||
+                                    refStatus === "error"
+                                  ? "1px solid #ef4444"
+                                  : undefined,
+                          },
+                        }}
+                      />
+                    </Box>
+
+                    <Box>
                       <FieldTitle label="Modo de operación del restaurante" />
 
-                      <FormControl fullWidth error={!!errors.default_attention_mode}>
+                      <FormControl
+                        fullWidth
+                        error={!!errors.default_attention_mode}
+                      >
                         <Select
                           value={watch("default_attention_mode") || "fixed"}
                           {...register("default_attention_mode", {
@@ -467,9 +672,7 @@ export default function Register() {
                             Con mesas, meseros y atención presencial
                           </MenuItem>
 
-                          <MenuItem value="direct">
-                            Atención directa
-                          </MenuItem>
+                          <MenuItem value="direct">Atención directa</MenuItem>
                         </Select>
                       </FormControl>
 
@@ -477,7 +680,9 @@ export default function Register() {
                         sx={{
                           mt: 0.5,
                           minHeight: 18,
-                          color: errors.default_attention_mode ? "error.main" : "transparent",
+                          color: errors.default_attention_mode
+                            ? "error.main"
+                            : "transparent",
                           fontSize: 11,
                           fontWeight: 700,
                         }}
@@ -525,7 +730,9 @@ export default function Register() {
                             required: "La confirmación es obligatoria.",
                           })}
                           error={!!errors.password_confirmation}
-                          helperText={errors.password_confirmation?.message || " "}
+                          helperText={
+                            errors.password_confirmation?.message || " "
+                          }
                           slotProps={{
                             formHelperText: {
                               sx: { ml: 0, mt: 0.5 },
@@ -551,7 +758,9 @@ export default function Register() {
                           />
                         }
                         label={
-                          <Typography sx={{ fontSize: 13, color: "text.primary" }}>
+                          <Typography
+                            sx={{ fontSize: 13, color: "text.primary" }}
+                          >
                             Acepto los{" "}
                             <Button
                               type="button"
@@ -597,7 +806,6 @@ export default function Register() {
                           {errors.terms_accepted.message}
                         </Typography>
                       )}
-
                     </Box>
 
                     <Button
@@ -619,7 +827,10 @@ export default function Register() {
                     </Button>
 
                     <Box sx={{ textAlign: "center", pt: 0.5 }}>
-                      <Typography component="span" sx={{ fontSize: 14, color: "text.secondary" }}>
+                      <Typography
+                        component="span"
+                        sx={{ fontSize: 14, color: "text.secondary" }}
+                      >
                         ¿Ya tienes cuenta?{" "}
                       </Typography>
 
@@ -632,7 +843,6 @@ export default function Register() {
                         Iniciar sesión
                       </Button>
                     </Box>
-
                   </Stack>
                 </form>
               )}
@@ -648,7 +858,8 @@ export default function Register() {
                         mb: 1,
                       }}
                     >
-                      Te enviamos un código a WhatsApp. Si no te llegó, revisa que el número sea correcto.
+                      Te enviamos un código a WhatsApp. Si no te llegó, revisa
+                      que el número sea correcto.
                     </Typography>
 
                     <FieldTitle label="Teléfono" />
@@ -697,7 +908,9 @@ export default function Register() {
                         textTransform: "none",
                       }}
                     >
-                      {busy ? "Verificando..." : "Verificar y completar registro"}
+                      {busy
+                        ? "Verificando..."
+                        : "Verificar y completar registro"}
                     </Button>
 
                     <Button
@@ -710,10 +923,13 @@ export default function Register() {
                         height: 44,
                         borderRadius: 2,
                         opacity: busy || cooldown > 0 ? 0.6 : 1,
-                        cursor: busy || cooldown > 0 ? "not-allowed" : "pointer",
+                        cursor:
+                          busy || cooldown > 0 ? "not-allowed" : "pointer",
                       }}
                     >
-                      {cooldown > 0 ? `Reenviar disponible en ${cooldown}s` : "Reenviar código"}
+                      {cooldown > 0
+                        ? `Reenviar disponible en ${cooldown}s`
+                        : "Reenviar código"}
                     </Button>
 
                     <Button
@@ -752,6 +968,11 @@ export default function Register() {
               ? "Registra tu restaurante y comienza a gestionar tu operación con ClicMenu."
               : "Confirma tu código y completa tu registro en unos segundos."
           }
+        />
+        <ReferralWelcomeModal
+          open={showReferralModal}
+          code={codigoRef}
+          onClose={() => setShowReferralModal(false)}
         />
       </Box>
 
