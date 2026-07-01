@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch,
-  TextField, Typography, useMediaQuery,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+  useMediaQuery,
+  Alert,
+  Chip,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -14,6 +29,8 @@ import { normalizeErr } from "../../../../../utils/err";
 export default function SystemRestaurantSubscriptionAssignModal({
   open,
   plans = [],
+  owner = null,
+  subscriptions = [],
   onClose,
   onSave,
 }) {
@@ -38,9 +55,46 @@ export default function SystemRestaurantSubscriptionAssignModal({
     message: "",
   });
 
+  const hasReferralCode = Boolean(owner?.referred_by_code);
+
+  const hasPreviousPaidSubscription = useMemo(() => {
+    return subscriptions.some((item) => {
+      const providerValue = String(item.provider || "");
+      const paidValue = Number(item.paid_price || 0);
+
+      return providerValue !== "internal" && paidValue > 0;
+    });
+  }, [subscriptions]);
+
+  const canApplyReferralDiscount =
+    hasReferralCode && !hasPreviousPaidSubscription && provider !== "internal";
+
   const selectedPlan = useMemo(() => {
     return plans.find((item) => String(item.id) === String(planId)) || null;
   }, [plans, planId]);
+
+  const pricePreview = useMemo(() => {
+    const price = Number(selectedPlan?.monthly_price || 0);
+    const months = Number(monthsPaid || 1);
+
+    if (!selectedPlan || !Number.isFinite(price) || !Number.isFinite(months)) {
+      return {
+        subtotal: 0,
+        discount: 0,
+        total: 0,
+      };
+    }
+
+    const subtotal = price * Math.max(1, months);
+    const discount = canApplyReferralDiscount ? subtotal * 0.05 : 0;
+    const total = subtotal - discount;
+
+    return {
+      subtotal,
+      discount,
+      total,
+    };
+  }, [selectedPlan, monthsPaid, canApplyReferralDiscount]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,13 +112,8 @@ export default function SystemRestaurantSubscriptionAssignModal({
   useEffect(() => {
     if (!selectedPlan) return;
 
-    const price = Number(selectedPlan.monthly_price || 0);
-    const months = Number(monthsPaid || 1);
-
-    if (Number.isFinite(price) && Number.isFinite(months)) {
-      setPaidPrice(String(price * months));
-    }
-  }, [selectedPlan, monthsPaid]);
+    setPaidPrice(pricePreview.total.toFixed(2));
+  }, [selectedPlan, pricePreview.total]);
 
   const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
@@ -109,6 +158,11 @@ export default function SystemRestaurantSubscriptionAssignModal({
       auto_renew: autoRenew,
       meta: {
         note: "Suscripción asignada desde panel administrador.",
+        frontend_referral_discount_preview: canApplyReferralDiscount,
+        frontend_referral_code: owner?.referred_by_code || null,
+        frontend_base_price: pricePreview.subtotal,
+        frontend_discount_amount: pricePreview.discount,
+        frontend_final_price: pricePreview.total,
       },
     };
 
@@ -158,7 +212,12 @@ export default function SystemRestaurantSubscriptionAssignModal({
             color: "#fff",
           }}
         >
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
             <Box>
               <Typography
                 sx={{
@@ -217,6 +276,21 @@ export default function SystemRestaurantSubscriptionAssignModal({
                   Datos de suscripción
                 </Typography>
 
+                {canApplyReferralDiscount && (
+                  <Alert severity="success" sx={{ borderRadius: 2 }}>
+                    Este propietario tiene código referido y aún no tiene una
+                    compra pagada previa. Se mostrará el 5% de descuento en esta
+                    primera compra.
+                  </Alert>
+                )}
+
+                {!canApplyReferralDiscount && hasReferralCode && (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Este propietario tiene código referido, pero esta operación
+                    se tomará como renovación o compra posterior sin descuento.
+                  </Alert>
+                )}
+
                 <Stack spacing={2}>
                   <FieldBlock
                     label="Plan *"
@@ -227,11 +301,24 @@ export default function SystemRestaurantSubscriptionAssignModal({
                         onChange={(e) => setPlanId(e.target.value)}
                       >
                         <MenuItem value="">Selecciona un plan</MenuItem>
-                        {plans.map((plan) => (
-                          <MenuItem key={plan.id} value={plan.id}>
-                            {plan.name} · ${Number(plan.monthly_price || 0).toFixed(2)} {plan.currency || "MXN"}
-                          </MenuItem>
-                        ))}
+
+                        {plans.map((plan) => {
+                          const price = Number(plan.monthly_price || 0);
+                          const discount = canApplyReferralDiscount
+                            ? price * 0.05
+                            : 0;
+                          const finalPrice = price - discount;
+
+                          return (
+                            <MenuItem key={plan.id} value={plan.id}>
+                              {plan.name} · ${finalPrice.toFixed(2)}{" "}
+                              {plan.currency || "MXN"}
+                              {canApplyReferralDiscount
+                                ? " · 5% referido"
+                                : ""}
+                            </MenuItem>
+                          );
+                        })}
                       </TextField>
                     }
                   />
@@ -262,9 +349,90 @@ export default function SystemRestaurantSubscriptionAssignModal({
                     />
                   </Stack>
 
+                  {selectedPlan && (
+                    <Box
+                      sx={{
+                        p: 2,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 2,
+                        bgcolor: "background.default",
+                      }}
+                    >
+                      <Stack spacing={1}>
+                        <Stack direction="row" justifyContent="space-between">
+                          <Typography sx={summaryLabelSx}>Subtotal</Typography>
+                          <Typography sx={summaryValueSx}>
+                            ${pricePreview.subtotal.toFixed(2)}{" "}
+                            {selectedPlan.currency || "MXN"}
+                          </Typography>
+                        </Stack>
+
+                        <Stack direction="row" justifyContent="space-between">
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography sx={summaryLabelSx}>
+                              Descuento referido
+                            </Typography>
+                            {canApplyReferralDiscount && (
+                              <Chip
+                                size="small"
+                                label="5%"
+                                color="success"
+                                sx={{ height: 22, fontWeight: 800 }}
+                              />
+                            )}
+                          </Stack>
+
+                          <Typography sx={summaryValueSx}>
+                            -${pricePreview.discount.toFixed(2)}{" "}
+                            {selectedPlan.currency || "MXN"}
+                          </Typography>
+                        </Stack>
+
+                        <Box
+                          sx={{
+                            borderTop: "1px solid",
+                            borderColor: "divider",
+                            pt: 1,
+                            mt: 0.5,
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                          >
+                            <Typography
+                              sx={{
+                                ...summaryLabelSx,
+                                fontSize: 16,
+                                fontWeight: 900,
+                                color: "text.primary",
+                              }}
+                            >
+                              Total a pagar
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                ...summaryValueSx,
+                                fontSize: 18,
+                                fontWeight: 900,
+                                color: "text.primary",
+                              }}
+                            >
+                              ${pricePreview.total.toFixed(2)}{" "}
+                              {selectedPlan.currency || "MXN"}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Precio pagado"
+                      help="El backend vuelve a calcular el precio real y valida si aplica referido."
                       input={
                         <TextField
                           value={paidPrice}
@@ -314,7 +482,9 @@ export default function SystemRestaurantSubscriptionAssignModal({
                   </Stack>
 
                   <Box>
-                    <Typography sx={fieldLabelSx}>Renovación automática</Typography>
+                    <Typography sx={fieldLabelSx}>
+                      Renovación automática
+                    </Typography>
 
                     <FormControlLabel
                       sx={{ m: 0 }}
@@ -420,5 +590,17 @@ const fieldLabelSx = {
 const switchLabelSx = {
   fontSize: 14,
   fontWeight: 700,
+  color: "text.primary",
+};
+
+const summaryLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.secondary",
+};
+
+const summaryValueSx = {
+  fontSize: 14,
+  fontWeight: 800,
   color: "text.primary",
 };

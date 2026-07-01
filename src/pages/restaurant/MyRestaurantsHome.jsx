@@ -77,7 +77,7 @@ function getBadgeConfig(st) {
 
 export default function MyRestaurantsHome() {
   const nav = useNavigate();
-  const { user, logout, referralDiscount } = useAuth();
+  const { user, logout, referralDiscount, refreshMe } = useAuth();
 
   const [items, setItems] = useState([]);
   const [statusMap, setStatusMap] = useState({});
@@ -143,6 +143,8 @@ export default function MyRestaurantsHome() {
     setLoading(true);
 
     try {
+      await refreshMe();
+
       const res = await getMyRestaurants();
       const list = Array.isArray(res) ? res : (res?.data ?? []);
       setItems(list);
@@ -175,11 +177,12 @@ export default function MyRestaurantsHome() {
   }, []);
 
   useEffect(() => {
+    if (loading) return;
     if (!user?.id) return;
     if (!referralDiscount?.applies) return;
 
     setReferralModalOpen(true);
-  }, [user?.id, referralDiscount?.applies]);
+  }, [loading, user?.id, referralDiscount?.applies]);
 
   const onGoReferralPlans = () => {
     const firstRestaurant = items?.[0];

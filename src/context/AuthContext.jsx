@@ -43,6 +43,17 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       referralDiscount,
 
+      async refreshMe() {
+        const res = await authService.me();
+        const nextUser = res.user || null;
+
+        setUser(nextUser);
+        setReferralDiscount(res.referral_discount || null);
+        syncUserSession(nextUser);
+
+        return res;
+      },
+
       updateUser(nextUser) {
         const normalizedUser = nextUser || null;
         setUser(normalizedUser);

@@ -42,7 +42,7 @@ export async function createSystemRestaurantSubscription(ownerId, restaurantId, 
 
 export async function expireSystemRestaurantCurrentSubscription(ownerId, restaurantId) {
   const { data } = await systemAdminApi.post(
-    `/system-admin/owners/${ownerId}/restaurants/${restaurantId}/subscriptions/expire-current`,
+    `/system-admin/owners/${ownerId}/restaurants/${restaurantId}/subscriptions/current/expire`,
     {},
     { headers: NO_CACHE_HEADERS }
   );

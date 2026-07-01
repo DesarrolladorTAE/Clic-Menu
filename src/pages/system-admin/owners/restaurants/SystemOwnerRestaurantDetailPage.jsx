@@ -138,7 +138,7 @@ export default function SystemOwnerRestaurantDetailPage() {
         title: "Error",
         message: normalizeErr(
           e,
-          "No se pudo cargar la información del restaurante."
+          "No se pudo cargar la información del restaurante.",
         ),
       });
     } finally {
@@ -174,7 +174,7 @@ export default function SystemOwnerRestaurantDetailPage() {
 
   const handleSaveBranch = async (
     { payload, logoFile, removeCurrentLogo },
-    editing
+    editing,
   ) => {
     if (editing?.id) {
       let res = await updateSystemOwnerRestaurantBranch(
@@ -184,7 +184,7 @@ export default function SystemOwnerRestaurantDetailPage() {
         {
           ...payload,
           status: editing.status || "active",
-        }
+        },
       );
 
       let updated = res?.data;
@@ -193,7 +193,7 @@ export default function SystemOwnerRestaurantDetailPage() {
         await deleteSystemOwnerRestaurantBranchActiveLogo(
           ownerId,
           restaurantId,
-          editing.id
+          editing.id,
         );
 
         updated = {
@@ -208,7 +208,7 @@ export default function SystemOwnerRestaurantDetailPage() {
           ownerId,
           restaurantId,
           editing.id,
-          logoFile
+          logoFile,
         );
 
         updated = {
@@ -220,8 +220,8 @@ export default function SystemOwnerRestaurantDetailPage() {
 
       setBranches((prev) =>
         prev.map((item) =>
-          Number(item.id) === Number(updated.id) ? updated : item
-        )
+          Number(item.id) === Number(updated.id) ? updated : item,
+        ),
       );
 
       showAlert({
@@ -233,7 +233,7 @@ export default function SystemOwnerRestaurantDetailPage() {
       const res = await createSystemOwnerRestaurantBranch(
         ownerId,
         restaurantId,
-        payload
+        payload,
       );
 
       let created = res?.data;
@@ -243,7 +243,7 @@ export default function SystemOwnerRestaurantDetailPage() {
           ownerId,
           restaurantId,
           created.id,
-          logoFile
+          logoFile,
         );
 
         created = {
@@ -278,8 +278,8 @@ export default function SystemOwnerRestaurantDetailPage() {
       prev.map((item) =>
         Number(item.id) === Number(row.id)
           ? { ...item, status: nextStatus }
-          : item
-      )
+          : item,
+      ),
     );
 
     try {
@@ -292,9 +292,11 @@ export default function SystemOwnerRestaurantDetailPage() {
           address: row.address || "",
           phone: row.phone || "",
           open_time: row.open_time ? String(row.open_time).slice(0, 5) : null,
-          close_time: row.close_time ? String(row.close_time).slice(0, 5) : null,
+          close_time: row.close_time
+            ? String(row.close_time).slice(0, 5)
+            : null,
           status: nextStatus,
-        }
+        },
       );
 
       const updated = res?.data;
@@ -302,8 +304,8 @@ export default function SystemOwnerRestaurantDetailPage() {
       if (updated) {
         setBranches((prev) =>
           prev.map((item) =>
-            Number(item.id) === Number(updated.id) ? updated : item
-          )
+            Number(item.id) === Number(updated.id) ? updated : item,
+          ),
         );
       }
     } catch (e) {
@@ -321,7 +323,7 @@ export default function SystemOwnerRestaurantDetailPage() {
 
   const handleDelete = async (row) => {
     const ok = window.confirm(
-      `¿De verdad estás seguro de querer eliminar la sucursal?\n\n${row.name}`
+      `¿De verdad estás seguro de querer eliminar la sucursal?\n\n${row.name}`,
     );
 
     if (!ok) return;
@@ -330,7 +332,7 @@ export default function SystemOwnerRestaurantDetailPage() {
     setBusyId(row.id);
 
     setBranches((prev) =>
-      prev.filter((item) => Number(item.id) !== Number(row.id))
+      prev.filter((item) => Number(item.id) !== Number(row.id)),
     );
 
     try {
@@ -361,7 +363,7 @@ export default function SystemOwnerRestaurantDetailPage() {
       const res = await createSystemRestaurantSubscription(
         ownerId,
         restaurantId,
-        payload
+        payload,
       );
 
       const created = res?.data;
@@ -387,7 +389,7 @@ export default function SystemOwnerRestaurantDetailPage() {
 
   const handleExpireCurrentSubscription = async () => {
     const ok = window.confirm(
-      "¿De verdad quieres terminar la suscripción actual de este restaurante?"
+      "¿De verdad quieres terminar la suscripción actual de este restaurante?",
     );
 
     if (!ok) return;
@@ -397,7 +399,7 @@ export default function SystemOwnerRestaurantDetailPage() {
     try {
       const res = await expireSystemRestaurantCurrentSubscription(
         ownerId,
-        restaurantId
+        restaurantId,
       );
 
       const expired = res?.data;
@@ -407,8 +409,8 @@ export default function SystemOwnerRestaurantDetailPage() {
       if (expired?.id) {
         setSubscriptions((prev) =>
           prev.map((item) =>
-            Number(item.id) === Number(expired.id) ? expired : item
-          )
+            Number(item.id) === Number(expired.id) ? expired : item,
+          ),
         );
       }
 
@@ -509,6 +511,8 @@ export default function SystemOwnerRestaurantDetailPage() {
       <SystemRestaurantSubscriptionAssignModal
         open={subscriptionModalOpen}
         plans={plans}
+        owner={owner}
+        subscriptions={subscriptions}
         onClose={() => setSubscriptionModalOpen(false)}
         onSave={handleAssignSubscription}
       />
