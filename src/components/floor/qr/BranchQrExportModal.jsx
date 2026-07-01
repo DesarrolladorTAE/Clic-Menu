@@ -3,30 +3,98 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
   Stack,
   Typography,
   useMediaQuery,
-  MenuItem,
-  Paper,
-  FormControl,
-  InputLabel,
-  Select,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
 
 import CloseIcon from "@mui/icons-material/Close";
 import DownloadIcon from "@mui/icons-material/Download";
+import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
+import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
+import CropFreeRoundedIcon from "@mui/icons-material/CropFreeRounded";
 
 import PaginationFooter from "../../common/PaginationFooter";
 import AppAlert from "../../common/AppAlert";
 
 import { exportBranchQrCodesPdf } from "../../../services/floor/qr/branchQrCodes.service";
+
+const TYPE_LABEL = {
+  physical: "Físico",
+  web: "Web",
+  delivery: "Delivery",
+};
+
+const TYPE_COLORS = {
+  physical: {
+    bgcolor: "#EAF1FF",
+    color: "#1D4ED8",
+    borderColor: "#BFDBFE",
+  },
+  web: {
+    bgcolor: "#ECFDF5",
+    color: "#047857",
+    borderColor: "#A7F3D0",
+  },
+  delivery: {
+    bgcolor: "#FFF7ED",
+    color: "#C2410C",
+    borderColor: "#FED7AA",
+  },
+};
+
+const LAYOUT_OPTIONS = [
+  {
+    value: "grid_6",
+    title: "Normal para mesas",
+    subtitle: "6 QRs por hoja · A4 horizontal",
+    description:
+      "Recomendado para pegar en mesas, atriles, portamenús o stickers pequeños.",
+    icon: <TableRestaurantRoundedIcon />,
+  },
+  {
+    value: "single",
+    title: "Grande para pared o cristal",
+    subtitle: "1 QR por hoja · A4 vertical",
+    description:
+      "Recomendado para entrada, mostrador, pared, caja o cristales.",
+    icon: <CropFreeRoundedIcon />,
+  },
+];
+
+function getTypeLabel(type) {
+  return TYPE_LABEL[type] || type || "—";
+}
+
+function getStatusLabel(qr) {
+  return qr?.is_active ? "Activo" : "Inactivo";
+}
+
+function getQrTableLabel(qr) {
+  return qr?.table?.name || qr?.table_name || "General";
+}
+
+function getQrChannelLabel(qr) {
+  return (
+    qr?.sales_channel?.name ||
+    qr?.salesChannel?.name ||
+    qr?.channel?.name ||
+    qr?.channel_name ||
+    "—"
+  );
+}
 
 export default function BranchQrExportModal({
   open,
@@ -65,6 +133,11 @@ export default function BranchQrExportModal({
     setPage(1);
     setFilters({ type: "", active: "" });
     setLayout("grid_6");
+    setAlert({
+      open: false,
+      severity: "error",
+      message: "",
+    });
   }, [open]);
 
   const showAlert = (message, severity = "error") => {
@@ -73,6 +146,14 @@ export default function BranchQrExportModal({
 
   const closeAlert = () => {
     setAlert((p) => ({ ...p, open: false }));
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setPage(1);
   };
 
   const filteredItems = useMemo(() => {
@@ -84,10 +165,31 @@ export default function BranchQrExportModal({
     });
   }, [items, filters]);
 
+  const total = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const paginatedItems = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredItems.slice(start, start + pageSize);
   }, [filteredItems, page]);
+
+  const selectedVisibleCount = useMemo(() => {
+    return paginatedItems.filter((qr) => selected.includes(qr.id)).length;
+  }, [paginatedItems, selected]);
+
+  const selectedLayout = useMemo(() => {
+    return LAYOUT_OPTIONS.find((option) => option.value === layout);
+  }, [layout]);
 
   const toggleSelect = (id) => {
     setSelected((prev) =>
@@ -102,12 +204,21 @@ export default function BranchQrExportModal({
     setSelected((prev) => Array.from(new Set([...prev, ...ids])));
   };
 
-  const clearSelection = () => setSelected([]);
+  const clearSelection = () => {
+    setSelected([]);
+  };
+
+  const handlePrev = () => {
+    setPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNext = () => {
+    setPage((prev) => Math.min(totalPages, prev + 1));
+  };
 
   const handleExport = async () => {
     if (selected.length === 0) {
       showAlert("Debes seleccionar al menos un QR", "error");
-      setTimeout(() => setAlert((p) => ({ ...p, open: false })), 3000);
       return;
     }
 
@@ -167,153 +278,646 @@ export default function BranchQrExportModal({
 
       <Dialog
         open={open}
-        onClose={busy ? undefined : onClose}
+        onClose={busy || loading ? undefined : onClose}
         fullWidth
         maxWidth="md"
         fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            borderRadius: isMobile ? 0 : 1,
+            overflow: "hidden",
+            bgcolor: "background.default",
+          },
+        }}
       >
         <DialogTitle
           sx={{
-            bgcolor: "#111",
+            p: 0,
+            bgcolor: "#0F172A",
             color: "#fff",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            px: 3,
-            py: 2,
           }}
         >
-          <Box>
-            <Typography fontWeight={900}>Descargar QRs</Typography>
-            <Typography fontSize={12} sx={{ opacity: 0.75 }}>
-              Selección manual · Exportación en PDF
-            </Typography>
-          </Box>
+          <Box
+            sx={{
+              px: { xs: 2, sm: 3 },
+              py: 2.25,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 2,
+              background:
+                "linear-gradient(135deg, #0F172A 0%, #111827 55%, #1E293B 100%)",
+            }}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Box
+                sx={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  bgcolor: "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.16)",
+                }}
+              >
+                <QrCode2RoundedIcon />
+              </Box>
 
-          <IconButton onClick={onClose} sx={{ color: "#fff" }}>
-            <CloseIcon />
-          </IconButton>
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: { xs: 18, sm: 20 },
+                    fontWeight: 900,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Descargar QRs
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize: 12.5,
+                    color: "rgba(255,255,255,0.72)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Selección manual · Exportación en PDF · {selected.length} seleccionado(s)
+                </Typography>
+              </Box>
+            </Stack>
+
+            <IconButton
+              onClick={onClose}
+              disabled={loading || busy}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.14)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 3, bgcolor: "background.default" }}>
-          <Box sx={{ maxWidth: 1100, mx: "auto" }}>
-
-            {/* FILTROS */}
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Typography fontWeight={900} mb={1.5}>
-                Filtros
-              </Typography>
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-
-                <FormControl fullWidth>
-                  <InputLabel>Tipo</InputLabel>
-                  <Select
-                    value={filters.type}
-                    label="Tipo"
-                    onChange={(e) =>
-                      setFilters((p) => ({ ...p, type: e.target.value }))
-                    }
+        <DialogContent
+          sx={{
+            p: { xs: 2, sm: 3 },
+            bgcolor: "#F8FAFC",
+          }}
+        >
+          <Box sx={{ maxWidth: 1120, mx: "auto" }}>
+            <Paper
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                mb: 2,
+                borderRadius: 2.5,
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+                bgcolor: "#fff",
+              }}
+            >
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={2}
+                alignItems={{ xs: "stretch", md: "center" }}
+                justifyContent="space-between"
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
                   >
-                    <MenuItem value="">Todos</MenuItem>
-                    <MenuItem value="physical">Físico</MenuItem>
-                    <MenuItem value="web">Web</MenuItem>
-                    <MenuItem value="delivery">Delivery</MenuItem>
-                  </Select>
-                </FormControl>
+                    Filtros
+                  </Typography>
 
-                <FormControl fullWidth>
-                  <InputLabel>Estado</InputLabel>
-                  <Select
-                    value={filters.active}
-                    label="Estado"
-                    onChange={(e) =>
-                      setFilters((p) => ({ ...p, active: e.target.value }))
-                    }
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 13,
+                      color: "text.secondary",
+                      fontWeight: 600,
+                    }}
                   >
-                    <MenuItem value="">Todos</MenuItem>
-                    <MenuItem value="active">Activos</MenuItem>
-                    <MenuItem value="inactive">Inactivos</MenuItem>
-                  </Select>
-                </FormControl>
-
-              </Stack>
-            </Paper>
-
-            {/* CONFIG */}
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Typography fontWeight={900} mb={1.5}>
-                Configuración de exportación
-              </Typography>
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-
-                <FormControl fullWidth>
-                  <InputLabel>QRs por hoja</InputLabel>
-                  <Select
-                    value={layout}
-                    label="QRs por hoja"
-                    onChange={(e) => setLayout(e.target.value)}
-                  >
-                    <MenuItem value="single">1 QR</MenuItem>
-                    <MenuItem value="grid_6">6 QRs</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <Box sx={{
-                  minWidth: 180,
-                  height: 56,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid #ddd",
-                  borderRadius: 1,
-                }}>
-                  <Typography fontWeight={900}>
-                    Seleccionados: {selected.length}
+                    Refina la lista antes de seleccionar los códigos a descargar.
                   </Typography>
                 </Box>
 
-                <Button variant="outlined" onClick={selectAllVisible}>
-                  Seleccionar página
-                </Button>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  sx={{ minWidth: { xs: "100%", md: 440 } }}
+                >
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Tipo</InputLabel>
+                    <Select
+                      value={filters.type}
+                      label="Tipo"
+                      onChange={(e) =>
+                        handleFilterChange("type", e.target.value)
+                      }
+                    >
+                      <MenuItem value="">Todos</MenuItem>
+                      <MenuItem value="physical">Físico</MenuItem>
+                      <MenuItem value="web">Web</MenuItem>
+                      <MenuItem value="delivery">Delivery</MenuItem>
+                    </Select>
+                  </FormControl>
 
-                <Button variant="text" onClick={clearSelection}>
-                  Limpiar
-                </Button>
-
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Estado</InputLabel>
+                    <Select
+                      value={filters.active}
+                      label="Estado"
+                      onChange={(e) =>
+                        handleFilterChange("active", e.target.value)
+                      }
+                    >
+                      <MenuItem value="">Todos</MenuItem>
+                      <MenuItem value="active">Activos</MenuItem>
+                      <MenuItem value="inactive">Inactivos</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Stack>
               </Stack>
             </Paper>
 
-            {/* LISTA */}
-            <Paper sx={{ p: 2 }}>
-              <Stack spacing={1}>
-                {paginatedItems.map((qr) => (
-                  <Box key={qr.id} sx={{ display: "flex", alignItems: "center", p: 1.5, border: "1px solid #eee" }}>
-                    <FormControlLabel
-                      sx={{ width: "100%" }}
-                      control={
-                        <Checkbox
-                          checked={selected.includes(qr.id)}
-                          onChange={() => toggleSelect(qr.id)}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography fontWeight={800}>{qr.name}</Typography>
-                          <Typography fontSize={12} color="text.secondary">
-                            {qr.type}
-                          </Typography>
-                        </Box>
-                      }
+            <Paper
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                mb: 2,
+                borderRadius: 2.5,
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+                bgcolor: "#fff",
+              }}
+            >
+              <Stack spacing={2}>
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    Tamaño de impresión
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 13,
+                      color: "text.secondary",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {selectedLayout?.subtitle || "Selecciona el formato del PDF."}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      md: "repeat(2, minmax(0, 1fr))",
+                    },
+                    gap: 1.5,
+                  }}
+                >
+                  {LAYOUT_OPTIONS.map((option) => {
+                    const active = layout === option.value;
+
+                    return (
+                      <Box
+                        key={option.value}
+                        onClick={() => setLayout(option.value)}
+                        sx={{
+                          p: 2,
+                          cursor: "pointer",
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: active ? "primary.main" : "divider",
+                          bgcolor: active ? "#EEF4FF" : "#fff",
+                          boxShadow: active
+                            ? "0 10px 24px rgba(37, 99, 235, 0.12)"
+                            : "none",
+                          transition: "all 160ms ease",
+                          "&:hover": {
+                            borderColor: active ? "primary.main" : "#CBD5E1",
+                            bgcolor: active ? "#EEF4FF" : "#F8FAFC",
+                          },
+                        }}
+                      >
+                        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                          <Box
+                            sx={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: 2,
+                              display: "grid",
+                              placeItems: "center",
+                              bgcolor: active ? "primary.main" : "#F1F5F9",
+                              color: active ? "#fff" : "text.primary",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {option.icon}
+                          </Box>
+
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                              sx={{
+                                fontSize: 15,
+                                fontWeight: 900,
+                                color: "text.primary",
+                              }}
+                            >
+                              {option.title}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.4,
+                                fontSize: 12.5,
+                                fontWeight: 800,
+                                color: active ? "primary.main" : "text.secondary",
+                              }}
+                            >
+                              {option.subtitle}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                mt: 0.75,
+                                fontSize: 12.5,
+                                color: "text.secondary",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {option.description}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Box>
+
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.25}
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                  justifyContent="space-between"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: "#F8FAFC",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      label={`${selected.length} seleccionado(s)`}
+                      sx={{
+                        fontWeight: 900,
+                        bgcolor: "#111827",
+                        color: "#fff",
+                      }}
                     />
-                  </Box>
-                ))}
+
+                    <Chip
+                      label={`${selectedVisibleCount} en esta página`}
+                      variant="outlined"
+                      sx={{
+                        fontWeight: 800,
+                        bgcolor: "#fff",
+                      }}
+                    />
+                  </Stack>
+
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Button
+                      variant="outlined"
+                      onClick={selectAllVisible}
+                      disabled={paginatedItems.length === 0}
+                      sx={{
+                        fontWeight: 800,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      Seleccionar página
+                    </Button>
+
+                    <Button
+                      variant="text"
+                      onClick={clearSelection}
+                      disabled={selected.length === 0}
+                      sx={{
+                        fontWeight: 800,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                  </Stack>
+                </Stack>
               </Stack>
             </Paper>
 
-            <Stack direction="row" justifyContent="flex-end" spacing={2} mt={3}>
-              <Button onClick={onClose} variant="outlined">
+            <Paper
+              sx={{
+                p: 0,
+                overflow: "hidden",
+                borderRadius: 2.5,
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+                bgcolor: "#fff",
+              }}
+            >
+              <Box
+                sx={{
+                  px: { xs: 2, sm: 2.5 },
+                  py: 1.75,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 2,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    QRs disponibles
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      fontSize: 13,
+                      color: "text.secondary",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {total} resultado(s) · Mostrando de 5 en 5
+                  </Typography>
+                </Box>
+              </Box>
+
+              {total === 0 ? (
+                <Box
+                  sx={{
+                    px: 3,
+                    py: 6,
+                    textAlign: "center",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 3,
+                      display: "grid",
+                      placeItems: "center",
+                      mx: "auto",
+                      mb: 2,
+                      bgcolor: "#F1F5F9",
+                      color: "text.secondary",
+                    }}
+                  >
+                    <QrCode2RoundedIcon fontSize="large" />
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    No hay QRs con estos filtros
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      color: "text.secondary",
+                      fontSize: 14,
+                    }}
+                  >
+                    Cambia los filtros para visualizar otros códigos disponibles.
+                  </Typography>
+                </Box>
+              ) : (
+                <>
+                  <Stack spacing={1.25} sx={{ p: { xs: 1.5, sm: 2 } }}>
+                    {paginatedItems.map((qr) => {
+                      const checked = selected.includes(qr.id);
+                      const typeSx = TYPE_COLORS[qr.type] || {
+                        bgcolor: "#F1F5F9",
+                        color: "#334155",
+                        borderColor: "#CBD5E1",
+                      };
+
+                      return (
+                        <Box
+                          key={qr.id}
+                          onClick={() => toggleSelect(qr.id)}
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: checked ? "primary.main" : "divider",
+                            bgcolor: checked ? "#F8FBFF" : "#fff",
+                            cursor: "pointer",
+                            transition: "all 160ms ease",
+                            "&:hover": {
+                              borderColor: checked ? "primary.main" : "#CBD5E1",
+                              bgcolor: checked ? "#F8FBFF" : "#F8FAFC",
+                            },
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1.5}
+                            alignItems="center"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleSelect(qr.id);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+
+                            <Box
+                              sx={{
+                                width: 58,
+                                height: 58,
+                                borderRadius: 2,
+                                bgcolor: "#F8FAFC",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                display: "grid",
+                                placeItems: "center",
+                                flexShrink: 0,
+                                overflow: "hidden",
+                              }}
+                            >
+                              {qr.qr_image_url ? (
+                                <Box
+                                  component="img"
+                                  src={qr.qr_image_url}
+                                  alt={qr.name || "QR"}
+                                  sx={{
+                                    width: 48,
+                                    height: 48,
+                                    objectFit: "contain",
+                                    display: "block",
+                                  }}
+                                />
+                              ) : (
+                                <QrCode2RoundedIcon
+                                  sx={{
+                                    color: "text.secondary",
+                                  }}
+                                />
+                              )}
+                            </Box>
+
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography
+                                sx={{
+                                  fontSize: 15,
+                                  fontWeight: 900,
+                                  color: "text.primary",
+                                  lineHeight: 1.3,
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {qr.name || "QR sin nombre"}
+                              </Typography>
+
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                useFlexGap
+                                flexWrap="wrap"
+                                sx={{ mt: 0.75 }}
+                              >
+                                <Chip
+                                  size="small"
+                                  label={getTypeLabel(qr.type)}
+                                  sx={{
+                                    height: 24,
+                                    fontSize: 11.5,
+                                    fontWeight: 900,
+                                    bgcolor: typeSx.bgcolor,
+                                    color: typeSx.color,
+                                    border: "1px solid",
+                                    borderColor: typeSx.borderColor,
+                                  }}
+                                />
+
+                                <Chip
+                                  size="small"
+                                  label={getStatusLabel(qr)}
+                                  sx={{
+                                    height: 24,
+                                    fontSize: 11.5,
+                                    fontWeight: 900,
+                                    bgcolor: qr.is_active ? "#ECFDF5" : "#FEF2F2",
+                                    color: qr.is_active ? "#047857" : "#B91C1C",
+                                    border: "1px solid",
+                                    borderColor: qr.is_active ? "#A7F3D0" : "#FECACA",
+                                  }}
+                                />
+
+                                <Chip
+                                  size="small"
+                                  label={`Mesa: ${getQrTableLabel(qr)}`}
+                                  variant="outlined"
+                                  sx={{
+                                    height: 24,
+                                    fontSize: 11.5,
+                                    fontWeight: 800,
+                                    bgcolor: "#fff",
+                                  }}
+                                />
+
+                                <Chip
+                                  size="small"
+                                  label={`Canal: ${getQrChannelLabel(qr)}`}
+                                  variant="outlined"
+                                  sx={{
+                                    height: 24,
+                                    fontSize: 11.5,
+                                    fontWeight: 800,
+                                    bgcolor: "#fff",
+                                  }}
+                                />
+                              </Stack>
+                            </Box>
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+
+                  <PaginationFooter
+                    page={page}
+                    totalPages={totalPages}
+                    startItem={startItem}
+                    endItem={endItem}
+                    total={total}
+                    hasPrev={hasPrev}
+                    hasNext={hasNext}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    itemLabel="QRs"
+                  />
+                </>
+              )}
+            </Paper>
+
+            <Stack
+              direction={{ xs: "column-reverse", sm: "row" }}
+              justifyContent="flex-end"
+              spacing={1.5}
+              mt={3}
+            >
+              <Button
+                onClick={onClose}
+                variant="outlined"
+                disabled={loading || busy}
+                sx={{
+                  height: 42,
+                  px: 3,
+                  borderRadius: 1.5,
+                  fontWeight: 900,
+                }}
+              >
                 Cancelar
               </Button>
 
@@ -321,12 +925,18 @@ export default function BranchQrExportModal({
                 onClick={handleExport}
                 variant="contained"
                 startIcon={<DownloadIcon />}
-                disabled={loading}
+                disabled={loading || busy || selected.length === 0}
+                sx={{
+                  height: 42,
+                  px: 3,
+                  borderRadius: 1.5,
+                  fontWeight: 900,
+                  boxShadow: "none",
+                }}
               >
                 {loading ? "Generando..." : "Descargar QRs"}
               </Button>
             </Stack>
-
           </Box>
         </DialogContent>
       </Dialog>
