@@ -19,6 +19,7 @@ import {
 
 import {
   getPayPalConfig,
+  capturePayPalOrder,
 } from "../../services/paypal/paypal.service";
 
 import PayPalCheckoutDialog from "../../components/paypal/PayPalCheckoutDialog";
@@ -29,6 +30,32 @@ function chunkArray(arr, size) {
     out.push(arr.slice(i, i + size));
   }
   return out;
+}
+
+function getPayPalSuccessCopy(captureResponse) {
+  const activationType = captureResponse?.activation_type;
+
+  if (activationType === "advance_renewal") {
+    return {
+      title: "Renovación programada",
+      message:
+        "Tu renovación fue programada correctamente. La nueva vigencia iniciará cuando termine el periodo actual.",
+    };
+  }
+
+  if (activationType === "new_activation") {
+    return {
+      title: "Suscripción activada",
+      message: "Tu suscripción fue activada correctamente.",
+    };
+  }
+
+  return {
+    title: "Pago confirmado",
+    message:
+      captureResponse?.message ||
+      "Tu pago fue confirmado correctamente.",
+  };
 }
 
 export default function RestaurantPlans() {
@@ -79,17 +106,37 @@ export default function RestaurantPlans() {
   const noticeCode = location?.state?.code || null;
   const noticeMeta = location?.state?.meta || null;
 
+  const accessType = status?.access_type || "none";
+
+  const currentAccess = status?.current_access || status?.subscription || null;
+  const currentPaidSubscription = status?.current_paid_subscription || null;
+  const nextSubscription = status?.next_subscription || null;
+
+  const isSuspended = status?.code === "RESTAURANT_SUSPENDED";
   const isOperational = status?.is_operational === true;
-  const currentPlanSlug = status?.subscription?.plan?.slug || null;
-  const currentEndsAt = status?.subscription?.ends_at || null;
-  const isDemo = status?.subscription?.is_demo === true;
-  const daysRemaining = status?.subscription?.days_remaining ?? null;
 
-  const canChangeNow = useMemo(() => {
-    if (!currentPlanSlug) return true;
-    return currentPlanSlug === "demo";
-  }, [currentPlanSlug]);
+  const currentPlanSlug = currentAccess?.plan?.slug || null;
+  const currentEndsAt = currentAccess?.ends_at || null;
 
+  const isDemo =
+    accessType === "demo" ||
+    currentAccess?.classification?.is_demo === true ||
+    currentAccess?.plan?.is_demo === true;
+
+  const isPaid =
+    accessType === "paid" ||
+    currentAccess?.classification?.is_paid_commercial === true;
+
+  const isInternal =
+    accessType === "internal" ||
+    currentAccess?.classification?.is_internal === true;
+
+  const daysRemaining = currentAccess?.days_remaining ?? null;
+
+  const hasNextSubscription =
+    status?.has_next_subscription === true || Boolean(nextSubscription);
+
+  const canChangeNow = !isSuspended;
 
   const billingOptions = [
     {
@@ -195,17 +242,19 @@ export default function RestaurantPlans() {
     setLoading(false);
 
     try {
-      await capturePayPalOrder(
+      const captureResponse = await capturePayPalOrder(
         restaurantId,
         orderId
       );
 
       await load();
 
+      const successCopy = getPayPalSuccessCopy(captureResponse);
+
       showAlert({
         severity: "success",
-        title: "Pago confirmado",
-        message: "Tu suscripción fue activada correctamente.",
+        title: successCopy.title,
+        message: successCopy.message,
       });
 
       nav("/owner/restaurants-home", {
@@ -213,7 +262,6 @@ export default function RestaurantPlans() {
       });
 
     } catch (e) {
-
       showAlert({
         severity: "error",
         title: "Error PayPal",
@@ -267,17 +315,19 @@ export default function RestaurantPlans() {
     setBusyPlanId(null);
   };
 
-  const handlePayPalModalSuccess = async () => {
+  const handlePayPalModalSuccess = async (captureResponse) => {
     setPaypalDialogOpen(false);
     setConfirmingPayPal(true);
 
     try {
       await load();
 
+      const successCopy = getPayPalSuccessCopy(captureResponse);
+
       showAlert({
         severity: "success",
-        title: "Pago confirmado",
-        message: "Tu suscripción fue activada correctamente.",
+        title: successCopy.title,
+        message: successCopy.message,
       });
 
       nav("/owner/restaurants-home", {
@@ -290,14 +340,15 @@ export default function RestaurantPlans() {
     }
   };
 
+
   const handlePayPalModalError = (error) => {
     const code = error?.response?.data?.code;
 
     const fallbackMessages = {
-      SUBSCRIPTION_ALREADY_ACTIVE:
-        "Tu restaurante ya cuenta con una suscripción vigente.",
       DEMO_NOT_ALLOWED:
         "El plan demo no puede comprarse.",
+      PLAN_NOT_PURCHASABLE:
+        "El plan seleccionado no está activo o no puede comprarse.",
       RESTAURANT_SUSPENDED:
         "El restaurante está suspendido.",
     };
@@ -395,10 +446,19 @@ export default function RestaurantPlans() {
 
         <PlansStateCard
           isOperational={isOperational}
+          accessType={accessType}
+          statusCode={status?.code || null}
+          statusMessage={status?.message || ""}
           currentPlanSlug={currentPlanSlug}
           currentEndsAt={currentEndsAt}
+          currentAccess={currentAccess}
+          currentPaidSubscription={currentPaidSubscription}
+          nextSubscription={nextSubscription}
+          hasNextSubscription={hasNextSubscription}
           canChangeNow={canChangeNow}
           isDemo={isDemo}
+          isPaid={isPaid}
+          isInternal={isInternal}
           daysRemaining={daysRemaining}
         />
 
@@ -504,8 +564,19 @@ export default function RestaurantPlans() {
             const isCurrent = p.slug === currentPlanSlug;
             const isDisabled =
               busyPlanId !== null ||
-              isCurrent ||
-              !canChangeNow;
+              !canChangeNow ||
+              p?.is_purchasable === false;
+
+            const actionLabel = isPaid
+              ? isCurrent
+                ? "Renovar plan"
+                : "Cambiar en próxima vigencia"
+              : isDemo
+              ? "Contratar plan"
+              : isInternal
+              ? "Contratar plan"
+              : "Contratar";
+
 
             return (
               <PlanCard
@@ -515,6 +586,7 @@ export default function RestaurantPlans() {
                 isDisabled={isDisabled}
                 busy={busyPlanId === p.id}
                 billingPeriod={billingPeriod}
+                actionLabel={actionLabel}
                 onSubscribe={onSubscribe}
               />
             );

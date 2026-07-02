@@ -3,18 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Container,
-  IconButton,
-  Stack,
-  Typography,
+  Alert, Avatar,Box,Button,Card, CardContent, Chip, CircularProgress, Container, IconButton, Stack, Typography,
 } from "@mui/material";
 
 import AddBusinessIcon from "@mui/icons-material/AddBusiness";
@@ -44,11 +33,35 @@ function getBadgeConfig(st) {
     };
   }
 
-  if (st?.is_operational === true && st?.subscription?.is_demo === true) {
+  if (st?.code === "RESTAURANT_SUSPENDED") {
+    return {
+      label: "SUSPENDIDO",
+      color: "#ffffff",
+      bg: "#D67A3A",
+    };
+  }
+
+  if (st?.is_operational === true && st?.access_type === "demo") {
     return {
       label: "DEMO ACTIVO",
       color: "#111111",
       bg: "#FFB547",
+    };
+  }
+
+  if (st?.is_operational === true && st?.access_type === "internal") {
+    return {
+      label: "ACCESO INTERNO",
+      color: "#ffffff",
+      bg: "#1976D2",
+    };
+  }
+
+  if (st?.is_operational === true && st?.access_type === "paid") {
+    return {
+      label: st?.has_next_subscription ? "RENOVACIÓN PROGRAMADA" : "OPERATIVO",
+      color: "#ffffff",
+      bg: "#2EAF2E",
     };
   }
 
@@ -57,14 +70,6 @@ function getBadgeConfig(st) {
       label: "OPERATIVO",
       color: "#ffffff",
       bg: "#2EAF2E",
-    };
-  }
-
-  if (st?.code === "RESTAURANT_SUSPENDED") {
-    return {
-      label: "SUSPENDIDO",
-      color: "#ffffff",
-      bg: "#D67A3A",
     };
   }
 
@@ -493,9 +498,19 @@ export default function MyRestaurantsHome() {
               {items.map((r) => {
                 const st = statusMap[r.id];
                 const badge = getBadgeConfig(st);
+
+                const accessType = st?.access_type || "none";
+                const currentAccess = st?.current_access || st?.subscription || null;
+                const nextSubscription = st?.next_subscription || null;
+
                 const isOperational = st?.is_operational === true;
-                const isDemo = st?.subscription?.is_demo === true;
-                const demoDays = st?.subscription?.days_remaining;
+                const isDemo = accessType === "demo";
+                const isPaid = accessType === "paid";
+                const isInternal = accessType === "internal";
+
+                const demoDays = currentAccess?.days_remaining;
+                const hasNextSubscription =
+                  st?.has_next_subscription === true || Boolean(nextSubscription);
 
                 return (
                   <Card
@@ -564,6 +579,46 @@ export default function MyRestaurantsHome() {
                         </Typography>
                       ) : null}
 
+                      {isPaid && hasNextSubscription ? (
+                        <Typography
+                          sx={{
+                            mt: 2,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: "#166534",
+                            backgroundColor: "#ECFDF3",
+                            border: "1px solid #B7E4C7",
+                            borderRadius: 1,
+                            px: 1.5,
+                            py: 1,
+                          }}
+                        >
+                          Este restaurante ya tiene una renovación programada
+                          {nextSubscription?.starts_at
+                            ? ` para iniciar el ${new Date(nextSubscription.starts_at).toLocaleDateString("es-MX")}.`
+                            : "."}
+                        </Typography>
+                      ) : null}
+
+                      {isInternal ? (
+                        <Typography
+                          sx={{
+                            mt: 2,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: "#1D4ED8",
+                            backgroundColor: "#EFF6FF",
+                            border: "1px solid #BFDBFE",
+                            borderRadius: 1,
+                            px: 1.5,
+                            py: 1,
+                          }}
+                        >
+                          Este restaurante cuenta con acceso interno activo.
+                        </Typography>
+                      ) : null}
+
+
                       <Box sx={{ flex: 1 }} />
 
                       <Stack
@@ -585,7 +640,11 @@ export default function MyRestaurantsHome() {
                           }}
                         >
                           {isOperational
-                            ? "Cambiar plan"
+                            ? isPaid
+                              ? "Renovar plan"
+                              : isDemo
+                              ? "Contratar plan"
+                              : "Ver planes"
                             : "Ver planes / Contratar"}
                         </Button>
 

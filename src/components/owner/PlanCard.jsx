@@ -18,6 +18,7 @@ export default function PlanCard({
   isDisabled = false,
   busy = false,
   billingPeriod = "monthly",
+  actionLabel = null,
   onSubscribe,
 }) {
   const includedFeatures = Array.isArray(plan?.features?.included)
@@ -30,20 +31,31 @@ export default function PlanCard({
     ? plan.features.excluded
     : [];
 
+  const isPurchasable = plan?.is_purchasable !== false;
+
+  const billingMonths = plan?.billing_months || {};
+  const billingLabels = plan?.billing_labels || {};
+
   const billingConfig = {
     monthly: {
-      months: 1,
-      label: "Plan mensual",
+      months: Number(billingMonths.monthly || 1),
+      label: billingLabels.monthly
+        ? `Plan ${String(billingLabels.monthly).toLowerCase()}`
+        : "Plan mensual",
       suffix: "/ mes",
     },
     semester: {
-      months: 6,
-      label: "Plan semestral",
+      months: Number(billingMonths.semester || 6),
+      label: billingLabels.semester
+        ? `Plan ${String(billingLabels.semester).toLowerCase()}`
+        : "Plan semestral",
       suffix: "/ semestre",
     },
     annual: {
-      months: 12,
-      label: "Plan anual",
+      months: Number(billingMonths.annual || 12),
+      label: billingLabels.annual
+        ? `Plan ${String(billingLabels.annual).toLowerCase()}`
+        : "Plan anual",
       suffix: "/ año",
     },
   };
@@ -82,12 +94,17 @@ export default function PlanCard({
           "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
         "&:hover": {
           transform:
-            !isCurrent && !isDisabled ? "translateY(-8px)" : "translateY(0)",
+            !isCurrent && !isDisabled && isPurchasable
+              ? "translateY(-8px)"
+              : "translateY(0)",
           boxShadow:
-            !isCurrent && !isDisabled
+            !isCurrent && !isDisabled && isPurchasable
               ? "0 10px 24px rgba(0,0,0,0.10)"
               : "none",
-          borderColor: !isCurrent && !isDisabled ? "primary.main" : undefined,
+          borderColor:
+            !isCurrent && !isDisabled && isPurchasable
+              ? "primary.main"
+              : undefined,
         },
       }}
     >
@@ -262,8 +279,11 @@ export default function PlanCard({
           </Stack>
 
           <Button
-            onClick={() => onSubscribe(plan.id, selectedBilling.months)}
-            disabled={isDisabled || busy}
+            onClick={() => {
+              if (!isPurchasable || isDisabled || busy) return;
+              onSubscribe?.(plan.id, selectedBilling.months);
+            }}
+            disabled={isDisabled || busy || !isPurchasable}
             variant={isCurrent ? "contained" : "outlined"}
             sx={{
               height: 46,
@@ -281,7 +301,11 @@ export default function PlanCard({
                 : undefined,
             }}
           >
-            {isCurrent ? "Plan actual" : busy ? "Contratando..." : "Contratar"}
+            {!isPurchasable
+              ? "No disponible"
+              : busy
+              ? "Contratando..."
+              : actionLabel || (isCurrent ? "Plan actual" : "Contratar")}
           </Button>
 
           <Box

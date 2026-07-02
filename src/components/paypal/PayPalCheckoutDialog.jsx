@@ -180,12 +180,12 @@ export default function PayPalCheckoutDialog({
 
                     onApprove={async (data) => {
                         try {
-                            await capturePayPalOrder(
+                            const captureResponse = await capturePayPalOrder(
                                 restaurantId,
                                 data.orderID
                             );
 
-                            onSuccess?.();
+                            onSuccess?.(captureResponse);
 
                         } catch (error) {
                             onError?.(
