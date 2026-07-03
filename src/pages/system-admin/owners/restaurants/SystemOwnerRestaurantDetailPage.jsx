@@ -18,6 +18,7 @@ import SystemRestaurantSubscriptionAssignModal from "../../../../components/syst
 
 import {
   createSystemOwnerRestaurantBranch,
+  dryRunDeleteSystemOwnerRestaurantBranch,
   deleteSystemOwnerRestaurantBranch,
   getSystemOwnerRestaurantBranches,
   updateSystemOwnerRestaurantBranch,
@@ -320,36 +321,66 @@ export default function SystemOwnerRestaurantDetailPage() {
       setBusyId(null);
     }
   };
-
+  
   const handleDelete = async (row) => {
-    const ok = window.confirm(
-      `¿De verdad estás seguro de querer eliminar la sucursal?\n\n${row.name}`,
-    );
+    const branchId = row?.id;
 
-    if (!ok) return;
+    if (!branchId) return;
+    if (busyId !== null) return;
 
-    const snapshot = branches;
-    setBusyId(row.id);
-
-    setBranches((prev) =>
-      prev.filter((item) => Number(item.id) !== Number(row.id)),
-    );
+    setBusyId(branchId);
 
     try {
-      await deleteSystemOwnerRestaurantBranch(ownerId, restaurantId, row.id);
+      const dryRunResult = await dryRunDeleteSystemOwnerRestaurantBranch(
+        ownerId,
+        restaurantId,
+        branchId
+      );
+
+      if (dryRunResult?.ok === false) {
+        showAlert({
+          severity: "error",
+          title: "No se puede eliminar",
+          message:
+            dryRunResult?.message ||
+            "Esta sucursal no puede eliminarse por la información relacionada que tiene registrada.",
+        });
+
+        return;
+      }
+
+      const branchName = row?.name || `Sucursal #${branchId}`;
+
+      const ok = window.confirm(
+        `¿Eliminar definitivamente la sucursal "${branchName}"?\n\nEsta acción no se puede deshacer.`
+      );
+
+      if (!ok) return;
+
+      const result = await deleteSystemOwnerRestaurantBranch(
+        ownerId,
+        restaurantId,
+        branchId
+      );
+
+      setBranches((prev) =>
+        prev.filter((item) => Number(item.id) !== Number(branchId))
+      );
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Sucursal eliminada correctamente.",
+        title: "Sucursal eliminada",
+        message: result?.message || "Sucursal eliminada correctamente.",
       });
     } catch (e) {
-      setBranches(snapshot);
+      const responseData = e?.response?.data;
 
       showAlert({
         severity: "error",
-        title: "Error",
-        message: normalizeErr(e, "No se pudo eliminar la sucursal."),
+        title: responseData?.ok === false ? "No se puede eliminar" : "Error",
+        message:
+          responseData?.message ||
+          normalizeErr(e, "No se pudo eliminar la sucursal."),
       });
     } finally {
       setBusyId(null);

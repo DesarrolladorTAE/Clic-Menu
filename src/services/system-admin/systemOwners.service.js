@@ -37,10 +37,25 @@ export async function updateSystemOwner(ownerId, payload) {
   return data;
 }
 
+export async function dryRunDeleteSystemOwner(ownerId) {
+  const { data } = await systemAdminApi.post(
+    `/system-admin/owners/${ownerId}/hard-delete-dry-run`,
+    {},
+    {
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return data;
+}
+
 export async function deleteSystemOwner(ownerId) {
-  const { data } = await systemAdminApi.delete(`/system-admin/owners/${ownerId}`, {
-    headers: NO_CACHE_HEADERS,
-  });
+  const { data } = await systemAdminApi.delete(
+    `/system-admin/owners/${ownerId}`,
+    {
+      headers: NO_CACHE_HEADERS,
+    }
+  );
 
   return data;
 }

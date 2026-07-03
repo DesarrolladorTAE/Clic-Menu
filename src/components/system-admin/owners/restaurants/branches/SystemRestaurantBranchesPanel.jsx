@@ -290,9 +290,15 @@ function BranchesDesktopTable({
                     </Tooltip>
 
                     <Tooltip title="Eliminar">
-                      <IconButton disabled={disabled} onClick={() => onDelete(row)} sx={iconDeleteSx}>
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
+                      <span>
+                        <IconButton
+                          disabled={disabled}
+                          onClick={() => onDelete(row)}
+                          sx={iconDeleteSx}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Stack>
                 </TableCell>
@@ -384,9 +390,15 @@ function BranchesMobileCards({
                   </Tooltip>
 
                   <Tooltip title="Eliminar">
-                    <IconButton disabled={disabled} onClick={() => onDelete(row)} sx={iconDeleteSx}>
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
+                    <span>
+                      <IconButton
+                        disabled={disabled}
+                        onClick={() => onDelete(row)}
+                        sx={iconDeleteSx}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </Stack>
               </Stack>
@@ -461,5 +473,9 @@ const iconDeleteSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
   },
 };

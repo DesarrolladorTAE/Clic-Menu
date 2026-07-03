@@ -54,6 +54,16 @@ export async function updateSystemOwnerRestaurant(ownerId, restaurantId, payload
   return data;
 }
 
+export async function dryRunDeleteSystemOwnerRestaurant(ownerId, restaurantId) {
+  const { data } = await systemAdminApi.post(
+    `/system-admin/owners/${ownerId}/restaurants/${restaurantId}/hard-delete-dry-run`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return data;
+}
+
 export async function deleteSystemOwnerRestaurant(ownerId, restaurantId) {
   const { data } = await systemAdminApi.delete(
     `/system-admin/owners/${ownerId}/restaurants/${restaurantId}`,

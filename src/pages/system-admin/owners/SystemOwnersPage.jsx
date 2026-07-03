@@ -14,6 +14,7 @@ import SystemOwnerUpsertModal from "../../../components/system-admin/owners/Syst
 
 import {
   createSystemOwner,
+  dryRunDeleteSystemOwner,
   deleteSystemOwner,
   getSystemOwners,
   updateSystemOwner,
@@ -237,40 +238,59 @@ export default function SystemOwnersPage() {
       setBusyId(null);
     }
   };
-
+  
   const handleDelete = async (row) => {
-    const ok = window.confirm(
-      `¿De verdad estás seguro de querer desactivar la cuenta de ${row.full_name || row.name}?`
-    );
+    const ownerId = row?.id;
 
-    if (!ok) return;
+    if (!ownerId) return;
+    if (busyId !== null) return;
 
-    const snapshot = owners;
-    setBusyId(row.id);
-
-    setOwners((prev) =>
-      prev.map((item) =>
-        Number(item.id) === Number(row.id)
-          ? { ...item, status: "inactive" }
-          : item
-      )
-    );
+    setBusyId(ownerId);
 
     try {
-      await deleteSystemOwner(row.id);
+      const dryRunResult = await dryRunDeleteSystemOwner(ownerId);
+
+      if (dryRunResult?.ok === false) {
+        showAlert({
+          severity: "error",
+          title: "No se puede eliminar",
+          message:
+            dryRunResult?.message ||
+            "Este propietario no puede eliminarse por la información relacionada que tiene registrada.",
+        });
+
+        return;
+      }
+
+      const ownerName = row?.full_name || row?.name || `Propietario #${ownerId}`;
+
+      const ok = window.confirm(
+        `¿Eliminar definitivamente la cuenta de ${ownerName}?\n\nEsta acción eliminará al propietario y no se puede deshacer.`
+      );
+
+      if (!ok) return;
+
+      const result = await deleteSystemOwner(ownerId);
+
+      setOwners((prev) =>
+        prev.filter((item) => Number(item.id) !== Number(ownerId))
+      );
+
+      setMeta((prev) => ({
+        ...prev,
+        total: Math.max(Number(prev.total || 0) - 1, 0),
+      }));
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Propietario desactivado correctamente.",
+        title: "Propietario eliminado",
+        message: result?.message || "Propietario eliminado correctamente.",
       });
     } catch (e) {
-      setOwners(snapshot);
-
       showAlert({
         severity: "error",
-        title: "Error",
-        message: normalizeErr(e, "No se pudo desactivar el propietario."),
+        title: "No se puede eliminar",
+        message: normalizeErr(e, "No se pudo eliminar el propietario."),
       });
     } finally {
       setBusyId(null);

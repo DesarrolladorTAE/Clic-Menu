@@ -201,14 +201,16 @@ function OwnersDesktopTable({
                       </IconButton>
                     </Tooltip>
 
-                    <Tooltip title="Desactivar">
-                      <IconButton
-                        disabled={disabled || !active}
-                        onClick={() => onDelete(row)}
-                        sx={iconDeleteSx}
-                      >
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
+                    <Tooltip title="Eliminar">
+                      <span>
+                        <IconButton
+                          disabled={disabled}
+                          onClick={() => onDelete(row)}
+                          sx={iconDeleteSx}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Stack>
                 </TableCell>
@@ -331,14 +333,16 @@ function OwnersMobileCards({
                     </IconButton>
                   </Tooltip>
 
-                  <Tooltip title="Desactivar">
-                    <IconButton
-                      disabled={disabled || !active}
-                      onClick={() => onDelete(row)}
-                      sx={iconDeleteSx}
-                    >
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
+                  <Tooltip title="Eliminar">
+                    <span>
+                      <IconButton
+                        disabled={disabled}
+                        onClick={() => onDelete(row)}
+                        sx={iconDeleteSx}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </Stack>
               </Stack>
@@ -384,5 +388,9 @@ const iconDeleteSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
   },
 };

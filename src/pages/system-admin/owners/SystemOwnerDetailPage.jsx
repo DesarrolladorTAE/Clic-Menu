@@ -13,6 +13,7 @@ import SystemOwnerRestaurantUpsertModal from "../../../components/system-admin/o
 
 import {
   createSystemOwnerRestaurant,
+  dryRunDeleteSystemOwnerRestaurant,
   deleteSystemOwnerRestaurant,
   getSystemOwnerRestaurants,
   updateSystemOwnerRestaurant,
@@ -271,21 +272,45 @@ export default function SystemOwnerDetailPage() {
   };
 
   const handleDelete = async (row) => {
-    const ok = window.confirm(
-      `¿De verdad estás seguro de querer eliminar el restaurante?\n\n${row.trade_name}\n\nEsta acción puede eliminar sucursales, tickets y demás información asociada.`
-    );
+    const restaurantId = row?.id;
 
-    if (!ok) return;
+    if (!restaurantId) return;
+    if (busyId !== null) return;
 
-    const snapshot = restaurants;
-    setBusyId(row.id);
-
-    setRestaurants((prev) =>
-      prev.filter((item) => Number(item.id) !== Number(row.id))
-    );
+    setBusyId(restaurantId);
 
     try {
-      await deleteSystemOwnerRestaurant(ownerId, row.id);
+      const dryRunResult = await dryRunDeleteSystemOwnerRestaurant(
+        ownerId,
+        restaurantId
+      );
+
+      if (dryRunResult?.ok === false) {
+        showAlert({
+          severity: "error",
+          title: "No se puede eliminar",
+          message:
+            dryRunResult?.message ||
+            "Este restaurante no puede eliminarse por la información relacionada que tiene registrada.",
+        });
+
+        return;
+      }
+
+      const restaurantName =
+        row?.trade_name || `Restaurante #${restaurantId}`;
+
+      const ok = window.confirm(
+        `¿Eliminar definitivamente el restaurante "${restaurantName}"?\n\nEsta acción puede eliminar sucursales, tickets y demás información asociada. No se puede deshacer.`
+      );
+
+      if (!ok) return;
+
+      const result = await deleteSystemOwnerRestaurant(ownerId, restaurantId);
+
+      setRestaurants((prev) =>
+        prev.filter((item) => Number(item.id) !== Number(restaurantId))
+      );
 
       setMeta((prev) => ({
         ...prev,
@@ -294,16 +319,18 @@ export default function SystemOwnerDetailPage() {
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Restaurante eliminado correctamente.",
+        title: "Restaurante eliminado",
+        message: result?.message || "Restaurante eliminado correctamente.",
       });
     } catch (e) {
-      setRestaurants(snapshot);
+      const responseData = e?.response?.data;
 
       showAlert({
         severity: "error",
-        title: "Error",
-        message: normalizeErr(e, "No se pudo eliminar el restaurante."),
+        title: responseData?.ok === false ? "No se puede eliminar" : "Error",
+        message:
+          responseData?.message ||
+          normalizeErr(e, "No se pudo eliminar el restaurante."),
       });
     } finally {
       setBusyId(null);

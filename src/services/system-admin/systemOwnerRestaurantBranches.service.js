@@ -51,6 +51,20 @@ export async function updateSystemOwnerRestaurantBranch(ownerId, restaurantId, b
   return data;
 }
 
+export async function dryRunDeleteSystemOwnerRestaurantBranch(
+  ownerId,
+  restaurantId,
+  branchId
+) {
+  const { data } = await systemAdminApi.post(
+    `${base(ownerId, restaurantId)}/${branchId}/hard-delete-dry-run`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return data;
+}
+
 export async function deleteSystemOwnerRestaurantBranch(ownerId, restaurantId, branchId) {
   const { data } = await systemAdminApi.delete(
     `${base(ownerId, restaurantId)}/${branchId}`,
