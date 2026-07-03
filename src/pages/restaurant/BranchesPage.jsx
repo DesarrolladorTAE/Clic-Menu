@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Stack,
-  Tooltip,
-  Typography,
+  Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
@@ -23,8 +12,10 @@ import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
 import {
   getBranchesByRestaurant,
+  dryRunDeleteBranch,
   deleteBranch,
 } from "../../services/restaurant/branch.service";
+
 import {
   getRestaurant,
   setRestaurantMainBranch,
@@ -89,6 +80,7 @@ export default function BranchesPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [deletingBranchId, setDeletingBranchId] = useState(null);
 
   const [items, setItems] = useState([]);
   const [mainBranchId, setMainBranchId] = useState(null);
@@ -150,23 +142,61 @@ export default function BranchesPage() {
   };
 
   const onDelete = async (branch) => {
-    const ok = window.confirm(`¿Eliminar la sucursal "${branch?.name || ""}"?`);
-    if (!ok) return;
+    const branchId = branch?.id;
+
+    if (!branchId) return;
+    if (saving || deletingBranchId !== null) return;
 
     setErr("");
+    setSuccessMsg("");
     setSaving(true);
+    setDeletingBranchId(branchId);
 
     try {
-      await deleteBranch(restaurantId, branch.id);
-      setSuccessMsg("La sucursal se eliminó correctamente.");
-      await load();
+      const dryRunResult = await dryRunDeleteBranch(restaurantId, branchId);
+
+      if (dryRunResult?.ok === false) {
+        setErr(
+          dryRunResult?.message ||
+            "Esta sucursal no puede eliminarse por la información relacionada que tiene registrada."
+        );
+
+        return;
+      }
+
+      const branchName = branch?.name || `Sucursal #${branchId}`;
+
+      const ok = window.confirm(
+        `¿Eliminar definitivamente la sucursal "${branchName}"?\n\nEsta acción no se puede deshacer.`
+      );
+
+      if (!ok) return;
+
+      const result = await deleteBranch(restaurantId, branchId);
+
+      setItems((prev) => prev.filter((item) => item.id !== branchId));
+
+      if (Number(mainBranchId) === Number(branchId)) {
+        setMainBranchId(null);
+      }
+
+      setSuccessMsg(
+        result?.message || "La sucursal se eliminó correctamente."
+      );
     } catch (e) {
       const redirected = handleRestaurantApiError(e, nav, restaurantId);
+
       if (!redirected) {
-        setErr(e?.response?.data?.message || "No se pudo eliminar la sucursal.");
+        const responseData = e?.response?.data;
+
+        setErr(
+          responseData?.message ||
+            "No se pudo eliminar la sucursal."
+        );
       }
     } finally {
       setSaving(false);
+      setDeletingBranchId(null);
     }
   };
 
@@ -555,13 +585,15 @@ export default function BranchesPage() {
                             </Tooltip>
 
                             <Tooltip title="Eliminar">
-                              <IconButton
-                                onClick={() => onDelete(branch)}
-                                disabled={saving}
-                                sx={iconDeleteSx}
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
+                              <span>
+                                <IconButton
+                                  onClick={() => onDelete(branch)}
+                                  disabled={saving || deletingBranchId === branch.id}
+                                  sx={iconDeleteSx}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </span>
                             </Tooltip>
                           </Stack>
                         </Stack>
@@ -613,5 +645,9 @@ const iconDeleteSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "#D94E17",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
   },
 };

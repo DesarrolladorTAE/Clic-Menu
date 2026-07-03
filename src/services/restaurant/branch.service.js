@@ -24,12 +24,23 @@ export async function getBranch(restaurantId, branchId) {
   return data; // { ...branch } o { data: branch } según backend
 }
 
-// DELETE /restaurants/:restaurantId/branches/:branchId
-export async function deleteBranch(restaurantId, branchId) {
-  const { data } = await api.delete(`/restaurants/${restaurantId}/branches/${branchId}`);
+// POST /restaurants/:restaurantId/branches/:branchId/hard-delete-dry-run
+export async function dryRunDeleteBranch(restaurantId, branchId) {
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/branches/${branchId}/hard-delete-dry-run`
+  );
+
   return data;
 }
 
+// DELETE /restaurants/:restaurantId/branches/:branchId
+export async function deleteBranch(restaurantId, branchId) {
+  const { data } = await api.delete(
+    `/restaurants/${restaurantId}/branches/${branchId}`
+  );
+
+  return data;
+}
 
 
 // ========= LOGO DE SUCURSAL =========

@@ -25,6 +25,12 @@ export async function updateRestaurant(id, payload) {
   return data;
 }
 
+// POST /restaurants/:id/hard-delete-dry-run
+export async function dryRunDeleteRestaurant(id) {
+  const { data } = await api.post(`/restaurants/${id}/hard-delete-dry-run`);
+  return data;
+}
+
 // DELETE /restaurants/:id
 export async function deleteRestaurant(id) {
   const { data } = await api.delete(`/restaurants/${id}`);

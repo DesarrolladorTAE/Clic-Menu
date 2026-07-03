@@ -13,6 +13,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import {
   getMyRestaurants,
   getRestaurantSubscriptionStatus,
+  dryRunDeleteRestaurant,
   deleteRestaurant,
 } from "../../services/restaurant/restaurant.service";
 
@@ -88,6 +89,7 @@ export default function MyRestaurantsHome() {
   const [statusMap, setStatusMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [deletingRestaurantId, setDeletingRestaurantId] = useState(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create");
@@ -258,17 +260,68 @@ export default function MyRestaurantsHome() {
     });
   };
 
-  const onDelete = async (restaurantId) => {
-    const ok = window.confirm("¿De verdad desea borrar restaurante?");
-    if (!ok) return;
+  const onDelete = async (restaurant) => {
+    const restaurantId = restaurant?.id;
+
+    if (!restaurantId) return;
+    if (deletingRestaurantId !== null) return;
+
+    setErr("");
+    setDeletingRestaurantId(restaurantId);
 
     try {
-      await deleteRestaurant(restaurantId);
-      await load();
-    } catch (e) {
-      setErr(
-        e?.response?.data?.message || "No se pudo eliminar el restaurante.",
+      const dryRunResult = await dryRunDeleteRestaurant(restaurantId);
+
+      if (dryRunResult?.ok === false) {
+        showAlert({
+          severity: "error",
+          title: "No se puede eliminar",
+          message:
+            dryRunResult?.message ||
+            "Este restaurante no puede eliminarse por la información relacionada que tiene registrada.",
+        });
+
+        return;
+      }
+
+      const restaurantName =
+        restaurant?.trade_name || `Restaurante #${restaurantId}`;
+
+      const ok = window.confirm(
+        `¿Eliminar definitivamente "${restaurantName}"?\n\nEsta acción no se puede deshacer.`
       );
+
+      if (!ok) return;
+
+      const result = await deleteRestaurant(restaurantId);
+
+      setItems((prev) => prev.filter((item) => item.id !== restaurantId));
+
+      setStatusMap((prev) => {
+        const next = { ...prev };
+        delete next[restaurantId];
+        return next;
+      });
+
+      showAlert({
+        severity: "success",
+        title: "Restaurante eliminado",
+        message:
+          result?.message ||
+          "Restaurante eliminado correctamente.",
+      });
+    } catch (e) {
+      const responseData = e?.response?.data;
+
+      showAlert({
+        severity: "error",
+        title: "No se puede eliminar",
+        message:
+          responseData?.message ||
+          "No se pudo eliminar el restaurante.",
+      });
+    } finally {
+      setDeletingRestaurantId(null);
     }
   };
 
@@ -669,7 +722,8 @@ export default function MyRestaurantsHome() {
                         sx={{ mt: 2 }}
                       >
                         <IconButton
-                          onClick={() => onDelete(r.id)}
+                          onClick={() => onDelete(r)}
+                          disabled={deletingRestaurantId === r.id}
                           sx={{
                             bgcolor: "error.main",
                             color: "#fff",
@@ -677,11 +731,16 @@ export default function MyRestaurantsHome() {
                             "&:hover": {
                               bgcolor: "error.dark",
                             },
+                            "&.Mui-disabled": {
+                              bgcolor: "action.disabledBackground",
+                              color: "action.disabled",
+                            },
                           }}
                           title="Eliminar restaurante"
                         >
                           <DeleteOutlineIcon />
                         </IconButton>
+
                       </Stack>
                     </CardContent>
                   </Card>
