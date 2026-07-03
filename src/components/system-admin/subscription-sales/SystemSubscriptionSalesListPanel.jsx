@@ -38,25 +38,53 @@ function dateText(value) {
   });
 }
 
-function statusLabel(status) {
-  if (status === "trialing") return "Demo";
-  if (status === "active") return "Activa";
-  if (status === "expired") return "Expirada";
-  if (status === "cancelled") return "Cancelada";
-  if (status === "pending_payment") return "Pendiente";
-  return status || "—";
+function isExpiredByDate(row) {
+  if (!row?.ends_at) return false;
+
+  const endsAt = new Date(row.ends_at);
+  if (Number.isNaN(endsAt.getTime())) return false;
+
+  return endsAt.getTime() < Date.now();
 }
 
-function statusColor(status) {
-  if (status === "active") return "success";
-  if (status === "trialing") return "info";
-  if (status === "pending_payment") return "warning";
-  if (status === "expired" || status === "cancelled") return "default";
+function isFutureSubscription(row) {
+  if (!row?.starts_at) return false;
+
+  const startsAt = new Date(row.starts_at);
+  if (Number.isNaN(startsAt.getTime())) return false;
+
+  return row.status === "active" && startsAt.getTime() > Date.now();
+}
+
+function statusLabel(row) {
+  if (row?.status === "expired" || isExpiredByDate(row)) return "Expirada";
+  if (isFutureSubscription(row)) return "Futura";
+  if (row?.status === "trialing") return "Demo";
+  if (row?.status === "active") return "Activa";
+  if (row?.status === "cancelled") return "Cancelada";
+  if (row?.status === "pending_payment") return "Pendiente";
+  return row?.status || "—";
+}
+
+function statusColor(row) {
+  if (row?.status === "expired" || isExpiredByDate(row)) return "default";
+  if (isFutureSubscription(row)) return "info";
+  if (row?.status === "active") return "success";
+  if (row?.status === "trialing") return "info";
+  if (row?.status === "pending_payment") return "warning";
+  if (row?.status === "cancelled") return "default";
   return "default";
+}
+
+function panelTitle(period) {
+  if (period?.period === "all") return "Todas las suscripciones";
+  if (period?.period === "year") return "Suscripciones del año";
+  return "Suscripciones del mes";
 }
 
 export default function SystemSubscriptionSalesListPanel({
   rows = [],
+  period = null,
   pagination,
   onPrev,
   onNext,
@@ -83,7 +111,7 @@ export default function SystemSubscriptionSalesListPanel({
         }}
       >
         <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
-          Suscripciones del mes
+          {panelTitle(period)}
         </Typography>
       </Box>
 
@@ -217,8 +245,8 @@ function SalesDesktopTable({ rows }) {
 
                 <TableCell>
                   <Chip
-                    label={statusLabel(row.status)}
-                    color={statusColor(row.status)}
+                    label={statusLabel(row)}
+                    color={statusColor(row)}
                     size="small"
                     sx={{ fontWeight: 800 }}
                   />
@@ -282,8 +310,8 @@ function SalesMobileCards({ rows }) {
                   </Box>
 
                   <Chip
-                    label={statusLabel(row.status)}
-                    color={statusColor(row.status)}
+                    label={statusLabel(row)}
+                    color={statusColor(row)}
                     size="small"
                     sx={{ fontWeight: 800, flexShrink: 0 }}
                   />

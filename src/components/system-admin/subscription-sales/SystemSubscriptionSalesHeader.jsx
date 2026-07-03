@@ -25,9 +25,19 @@ export default function SystemSubscriptionSalesHeader({
   refreshing = false,
   period,
 }) {
-  const periodLabel = period
-    ? `${monthName(period.month)} ${period.year}`
-    : "Periodo actual";
+  const periodLabel = (() => {
+    if (!period) return "Periodo actual";
+
+    if (period.period === "all") {
+      return "Todo el historial";
+    }
+
+    if (period.period === "year") {
+      return `Año ${period.year}`;
+    }
+
+    return `${monthName(period.month)} ${period.year}`;
+  })();
 
   return (
     <Stack
@@ -45,7 +55,7 @@ export default function SystemSubscriptionSalesHeader({
             lineHeight: 1.1,
           }}
         >
-          Ventas mensuales
+          Ventas de suscripciones
         </Typography>
 
         <Typography
@@ -55,7 +65,7 @@ export default function SystemSubscriptionSalesHeader({
             fontSize: { xs: 15, md: 18 },
           }}
         >
-          Consulta las suscripciones registradas y separadas por mes.
+          Consulta ventas, renovaciones, demos y accesos internos por periodo.
         </Typography>
 
         <Typography

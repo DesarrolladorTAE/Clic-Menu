@@ -397,19 +397,17 @@ export default function SystemOwnerRestaurantDetailPage() {
         payload,
       );
 
-      const created = res?.data;
-
-      if (created) {
-        setCurrentSubscription(created);
-        setSubscriptions((prev) => [created, ...prev]);
-      }
+      await loadSubscriptions();
 
       setSubscriptionModalOpen(false);
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Suscripción asignada correctamente.",
+        title:
+          res?.activation_type === "advance_renewal"
+            ? "Renovación programada"
+            : "Suscripción asignada",
+        message: res?.message || "Suscripción asignada correctamente.",
       });
     } catch (e) {
       throw e;
@@ -433,22 +431,12 @@ export default function SystemOwnerRestaurantDetailPage() {
         restaurantId,
       );
 
-      const expired = res?.data;
-
-      setCurrentSubscription(null);
-
-      if (expired?.id) {
-        setSubscriptions((prev) =>
-          prev.map((item) =>
-            Number(item.id) === Number(expired.id) ? expired : item,
-          ),
-        );
-      }
+      await loadSubscriptions();
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Suscripción actual terminada correctamente.",
+        title: "Suscripción terminada",
+        message: res?.message || "Suscripción actual terminada correctamente.",
       });
     } catch (e) {
       showAlert({

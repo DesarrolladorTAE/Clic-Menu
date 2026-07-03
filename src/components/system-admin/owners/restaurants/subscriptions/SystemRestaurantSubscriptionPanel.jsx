@@ -30,21 +30,32 @@ function dateLabel(value) {
   }
 }
 
-function statusLabel(status) {
-  if (status === "trialing") return "Prueba";
-  if (status === "active") return "Activa";
-  if (status === "expired") return "Expirada";
-  if (status === "cancelled") return "Cancelada";
-  if (status === "pending_payment") return "Pendiente";
-  return status || "—";
+function isFutureSubscription(row) {
+  if (!row?.starts_at) return false;
+
+  const startsAt = new Date(row.starts_at);
+  if (Number.isNaN(startsAt.getTime())) return false;
+
+  return row.status === "active" && startsAt.getTime() > Date.now();
 }
 
-function statusColor(status) {
-  if (status === "trialing") return "info";
-  if (status === "active") return "success";
-  if (status === "expired") return "default";
-  if (status === "cancelled") return "error";
-  if (status === "pending_payment") return "warning";
+function subscriptionStatusLabel(row) {
+  if (isFutureSubscription(row)) return "Futura";
+  if (row?.status === "trialing") return "Prueba";
+  if (row?.status === "active") return "Activa";
+  if (row?.status === "expired") return "Expirada";
+  if (row?.status === "cancelled") return "Cancelada";
+  if (row?.status === "pending_payment") return "Pendiente";
+  return row?.status || "—";
+}
+
+function subscriptionStatusColor(row) {
+  if (isFutureSubscription(row)) return "info";
+  if (row?.status === "trialing") return "info";
+  if (row?.status === "active") return "success";
+  if (row?.status === "expired") return "default";
+  if (row?.status === "cancelled") return "error";
+  if (row?.status === "pending_payment") return "warning";
   return "default";
 }
 
@@ -121,7 +132,7 @@ export default function SystemRestaurantSubscriptionPanel({
               variant="contained"
               startIcon={<AddIcon />}
               onClick={onAssign}
-              disabled={busy || loading || hasCurrent || plans.length === 0}
+              disabled={busy || loading || plans.length === 0}
               sx={{
                 minWidth: { xs: "100%", sm: 210 },
                 height: 42,
@@ -129,7 +140,7 @@ export default function SystemRestaurantSubscriptionPanel({
                 fontWeight: 800,
               }}
             >
-              Asignar suscripción
+              {hasCurrent ? "Renovar suscripción" : "Asignar suscripción"}
             </Button>
           </Stack>
         </Stack>
@@ -171,8 +182,8 @@ export default function SystemRestaurantSubscriptionPanel({
 
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Chip
-                    label={statusLabel(currentSubscription?.status)}
-                    color={statusColor(currentSubscription?.status)}
+                    label={subscriptionStatusLabel(currentSubscription)}
+                    color={subscriptionStatusColor(currentSubscription)}
                     size="small"
                     sx={{ fontWeight: 800 }}
                   />
@@ -297,8 +308,8 @@ export default function SystemRestaurantSubscriptionPanel({
 
                     <TableCell>
                       <Chip
-                        label={statusLabel(row.status)}
-                        color={statusColor(row.status)}
+                        label={subscriptionStatusLabel(row)}
+                        color={subscriptionStatusColor(row)}
                         size="small"
                         sx={{ fontWeight: 800 }}
                       />
@@ -349,8 +360,8 @@ function SubscriptionMobileCard({ row }) {
             </Box>
 
             <Chip
-              label={statusLabel(row.status)}
-              color={statusColor(row.status)}
+              label={subscriptionStatusLabel(row)}
+              color={subscriptionStatusColor(row)}
               size="small"
               sx={{ fontWeight: 800, flexShrink: 0 }}
             />

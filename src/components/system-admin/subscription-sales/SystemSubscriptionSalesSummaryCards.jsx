@@ -24,8 +24,17 @@ function statusLabel(status) {
   return status || "Sin estatus";
 }
 
+function typeLabel(type) {
+  if (type === "demo") return "Demo";
+  if (type === "normal") return "Normal";
+  if (type === "paid") return "Pagadas";
+  if (type === "internal") return "Internas";
+  return type || "Sin tipo";
+}
+
 export default function SystemSubscriptionSalesSummaryCards({
   summary,
+  byType = [],
   byPlan = [],
   byStatus = [],
   byProvider = [],
@@ -56,8 +65,8 @@ export default function SystemSubscriptionSalesSummaryCards({
         <SummaryCard
           icon={<ReceiptLongRoundedIcon />}
           title="Suscripciones"
-          value={summary?.total_subscriptions || 0}
-          caption="Total de registros del mes"
+          value={summary?.total_records || 0}
+          caption="Total de registros del periodo"
         />
 
         <SummaryCard
@@ -70,7 +79,7 @@ export default function SystemSubscriptionSalesSummaryCards({
         <SummaryCard
           icon={<StarsRoundedIcon />}
           title="Demos"
-          value={summary?.demo_subscriptions || 0}
+          value={summary?.demo_count || 0}
           caption="Planes de prueba registrados"
         />
       </Box>
@@ -80,12 +89,22 @@ export default function SystemSubscriptionSalesSummaryCards({
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr",
-            md: "repeat(3, minmax(0, 1fr))",
+            md: "repeat(2, minmax(0, 1fr))",
+            lg: "repeat(4, minmax(0, 1fr))",
           },
           gap: 2.5,
           width: "100%",
         }}
       >
+        <BreakdownCard
+          title="Registros por tipo"
+          rows={byType.map((item) => ({
+            label: typeLabel(item?.type),
+            value: money(item?.total_sales, currency),
+            chip: `${item?.total_subscriptions || 0}`,
+          }))}
+        />
+
         <BreakdownCard
           title="Ventas por plan"
           rows={byPlan.map((item) => ({

@@ -29,6 +29,7 @@ export default function SystemSubscriptionSalesPage() {
   const [rows, setRows] = useState([]);
   const [period, setPeriod] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [byType, setByType] = useState([]);
   const [byPlan, setByPlan] = useState([]);
   const [byStatus, setByStatus] = useState([]);
   const [byProvider, setByProvider] = useState([]);
@@ -39,11 +40,14 @@ export default function SystemSubscriptionSalesPage() {
     total: 0,
   });
 
+  const [periodType, setPeriodType] = useState("month");
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [dateField, setDateField] = useState("created_at");
+  const [subscriptionType, setSubscriptionType] = useState("all");
+
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
-  const [provider, setProvider] = useState("");
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -70,13 +74,25 @@ export default function SystemSubscriptionSalesPage() {
 
   const params = useMemo(() => {
     return {
-      year: Number(year),
-      month: Number(month),
+      period: periodType,
+      date_field: dateField,
+      subscription_type: subscriptionType,
+
+      ...(periodType !== "all" && year ? { year: Number(year) } : {}),
+      ...(periodType === "month" && month ? { month: Number(month) } : {}),
+
       ...(q ? { q } : {}),
       ...(status ? { status } : {}),
-      ...(provider ? { provider } : {}),
     };
-  }, [year, month, q, status, provider]);
+  }, [
+    periodType,
+    year,
+    month,
+    dateField,
+    subscriptionType,
+    q,
+    status,
+  ]);
 
   const loadSales = async ({ page = 1, initial = false } = {}) => {
     const myReq = ++reqRef.current;
@@ -102,6 +118,7 @@ export default function SystemSubscriptionSalesPage() {
       setRows(list);
       setPeriod(monthlyRes?.period || summaryRes?.period || null);
       setSummary(summaryRes?.summary || monthlyRes?.summary || null);
+      setByType(Array.isArray(summaryRes?.by_type) ? summaryRes.by_type : []);
       setByPlan(Array.isArray(summaryRes?.by_plan) ? summaryRes.by_plan : []);
       setByStatus(Array.isArray(summaryRes?.by_status) ? summaryRes.by_status : []);
       setByProvider(Array.isArray(summaryRes?.by_provider) ? summaryRes.by_provider : []);
@@ -152,7 +169,7 @@ export default function SystemSubscriptionSalesPage() {
           <Stack spacing={2} alignItems="center">
             <CircularProgress color="primary" />
             <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
-              Cargando ventas mensuales…
+              Cargando ventas de suscripciones…
             </Typography>
           </Stack>
         </Box>
@@ -169,21 +186,26 @@ export default function SystemSubscriptionSalesPage() {
         />
 
         <SystemSubscriptionSalesFiltersCard
+          periodType={periodType}
           year={year}
           month={month}
+          dateField={dateField}
+          subscriptionType={subscriptionType}
           q={q}
           status={status}
-          provider={provider}
           total={meta.total}
+          onChangePeriodType={setPeriodType}
           onChangeYear={setYear}
           onChangeMonth={setMonth}
+          onChangeDateField={setDateField}
+          onChangeSubscriptionType={setSubscriptionType}
           onChangeQ={setQ}
           onChangeStatus={setStatus}
-          onChangeProvider={setProvider}
         />
 
         <SystemSubscriptionSalesSummaryCards
           summary={summary}
+          byType={byType}
           byPlan={byPlan}
           byStatus={byStatus}
           byProvider={byProvider}
@@ -191,6 +213,7 @@ export default function SystemSubscriptionSalesPage() {
 
         <SystemSubscriptionSalesListPanel
           rows={rows}
+          period={period}
           pagination={pagination}
           onPrev={() => handleChangePage(pagination.page - 1)}
           onNext={() => handleChangePage(pagination.page + 1)}

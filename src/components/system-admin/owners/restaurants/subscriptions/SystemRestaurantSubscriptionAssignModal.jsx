@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
-  Alert,
-  Chip,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField,
+  Typography, useMediaQuery, Alert, Chip,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -25,6 +10,11 @@ import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../../../common/AppAlert";
 import { normalizeErr } from "../../../../../utils/err";
+
+const PROVIDERS = [
+  { value: "internal", label: "Interno / pruebas" },
+  { value: "manual", label: "Manual" },
+];
 
 export default function SystemRestaurantSubscriptionAssignModal({
   open,
@@ -43,7 +33,7 @@ export default function SystemRestaurantSubscriptionAssignModal({
   const [monthsPaid, setMonthsPaid] = useState("1");
   const [monthsGranted, setMonthsGranted] = useState("1");
   const [paidPrice, setPaidPrice] = useState("");
-  const [provider, setProvider] = useState("manual");
+  const [provider, setProvider] = useState("internal");
   const [providerRef, setProviderRef] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [autoRenew, setAutoRenew] = useState(false);
@@ -55,6 +45,7 @@ export default function SystemRestaurantSubscriptionAssignModal({
     message: "",
   });
 
+  const isInternalProvider = provider === "internal";
   const hasReferralCode = Boolean(owner?.referred_by_code);
 
   const hasPreviousPaidSubscription = useMemo(() => {
@@ -67,7 +58,7 @@ export default function SystemRestaurantSubscriptionAssignModal({
   }, [subscriptions]);
 
   const canApplyReferralDiscount =
-    hasReferralCode && !hasPreviousPaidSubscription && provider !== "internal";
+    hasReferralCode && !hasPreviousPaidSubscription && !isInternalProvider;
 
   const selectedPlan = useMemo(() => {
     return plans.find((item) => String(item.id) === String(planId)) || null;
@@ -87,14 +78,14 @@ export default function SystemRestaurantSubscriptionAssignModal({
 
     const subtotal = price * Math.max(1, months);
     const discount = canApplyReferralDiscount ? subtotal * 0.05 : 0;
-    const total = subtotal - discount;
+    const total = isInternalProvider ? 0 : subtotal - discount;
 
     return {
       subtotal,
       discount,
       total,
     };
-  }, [selectedPlan, monthsPaid, canApplyReferralDiscount]);
+  }, [selectedPlan, monthsPaid, canApplyReferralDiscount, isInternalProvider]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +94,7 @@ export default function SystemRestaurantSubscriptionAssignModal({
     setMonthsPaid("1");
     setMonthsGranted("1");
     setPaidPrice("");
-    setProvider("manual");
+    setProvider("internal");
     setProviderRef("");
     setStartsAt("");
     setAutoRenew(false);
@@ -112,8 +103,13 @@ export default function SystemRestaurantSubscriptionAssignModal({
   useEffect(() => {
     if (!selectedPlan) return;
 
+    if (isInternalProvider) {
+      setPaidPrice("0.00");
+      return;
+    }
+
     setPaidPrice(pricePreview.total.toFixed(2));
-  }, [selectedPlan, pricePreview.total]);
+  }, [selectedPlan, pricePreview.total, isInternalProvider]);
 
   const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
@@ -150,19 +146,26 @@ export default function SystemRestaurantSubscriptionAssignModal({
       plan_id: Number(planId),
       months_paid: Number(monthsPaid || 1),
       months_granted: Number(monthsGranted || monthsPaid || 1),
-      paid_price: paidPrice === "" ? null : Number(paidPrice),
+      paid_price: isInternalProvider
+        ? 0
+        : paidPrice === ""
+          ? null
+          : Number(paidPrice),
       currency: selectedPlan?.currency || "MXN",
-      provider: provider || "manual",
+      provider: provider || "internal",
       provider_ref: providerRef.trim() || null,
       starts_at: startsAt || null,
       auto_renew: autoRenew,
       meta: {
-        note: "Suscripción asignada desde panel administrador.",
+        note: isInternalProvider
+          ? "Suscripción interna asignada desde panel administrador."
+          : "Suscripción asignada desde panel administrador.",
         frontend_referral_discount_preview: canApplyReferralDiscount,
         frontend_referral_code: owner?.referred_by_code || null,
         frontend_base_price: pricePreview.subtotal,
-        frontend_discount_amount: pricePreview.discount,
-        frontend_final_price: pricePreview.total,
+        frontend_discount_amount: isInternalProvider ? 0 : pricePreview.discount,
+        frontend_final_price: isInternalProvider ? 0 : pricePreview.total,
+        frontend_provider_type: provider || "internal",
       },
     };
 
@@ -288,6 +291,13 @@ export default function SystemRestaurantSubscriptionAssignModal({
                   <Alert severity="info" sx={{ borderRadius: 2 }}>
                     Este propietario tiene código referido, pero esta operación
                     se tomará como renovación o compra posterior sin descuento.
+                  </Alert>
+                )}
+
+                {isInternalProvider && (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Esta suscripción se registrará como acceso interno o de pruebas. No contará
+                    como venta, no generará comisión y el importe pagado será $0.00.
                   </Alert>
                 )}
 
@@ -432,13 +442,18 @@ export default function SystemRestaurantSubscriptionAssignModal({
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Precio pagado"
-                      help="El backend vuelve a calcular el precio real y valida si aplica referido."
+                      help={
+                        isInternalProvider
+                          ? "En accesos internos se enviará $0.00 y no contará como venta."
+                          : "El backend vuelve a calcular el precio real y valida si aplica referido."
+                      }
                       input={
                         <TextField
-                          value={paidPrice}
+                          value={isInternalProvider ? "0.00" : paidPrice}
                           onChange={(e) => setPaidPrice(e.target.value)}
                           inputProps={{ inputMode: "decimal" }}
                           placeholder="0"
+                          disabled={isInternalProvider}
                         />
                       }
                     />
@@ -460,12 +475,23 @@ export default function SystemRestaurantSubscriptionAssignModal({
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Proveedor"
+                      help={
+                        isInternalProvider
+                          ? "Úsalo para cuentas propias, pruebas internas o accesos sin cobro."
+                          : "Úsalo cuando el cliente pagó y el administrador registra la suscripción manualmente."
+                      }
                       input={
                         <TextField
+                          select
                           value={provider}
                           onChange={(e) => setProvider(e.target.value)}
-                          placeholder="manual"
-                        />
+                        >
+                          {PROVIDERS.map((item) => (
+                            <MenuItem key={item.value} value={item.value}>
+                              {item.label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
                       }
                     />
 

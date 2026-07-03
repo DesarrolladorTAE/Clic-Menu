@@ -1,5 +1,8 @@
 import React from "react";
-import { Box, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  Box, MenuItem, Paper, Stack, TextField, Typography,
+} from "@mui/material";
+
 
 const MONTHS = [
   { value: "1", label: "Enero" },
@@ -16,19 +19,43 @@ const MONTHS = [
   { value: "12", label: "Diciembre" },
 ];
 
+const PERIODS = [
+  { value: "month", label: "Mensual" },
+  { value: "year", label: "Anual" },
+  { value: "all", label: "Todo" },
+];
+
+const DATE_FIELDS = [
+  { value: "created_at", label: "Fecha de registro" },
+  { value: "starts_at", label: "Inicio de suscripción" },
+  { value: "paid_at", label: "Fecha de pago" },
+];
+
+const SUBSCRIPTION_TYPES = [
+  { value: "all", label: "Todas" },
+  { value: "paid", label: "Pagadas" },
+  { value: "demo", label: "Demo" },
+  { value: "internal", label: "Internas" },
+];
+
 export default function SystemSubscriptionSalesFiltersCard({
+  periodType,
   year,
   month,
+  dateField,
+  subscriptionType,
   q,
   status,
-  provider,
   total = 0,
+  onChangePeriodType,
   onChangeYear,
   onChangeMonth,
+  onChangeDateField,
+  onChangeSubscriptionType,
   onChangeQ,
   onChangeStatus,
-  onChangeProvider,
 }) {
+
   return (
     <Paper
       sx={{
@@ -46,28 +73,16 @@ export default function SystemSubscriptionSalesFiltersCard({
           spacing={2}
           alignItems={{ xs: "stretch", md: "flex-end" }}
         >
-          <Box sx={{ width: { xs: "100%", md: 150 } }}>
-            <Typography sx={fieldLabelSx}>Año</Typography>
-
-            <TextField
-              value={year}
-              onChange={(e) => onChangeYear(e.target.value)}
-              placeholder="2026"
-              inputProps={{ inputMode: "numeric" }}
-              fullWidth
-            />
-          </Box>
-
-          <Box sx={{ width: { xs: "100%", md: 210 } }}>
-            <Typography sx={fieldLabelSx}>Mes</Typography>
+          <Box sx={{ width: { xs: "100%", md: 190 } }}>
+            <Typography sx={fieldLabelSx}>Periodo</Typography>
 
             <TextField
               select
-              value={month}
-              onChange={(e) => onChangeMonth(e.target.value)}
+              value={periodType}
+              onChange={(e) => onChangePeriodType(e.target.value)}
               fullWidth
             >
-              {MONTHS.map((item) => (
+              {PERIODS.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
@@ -75,6 +90,62 @@ export default function SystemSubscriptionSalesFiltersCard({
             </TextField>
           </Box>
 
+          {periodType !== "all" && (
+            <Box sx={{ width: { xs: "100%", md: 150 } }}>
+              <Typography sx={fieldLabelSx}>Año</Typography>
+
+              <TextField
+                value={year}
+                onChange={(e) => onChangeYear(e.target.value)}
+                placeholder="2026"
+                inputProps={{ inputMode: "numeric" }}
+                fullWidth
+              />
+            </Box>
+          )}
+
+          {periodType === "month" && (
+            <Box sx={{ width: { xs: "100%", md: 210 } }}>
+              <Typography sx={fieldLabelSx}>Mes</Typography>
+
+              <TextField
+                select
+                value={month}
+                onChange={(e) => onChangeMonth(e.target.value)}
+                fullWidth
+              >
+                {MONTHS.map((item) => (
+                  <MenuItem key={item.value} value={item.value}>
+                    {item.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          )}
+
+          <Box sx={{ width: { xs: "100%", md: 240 } }}>
+            <Typography sx={fieldLabelSx}>Fecha de corte</Typography>
+
+            <TextField
+              select
+              value={dateField}
+              onChange={(e) => onChangeDateField(e.target.value)}
+              fullWidth
+            >
+              {DATE_FIELDS.map((item) => (
+                <MenuItem key={item.value} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+        </Stack>
+
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "stretch", md: "flex-end" }}
+        >
           <Box sx={{ flex: 1 }}>
             <Typography sx={fieldLabelSx}>Buscar</Typography>
 
@@ -85,13 +156,7 @@ export default function SystemSubscriptionSalesFiltersCard({
               fullWidth
             />
           </Box>
-        </Stack>
 
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          alignItems={{ xs: "stretch", md: "flex-end" }}
-        >
           <Box sx={{ width: { xs: "100%", md: 240 } }}>
             <Typography sx={fieldLabelSx}>Estatus</Typography>
 
@@ -110,18 +175,28 @@ export default function SystemSubscriptionSalesFiltersCard({
             </TextField>
           </Box>
 
-          <Box sx={{ width: { xs: "100%", md: 240 } }}>
-            <Typography sx={fieldLabelSx}>Proveedor</Typography>
+        </Stack>
+
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          justifyContent="space-between"
+          alignItems={{ xs: "stretch", md: "flex-end" }}
+        >
+          <Box sx={{ width: { xs: "100%", md: 260 } }}>
+            <Typography sx={fieldLabelSx}>Clasificación</Typography>
 
             <TextField
               select
-              value={provider}
-              onChange={(e) => onChangeProvider(e.target.value)}
+              value={subscriptionType}
+              onChange={(e) => onChangeSubscriptionType(e.target.value)}
               fullWidth
             >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="manual">Manual</MenuItem>
-              <MenuItem value="conekta">Conekta</MenuItem>
+              {SUBSCRIPTION_TYPES.map((item) => (
+                <MenuItem key={item.value} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
             </TextField>
           </Box>
 
@@ -139,6 +214,7 @@ export default function SystemSubscriptionSalesFiltersCard({
             </Typography>
           </Box>
         </Stack>
+
       </Stack>
     </Paper>
   );
