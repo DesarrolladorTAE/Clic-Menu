@@ -122,6 +122,7 @@ import TaecontaAccountPage from "../pages/connection/tae/TaecontaAccountPage";
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
+import RestaurantSubscriptionHistoryPage from "../pages/owner/subscription-history/RestaurantSubscriptionHistoryPage";
 
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
@@ -248,6 +249,7 @@ export default function AppRoutes() {
         </Route>
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
+        <Route path="/owner/restaurants/:restaurantId/subscriptions" element={<RestaurantSubscriptionHistoryPage />} />
 
       </Route>
 

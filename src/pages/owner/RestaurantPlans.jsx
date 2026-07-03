@@ -11,6 +11,9 @@ import PlansNoticeCard from "../../components/owner/PlansNoticeCard";
 import PlansCarouselControls from "../../components/owner/PlansCarouselControls";
 import PlanCard from "../../components/owner/PlanCard";
 
+import SubscriptionHistoryShortcut from "../../components/owner/subscription-history/SubscriptionHistoryShortcut";
+
+
 import { getPlans } from "../../services/owner/plan.service";
 
 import {
@@ -460,6 +463,11 @@ export default function RestaurantPlans() {
           isPaid={isPaid}
           isInternal={isInternal}
           daysRemaining={daysRemaining}
+        />
+
+        <SubscriptionHistoryShortcut
+          disabled={busyPlanId !== null || confirmingPayPal}
+          onOpen={() => nav(`/owner/restaurants/${restaurantId}/subscriptions`)}
         />
 
         <Box

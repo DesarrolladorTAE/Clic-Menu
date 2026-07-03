@@ -31,10 +31,41 @@ export async function deleteRestaurant(id) {
   return data;
 }
 
-
 // GET /api/restaurants/:id/subscription
 export async function getRestaurantSubscriptionStatus(restaurantId) {
   const { data } = await api.get(`/restaurants/${restaurantId}/subscription`);
+  return data;
+}
+
+// GET /api/restaurants/:id/subscriptions
+export async function getRestaurantSubscriptions(restaurantId, filters = {}) {
+  const params = {};
+
+  if (filters.period) {
+    params.period = filters.period;
+  }
+
+  if (filters.year) {
+    params.year = filters.year;
+  }
+
+  if (filters.month) {
+    params.month = filters.month;
+  }
+
+  const { data } = await api.get(`/restaurants/${restaurantId}/subscriptions`, {
+    params,
+  });
+
+  return data;
+}
+
+// GET /api/restaurants/:id/subscriptions/:subscriptionId
+export async function getRestaurantSubscription(restaurantId, subscriptionId) {
+  const { data } = await api.get(
+    `/restaurants/${restaurantId}/subscriptions/${subscriptionId}`
+  );
+
   return data;
 }
 
