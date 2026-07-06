@@ -364,21 +364,36 @@ export default function CashierDiscountAuthorizationDialog({
                   input={
                     <TextField
                       fullWidth
-                      type="password"
+                      type="tel"
                       value={form?.pin || ""}
-                      onChange={(e) => onFormChange?.("pin", e.target.value)}
+                      onChange={(e) =>
+                        onFormChange?.(
+                          "pin",
+                          String(e.target.value || "")
+                            .replace(/\D/g, "")
+                            .slice(0, 8)
+                        )
+                      }
                       placeholder="PIN"
                       disabled={busy || loading || rows.length === 0}
                       autoFocus={!loading && rows.length > 0}
+                      autoComplete="off"
                       inputProps={{
-                        autoComplete: "new-password",
+                        autoComplete: "off",
                         inputMode: "numeric",
+                        pattern: "[0-9]*",
+                        name: "discount_authorization_code",
+                        id: "discount_authorization_code",
+                        "aria-label": "PIN de autorización de descuento",
+                        "data-lpignore": "true",
+                        "data-1p-ignore": "true",
                       }}
                       sx={{
                         "& .MuiInputBase-input": {
                           fontSize: 18,
                           fontWeight: 900,
                           letterSpacing: "0.08em",
+                          WebkitTextSecurity: form?.pin ? "disc" : "none",
                         },
                       }}
                     />

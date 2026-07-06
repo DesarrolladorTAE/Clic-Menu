@@ -255,6 +255,31 @@ export default function CashierSaleDetailPage() {
     quantity: "",
   });
 
+  const formatPaymentAmountValue = (value) => {
+    const amount = Number(value || 0);
+
+    if (!Number.isFinite(amount)) return "";
+
+    return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
+  };
+
+  const syncSinglePaymentAmountToSaleTotal = (nextTotal) => {
+    const amount = Number(nextTotal || 0);
+
+    if (!Number.isFinite(amount)) return;
+
+    setPayments((prev) => {
+      if (!Array.isArray(prev) || prev.length !== 1) return prev;
+
+      return [
+        {
+          ...prev[0],
+          amount: amount > 0 ? formatPaymentAmountValue(amount) : "",
+        },
+      ];
+    });
+  };
+
   const deriveCanOperate = (loadedDetail) => {
     const loadedSale = loadedDetail?.sale || null;
     const loadedSession = loadedDetail?.cash_session || null;
@@ -342,6 +367,8 @@ export default function CashierSaleDetailPage() {
 
   const syncSaleFromDiscountSummary = (summaryData) => {
     if (!summaryData?.sale) return;
+
+    syncSinglePaymentAmountToSaleTotal(summaryData.sale.total);
 
     setDetailData((prev) => {
       if (!prev?.sale) return prev;
