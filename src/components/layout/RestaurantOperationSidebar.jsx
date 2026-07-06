@@ -18,6 +18,7 @@ import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
+import PercentIcon from "@mui/icons-material/Percent";
 import TuneIcon from "@mui/icons-material/Tune";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import StarsOutlinedIcon from "@mui/icons-material/StarsOutlined";
@@ -122,6 +123,7 @@ export default function RestaurantOperationSidebar({
         items: [
           { key: "tables", label: "Mesas", icon: <TableRestaurantIcon /> },
           { key: "cash-registers", label: "Cajas", icon: <PointOfSaleIcon /> },
+          { key: "discounts", label: "Descuentos", icon: <PercentIcon /> },
           { key: "ticket-settings", label: "Tickets", icon: <ReceiptLongIcon /> },
           {
             key: "public-menu-settings",

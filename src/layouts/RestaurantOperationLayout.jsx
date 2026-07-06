@@ -80,6 +80,7 @@ export default function RestaurantOperationLayout() {
     if (pathname.includes("/catalog")) return "catalog";
     if (pathname.includes("/tables")) return "tables";
     if (pathname.includes("/cash-registers")) return "cash-registers";
+    if (pathname.includes("/discounts")) return "discounts";
     if (pathname.includes("/ticket-settings")) return "ticket-settings";
     if (pathname.includes("/customer-loyalty-settings")) {
       return "customer-loyalty-settings";
@@ -231,6 +232,10 @@ export default function RestaurantOperationLayout() {
 
       case "cash-registers":
         nav(`${base}/cash-registers`, { state: { restaurantName } });
+        break;
+
+      case "discounts":
+        nav(`${base}/discounts`, { state: { restaurantName } });
         break;
 
       case "ticket-settings":

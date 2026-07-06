@@ -109,6 +109,7 @@ import PurchaseDetailPage from "../pages/inventory/purchases/PurchaseDetailPage"
 import TicketSettingsPage from "../pages/operation/ticket/TicketSettingsPage";
 import CustomerLoyaltySettingsPage from "../pages/operation/loyalty/CustomerLoyaltySettingsPage";
 import PublicMenuSettingsPage from "../pages/public-menu/PublicMenuSettingsPage";
+import DiscountsPage from "../pages/operation/discounts/DiscountsPage";
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
@@ -238,6 +239,7 @@ export default function AppRoutes() {
           <Route path="tables/qr-codes" element={<BranchQrCodesPage />} />
 
           <Route path="cash-registers" element={<CashRegistersPage />} />
+          <Route path="discounts" element={<DiscountsPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />
           <Route path="public-menu-settings" element={<PublicMenuSettingsPage />} />
           <Route path="customer-loyalty-settings" element={<CustomerLoyaltySettingsPage />} />

@@ -25,6 +25,15 @@ export async function fetchCashierSaleDiscountAudit(saleId) {
   return res?.data;
 }
 
+export async function fetchCashierDiscountAuthorizers() {
+  const res = await staffApi.get(`/staff/cashier/discounts/authorizers`, {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
+}
+
 export async function applyCashierSaleGlobalDiscount(saleId, payload) {
   const res = await staffApi.post(
     `/staff/cashier/sales/${saleId}/discounts/global`,
