@@ -30,6 +30,7 @@ import {
 
 import {
   fetchCashierSaleDiscountSummary,
+  fetchCashierDiscountAuthorizers,
   applyCashierSaleGlobalDiscount,
   removeCashierSaleGlobalDiscount,
   applyCashierSaleItemDiscount,
@@ -74,6 +75,7 @@ import CashierAdjustmentCard from "../../../components/staff/casher/saleDetailPa
 import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage/CashierCustomerCard";
 import CashierSaleOptionalActionsBar from "../../../components/staff/casher/saleDetailPage/CashierSaleOptionalActionsBar";
 import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
+import CashierDiscountAuthorizationDialog from "../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
 import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
 
 export default function CashierSaleDetailPage() {
@@ -138,6 +140,26 @@ export default function CashierSaleDetailPage() {
   const [adjustmentBusy, setAdjustmentBusy] = useState(false);
   const [customerBusy, setCustomerBusy] = useState(false);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
+
+  const [discountAuthorizationOpen, setDiscountAuthorizationOpen] =
+    useState(false);
+  const [discountAuthorizationPolicy, setDiscountAuthorizationPolicy] =
+    useState(null);
+  const [discountAuthorizationMessage, setDiscountAuthorizationMessage] =
+    useState("");
+  const [discountAuthorizationTarget, setDiscountAuthorizationTarget] =
+    useState(null);
+  const [discountAuthorizers, setDiscountAuthorizers] = useState([]);
+  const [discountAuthorizationForm, setDiscountAuthorizationForm] = useState({
+    user_id: "",
+    pin: "",
+  });
+  const [loadingDiscountAuthorizers, setLoadingDiscountAuthorizers] =
+    useState(false);
+  const [authorizingDiscount, setAuthorizingDiscount] = useState(false);
+  const [discountAuthorizationError, setDiscountAuthorizationError] =
+    useState("");
+
 
   const [postPaymentOpen, setPostPaymentOpen] = useState(false);
   const [postPaymentTicket, setPostPaymentTicket] = useState(null);
@@ -204,10 +226,11 @@ export default function CashierSaleDetailPage() {
   const itemsSummary = orderDetail?.items_summary || null;
 
   const pickErr = (e, fallback) =>
-    e?.response?.data?.message || e?.message || fallback;
+  e?.response?.data?.message || e?.message || fallback;
 
   const pickCode = (e) => e?.response?.data?.code;
   const pickData = (e) => e?.response?.data?.data || null;
+  const pickErrorPayload = (e) => e?.response?.data || {};
 
   const createEmptyPayment = (methodId = "") => ({
     localId: `p-${localIdRef.current++}`,
@@ -1167,6 +1190,231 @@ export default function CashierSaleDetailPage() {
     }
   };
 
+  const syncDiscountResponseToState = (res) => {
+    setDiscountSummary(res?.data || null);
+    syncSaleFromDiscountSummary(res?.data || null);
+    setPreview(null);
+  };
+
+  const resetDiscountAuthorizationState = () => {
+    setDiscountAuthorizationOpen(false);
+    setDiscountAuthorizationPolicy(null);
+    setDiscountAuthorizationMessage("");
+    setDiscountAuthorizationTarget(null);
+    setDiscountAuthorizers([]);
+    setDiscountAuthorizationForm({
+      user_id: "",
+      pin: "",
+    });
+    setLoadingDiscountAuthorizers(false);
+    setAuthorizingDiscount(false);
+    setDiscountAuthorizationError("");
+  };
+
+  const handleDiscountAuthorizationFormChange = (field, value) => {
+    setDiscountAuthorizationForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const loadDiscountAuthorizersForAuthorization = async () => {
+    try {
+      setLoadingDiscountAuthorizers(true);
+      setDiscountAuthorizationError("");
+
+      const res = await fetchCashierDiscountAuthorizers();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+
+      setDiscountAuthorizers(rows);
+
+      if (rows.length === 1) {
+        setDiscountAuthorizationForm((prev) => ({
+          ...prev,
+          user_id: String(rows[0]?.user_id || ""),
+        }));
+      }
+
+      if (!rows.length) {
+        setDiscountAuthorizationError(
+          res?.message ||
+            "No hay autorizadores de descuentos disponibles para esta sucursal."
+        );
+      }
+
+      return rows;
+    } catch (e) {
+      setDiscountAuthorizers([]);
+      setDiscountAuthorizationError(
+        pickErr(
+          e,
+          "No se pudieron cargar los autorizadores de descuentos."
+        )
+      );
+      return [];
+    } finally {
+      setLoadingDiscountAuthorizers(false);
+    }
+  };
+
+  const openDiscountAuthorizationModal = async ({
+    error,
+    target,
+    fallbackMessage,
+  }) => {
+    const payload = pickErrorPayload(error);
+
+    setDiscountAuthorizationTarget(target);
+    setDiscountAuthorizationPolicy(payload?.discount_policy || null);
+    setDiscountAuthorizationMessage(
+      payload?.message ||
+        fallbackMessage ||
+        "Este descuento requiere autorización."
+    );
+    setDiscountAuthorizationForm({
+      user_id: "",
+      pin: "",
+    });
+    setDiscountAuthorizationError("");
+    setDiscountAuthorizationOpen(true);
+
+    await loadDiscountAuthorizersForAuthorization();
+  };
+
+  const maybeHandleDiscountAuthorizationRequired = async ({
+    error,
+    target,
+    fallbackMessage,
+  }) => {
+    if (pickCode(error) !== "DISCOUNT_AUTHORIZATION_REQUIRED") {
+      return false;
+    }
+
+    await openDiscountAuthorizationModal({
+      error,
+      target,
+      fallbackMessage,
+    });
+
+    return true;
+  };
+
+  const handleCloseDiscountAuthorization = () => {
+    if (authorizingDiscount) return;
+    resetDiscountAuthorizationState();
+  };
+
+  const buildAuthorizationErrorMessage = (e) => {
+    const payload = pickErrorPayload(e);
+    const authorizationError = payload?.authorization_error || {};
+
+    return (
+      authorizationError?.message ||
+      authorizationError?.failure_message ||
+      payload?.message ||
+      "La autorización no es válida."
+    );
+  };
+
+  const handleSubmitDiscountAuthorization = async () => {
+    if (!discountAuthorizationTarget) {
+      setDiscountAuthorizationError(
+        "No se encontró el descuento pendiente de autorización."
+      );
+      return;
+    }
+
+    if (!discountAuthorizationForm.user_id) {
+      setDiscountAuthorizationError("Selecciona un autorizador.");
+      return;
+    }
+
+    if (!String(discountAuthorizationForm.pin || "").trim()) {
+      setDiscountAuthorizationError("Ingresa el PIN del autorizador.");
+      return;
+    }
+
+    const authorizedPayload = {
+      ...(discountAuthorizationTarget.payload || {}),
+      authorization: {
+        user_id: Number(discountAuthorizationForm.user_id),
+        pin: String(discountAuthorizationForm.pin || "").trim(),
+      },
+    };
+
+    try {
+      setAuthorizingDiscount(true);
+      setDiscountAuthorizationError("");
+
+      let res = null;
+
+      if (discountAuthorizationTarget.scope === "global") {
+        res = await applyCashierSaleGlobalDiscount(
+          sale.sale_id,
+          authorizedPayload
+        );
+      }
+
+      if (discountAuthorizationTarget.scope === "item") {
+        res = await applyCashierSaleItemDiscount(
+          sale.sale_id,
+          Number(discountAuthorizationTarget.orderItemId || 0),
+          authorizedPayload
+        );
+      }
+
+      syncDiscountResponseToState(res);
+
+      if (
+        discountAuthorizationTarget.scope === "item" &&
+        discountAuthorizationTarget.draftLocalId
+      ) {
+        setItemDiscountDrafts((prev) =>
+          prev.filter(
+            (row) => row.localId !== discountAuthorizationTarget.draftLocalId
+          )
+        );
+      }
+
+      resetDiscountAuthorizationState();
+
+      showAlert({
+        severity: "success",
+        message:
+          res?.message ||
+          "Descuento autorizado y aplicado correctamente.",
+      });
+    } catch (e) {
+      const code = pickCode(e);
+
+      if (code === "DISCOUNT_AUTHORIZATION_INVALID") {
+        setDiscountAuthorizationError(buildAuthorizationErrorMessage(e));
+        return;
+      }
+
+      if (code === "DISCOUNT_AUTHORIZATION_REQUIRED") {
+        const payload = pickErrorPayload(e);
+
+        setDiscountAuthorizationPolicy(payload?.discount_policy || null);
+        setDiscountAuthorizationMessage(
+          payload?.message ||
+            "Este descuento requiere autorización."
+        );
+        setDiscountAuthorizationError(
+          "Verifica el autorizador y el PIN para continuar."
+        );
+        return;
+      }
+
+      setDiscountAuthorizationError(
+        pickErr(e, "No se pudo aplicar el descuento autorizado.")
+      );
+    } finally {
+      setAuthorizingDiscount(false);
+    }
+  };
+
+
   const validateDiscountPayload = (type, value, scopeLabel) => {
     if (!canOperate) {
       showAlert({
@@ -1195,29 +1443,58 @@ export default function CashierSaleDetailPage() {
     return true;
   };
 
-  const handleApplyGlobalDiscount = async () => {
+ const handleApplyGlobalDiscount = async () => {
     const { type, value, reason } = globalDiscountForm;
 
     if (!validateDiscountPayload(type, value, "el descuento total")) return;
 
+    const payload = {
+      type,
+      value: Number(value || 0),
+      reason: reason?.trim() || null,
+    };
+
     try {
       setDiscountBusy(true);
 
-      const res = await applyCashierSaleGlobalDiscount(sale.sale_id, {
-        type,
-        value: Number(value || 0),
-        reason: reason?.trim() || null,
-      });
+      const res = await applyCashierSaleGlobalDiscount(
+        sale.sale_id,
+        payload
+      );
 
-      setDiscountSummary(res?.data || null);
-      syncSaleFromDiscountSummary(res?.data || null);
-      setPreview(null);
+      syncDiscountResponseToState(res);
 
       showAlert({
         severity: "success",
         message: res?.message || "Descuento global aplicado correctamente.",
       });
     } catch (e) {
+
+      const authorizationOpened =
+        await maybeHandleDiscountAuthorizationRequired({
+          error: e,
+          target: {
+            scope: "global",
+            payload,
+          },
+          fallbackMessage:
+            "Este descuento global requiere autorización.",
+        });
+
+      if (authorizationOpened) return;
+      const code = pickCode(e);
+
+      if (
+        code === "MOTIVO_DESCUENTO_REQUERIDO" ||
+        code === "DISCOUNT_BLOCKED"
+      ) {
+        showAlert({
+          severity: "warning",
+          message: pickErr(e, "El descuento no puede aplicarse con los datos actuales."),
+        });
+        return;
+      }
+
       showAlert({
         severity: "error",
         message: pickErr(e, "No se pudo aplicar el descuento global."),
@@ -1272,9 +1549,21 @@ export default function CashierSaleDetailPage() {
       return;
     }
 
-    if (!validateDiscountPayload(draft.type, draft.value, "el descuento por ítem")) {
+    if (
+      !validateDiscountPayload(
+        draft.type,
+        draft.value,
+        "el descuento por ítem"
+      )
+    ) {
       return;
     }
+
+    const payload = {
+      type: draft.type,
+      value: Number(draft.value || 0),
+      reason: draft.reason?.trim() || null,
+    };
 
     try {
       setDiscountBusy(true);
@@ -1282,29 +1571,52 @@ export default function CashierSaleDetailPage() {
       const res = await applyCashierSaleItemDiscount(
         sale.sale_id,
         orderItemId,
-        {
-          type: draft.type,
-          value: Number(draft.value || 0),
-          reason: draft.reason?.trim() || null,
-        }
+        payload
       );
 
-      setDiscountSummary(res?.data || null);
-      syncSaleFromDiscountSummary(res?.data || null);
+      syncDiscountResponseToState(res);
+
       setItemDiscountDrafts((prev) =>
         prev.filter((row) => row.localId !== localId)
       );
-      setPreview(null);
 
       showAlert({
         severity: "success",
         message: res?.message || "Descuento por ítem aplicado correctamente.",
       });
     } catch (e) {
-      showAlert({
-        severity: "error",
-        message: pickErr(e, "No se pudo aplicar el descuento por ítem."),
-      });
+      const authorizationOpened =
+        await maybeHandleDiscountAuthorizationRequired({
+          error: e,
+          target: {
+            scope: "item",
+            orderItemId,
+            draftLocalId: localId,
+            payload,
+          },
+          fallbackMessage:
+            "Este descuento por ítem requiere autorización.",
+        });
+
+        if (authorizationOpened) return;
+
+        const code = pickCode(e);
+
+        if (
+          code === "MOTIVO_DESCUENTO_REQUERIDO" ||
+          code === "DISCOUNT_BLOCKED"
+        ) {
+          showAlert({
+            severity: "warning",
+            message: pickErr(e, "El descuento no puede aplicarse con los datos actuales."),
+          });
+          return;
+        }
+
+        showAlert({
+          severity: "error",
+          message: pickErr(e, "No se pudo aplicar el descuento por ítem."),
+        });
     } finally {
       setDiscountBusy(false);
     }
@@ -1869,7 +2181,22 @@ export default function CashierSaleDetailPage() {
         />
       </CashierSaleToolDialog>
 
+      <CashierDiscountAuthorizationDialog
+        open={discountAuthorizationOpen}
+        onClose={handleCloseDiscountAuthorization}
+        onSubmit={handleSubmitDiscountAuthorization}
+        authorizers={discountAuthorizers}
+        form={discountAuthorizationForm}
+        onFormChange={handleDiscountAuthorizationFormChange}
+        loading={loadingDiscountAuthorizers}
+        busy={authorizingDiscount}
+        error={discountAuthorizationError}
+        message={discountAuthorizationMessage}
+        policy={discountAuthorizationPolicy}
+      />
+
       <CashierPostPaymentTicketModal
+
         open={postPaymentOpen}
         onClose={handleClosePostPayment}
         onContinue={handleContinueToQueue}
