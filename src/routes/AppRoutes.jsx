@@ -81,6 +81,7 @@ import BranchesPage from "../pages/restaurant/BranchesPage";
 
 //Menu y así
 import MenuManager from "../pages/menu/MenuManager";
+import PromotionsPage from "../pages/menu/promotions/PromotionsPage";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductVariantsPage from "../pages/products/products_variants/ProductVariantsPage";
 import ProductCompositionPage from "../pages/products/ProductCompositionPage";
@@ -229,6 +230,8 @@ export default function AppRoutes() {
 
           <Route path="catalog" element={<BranchCatalogPage />} /> 
 
+          <Route path="promotions" element={<PromotionsPage />} />
+          
           <Route path="modifiers" element={<ModifierManager />} />
           <Route path="modifiers/catalogs/products" element={<ProductModifierCatalogPage />} />
           <Route path="modifiers/catalogs/variants" element={<VariantModifierCatalogPage />} />

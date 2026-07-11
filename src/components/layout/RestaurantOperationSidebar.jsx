@@ -16,6 +16,7 @@ import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import CategoryIcon from "@mui/icons-material/Category";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import PercentIcon from "@mui/icons-material/Percent";
@@ -107,6 +108,11 @@ export default function RestaurantOperationSidebar({
             key: "branch-sales-channels",
             label: "Canales de venta por sucursal",
             icon: <CampaignIcon />,
+          },
+          {
+            key: "promotions",
+            label: "Promociones",
+            icon: <LocalOfferOutlinedIcon />,
           },
           {
             key: "modifiers",
