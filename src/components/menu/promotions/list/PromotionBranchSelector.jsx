@@ -1,18 +1,22 @@
 import {
-  Box, MenuItem, Paper, Stack, TextField, Typography,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
-import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 export default function PromotionBranchSelector({
-  branches,
+  branches = [],
   value,
   onChange,
   disabled = false,
 }) {
-  const selectedBranch = branches.find(
-    (branch) => String(branch.id) === String(value)
-  );
+  const selectedBranch =
+    branches.find(
+      (branch) => String(branch.id) === String(value)
+    ) || null;
 
   return (
     <Paper
@@ -25,54 +29,18 @@ export default function PromotionBranchSelector({
         boxShadow: "none",
       }}
     >
-      <Stack spacing={1.75}>
-        <Stack
-          direction="row"
-          spacing={1}
-          alignItems="center"
-        >
-          <Box
-            sx={{
-              width: 34,
-              height: 34,
-              borderRadius: 1,
-              display: "grid",
-              placeItems: "center",
-              bgcolor: "rgba(255, 152, 0, 0.12)",
-              color: "primary.main",
-              flexShrink: 0,
-            }}
-          >
-            <StorefrontOutlinedIcon fontSize="small" />
-          </Box>
-
-          <Box>
-            <Typography
-              sx={{
-                fontSize: 15,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Sucursal
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.25,
-                fontSize: 12,
-                color: "text.secondary",
-              }}
-            >
-              Selecciona la sucursal que deseas administrar.
-            </Typography>
-          </Box>
-        </Stack>
+      <Stack spacing={1.25}>
+        <Typography sx={fieldLabelSx}>
+          Sucursal
+        </Typography>
 
         <TextField
           select
           value={value || ""}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) =>
+            onChange(event.target.value)
+          }
+          fullWidth
           disabled={disabled || branches.length === 0}
           SelectProps={{
             IconComponent: KeyboardArrowDownIcon,
@@ -83,23 +51,39 @@ export default function PromotionBranchSelector({
               key={branch.id}
               value={String(branch.id)}
             >
-              {branch.name}
+              {branch.name || `Sucursal ${branch.id}`}
             </MenuItem>
           ))}
         </TextField>
 
         <Typography
           sx={{
-            fontSize: 13,
+            fontSize: 12,
             color: "text.secondary",
-            lineHeight: 1.5,
           }}
         >
-          {selectedBranch
-            ? `Estás administrando las promociones de ${selectedBranch.name}.`
-            : "No hay una sucursal seleccionada."}
+          Estás administrando las promociones de{" "}
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 12,
+              color: "primary.main",
+              fontWeight: 800,
+            }}
+          >
+            {selectedBranch?.name ||
+              "la sucursal seleccionada"}
+          </Typography>
+          .
         </Typography>
       </Stack>
     </Paper>
   );
 }
+
+const fieldLabelSx = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "text.primary",
+  mb: 1,
+};

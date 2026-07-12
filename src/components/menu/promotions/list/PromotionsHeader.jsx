@@ -1,85 +1,71 @@
 import {
-  Box, Button, Chip, Stack, Typography,
+  Box,
+  Button,
+  Stack,
+  Typography,
 } from "@mui/material";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
-import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 
 export default function PromotionsHeader({
   branchName,
   onCreate,
 }) {
   return (
-    <Stack spacing={2.5}>
-      <Stack
-        direction={{ xs: "column", lg: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", lg: "center" }}
-        spacing={2}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Stack
-            direction="row"
-            spacing={1.25}
-            alignItems="center"
-            flexWrap="wrap"
-          >
-            <Box
-              sx={{
-                width: 42,
-                height: 42,
-                borderRadius: 1,
-                display: "grid",
-                placeItems: "center",
-                bgcolor: "rgba(255, 152, 0, 0.12)",
-                color: "primary.main",
-                flexShrink: 0,
-              }}
-            >
-              <LocalOfferOutlinedIcon />
-            </Box>
+    <Stack
+      direction={{ xs: "column", md: "row" }}
+      justifyContent="space-between"
+      alignItems={{ xs: "flex-start", md: "center" }}
+      spacing={2}
+    >
+      <Box>
+        <Typography
+          sx={{
+            fontSize: { xs: 30, md: 42 },
+            fontWeight: 800,
+            color: "text.primary",
+            lineHeight: 1.1,
+          }}
+        >
+          Promociones
+        </Typography>
 
-            <Typography
-              sx={{
-                fontSize: { xs: 30, md: 42 },
-                fontWeight: 800,
-                color: "text.primary",
-                lineHeight: 1.1,
-              }}
-            >
-              Promociones
-            </Typography>
-
-            {branchName ? (
-              <Chip
-                label={branchName}
-                size="small"
-                color="primary"
-                variant="outlined"
-              />
-            ) : null}
-          </Stack>
-
-          <Typography
+        <Typography
+          sx={{
+            mt: 1,
+            color: "text.secondary",
+            fontSize: { xs: 14, md: 17 },
+            lineHeight: 1.55,
+          }}
+        >
+          Configura las promociones automáticas de{" "}
+          <Box
+            component="span"
             sx={{
-              mt: 1,
-              color: "text.secondary",
-              fontSize: { xs: 14, md: 17 },
-              lineHeight: 1.55,
+              color: "primary.main",
+              fontWeight: 800,
             }}
           >
-            Configura promociones automáticas por sucursal,
-            canal, producto, fecha y horario.
-          </Typography>
-        </Box>
+            {branchName || "la sucursal seleccionada"}
+          </Box>
+          .
+        </Typography>
+      </Box>
 
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ width: { xs: "100%", md: "auto" } }}
+      >
         <Button
           type="button"
+          onClick={onCreate}
           variant="contained"
           startIcon={<AddOutlinedIcon />}
-          onClick={onCreate}
           sx={{
             minWidth: { xs: "100%", sm: 190 },
-            flexShrink: 0,
+            height: 44,
+            borderRadius: 2,
+            fontWeight: 800,
           }}
         >
           Crear promoción

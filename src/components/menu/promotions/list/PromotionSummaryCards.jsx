@@ -1,5 +1,5 @@
 import {
-  Box, Chip, Stack, Typography,
+  Box, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
@@ -45,25 +45,53 @@ export default function PromotionSummaryCards({
   summary,
 }) {
   return (
-    <Box
+    <Paper
       sx={{
-        display: "grid",
-        gridTemplateColumns: {
-          xs: "1fr",
-          sm: "repeat(2, minmax(0, 1fr))",
-          lg: "repeat(4, minmax(0, 1fr))",
-        },
-        gap: 2,
+        p: { xs: 2, sm: 2.5 },
+        borderRadius: 1,
+        backgroundColor: "background.paper",
+        border: "1px solid",
+        borderColor: "divider",
+        boxShadow: "none",
       }}
     >
-      {ITEMS.map((item) => (
-        <SummaryCard
-          key={item.key}
-          {...item}
-          value={summary?.[item.key] || 0}
-        />
-      ))}
-    </Box>
+      <Stack spacing={2}>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 800,
+            color: "text.primary",
+          }}
+        >
+          Contexto actual
+        </Typography>
+
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.5}
+          useFlexGap
+          flexWrap="wrap"
+        >
+          {ITEMS.map((item) => (
+            <SummaryCard
+              key={item.key}
+              {...item}
+              value={summary?.[item.key] || 0}
+            />
+          ))}
+        </Stack>
+
+        <Typography
+          sx={{
+            fontSize: 13,
+            color: "text.secondary",
+            lineHeight: 1.6,
+          }}
+        >
+          El resumen corresponde al tipo de promoción seleccionado.
+        </Typography>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -78,16 +106,16 @@ function SummaryCard({
   return (
     <Box
       sx={{
+        flex: "1 1 240px",
+        minWidth: 220,
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
         p: 1.75,
-        backgroundColor: "background.paper",
-        minHeight: 160,
-        height: "100%",
+        backgroundColor: "background.default",
       }}
     >
-      <Stack spacing={1.25} sx={{ height: "100%" }}>
+      <Stack spacing={1}>
         <Stack
           direction="row"
           alignItems="center"
@@ -97,7 +125,7 @@ function SummaryCard({
             sx={{
               width: 34,
               height: 34,
-              borderRadius: 1,
+              borderRadius: 1.5,
               display: "grid",
               placeItems: "center",
               bgcolor: "rgba(255, 152, 0, 0.12)",
@@ -121,10 +149,10 @@ function SummaryCard({
 
         <Typography
           sx={{
-            fontSize: 28,
-            fontWeight: 900,
+            fontSize: 14,
             color: "text.primary",
-            lineHeight: 1.1,
+            lineHeight: 1.45,
+            minHeight: 42,
           }}
         >
           {value}
@@ -135,13 +163,12 @@ function SummaryCard({
             fontSize: 12,
             color: "text.secondary",
             lineHeight: 1.45,
-            minHeight: 34,
           }}
         >
           {helper}
         </Typography>
 
-        <Box sx={{ mt: "auto" }}>
+        <Box>
           <Chip
             label={chipLabel}
             size="small"

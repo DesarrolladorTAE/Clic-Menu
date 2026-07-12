@@ -30,7 +30,6 @@ import {
 import {
   getPromotionSearchText,
   isPromotionCurrent,
-  PROMOTION_TYPES,
 } from "../../../components/menu/promotions/list/promotionList.helpers";
 
 const ITEMS_PER_PAGE = 5;
@@ -208,28 +207,6 @@ export default function PromotionsPage() {
       ) || null
     );
   }, [branches, selectedBranchId]);
-
-  const typeCounters = useMemo(() => {
-    return PROMOTION_TYPES.reduce(
-      (result, type) => {
-        const typePromotions = promotions.filter(
-          (promotion) =>
-            promotion?.type === type.value
-        );
-
-        result[type.value] = {
-          total: typePromotions.length,
-          active: typePromotions.filter(
-            (promotion) =>
-              promotion?.status === "active"
-          ).length,
-        };
-
-        return result;
-      },
-      {}
-    );
-  }, [promotions]);
 
   const selectedTypePromotions = useMemo(() => {
     return promotions.filter(
@@ -556,7 +533,6 @@ export default function PromotionsPage() {
             <PromotionTypeSelector
               value={activeType}
               onChange={setActiveType}
-              counters={typeCounters}
             />
 
             <PromotionSummaryCards
