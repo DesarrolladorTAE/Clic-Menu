@@ -32,8 +32,7 @@ export default function PromotionChannelsSchedulesStep({
       sx={{
         p: { xs: 2, sm: 3 },
         borderRadius: 1,
-        backgroundColor:
-          "background.paper",
+        backgroundColor: "background.paper",
         border: "1px solid",
         borderColor: "divider",
         boxShadow: "none",
@@ -64,8 +63,7 @@ export default function PromotionChannelsSchedulesStep({
             lineHeight: 1.5,
           }}
         >
-          Selecciona al menos un canal activo de la
-          sucursal.
+          Selecciona al menos un canal activo de la sucursal.
         </Typography>
 
         {loading ? (
@@ -79,8 +77,7 @@ export default function PromotionChannelsSchedulesStep({
             <Typography
               sx={{
                 fontSize: 13,
-                color:
-                  "text.secondary",
+                color: "text.secondary",
               }}
             >
               Cargando canales disponibles…
@@ -93,8 +90,7 @@ export default function PromotionChannelsSchedulesStep({
               borderRadius: 1,
               border: "1px solid",
               borderColor: "divider",
-              backgroundColor:
-                "background.default",
+              backgroundColor: "background.default",
             }}
           >
             <Typography
@@ -111,12 +107,10 @@ export default function PromotionChannelsSchedulesStep({
               sx={{
                 mt: 0.5,
                 fontSize: 13,
-                color:
-                  "text.secondary",
+                color: "text.secondary",
               }}
             >
-              Activa al menos un canal de venta para
-              esta sucursal.
+              Activa al menos un canal de venta para esta sucursal.
             </Typography>
           </Box>
         ) : (
@@ -132,69 +126,57 @@ export default function PromotionChannelsSchedulesStep({
             }}
           >
             {channels.map((channel) => {
-              const checked =
-                selectedChannelIds.some(
-                  (channelId) =>
-                    Number(channelId) ===
-                    Number(
-                      channel.branch_sales_channel_id
-                    )
-                );
+              const checked = selectedChannelIds.some(
+                (channelId) =>
+                  Number(channelId) ===
+                  Number(channel.branch_sales_channel_id)
+              );
 
               return (
                 <Box
-                  key={
-                    channel.branch_sales_channel_id
-                  }
+                  key={channel.branch_sales_channel_id}
                   sx={{
-                    border:
-                      "1px solid",
+                    border: "1px solid",
                     borderColor: checked
-                      ? "primary.main"
+                      ? "secondary.main"
                       : "divider",
                     borderRadius: 1,
                     p: 1.5,
-                    backgroundColor:
-                      checked
-                        ? "rgba(255, 152, 0, 0.07)"
-                        : "background.default",
+                    backgroundColor: checked
+                      ? "rgba(214, 122, 58, 0.10)"
+                      : "background.default",
                     minHeight: 82,
+                    transition:
+                      "border-color 0.18s ease, background-color 0.18s ease",
                   }}
                 >
                   <FormControlLabel
                     sx={{
                       m: 0,
                       width: "100%",
-                      alignItems:
-                        "flex-start",
+                      alignItems: "flex-start",
                     }}
                     control={
                       <Checkbox
                         checked={checked}
-                        onChange={(
-                          event
-                        ) =>
+                        onChange={(event) =>
                           onToggleChannel(
                             channel,
-                            event.target
-                              .checked
+                            event.target.checked
                           )
                         }
-                        color="primary"
+                        color="secondary"
                       />
                     }
                     label={
-                      <Box
-                        sx={{
-                          pt: 0.75,
-                        }}
-                      >
+                      <Box sx={{ pt: 0.75 }}>
                         <Typography
                           sx={{
                             fontSize: 14,
                             fontWeight: 800,
-                            color:
-                              "text.primary",
+                            color: checked
+                              ? "secondary.main"
+                              : "text.primary",
                           }}
                         >
                           {channel.name}
@@ -204,8 +186,7 @@ export default function PromotionChannelsSchedulesStep({
                           sx={{
                             mt: 0.25,
                             fontSize: 12,
-                            color:
-                              "text.secondary",
+                            color: "text.secondary",
                           }}
                         >
                           Canal activo de la sucursal
@@ -235,9 +216,7 @@ export default function PromotionChannelsSchedulesStep({
             type="button"
             variant="outlined"
             color="secondary"
-            onClick={() =>
-              onSetAllSchedules(false)
-            }
+            onClick={() => onSetAllSchedules(false)}
           >
             Desactivar todos
           </Button>
@@ -246,9 +225,7 @@ export default function PromotionChannelsSchedulesStep({
             type="button"
             variant="outlined"
             color="secondary"
-            onClick={() =>
-              onSetAllSchedules(true)
-            }
+            onClick={() => onSetAllSchedules(true)}
           >
             Activar todos
           </Button>
@@ -259,13 +236,9 @@ export default function PromotionChannelsSchedulesStep({
             const schedule =
               schedules.find(
                 (item) =>
-                  Number(
-                    item.day_of_week
-                  ) ===
-                  Number(day.value)
+                  Number(item.day_of_week) === Number(day.value)
               ) || {
-                day_of_week:
-                  day.value,
+                day_of_week: day.value,
                 enabled: false,
                 start_time: "00:00",
                 end_time: "23:59",
@@ -276,17 +249,14 @@ export default function PromotionChannelsSchedulesStep({
                 key={day.value}
                 sx={{
                   p: 1.75,
-                  border:
-                    "1px solid",
-                  borderColor:
-                    schedule.enabled
-                      ? "secondary.main"
-                      : "divider",
+                  border: "1px solid",
+                  borderColor: schedule.enabled
+                    ? "secondary.main"
+                    : "divider",
                   borderRadius: 1,
-                  backgroundColor:
-                    schedule.enabled
-                      ? "#FFFFFF"
-                      : "background.default",
+                  backgroundColor: schedule.enabled
+                    ? "#FFFFFF"
+                    : "background.default",
                   transition:
                     "border-color 0.18s ease, background-color 0.18s ease",
                 }}
@@ -308,17 +278,12 @@ export default function PromotionChannelsSchedulesStep({
                       sx={{ m: 0 }}
                       control={
                         <Switch
-                          checked={
-                            !!schedule.enabled
-                          }
-                          onChange={(
-                            event
-                          ) =>
+                          checked={!!schedule.enabled}
+                          onChange={(event) =>
                             onScheduleChange(
                               day.value,
                               "enabled",
-                              event.target
-                                .checked
+                              event.target.checked
                             )
                           }
                           color="secondary"
@@ -329,13 +294,10 @@ export default function PromotionChannelsSchedulesStep({
                           sx={{
                             fontSize: 14,
                             fontWeight: 800,
-                            color:
-                              "text.primary",
+                            color: "text.primary",
                           }}
                         >
-                          {getPromotionDayLabel(
-                            day.value
-                          )}
+                          {getPromotionDayLabel(day.value)}
                         </Typography>
                       }
                     />
@@ -344,9 +306,7 @@ export default function PromotionChannelsSchedulesStep({
                       type="button"
                       variant="outlined"
                       color="secondary"
-                      disabled={
-                        !schedule.enabled
-                      }
+                      disabled={!schedule.enabled}
                       onClick={() => {
                         onScheduleChange(
                           day.value,
@@ -382,8 +342,7 @@ export default function PromotionChannelsSchedulesStep({
                         sx={{
                           fontSize: 13,
                           fontWeight: 800,
-                          color:
-                            "text.primary",
+                          color: "text.primary",
                           mb: 0.75,
                         }}
                       >
@@ -392,40 +351,29 @@ export default function PromotionChannelsSchedulesStep({
 
                       <TextField
                         type="time"
-                        value={
-                          schedule.start_time
-                        }
-                        onChange={(
-                          event
-                        ) =>
+                        value={schedule.start_time}
+                        onChange={(event) =>
                           onScheduleChange(
                             day.value,
                             "start_time",
-                            event.target
-                              .value
+                            event.target.value
                           )
                         }
-                        disabled={
-                          !schedule.enabled
-                        }
+                        disabled={!schedule.enabled}
                         inputProps={{
                           step: 60,
                         }}
                         sx={{
-                          "& .MuiOutlinedInput-root":
-                            {
-                              backgroundColor:
-                                schedule.enabled
-                                  ? "background.default"
-                                  : undefined,
-                              "&.Mui-focused .MuiOutlinedInput-notchedOutline":
-                                {
-                                  border:
-                                    "1.5px solid",
-                                  borderColor:
-                                    "secondary.main",
-                                },
-                            },
+                          "& .MuiOutlinedInput-root": {
+                            backgroundColor: schedule.enabled
+                              ? "background.default"
+                              : undefined,
+                            "&.Mui-focused .MuiOutlinedInput-notchedOutline":
+                              {
+                                border: "1.5px solid",
+                                borderColor: "secondary.main",
+                              },
+                          },
                         }}
                       />
                     </Box>
@@ -440,8 +388,7 @@ export default function PromotionChannelsSchedulesStep({
                         sx={{
                           fontSize: 13,
                           fontWeight: 800,
-                          color:
-                            "text.primary",
+                          color: "text.primary",
                           mb: 0.75,
                         }}
                       >
@@ -450,40 +397,29 @@ export default function PromotionChannelsSchedulesStep({
 
                       <TextField
                         type="time"
-                        value={
-                          schedule.end_time
-                        }
-                        onChange={(
-                          event
-                        ) =>
+                        value={schedule.end_time}
+                        onChange={(event) =>
                           onScheduleChange(
                             day.value,
                             "end_time",
-                            event.target
-                              .value
+                            event.target.value
                           )
                         }
-                        disabled={
-                          !schedule.enabled
-                        }
+                        disabled={!schedule.enabled}
                         inputProps={{
                           step: 60,
                         }}
                         sx={{
-                          "& .MuiOutlinedInput-root":
-                            {
-                              backgroundColor:
-                                schedule.enabled
-                                  ? "background.default"
-                                  : undefined,
-                              "&.Mui-focused .MuiOutlinedInput-notchedOutline":
-                                {
-                                  border:
-                                    "1.5px solid",
-                                  borderColor:
-                                    "secondary.main",
-                                },
-                            },
+                          "& .MuiOutlinedInput-root": {
+                            backgroundColor: schedule.enabled
+                              ? "background.default"
+                              : undefined,
+                            "&.Mui-focused .MuiOutlinedInput-notchedOutline":
+                              {
+                                border: "1.5px solid",
+                                borderColor: "secondary.main",
+                              },
+                          },
                         }}
                       />
                     </Box>

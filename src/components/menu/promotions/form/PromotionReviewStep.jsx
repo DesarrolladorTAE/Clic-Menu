@@ -5,6 +5,12 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import PaginationFooter from "../../../common/PaginationFooter";
 
 import {
   formatPromotionCurrency,
@@ -12,6 +18,8 @@ import {
   getPromotionTargetLabel,
   getPromotionTypeLabel,
 } from "./promotionForm.helpers";
+
+const ITEMS_PER_PAGE = 5;
 
 export default function PromotionReviewStep({
   form,
@@ -45,11 +53,14 @@ export default function PromotionReviewStep({
         boxShadow: "none",
       }}
     >
-      <Stack spacing={3}>
+      <Stack spacing={2}>
         <Box>
           <Typography
             sx={{
-              fontSize: { xs: 18, sm: 20 },
+              fontSize: {
+                xs: 18,
+                sm: 20,
+              },
               fontWeight: 800,
               color: "text.primary",
             }}
@@ -133,6 +144,14 @@ export default function PromotionReviewStep({
                   label={channel.name}
                   color="primary"
                   variant="outlined"
+                  size="small"
+                  sx={{
+                    backgroundColor:
+                      "rgba(255, 152, 0, 0.06)",
+                    borderColor:
+                      "rgba(255, 152, 0, 0.45)",
+                    fontWeight: 700,
+                  }}
                 />
               )
             )}
@@ -140,55 +159,65 @@ export default function PromotionReviewStep({
         </ReviewSection>
 
         <ReviewSection title="Horarios">
-          <Stack spacing={1}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(3, minmax(0, 1fr))",
+              },
+              gap: 1,
+            }}
+          >
             {enabledSchedules.map(
               (schedule) => (
-                <Typography
+                <Box
                   key={schedule.day_of_week}
                   sx={{
-                    fontSize: 13,
-                    color: "text.primary",
+                    px: 1.25,
+                    py: 1,
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor:
+                      "rgba(255, 152, 0, 0.18)",
+                    backgroundColor:
+                      "rgba(255, 152, 0, 0.035)",
                   }}
                 >
                   <Typography
-                    component="span"
                     sx={{
                       fontSize: 13,
-                      fontWeight: 800,
-                      color:
-                        "text.primary",
+                      color: "text.secondary",
                     }}
                   >
-                    {getPromotionDayLabel(
-                      schedule.day_of_week
-                    )}
-                    :
-                  </Typography>{" "}
-                  {schedule.start_time} a{" "}
-                  {schedule.end_time}
-                </Typography>
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color:
+                          "text.primary",
+                      }}
+                    >
+                      {getPromotionDayLabel(
+                        schedule.day_of_week
+                      )}
+                      :
+                    </Typography>{" "}
+                    {schedule.start_time} a{" "}
+                    {schedule.end_time}
+                  </Typography>
+                </Box>
               )
             )}
-          </Stack>
+          </Box>
         </ReviewSection>
 
         <ReviewSection title="Productos participantes">
-          <Stack
-            direction="row"
-            spacing={1}
-            useFlexGap
-            flexWrap="wrap"
-          >
-            {form.targets.map((target) => (
-              <Chip
-                key={target.target_key}
-                label={getPromotionTargetLabel(
-                  target
-                )}
-                variant="outlined"
-              />
-            ))}
-          </Stack>
+          <ParticipantsSummary
+            targets={form.targets}
+          />
         </ReviewSection>
 
         <ReviewSection title="Regla configurada">
@@ -202,75 +231,307 @@ export default function PromotionReviewStep({
   );
 }
 
-function RuleSummary({ form, channels }) {
-  if (form.type === "promotional_price") {
-    return (
-      <Stack spacing={1.5}>
-        {form.targets.map((target) => (
-          <Box
-            key={target.target_key}
-            sx={{
-              p: 1.5,
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor:
-                "background.default",
-            }}
-          >
-            <Typography
+function ParticipantsSummary({
+  targets,
+}) {
+  const [page, setPage] =
+    useState(1);
+
+  const safeTargets = Array.isArray(
+    targets
+  )
+    ? targets
+    : [];
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      safeTargets.length /
+        ITEMS_PER_PAGE
+    )
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [safeTargets.length]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const startIndex =
+    (page - 1) * ITEMS_PER_PAGE;
+
+  const paginatedTargets =
+    safeTargets.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
+
+  const startItem =
+    safeTargets.length === 0
+      ? 0
+      : startIndex + 1;
+
+  const endItem = Math.min(
+    startIndex + ITEMS_PER_PAGE,
+    safeTargets.length
+  );
+
+  return (
+    <Stack spacing={1.5}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, minmax(0, 1fr))",
+            lg: "repeat(3, minmax(0, 1fr))",
+          },
+          gap: 1,
+        }}
+      >
+        {paginatedTargets.map(
+          (target) => (
+            <Box
+              key={target.target_key}
               sx={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
+                px: 1.25,
+                py: 0.9,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor:
+                  "rgba(255, 152, 0, 0.18)",
+                backgroundColor:
+                  "rgba(255, 152, 0, 0.035)",
+                minWidth: 0,
               }}
             >
-              {getPromotionTargetLabel(target)}
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: "text.primary",
+                  lineHeight: 1.4,
+                  wordBreak: "break-word",
+                }}
+              >
+                {getPromotionTargetLabel(
+                  target
+                )}
+              </Typography>
+            </Box>
+          )
+        )}
+      </Box>
 
-            <Stack
-              spacing={0.5}
-              sx={{ mt: 1 }}
+      {safeTargets.length >
+      ITEMS_PER_PAGE ? (
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={safeTargets.length}
+          hasPrev={page > 1}
+          hasNext={page < totalPages}
+          onPrev={() =>
+            setPage((current) =>
+              Math.max(
+                1,
+                current - 1
+              )
+            )
+          }
+          onNext={() =>
+            setPage((current) =>
+              Math.min(
+                totalPages,
+                current + 1
+              )
+            )
+          }
+          itemLabel="participantes"
+        />
+      ) : null}
+    </Stack>
+  );
+}
+
+function RuleSummary({
+  form,
+  channels,
+}) {
+  const [page, setPage] =
+    useState(1);
+
+  const targets = Array.isArray(
+    form.targets
+  )
+    ? form.targets
+    : [];
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      targets.length /
+        ITEMS_PER_PAGE
+    )
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    form.type,
+    targets.length,
+  ]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  if (
+    form.type ===
+    "promotional_price"
+  ) {
+    const startIndex =
+      (page - 1) * ITEMS_PER_PAGE;
+
+    const paginatedTargets =
+      targets.slice(
+        startIndex,
+        startIndex +
+          ITEMS_PER_PAGE
+      );
+
+    const startItem =
+      targets.length === 0
+        ? 0
+        : startIndex + 1;
+
+    const endItem = Math.min(
+      startIndex + ITEMS_PER_PAGE,
+      targets.length
+    );
+
+    return (
+      <Stack spacing={1.5}>
+        {paginatedTargets.map(
+          (target) => (
+            <Box
+              key={target.target_key}
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor:
+                  "rgba(255, 152, 0, 0.18)",
+                backgroundColor:
+                  "rgba(255, 152, 0, 0.035)",
+              }}
             >
-              {channels.map((channel) => (
-                <Typography
-                  key={
-                    channel.branch_sales_channel_id
-                  }
-                  sx={{
-                    fontSize: 13,
-                    color: "text.secondary",
-                  }}
-                >
-                  {channel.name}:{" "}
-                  <Typography
-                    component="span"
-                    sx={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color:
-                        "primary.main",
-                    }}
-                  >
-                    {formatPromotionCurrency(
-                      target
-                        .channel_prices?.[
-                        String(
-                          channel.branch_sales_channel_id
-                        )
-                      ]
-                    )}
-                  </Typography>
-                </Typography>
-              ))}
-            </Stack>
-          </Box>
-        ))}
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color:
+                    "text.primary",
+                }}
+              >
+                {getPromotionTargetLabel(
+                  target
+                )}
+              </Typography>
+
+              <Stack
+                direction="row"
+                spacing={2}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ mt: 1 }}
+              >
+                {channels.map(
+                  (channel) => (
+                    <Typography
+                      key={
+                        channel.branch_sales_channel_id
+                      }
+                      sx={{
+                        fontSize: 13,
+                        color:
+                          "text.secondary",
+                      }}
+                    >
+                      {channel.name}:{" "}
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color:
+                            "primary.main",
+                        }}
+                      >
+                        {formatPromotionCurrency(
+                          target
+                            .channel_prices?.[
+                            String(
+                              channel.branch_sales_channel_id
+                            )
+                          ]
+                        )}
+                      </Typography>
+                    </Typography>
+                  )
+                )}
+              </Stack>
+            </Box>
+          )
+        )}
+
+        {targets.length >
+        ITEMS_PER_PAGE ? (
+          <PaginationFooter
+            page={page}
+            totalPages={totalPages}
+            startItem={startItem}
+            endItem={endItem}
+            total={targets.length}
+            hasPrev={page > 1}
+            hasNext={
+              page < totalPages
+            }
+            onPrev={() =>
+              setPage((current) =>
+                Math.max(
+                  1,
+                  current - 1
+                )
+              )
+            }
+            onNext={() =>
+              setPage((current) =>
+                Math.min(
+                  totalPages,
+                  current + 1
+                )
+              )
+            }
+            itemLabel="participantes"
+          />
+        ) : null}
       </Stack>
     );
   }
 
-  if (form.type === "buy_x_pay_y") {
+  if (
+    form.type ===
+    "buy_x_pay_y"
+  ) {
     return (
       <ReviewGrid>
         <ReviewItem
@@ -308,14 +569,16 @@ function RuleSummary({ form, channels }) {
     );
   }
 
-  const rule = form.discount_rule;
+  const rule =
+    form.discount_rule;
 
   return (
     <ReviewGrid>
       <ReviewItem
         label="Tipo de descuento"
         value={
-          rule.discount_type === "percent"
+          rule.discount_type ===
+          "percent"
             ? "Porcentaje"
             : "Monto fijo"
         }
@@ -324,7 +587,8 @@ function RuleSummary({ form, channels }) {
       <ReviewItem
         label="Valor"
         value={
-          rule.discount_type === "percent"
+          rule.discount_type ===
+          "percent"
             ? `${rule.discount_value}%`
             : formatPromotionCurrency(
                 rule.discount_value
@@ -340,24 +604,77 @@ function ReviewSection({
   children,
 }) {
   return (
-    <Box>
-      <Typography
+    <Box
+      sx={{
+        overflow: "hidden",
+        borderRadius: 2,
+        border: "1px solid",
+        borderColor:
+          "rgba(255, 152, 0, 0.24)",
+        backgroundColor:
+          "background.paper",
+        boxShadow:
+          "0 5px 18px rgba(66, 48, 36, 0.06)",
+      }}
+    >
+      <Box
         sx={{
-          fontSize: 15,
-          fontWeight: 800,
-          color: "primary.main",
-          mb: 1.25,
+          px: {
+            xs: 1.75,
+            sm: 2.25,
+          },
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          gap: 1.25,
+          backgroundColor:
+            "rgba(255, 152, 0, 0.055)",
+          borderBottom: "1px solid",
+          borderBottomColor:
+            "rgba(255, 152, 0, 0.16)",
         }}
       >
-        {title}
-      </Typography>
+        <Box
+          sx={{
+            width: 4,
+            height: 22,
+            flexShrink: 0,
+            borderRadius: 4,
+            backgroundColor:
+              "primary.main",
+          }}
+        />
 
-      {children}
+        <Typography
+          sx={{
+            fontSize: 15,
+            fontWeight: 800,
+            color: "text.primary",
+          }}
+        >
+          {title}
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          p: {
+            xs: 1.75,
+            sm: 2.25,
+          },
+          backgroundColor:
+            "background.paper",
+        }}
+      >
+        {children}
+      </Box>
     </Box>
   );
 }
 
-function ReviewGrid({ children }) {
+function ReviewGrid({
+  children,
+}) {
   return (
     <Box
       sx={{
@@ -367,7 +684,7 @@ function ReviewGrid({ children }) {
           sm: "repeat(2, minmax(0, 1fr))",
           lg: "repeat(3, minmax(0, 1fr))",
         },
-        gap: 1.5,
+        gap: 1.25,
       }}
     >
       {children}
@@ -375,15 +692,20 @@ function ReviewGrid({ children }) {
   );
 }
 
-function ReviewItem({ label, value }) {
+function ReviewItem({
+  label,
+  value,
+}) {
   return (
     <Box
       sx={{
         p: 1.5,
-        borderRadius: 1,
+        borderRadius: 1.25,
         border: "1px solid",
-        borderColor: "divider",
-        backgroundColor: "background.default",
+        borderColor:
+          "rgba(255, 152, 0, 0.14)",
+        backgroundColor:
+          "rgba(255, 152, 0, 0.025)",
         minHeight: 84,
       }}
     >
@@ -392,7 +714,8 @@ function ReviewItem({ label, value }) {
           fontSize: 11,
           fontWeight: 800,
           color: "text.secondary",
-          textTransform: "uppercase",
+          textTransform:
+            "uppercase",
           letterSpacing: 0.3,
         }}
       >

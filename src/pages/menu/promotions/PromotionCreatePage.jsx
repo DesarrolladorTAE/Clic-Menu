@@ -41,15 +41,15 @@ import {
 
 import {
   createPromotion,
-  getPromotionChannelProducts,
+  getPromotionEligibleProducts,
   getPromotionFormBranches,
   getPromotionFormChannels,
-  getPromotionFormProductsCatalog,
-  getPromotionProductVariants,
 } from "../../../services/menu/promotions/promotionForm.service";
 
 export default function PromotionCreatePage() {
-  const { restaurantId } = useParams();
+  const { restaurantId } =
+    useParams();
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -64,17 +64,20 @@ export default function PromotionCreatePage() {
     location.state?.restaurantName ||
     "RESTAURANTE";
 
-  const cachedPromotions = Array.isArray(
-    location.state?.cachedPromotions
-  )
-    ? location.state.cachedPromotions
-    : [];
+  const cachedPromotions =
+    Array.isArray(
+      location.state?.cachedPromotions
+    )
+      ? location.state
+          .cachedPromotions
+      : [];
 
-  const [form, setForm] = useState(() =>
-    createInitialPromotionForm({
-      branchId: initialBranchId,
-      type: initialType,
-    })
+  const [form, setForm] = useState(
+    () =>
+      createInitialPromotionForm({
+        branchId: initialBranchId,
+        type: initialType,
+      })
   );
 
   const [activeStep, setActiveStep] =
@@ -82,54 +85,82 @@ export default function PromotionCreatePage() {
 
   const [branches, setBranches] =
     useState([]);
+
   const [channels, setChannels] =
     useState([]);
+
   const [products, setProducts] =
     useState([]);
 
   const [
-    channelProductsByChannel,
-    setChannelProductsByChannel,
-  ] = useState({});
-
-  const [
-    variantsByProduct,
-    setVariantsByProduct,
-  ] = useState({});
-
-  const [
-    loadingVariantIds,
-    setLoadingVariantIds,
-  ] = useState(new Set());
-
-  const [loadingBranches, setLoadingBranches] =
-    useState(true);
+    loadingBranches,
+    setLoadingBranches,
+  ] = useState(true);
 
   const [
     loadingBranchData,
     setLoadingBranchData,
   ] = useState(false);
 
+  const [
+    loadingProducts,
+    setLoadingProducts,
+  ] = useState(false);
+
   const [saving, setSaving] =
     useState(false);
 
-  const [alertState, setAlertState] =
-    useState({
-      open: false,
-      severity: "error",
-      title: "",
-      message: "",
-    });
+  const [
+    alertState,
+    setAlertState,
+  ] = useState({
+    open: false,
+    severity: "error",
+    title: "",
+    message: "",
+  });
 
-  const selectedBranch = useMemo(() => {
-    return (
-      branches.find(
-        (branch) =>
-          Number(branch.id) ===
-          Number(form.branch_id)
-      ) || null
-    );
-  }, [branches, form.branch_id]);
+  const selectedBranch =
+    useMemo(() => {
+      return (
+        branches.find(
+          (branch) =>
+            Number(branch.id) ===
+            Number(form.branch_id)
+        ) || null
+      );
+    }, [
+      branches,
+      form.branch_id,
+    ]);
+
+  const selectedChannelIds =
+    useMemo(() => {
+      return Array.from(
+        new Set(
+          (
+            Array.isArray(
+              form.channel_ids
+            )
+              ? form.channel_ids
+              : []
+          )
+            .map((id) => Number(id))
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            )
+        )
+      );
+    }, [form.channel_ids]);
+
+  const selectedChannelKey =
+    useMemo(() => {
+      return [...selectedChannelIds]
+        .sort((a, b) => a - b)
+        .join(",");
+    }, [selectedChannelIds]);
 
   const showAlert = ({
     severity = "error",
@@ -144,8 +175,13 @@ export default function PromotionCreatePage() {
     });
   };
 
-  const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+  const closeAlert = (
+    _,
+    reason
+  ) => {
+    if (reason === "clickaway") {
+      return;
+    }
 
     setAlertState((previous) => ({
       ...previous,
@@ -153,14 +189,18 @@ export default function PromotionCreatePage() {
     }));
   };
 
-  const navigateToList = (state = {}) => {
+  const navigateToList = (
+    state = {}
+  ) => {
     navigate(
       `/owner/restaurants/${restaurantId}/operation/promotions`,
       {
         state: {
           restaurantName,
-          branchId: form.branch_id,
-          promotionType: form.type,
+          branchId:
+            form.branch_id,
+          promotionType:
+            form.type,
           cachedPromotions,
           ...state,
         },
@@ -171,205 +211,333 @@ export default function PromotionCreatePage() {
   useEffect(() => {
     let active = true;
 
-    const loadBranches = async () => {
-      setLoadingBranches(true);
+    const loadBranches =
+      async () => {
+        setLoadingBranches(true);
 
-      try {
-        const result =
-          await getPromotionFormBranches(
-            restaurantId
-          );
+        try {
+          const result =
+            await getPromotionFormBranches(
+              restaurantId
+            );
 
-        if (!active) return;
+          if (!active) {
+            return;
+          }
 
-        setBranches(result);
+          setBranches(result);
 
-        const preferredBranch =
-          result.find(
-            (branch) =>
-              Number(branch.id) ===
-              Number(initialBranchId)
-          ) || result[0];
+          const preferredBranch =
+            result.find(
+              (branch) =>
+                Number(
+                  branch.id
+                ) ===
+                Number(
+                  initialBranchId
+                )
+            ) || result[0];
 
-        setForm((previous) => ({
-          ...previous,
-          branch_id: preferredBranch?.id
-            ? String(preferredBranch.id)
-            : "",
-        }));
-      } catch (error) {
-        if (!active) return;
+          setForm((previous) => ({
+            ...previous,
+            branch_id:
+              preferredBranch?.id
+                ? String(
+                    preferredBranch.id
+                  )
+                : "",
+          }));
+        } catch (error) {
+          if (!active) {
+            return;
+          }
 
-        setBranches([]);
+          setBranches([]);
 
-        showAlert({
-          severity: "error",
-          title: "Error",
-          message:
-            extractPromotionApiError(
-              error,
-              "No se pudieron cargar las sucursales."
-            ),
-        });
-      } finally {
-        if (active) {
-          setLoadingBranches(false);
+          showAlert({
+            severity: "error",
+            title: "Error",
+            message:
+              extractPromotionApiError(
+                error,
+                "No se pudieron cargar las sucursales."
+              ),
+          });
+        } finally {
+          if (active) {
+            setLoadingBranches(
+              false
+            );
+          }
         }
-      }
-    };
+      };
 
     loadBranches();
 
     return () => {
       active = false;
     };
-  }, [restaurantId, initialBranchId]);
+  }, [
+    restaurantId,
+    initialBranchId,
+  ]);
 
   useEffect(() => {
     if (!form.branch_id) {
       setChannels([]);
       setProducts([]);
-      setChannelProductsByChannel({});
       return undefined;
     }
 
     let active = true;
 
-    const loadBranchData = async () => {
-      setLoadingBranchData(true);
+    const loadBranchData =
+      async () => {
+        setLoadingBranchData(true);
+        setProducts([]);
 
-      try {
-        const [
-          channelsResult,
-          productsResult,
-        ] = await Promise.all([
-          getPromotionFormChannels(
-            restaurantId,
-            form.branch_id
-          ),
-          getPromotionFormProductsCatalog(
-            restaurantId,
-            form.branch_id
-          ),
-        ]);
+        try {
+          const channelsResult =
+            await getPromotionFormChannels(
+              restaurantId,
+              form.branch_id
+            );
 
-        if (!active) return;
+          if (!active) {
+            return;
+          }
 
-        const usableChannels =
-          channelsResult.filter(
-            (channel) =>
-              channel.is_usable !== false
+          const usableChannels =
+            channelsResult.filter(
+              (channel) =>
+                channel.is_usable !==
+                false
+            );
+
+          setChannels(
+            usableChannels
           );
 
-        setChannels(usableChannels);
-        setProducts(productsResult);
+          setForm((previous) => {
+            const validIds =
+              new Set(
+                usableChannels.map(
+                  (channel) =>
+                    String(
+                      channel.branch_sales_channel_id
+                    )
+                )
+              );
 
-        setForm((previous) => {
-          const validIds = new Set(
-            usableChannels.map((channel) =>
-              String(
-                channel.branch_sales_channel_id
-              )
-            )
-          );
-
-          return {
-            ...previous,
-            channel_ids:
+            const nextChannelIds =
               previous.channel_ids.filter(
                 (channelId) =>
                   validIds.has(
-                    String(channelId)
+                    String(
+                      channelId
+                    )
                   )
-              ),
-          };
-        });
+              );
 
-        const channelResults =
-          await Promise.allSettled(
-            usableChannels.map(
-              async (channel) => {
-                const rows =
-                  await getPromotionChannelProducts(
-                    restaurantId,
-                    form.branch_id,
-                    channel.sales_channel_id
-                  );
-
-                return {
-                  channelId:
-                    channel.branch_sales_channel_id,
-                  rows,
-                };
-              }
-            )
-          );
-
-        if (!active) return;
-
-        const nextChannelProducts = {};
-
-        channelResults.forEach(
-          (result, index) => {
-            const channel =
-              usableChannels[index];
-
-            const channelId = String(
-              channel.branch_sales_channel_id
-            );
-
-            if (
-              result.status === "fulfilled"
-            ) {
-              nextChannelProducts[
-                channelId
-              ] = {
-                loaded: true,
-                rows: result.value.rows,
-              };
-            } else {
-              nextChannelProducts[
-                channelId
-              ] = {
-                loaded: false,
-                rows: [],
-              };
-            }
+            return {
+              ...previous,
+              channel_ids:
+                nextChannelIds,
+              targets:
+                nextChannelIds
+                  .length > 0
+                  ? previous.targets
+                  : [],
+            };
+          });
+        } catch (error) {
+          if (!active) {
+            return;
           }
-        );
 
-        setChannelProductsByChannel(
-          nextChannelProducts
-        );
-      } catch (error) {
-        if (!active) return;
+          setChannels([]);
+          setProducts([]);
 
-        setChannels([]);
-        setProducts([]);
-        setChannelProductsByChannel({});
-
-        showAlert({
-          severity: "error",
-          title: "Error",
-          message:
-            extractPromotionApiError(
-              error,
-              "No se pudo cargar la información de la sucursal."
-            ),
-        });
-      } finally {
-        if (active) {
-          setLoadingBranchData(false);
+          showAlert({
+            severity: "error",
+            title: "Error",
+            message:
+              extractPromotionApiError(
+                error,
+                "No se pudieron cargar los canales de la sucursal."
+              ),
+          });
+        } finally {
+          if (active) {
+            setLoadingBranchData(
+              false
+            );
+          }
         }
-      }
-    };
+      };
 
     loadBranchData();
 
     return () => {
       active = false;
     };
-  }, [restaurantId, form.branch_id]);
+  }, [
+    restaurantId,
+    form.branch_id,
+  ]);
+
+  useEffect(() => {
+    if (
+      !form.branch_id ||
+      !selectedChannelKey
+    ) {
+      setProducts([]);
+      setLoadingProducts(false);
+
+      setForm((previous) => {
+        if (
+          previous.targets.length ===
+          0
+        ) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          targets: [],
+        };
+      });
+
+      return undefined;
+    }
+
+    let active = true;
+
+    const requestedChannelIds =
+      selectedChannelKey
+        .split(",")
+        .map((id) => Number(id))
+        .filter(
+          (id) =>
+            Number.isInteger(id) &&
+            id > 0
+        );
+
+    const loadEligibleProducts =
+      async () => {
+        setLoadingProducts(true);
+        setProducts([]);
+
+        try {
+          const catalog =
+            await getPromotionEligibleProducts(
+              restaurantId,
+              form.branch_id,
+              requestedChannelIds
+            );
+
+          if (!active) {
+            return;
+          }
+
+          const eligibleProducts =
+            Array.isArray(
+              catalog?.data
+            )
+              ? catalog.data
+              : [];
+
+          const eligibleTargetKeys =
+            new Set(
+              (
+                Array.isArray(
+                  catalog?.eligible_target_keys
+                )
+                  ? catalog.eligible_target_keys
+                  : []
+              ).map(String)
+            );
+
+          const selectedChannelSet =
+            new Set(
+              requestedChannelIds.map(
+                (id) => String(id)
+              )
+            );
+
+          setProducts(
+            eligibleProducts
+          );
+
+          setForm((previous) => ({
+            ...previous,
+            targets:
+              previous.targets
+                .filter((target) =>
+                  eligibleTargetKeys.has(
+                    String(
+                      target.target_key
+                    )
+                  )
+                )
+                .map((target) => {
+                  const nextPrices =
+                    Object.fromEntries(
+                      Object.entries(
+                        target.channel_prices ||
+                          {}
+                      ).filter(
+                        ([channelId]) =>
+                          selectedChannelSet.has(
+                            String(
+                              channelId
+                            )
+                          )
+                      )
+                    );
+
+                  return {
+                    ...target,
+                    channel_prices:
+                      nextPrices,
+                  };
+                }),
+          }));
+        } catch (error) {
+          if (!active) {
+            return;
+          }
+
+          setProducts([]);
+
+          showAlert({
+            severity: "error",
+            title: "Error",
+            message:
+              extractPromotionApiError(
+                error,
+                "No se pudieron cargar los productos y variantes vendibles."
+              ),
+          });
+        } finally {
+          if (active) {
+            setLoadingProducts(
+              false
+            );
+          }
+        }
+      };
+
+    loadEligibleProducts();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    restaurantId,
+    form.branch_id,
+    selectedChannelKey,
+  ]);
 
   const handleFieldChange = (
     field,
@@ -389,26 +557,32 @@ export default function PromotionCreatePage() {
       form.targets.length > 0;
 
     if (hasSelections) {
-      const confirmed = window.confirm(
-        "Al cambiar de sucursal se eliminarán los canales y productos seleccionados. ¿Deseas continuar?"
-      );
+      const confirmed =
+        window.confirm(
+          "Al cambiar de sucursal se eliminarán los canales y productos seleccionados. ¿Deseas continuar?"
+        );
 
-      if (!confirmed) return;
+      if (!confirmed) {
+        return;
+      }
     }
 
     setForm((previous) => ({
       ...previous,
-      branch_id: String(branchId),
+      branch_id:
+        String(branchId),
       channel_ids: [],
       targets: [],
     }));
 
-    setVariantsByProduct({});
-    setChannelProductsByChannel({});
+    setChannels([]);
+    setProducts([]);
     setActiveStep(0);
   };
 
-  const handleTypeChange = (type) => {
+  const handleTypeChange = (
+    type
+  ) => {
     setForm((previous) => ({
       ...previous,
       type,
@@ -425,7 +599,9 @@ export default function PromotionCreatePage() {
 
     setForm((previous) => {
       const currentIds =
-        previous.channel_ids.map(Number);
+        previous.channel_ids.map(
+          Number
+        );
 
       const nextIds = checked
         ? Array.from(
@@ -435,30 +611,41 @@ export default function PromotionCreatePage() {
             ])
           )
         : currentIds.filter(
-            (id) => id !== channelId
+            (id) =>
+              id !== channelId
           );
 
       const nextTargets =
-        previous.targets.map((target) => {
-          if (checked) return target;
+        previous.targets.map(
+          (target) => {
+            if (checked) {
+              return target;
+            }
 
-          const prices = {
-            ...(target.channel_prices ||
-              {}),
-          };
+            const prices = {
+              ...(target.channel_prices ||
+                {}),
+            };
 
-          delete prices[String(channelId)];
+            delete prices[
+              String(channelId)
+            ];
 
-          return {
-            ...target,
-            channel_prices: prices,
-          };
-        });
+            return {
+              ...target,
+              channel_prices:
+                prices,
+            };
+          }
+        );
 
       return {
         ...previous,
         channel_ids: nextIds,
-        targets: nextTargets,
+        targets:
+          nextIds.length > 0
+            ? nextTargets
+            : [],
       };
     });
   };
@@ -470,16 +657,19 @@ export default function PromotionCreatePage() {
   ) => {
     setForm((previous) => ({
       ...previous,
-      schedules: previous.schedules.map(
-        (schedule) =>
-          Number(schedule.day_of_week) ===
-          Number(dayOfWeek)
-            ? {
-                ...schedule,
-                [field]: value,
-              }
-            : schedule
-      ),
+      schedules:
+        previous.schedules.map(
+          (schedule) =>
+            Number(
+              schedule.day_of_week
+            ) ===
+            Number(dayOfWeek)
+              ? {
+                  ...schedule,
+                  [field]: value,
+                }
+              : schedule
+        ),
     }));
   };
 
@@ -488,56 +678,14 @@ export default function PromotionCreatePage() {
   ) => {
     setForm((previous) => ({
       ...previous,
-      schedules: previous.schedules.map(
-        (schedule) => ({
-          ...schedule,
-          enabled,
-        })
-      ),
+      schedules:
+        previous.schedules.map(
+          (schedule) => ({
+            ...schedule,
+            enabled,
+          })
+        ),
     }));
-  };
-
-  const handleLoadVariants = async (
-    product
-  ) => {
-    const productId = String(product.id);
-
-    setLoadingVariantIds((current) => {
-      const next = new Set(current);
-      next.add(productId);
-      return next;
-    });
-
-    try {
-      const variants =
-        await getPromotionProductVariants(
-          restaurantId,
-          product.id
-        );
-
-      setVariantsByProduct(
-        (previous) => ({
-          ...previous,
-          [productId]: variants,
-        })
-      );
-    } catch (error) {
-      showAlert({
-        severity: "error",
-        title: "Error",
-        message:
-          extractPromotionApiError(
-            error,
-            "No se pudieron cargar las variantes del producto."
-          ),
-      });
-    } finally {
-      setLoadingVariantIds((current) => {
-        const next = new Set(current);
-        next.delete(productId);
-        return next;
-      });
-    }
   };
 
   const handleToggleProduct = (
@@ -545,16 +693,12 @@ export default function PromotionCreatePage() {
     checked
   ) => {
     const targetKey =
-      buildPromotionTargetKey(product.id);
+      product?.target_key ||
+      buildPromotionTargetKey(
+        product.id
+      );
 
     setForm((previous) => {
-      const withoutProductTargets =
-        previous.targets.filter(
-          (target) =>
-            Number(target.product_id) !==
-            Number(product.id)
-        );
-
       if (!checked) {
         return {
           ...previous,
@@ -567,17 +711,32 @@ export default function PromotionCreatePage() {
         };
       }
 
+      const alreadySelected =
+        previous.targets.some(
+          (target) =>
+            target.target_key ===
+            targetKey
+        );
+
+      if (alreadySelected) {
+        return previous;
+      }
+
       return {
         ...previous,
         targets: [
-          ...withoutProductTargets,
+          ...previous.targets,
           {
-            target_key: targetKey,
+            target_key:
+              targetKey,
             product_id: Number(
               product.id
             ),
-            product_variant_id: null,
-            product_name: product.name,
+            product_variant_id:
+              null,
+            product_name:
+              product.display_name ||
+              product.name,
             variant_name: null,
             channel_prices: {},
           },
@@ -592,60 +751,58 @@ export default function PromotionCreatePage() {
     checked
   ) => {
     const targetKey =
+      variant?.target_key ||
       buildPromotionTargetKey(
         product.id,
         variant.id
       );
 
-    const generalKey =
-      buildPromotionTargetKey(product.id);
-
     setForm((previous) => {
-      let nextTargets =
-        previous.targets.filter(
-          (target) =>
-            target.target_key !==
-            generalKey
-        );
+      if (!checked) {
+        return {
+          ...previous,
+          targets:
+            previous.targets.filter(
+              (target) =>
+                target.target_key !==
+                targetKey
+            ),
+        };
+      }
 
-      if (checked) {
-        const exists = nextTargets.some(
+      const alreadySelected =
+        previous.targets.some(
           (target) =>
             target.target_key ===
             targetKey
         );
 
-        if (!exists) {
-          nextTargets = [
-            ...nextTargets,
-            {
-              target_key: targetKey,
-              product_id: Number(
-                product.id
-              ),
-              product_variant_id: Number(
-                variant.id
-              ),
-              product_name:
-                product.name,
-              variant_name:
-                variant.name,
-              channel_prices: {},
-            },
-          ];
-        }
-      } else {
-        nextTargets =
-          nextTargets.filter(
-            (target) =>
-              target.target_key !==
-              targetKey
-          );
+      if (alreadySelected) {
+        return previous;
       }
 
       return {
         ...previous,
-        targets: nextTargets,
+        targets: [
+          ...previous.targets,
+          {
+            target_key:
+              targetKey,
+            product_id: Number(
+              product.id
+            ),
+            product_variant_id:
+              Number(
+                variant.id
+              ),
+            product_name:
+              product.display_name ||
+              product.name,
+            variant_name:
+              variant.name,
+            channel_prices: {},
+          },
+        ],
       };
     });
   };
@@ -671,125 +828,161 @@ export default function PromotionCreatePage() {
   ) => {
     setForm((previous) => ({
       ...previous,
-      targets: previous.targets.map(
-        (target) =>
-          target.target_key ===
-          targetKey
-            ? {
-                ...target,
-                channel_prices: {
-                  ...(target.channel_prices ||
-                    {}),
-                  [String(channelId)]:
-                    value,
-                },
-              }
-            : target
-      ),
+      targets:
+        previous.targets.map(
+          (target) =>
+            target.target_key ===
+            targetKey
+              ? {
+                  ...target,
+                  channel_prices: {
+                    ...(target.channel_prices ||
+                      {}),
+                    [String(
+                      channelId
+                    )]: value,
+                  },
+                }
+              : target
+        ),
     }));
   };
 
-  const getBasePrice = useCallback(
-    (target, channelId) => {
-      const channelData =
-        channelProductsByChannel?.[
-          String(channelId)
-        ];
+  const getBasePrice =
+    useCallback(
+      (target, channelId) => {
+        const product =
+          products.find(
+            (item) =>
+              Number(item.id) ===
+              Number(
+                target.product_id
+              )
+          );
 
-      const rows = Array.isArray(
-        channelData?.rows
-      )
-        ? channelData.rows
-        : [];
+        if (!product) {
+          return null;
+        }
 
-      const exact = rows.find(
-        (row) =>
-          Number(row.product_id) ===
-            Number(target.product_id) &&
-          Number(
-            row.product_variant_id || 0
-          ) ===
-            Number(
-              target.product_variant_id ||
-                0
+        if (
+          target.product_variant_id
+        ) {
+          const variants =
+            Array.isArray(
+              product.variants
             )
-      );
+              ? product.variants
+              : [];
 
-      const general = rows.find(
-        (row) =>
-          Number(row.product_id) ===
-            Number(target.product_id) &&
-          !row.product_variant_id
-      );
-
-      const channelPrice =
-        exact?.price ?? general?.price;
-
-      if (
-        Number.isFinite(
-          Number(channelPrice)
-        )
-      ) {
-        return Number(channelPrice);
-      }
-
-      if (target.product_variant_id) {
-        const variants =
-          variantsByProduct?.[
-            String(target.product_id)
-          ];
-
-        const variant = Array.isArray(
-          variants
-        )
-          ? variants.find(
+          const variant =
+            variants.find(
               (item) =>
                 Number(item.id) ===
                 Number(
                   target.product_variant_id
                 )
+            );
+
+          const variantChannels =
+            Array.isArray(
+              variant?.channels
             )
-          : null;
+              ? variant.channels
+              : [];
+
+          const variantChannel =
+            variantChannels.find(
+              (item) =>
+                Number(
+                  item.branch_sales_channel_id
+                ) ===
+                Number(channelId)
+            );
+
+          if (
+            Number.isFinite(
+              Number(
+                variantChannel?.price
+              )
+            )
+          ) {
+            return Number(
+              variantChannel.price
+            );
+          }
+
+          if (
+            Number.isFinite(
+              Number(variant?.price)
+            )
+          ) {
+            return Number(
+              variant.price
+            );
+          }
+        }
+
+        const productChannels =
+          Array.isArray(
+            product.channels
+          )
+            ? product.channels
+            : [];
+
+        const productChannel =
+          productChannels.find(
+            (item) =>
+              Number(
+                item.branch_sales_channel_id
+              ) ===
+              Number(channelId)
+          );
 
         if (
           Number.isFinite(
-            Number(variant?.price)
+            Number(
+              productChannel?.price
+            )
           )
         ) {
-          return Number(variant.price);
+          return Number(
+            productChannel.price
+          );
         }
-      }
 
-      const product = products.find(
-        (item) =>
-          Number(item.id) ===
-          Number(target.product_id)
-      );
+        if (
+          Number.isFinite(
+            Number(
+              product.base_price
+            )
+          )
+        ) {
+          return Number(
+            product.base_price
+          );
+        }
 
-      if (
-        Number.isFinite(
-          Number(product?.base_price)
-        )
-      ) {
-        return Number(
-          product.base_price
-        );
-      }
+        if (
+          Number.isFinite(
+            Number(product.price)
+          )
+        ) {
+          return Number(
+            product.price
+          );
+        }
 
-      return null;
-    },
-    [
-      channelProductsByChannel,
-      variantsByProduct,
-      products,
-    ]
-  );
+        return null;
+      },
+      [products]
+    );
 
   const handleNext = () => {
-    const error = validatePromotionStep(
-      activeStep,
-      form
-    );
+    const error =
+      validatePromotionStep(
+        activeStep,
+        form
+      );
 
     if (error) {
       showAlert({
@@ -803,7 +996,8 @@ export default function PromotionCreatePage() {
 
     setActiveStep((current) =>
       Math.min(
-        PROMOTION_FORM_STEPS.length - 1,
+        PROMOTION_FORM_STEPS.length -
+          1,
         current + 1
       )
     );
@@ -811,7 +1005,10 @@ export default function PromotionCreatePage() {
 
   const handlePrevious = () => {
     setActiveStep((current) =>
-      Math.max(0, current - 1)
+      Math.max(
+        0,
+        current - 1
+      )
     );
   };
 
@@ -819,15 +1016,20 @@ export default function PromotionCreatePage() {
     statusOverride = null
   ) => {
     const validation =
-      validateCompletePromotionForm(form);
+      validateCompletePromotionForm(
+        form
+      );
 
     if (validation) {
-      setActiveStep(validation.step);
+      setActiveStep(
+        validation.step
+      );
 
       showAlert({
         severity: "warning",
         title: "Nota",
-        message: validation.message,
+        message:
+          validation.message,
       });
 
       return;
@@ -842,11 +1044,12 @@ export default function PromotionCreatePage() {
           statusOverride
         );
 
-      const result = await createPromotion(
-        restaurantId,
-        form.branch_id,
-        payload
-      );
+      const result =
+        await createPromotion(
+          restaurantId,
+          form.branch_id,
+          payload
+        );
 
       const createdPromotion =
         result?.promotion || {
@@ -854,17 +1057,23 @@ export default function PromotionCreatePage() {
           id: `nuevo-${Date.now()}`,
         };
 
-      const nextCachedPromotions = [
-        createdPromotion,
-        ...cachedPromotions.filter(
-          (promotion) =>
-            String(promotion.id) !==
-            String(createdPromotion.id)
-        ),
-      ];
+      const nextCachedPromotions =
+        [
+          createdPromotion,
+          ...cachedPromotions.filter(
+            (promotion) =>
+              String(
+                promotion.id
+              ) !==
+              String(
+                createdPromotion.id
+              )
+          ),
+        ];
 
       navigateToList({
-        branchId: form.branch_id,
+        branchId:
+          form.branch_id,
         promotionType:
           createdPromotion.type ||
           form.type,
@@ -872,7 +1081,8 @@ export default function PromotionCreatePage() {
           nextCachedPromotions,
         createdPromotion,
         successMessage:
-          result?.response?.message ||
+          result?.response
+            ?.message ||
           "Promoción creada correctamente.",
       });
     } catch (error) {
@@ -909,10 +1119,12 @@ export default function PromotionCreatePage() {
             <Typography
               sx={{
                 fontSize: 14,
-                color: "text.secondary",
+                color:
+                  "text.secondary",
               }}
             >
-              Preparando el formulario de promoción…
+              Preparando el formulario
+              de promoción…
             </Typography>
           </Stack>
         </Box>
@@ -937,7 +1149,8 @@ export default function PromotionCreatePage() {
               backgroundColor:
                 "background.paper",
               border: "1px solid",
-              borderColor: "divider",
+              borderColor:
+                "divider",
               boxShadow: "none",
               textAlign: "center",
             }}
@@ -946,20 +1159,24 @@ export default function PromotionCreatePage() {
               sx={{
                 fontSize: 20,
                 fontWeight: 800,
-                color: "text.primary",
+                color:
+                  "text.primary",
               }}
             >
-              No hay sucursales disponibles
+              No hay sucursales
+              disponibles
             </Typography>
 
             <Typography
               sx={{
                 mt: 1,
                 fontSize: 14,
-                color: "text.secondary",
+                color:
+                  "text.secondary",
               }}
             >
-              Registra una sucursal antes de crear
+              Registra una sucursal
+              antes de crear
               promociones.
             </Typography>
           </Paper>
@@ -968,9 +1185,13 @@ export default function PromotionCreatePage() {
         <AppAlert
           open={alertState.open}
           onClose={closeAlert}
-          severity={alertState.severity}
+          severity={
+            alertState.severity
+          }
           title={alertState.title}
-          message={alertState.message}
+          message={
+            alertState.message
+          }
           autoHideDuration={3000}
         />
       </PageContainer>
@@ -984,12 +1205,16 @@ export default function PromotionCreatePage() {
           branchName={
             selectedBranch?.name
           }
-          onBack={() => navigateToList()}
+          onBack={() =>
+            navigateToList()
+          }
         />
 
         <PromotionFormStepper
           activeStep={activeStep}
-          onStepChange={setActiveStep}
+          onStepChange={
+            setActiveStep
+          }
         />
 
         {activeStep === 0 ? (
@@ -1016,9 +1241,11 @@ export default function PromotionCreatePage() {
           <PromotionChannelsSchedulesStep
             channels={channels}
             selectedChannelIds={
-              form.channel_ids
+              selectedChannelIds
             }
-            schedules={form.schedules}
+            schedules={
+              form.schedules
+            }
             loading={
               loadingBranchData
             }
@@ -1038,24 +1265,12 @@ export default function PromotionCreatePage() {
           <PromotionProductsStep
             products={products}
             targets={form.targets}
-            channels={channels}
             selectedChannelIds={
-              form.channel_ids
-            }
-            variantsByProduct={
-              variantsByProduct
-            }
-            loadingVariantIds={
-              loadingVariantIds
-            }
-            channelProductsByChannel={
-              channelProductsByChannel
+              selectedChannelIds
             }
             loading={
-              loadingBranchData
-            }
-            onLoadVariants={
-              handleLoadVariants
+              loadingBranchData ||
+              loadingProducts
             }
             onToggleProduct={
               handleToggleProduct
@@ -1070,7 +1285,9 @@ export default function PromotionCreatePage() {
           <PromotionConfigurationStep
             form={form}
             channels={channels}
-            getBasePrice={getBasePrice}
+            getBasePrice={
+              getBasePrice
+            }
             onRuleChange={
               handleRuleChange
             }
@@ -1083,7 +1300,9 @@ export default function PromotionCreatePage() {
         {activeStep === 4 ? (
           <PromotionReviewStep
             form={form}
-            branch={selectedBranch}
+            branch={
+              selectedBranch
+            }
             channels={channels}
           />
         ) : null}
@@ -1095,7 +1314,8 @@ export default function PromotionCreatePage() {
           }
           saving={saving}
           loading={
-            loadingBranchData
+            loadingBranchData ||
+            loadingProducts
           }
           onCancel={() =>
             navigateToList()
@@ -1116,9 +1336,13 @@ export default function PromotionCreatePage() {
       <AppAlert
         open={alertState.open}
         onClose={closeAlert}
-        severity={alertState.severity}
+        severity={
+          alertState.severity
+        }
         title={alertState.title}
-        message={alertState.message}
+        message={
+          alertState.message
+        }
         autoHideDuration={3000}
       />
     </PageContainer>

@@ -1,6 +1,5 @@
 import {
   Box,
-  Button,
   Checkbox,
   Chip,
   CircularProgress,
@@ -12,7 +11,11 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -26,93 +29,97 @@ import {
 
 const ITEMS_PER_PAGE = 5;
 
-function getUnavailableChannels({
-  productId,
-  variantId = null,
-  selectedChannelIds,
-  channels,
-  channelProductsByChannel,
-}) {
-  return selectedChannelIds
-    .map((channelId) => {
-      const channel = channels.find(
-        (item) =>
-          Number(
-            item.branch_sales_channel_id
-          ) === Number(channelId)
-      );
+function getCategoryName(product) {
+  return (
+    product?.category?.name ||
+    product?.category_name ||
+    "Sin categoría"
+  );
+}
 
-      const channelData =
-        channelProductsByChannel?.[
-          String(channelId)
-        ];
+function formatPriceRange(item) {
+  const minimumPrice =
+    item?.price_min ??
+    item?.base_price ??
+    item?.price ??
+    null;
 
-      if (!channelData?.loaded) {
-        return null;
-      }
+  const maximumPrice =
+    item?.price_max ??
+    item?.base_price ??
+    item?.price ??
+    null;
 
-      const rows = Array.isArray(
-        channelData?.rows
-      )
-        ? channelData.rows
-        : [];
+  if (
+    item?.has_different_prices &&
+    Number.isFinite(Number(minimumPrice)) &&
+    Number.isFinite(Number(maximumPrice)) &&
+    Number(minimumPrice) !==
+      Number(maximumPrice)
+  ) {
+    return `${formatPromotionCurrency(
+      minimumPrice
+    )} a ${formatPromotionCurrency(
+      maximumPrice
+    )}`;
+  }
 
-      const exact = rows.find(
-        (row) =>
-          Number(row.product_id) ===
-            Number(productId) &&
-          Number(
-            row.product_variant_id || 0
-          ) === Number(variantId || 0)
-      );
-
-      const general = rows.find(
-        (row) =>
-          Number(row.product_id) ===
-            Number(productId) &&
-          !row.product_variant_id
-      );
-
-      const record = exact || general;
-
-      if (!record || record.is_active === false) {
-        return (
-          channel?.name ||
-          `Canal ${channelId}`
-        );
-      }
-
-      return null;
-    })
-    .filter(Boolean);
+  return formatPromotionCurrency(
+    minimumPrice
+  );
 }
 
 export default function PromotionProductsStep({
-  products,
-  targets,
-  channels,
-  selectedChannelIds,
-  variantsByProduct,
-  loadingVariantIds,
-  channelProductsByChannel,
+  products = [],
+  targets = [],
+  selectedChannelIds = [],
   loading = false,
-  onLoadVariants,
   onToggleProduct,
   onToggleVariant,
 }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] =
+    useState("");
+
   const [category, setCategory] =
     useState("all");
-  const [page, setPage] = useState(1);
+
+  const [page, setPage] =
+    useState(1);
+
+  const safeProducts = useMemo(
+    () =>
+      Array.isArray(products)
+        ? products
+        : [],
+    [products]
+  );
+
+  const normalizedSelectedChannelIds =
+    useMemo(() => {
+      return Array.from(
+        new Set(
+          (
+            Array.isArray(
+              selectedChannelIds
+            )
+              ? selectedChannelIds
+              : []
+          )
+            .map((id) => Number(id))
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            )
+        )
+      );
+    }, [selectedChannelIds]);
 
   const categories = useMemo(() => {
     return Array.from(
       new Set(
-        products
-          .map(
-            (product) =>
-              product.category_name
-          )
+        safeProducts
+          .map(getCategoryName)
           .filter(Boolean)
       )
     ).sort((a, b) =>
@@ -120,38 +127,53 @@ export default function PromotionProductsStep({
         sensitivity: "base",
       })
     );
-  }, [products]);
+  }, [safeProducts]);
 
-  const filteredProducts = useMemo(() => {
-    const normalizedSearch = String(
-      search || ""
-    )
-      .trim()
-      .toLocaleLowerCase("es-MX");
+  const filteredProducts =
+    useMemo(() => {
+      const normalizedSearch = String(
+        search || ""
+      )
+        .trim()
+        .toLocaleLowerCase("es-MX");
 
-    return products.filter((product) => {
-      const matchesCategory =
-        category === "all" ||
-        product.category_name === category;
+      return safeProducts.filter(
+        (product) => {
+          const categoryName =
+            getCategoryName(product);
 
-      const matchesSearch =
-        normalizedSearch === "" ||
-        [
-          product.name,
-          product.category_name,
-          product.description,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("es-MX")
-          .includes(normalizedSearch);
+          const matchesCategory =
+            category === "all" ||
+            categoryName === category;
 
-      return (
-        matchesCategory &&
-        matchesSearch
+          const matchesSearch =
+            normalizedSearch === "" ||
+            [
+              product?.name,
+              product?.display_name,
+              categoryName,
+              product?.description,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLocaleLowerCase(
+                "es-MX"
+              )
+              .includes(
+                normalizedSearch
+              );
+
+          return (
+            matchesCategory &&
+            matchesSearch
+          );
+        }
       );
-    });
-  }, [products, search, category]);
+    }, [
+      safeProducts,
+      search,
+      category,
+    ]);
 
   const totalPages = Math.max(
     1,
@@ -163,7 +185,11 @@ export default function PromotionProductsStep({
 
   useEffect(() => {
     setPage(1);
-  }, [search, category]);
+  }, [
+    search,
+    category,
+    safeProducts,
+  ]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -171,15 +197,17 @@ export default function PromotionProductsStep({
     }
   }, [page, totalPages]);
 
-  const paginatedProducts = useMemo(() => {
-    const start =
-      (page - 1) * ITEMS_PER_PAGE;
+  const paginatedProducts =
+    useMemo(() => {
+      const start =
+        (page - 1) *
+        ITEMS_PER_PAGE;
 
-    return filteredProducts.slice(
-      start,
-      start + ITEMS_PER_PAGE
-    );
-  }, [filteredProducts, page]);
+      return filteredProducts.slice(
+        start,
+        start + ITEMS_PER_PAGE
+      );
+    }, [filteredProducts, page]);
 
   const startItem =
     filteredProducts.length === 0
@@ -193,15 +221,37 @@ export default function PromotionProductsStep({
     filteredProducts.length
   );
 
-  const selectedTargetKeys = useMemo(
-    () =>
-      new Set(
-        targets.map(
-          (target) => target.target_key
+  const selectedTargetKeys =
+    useMemo(() => {
+      return new Set(
+        (
+          Array.isArray(targets)
+            ? targets
+            : []
+        ).map(
+          (target) =>
+            target.target_key
         )
-      ),
-    [targets]
-  );
+      );
+    }, [targets]);
+
+  const hasSelectedChannels =
+    normalizedSelectedChannelIds.length >
+    0;
+
+  const emptyTitle =
+    !hasSelectedChannels
+      ? "Selecciona los canales de venta"
+      : safeProducts.length === 0
+        ? "No hay productos vendibles"
+        : "No se encontraron productos";
+
+  const emptyMessage =
+    !hasSelectedChannels
+      ? "Selecciona al menos un canal de venta para consultar los productos y variantes disponibles."
+      : safeProducts.length === 0
+        ? "No existen productos habilitados en todos los canales seleccionados."
+        : "Ajusta la búsqueda o la categoría seleccionada.";
 
   return (
     <Paper
@@ -209,7 +259,8 @@ export default function PromotionProductsStep({
         p: 0,
         overflow: "hidden",
         borderRadius: 1,
-        backgroundColor: "background.paper",
+        backgroundColor:
+          "background.paper",
         border: "1px solid",
         borderColor: "divider",
         boxShadow: "none",
@@ -217,7 +268,10 @@ export default function PromotionProductsStep({
     >
       <Box
         sx={{
-          p: { xs: 2, sm: 3 },
+          p: {
+            xs: 2,
+            sm: 3,
+          },
           borderBottom: "1px solid",
           borderColor: "divider",
         }}
@@ -245,10 +299,10 @@ export default function PromotionProductsStep({
                 lineHeight: 1.5,
               }}
             >
-              Selecciona el producto completo o una
-              variante específica. Los productos deben
-              estar disponibles en todos los canales
-              seleccionados.
+              Puedes seleccionar el producto base,
+              una o varias variantes, o ambos.
+              Solo se muestran productos y variantes
+              vendibles en todos los canales seleccionados.
             </Typography>
           </Box>
 
@@ -262,9 +316,15 @@ export default function PromotionProductsStep({
             <TextField
               value={search}
               onChange={(event) =>
-                setSearch(event.target.value)
+                setSearch(
+                  event.target.value
+                )
               }
               placeholder="Buscar producto..."
+              disabled={
+                loading ||
+                !hasSelectedChannels
+              }
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -287,6 +347,10 @@ export default function PromotionProductsStep({
                 setCategory(
                   event.target.value
                 )
+              }
+              disabled={
+                loading ||
+                !hasSelectedChannels
               }
               SelectProps={{
                 IconComponent:
@@ -317,20 +381,46 @@ export default function PromotionProductsStep({
             </TextField>
           </Stack>
 
-          <Typography
-            sx={{
-              fontSize: 13,
-              fontWeight: 800,
-              color:
-                targets.length > 0
-                  ? "primary.main"
-                  : "text.secondary",
+          <Stack
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{
+              xs: "flex-start",
+              sm: "center",
             }}
           >
-            {targets.length === 1
-              ? "1 participante seleccionado"
-              : `${targets.length} participantes seleccionados`}
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 800,
+                color:
+                  targets.length > 0
+                    ? "primary.main"
+                    : "text.secondary",
+              }}
+            >
+              {targets.length === 1
+                ? "1 participante seleccionado"
+                : `${targets.length} participantes seleccionados`}
+            </Typography>
+
+            {hasSelectedChannels ? (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={
+                  normalizedSelectedChannelIds.length ===
+                  1
+                    ? "1 canal seleccionado"
+                    : `${normalizedSelectedChannelIds.length} canales seleccionados`
+                }
+              />
+            ) : null}
+          </Stack>
         </Stack>
       </Box>
 
@@ -348,10 +438,12 @@ export default function PromotionProductsStep({
               color: "text.secondary",
             }}
           >
-            Cargando productos disponibles…
+            Consultando productos y
+            variantes vendibles…
           </Typography>
         </Stack>
-      ) : paginatedProducts.length === 0 ? (
+      ) : paginatedProducts.length ===
+        0 ? (
         <Box
           sx={{
             px: 3,
@@ -366,7 +458,7 @@ export default function PromotionProductsStep({
               color: "text.primary",
             }}
           >
-            No se encontraron productos
+            {emptyTitle}
           </Typography>
 
           <Typography
@@ -376,8 +468,7 @@ export default function PromotionProductsStep({
               color: "text.secondary",
             }}
           >
-            Ajusta la búsqueda o la categoría
-            seleccionada.
+            {emptyMessage}
           </Typography>
         </Box>
       ) : (
@@ -385,6 +476,7 @@ export default function PromotionProductsStep({
           {paginatedProducts.map(
             (product, index) => {
               const productKey =
+                product?.target_key ||
                 buildPromotionTargetKey(
                   product.id
                 );
@@ -394,47 +486,51 @@ export default function PromotionProductsStep({
                   productKey
                 );
 
-              const unavailableChannels =
-                getUnavailableChannels({
-                  productId: product.id,
-                  selectedChannelIds,
-                  channels,
-                  channelProductsByChannel,
-                });
-
-              const productAvailable =
-                selectedChannelIds.length >
-                  0 &&
-                unavailableChannels.length ===
-                  0;
-
               const variants =
-                variantsByProduct?.[
-                  String(product.id)
-                ];
+                Array.isArray(
+                  product?.variants
+                )
+                  ? product.variants
+                  : [];
 
-              const variantsLoaded =
-                Array.isArray(variants);
+              const hasVariants =
+                product?.has_variants ===
+                  true &&
+                variants.length > 0;
 
-              const loadingVariants =
-                loadingVariantIds.has(
-                  String(product.id)
-                );
+              const hasSelectedVariant =
+                variants.some((variant) => {
+                  const variantKey =
+                    variant?.target_key ||
+                    buildPromotionTargetKey(
+                      product.id,
+                      variant.id
+                    );
+
+                  return selectedTargetKeys.has(
+                    variantKey
+                  );
+                });
 
               return (
                 <Box
                   key={product.id}
                   sx={{
-                    p: { xs: 2, sm: 2.5 },
+                    p: {
+                      xs: 2,
+                      sm: 2.5,
+                    },
                     borderBottom:
                       index ===
                       paginatedProducts.length -
                         1
                         ? "none"
                         : "1px solid",
-                    borderColor: "divider",
+                    borderColor:
+                      "divider",
                     backgroundColor:
-                      productSelected
+                      productSelected ||
+                      hasSelectedVariant
                         ? "rgba(255, 152, 0, 0.04)"
                         : "transparent",
                   }}
@@ -452,7 +548,11 @@ export default function PromotionProductsStep({
                       }}
                       spacing={1.5}
                     >
-                      <Box sx={{ minWidth: 0 }}>
+                      <Box
+                        sx={{
+                          minWidth: 0,
+                        }}
+                      >
                         <Stack
                           direction="row"
                           spacing={1}
@@ -467,18 +567,47 @@ export default function PromotionProductsStep({
                                 "text.primary",
                             }}
                           >
-                            {product.name}
+                            {product.display_name ||
+                              product.name}
                           </Typography>
 
                           <Chip
-                            label={
-                              product.category_name ||
-                              "Sin categoría"
-                            }
+                            label={getCategoryName(
+                              product
+                            )}
                             size="small"
                             variant="outlined"
                           />
+
+                          {hasVariants ? (
+                            <Chip
+                              label={
+                                variants.length ===
+                                1
+                                  ? "1 variante"
+                                  : `${variants.length} variantes`
+                              }
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                            />
+                          ) : null}
                         </Stack>
+
+                        {product.description ? (
+                          <Typography
+                            sx={{
+                              mt: 0.5,
+                              fontSize: 13,
+                              color:
+                                "text.secondary",
+                            }}
+                          >
+                            {
+                              product.description
+                            }
+                          </Typography>
+                        ) : null}
 
                         <Typography
                           sx={{
@@ -489,34 +618,16 @@ export default function PromotionProductsStep({
                           }}
                         >
                           Precio de referencia:{" "}
-                          {formatPromotionCurrency(
-                            product.base_price
+                          {formatPriceRange(
+                            product
                           )}
                         </Typography>
                       </Box>
 
                       <Chip
-                        label={
-                          productAvailable
-                            ? "Disponible"
-                            : selectedChannelIds.length ===
-                                0
-                              ? "Selecciona canales"
-                              : `No disponible en ${unavailableChannels.join(
-                                  ", "
-                                )}`
-                        }
+                        label="Disponible"
                         size="small"
-                        color={
-                          productAvailable
-                            ? "success"
-                            : "warning"
-                        }
-                        variant={
-                          productAvailable
-                            ? "filled"
-                            : "outlined"
-                        }
+                        color="success"
                       />
                     </Stack>
 
@@ -528,7 +639,7 @@ export default function PromotionProductsStep({
                             productSelected
                           }
                           disabled={
-                            !productAvailable
+                            !hasSelectedChannels
                           }
                           onChange={(event) =>
                             onToggleProduct(
@@ -546,145 +657,122 @@ export default function PromotionProductsStep({
                             fontSize: 14,
                             fontWeight: 700,
                             color:
-                              productAvailable
+                              hasSelectedChannels
                                 ? "text.primary"
                                 : "text.secondary",
                           }}
                         >
-                          Seleccionar producto completo
+                          Seleccionar producto base
                         </Typography>
                       }
                     />
 
-                    {product.has_variants ? (
-                      <Box>
-                        <Button
-                          type="button"
-                          variant="outlined"
-                          disabled={
-                            loadingVariants
-                          }
-                          onClick={() =>
-                            onLoadVariants(
-                              product
-                            )
-                          }
-                        >
-                          {loadingVariants
-                            ? "Cargando variantes…"
-                            : variantsLoaded
-                              ? "Volver a consultar variantes"
-                              : "Ver variantes"}
-                        </Button>
-                      </Box>
-                    ) : null}
-
-                    {variantsLoaded ? (
-                      variants.length === 0 ? (
+                    {hasVariants ? (
+                      <Box
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          border: "1px solid",
+                          borderColor:
+                            "divider",
+                          backgroundColor:
+                            "background.default",
+                        }}
+                      >
                         <Typography
                           sx={{
+                            mb: 1,
                             fontSize: 13,
+                            fontWeight: 800,
                             color:
                               "text.secondary",
                           }}
                         >
-                          Este producto no tiene variantes
-                          disponibles.
+                          Variantes disponibles
                         </Typography>
-                      ) : (
-                        <Box
-                          sx={{
-                            p: 1.5,
-                            borderRadius: 1,
-                            border:
-                              "1px solid",
-                            borderColor:
-                              "divider",
-                            backgroundColor:
-                              "background.default",
-                          }}
-                        >
-                          <Stack spacing={1}>
-                            {variants.map(
-                              (variant) => {
-                                const variantKey =
-                                  buildPromotionTargetKey(
-                                    product.id,
+
+                        <Stack spacing={1}>
+                          {variants.map(
+                            (variant) => {
+                              const variantKey =
+                                variant?.target_key ||
+                                buildPromotionTargetKey(
+                                  product.id,
+                                  variant.id
+                                );
+
+                              const selected =
+                                selectedTargetKeys.has(
+                                  variantKey
+                                );
+
+                              return (
+                                <Box
+                                  key={
                                     variant.id
-                                  );
-
-                                const selected =
-                                  selectedTargetKeys.has(
-                                    variantKey
-                                  );
-
-                                const unavailableVariantChannels =
-                                  getUnavailableChannels(
-                                    {
-                                      productId:
-                                        product.id,
-                                      variantId:
-                                        variant.id,
-                                      selectedChannelIds,
-                                      channels,
-                                      channelProductsByChannel,
-                                    }
-                                  );
-
-                                const available =
-                                  selectedChannelIds.length >
-                                    0 &&
-                                  unavailableVariantChannels.length ===
-                                    0;
-
-                                return (
-                                  <Box
-                                    key={
-                                      variant.id
-                                    }
+                                  }
+                                  sx={{
+                                    p: 1.25,
+                                    borderRadius: 1,
+                                    border:
+                                      "1px solid",
+                                    borderColor:
+                                      selected
+                                        ? "primary.main"
+                                        : "divider",
+                                    backgroundColor:
+                                      selected
+                                        ? "rgba(255, 152, 0, 0.06)"
+                                        : "background.paper",
+                                  }}
+                                >
+                                  <FormControlLabel
                                     sx={{
-                                      p: 1.25,
-                                      borderRadius: 1,
-                                      border:
-                                        "1px solid",
-                                      borderColor:
-                                        selected
-                                          ? "primary.main"
-                                          : "divider",
-                                      backgroundColor:
-                                        selected
-                                          ? "rgba(255, 152, 0, 0.06)"
-                                          : "background.paper",
+                                      m: 0,
+                                      width:
+                                        "100%",
                                     }}
-                                  >
-                                    <FormControlLabel
-                                      sx={{
-                                        m: 0,
-                                        width:
-                                          "100%",
-                                      }}
-                                      control={
-                                        <Checkbox
-                                          checked={
-                                            selected
-                                          }
-                                          disabled={
-                                            !available
-                                          }
-                                          onChange={(
+                                    control={
+                                      <Checkbox
+                                        checked={
+                                          selected
+                                        }
+                                        disabled={
+                                          !hasSelectedChannels
+                                        }
+                                        onChange={(
+                                          event
+                                        ) =>
+                                          onToggleVariant(
+                                            product,
+                                            variant,
                                             event
-                                          ) =>
-                                            onToggleVariant(
-                                              product,
-                                              variant,
-                                              event
-                                                .target
-                                                .checked
-                                            )
-                                          }
-                                        />
-                                      }
-                                      label={
+                                              .target
+                                              .checked
+                                          )
+                                        }
+                                      />
+                                    }
+                                    label={
+                                      <Stack
+                                        direction={{
+                                          xs: "column",
+                                          sm: "row",
+                                        }}
+                                        spacing={{
+                                          xs: 0.25,
+                                          sm: 1,
+                                        }}
+                                        justifyContent="space-between"
+                                        alignItems={{
+                                          xs: "flex-start",
+                                          sm: "center",
+                                        }}
+                                        sx={{
+                                          width:
+                                            "100%",
+                                        }}
+                                      >
                                         <Box>
                                           <Typography
                                             sx={{
@@ -699,32 +787,42 @@ export default function PromotionProductsStep({
                                             }
                                           </Typography>
 
-                                          <Typography
-                                            sx={{
-                                              mt: 0.25,
-                                              fontSize: 12,
-                                              color:
-                                                "text.secondary",
-                                            }}
-                                          >
-                                            {available
-                                              ? formatPromotionCurrency(
-                                                  variant.price
-                                                )
-                                              : `No disponible en ${unavailableVariantChannels.join(
-                                                  ", "
-                                                )}`}
-                                          </Typography>
+                                          {variant?.is_default ? (
+                                            <Typography
+                                              sx={{
+                                                mt: 0.25,
+                                                fontSize: 12,
+                                                color:
+                                                  "text.secondary",
+                                              }}
+                                            >
+                                              Variante
+                                              predeterminada
+                                            </Typography>
+                                          ) : null}
                                         </Box>
-                                      }
-                                    />
-                                  </Box>
-                                );
-                              }
-                            )}
-                          </Stack>
-                        </Box>
-                      )
+
+                                        <Typography
+                                          sx={{
+                                            fontSize: 13,
+                                            fontWeight: 800,
+                                            color:
+                                              "text.primary",
+                                          }}
+                                        >
+                                          {formatPriceRange(
+                                            variant
+                                          )}
+                                        </Typography>
+                                      </Stack>
+                                    }
+                                  />
+                                </Box>
+                              );
+                            }
+                          )}
+                        </Stack>
+                      </Box>
                     ) : null}
                   </Stack>
                 </Box>
@@ -739,12 +837,17 @@ export default function PromotionProductsStep({
         totalPages={totalPages}
         startItem={startItem}
         endItem={endItem}
-        total={filteredProducts.length}
+        total={
+          filteredProducts.length
+        }
         hasPrev={page > 1}
         hasNext={page < totalPages}
         onPrev={() =>
           setPage((current) =>
-            Math.max(1, current - 1)
+            Math.max(
+              1,
+              current - 1
+            )
           )
         }
         onNext={() =>

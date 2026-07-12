@@ -1,12 +1,14 @@
 import {
-  Box,
-  MenuItem,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
+  Box, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+
+import PaginationFooter from "../../../common/PaginationFooter";
 
 import {
   formatPromotionCurrency,
@@ -18,6 +20,12 @@ import {
   PromotionFieldBlock,
   PromotionSectionTitle,
 } from "./PromotionFormField";
+
+const ITEMS_PER_PAGE = 5;
+
+function isValidDecimalPrice(value) {
+  return /^\d*(\.\d{0,2})?$/.test(value);
+}
 
 export default function PromotionConfigurationStep({
   form,
@@ -105,6 +113,12 @@ function PromotionalPriceConfiguration({
   getBasePrice,
   onTargetPriceChange,
 }) {
+  const [page, setPage] = useState(1);
+
+  const targets = Array.isArray(form.targets)
+    ? form.targets
+    : [];
+
   const selectedChannels = channels.filter(
     (channel) =>
       form.channel_ids.some(
@@ -114,6 +128,41 @@ function PromotionalPriceConfiguration({
             channel.branch_sales_channel_id
           )
       )
+  );
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      targets.length / ITEMS_PER_PAGE
+    )
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [targets.length]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const startIndex =
+    (page - 1) * ITEMS_PER_PAGE;
+
+  const paginatedTargets = targets.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
+  const startItem =
+    targets.length === 0
+      ? 0
+      : startIndex + 1;
+
+  const endItem = Math.min(
+    startIndex + ITEMS_PER_PAGE,
+    targets.length
   );
 
   return (
@@ -133,7 +182,7 @@ function PromotionalPriceConfiguration({
         combinación de producto y canal.
       </Typography>
 
-      {form.targets.map((target) => (
+      {paginatedTargets.map((target) => (
         <Box
           key={target.target_key}
           sx={{
@@ -177,6 +226,11 @@ function PromotionalPriceConfiguration({
                       channelId
                     );
 
+                  const currentValue =
+                    target.channel_prices?.[
+                      String(channelId)
+                    ] ?? "";
+
                   return (
                     <PromotionFieldBlock
                       key={channelId}
@@ -186,27 +240,31 @@ function PromotionalPriceConfiguration({
                       )}`}
                       input={
                         <TextField
-                          type="number"
-                          value={
-                            target
-                              .channel_prices?.[
-                              String(
-                                channelId
+                          type="text"
+                          value={currentValue}
+                          onChange={(event) => {
+                            const value =
+                              event.target.value;
+
+                            if (
+                              isValidDecimalPrice(
+                                value
                               )
-                            ] ?? ""
-                          }
-                          onChange={(event) =>
-                            onTargetPriceChange(
-                              target.target_key,
-                              channelId,
-                              event.target
-                                .value
-                            )
-                          }
+                            ) {
+                              onTargetPriceChange(
+                                target.target_key,
+                                channelId,
+                                value
+                              );
+                            }
+                          }}
                           placeholder="0.00"
+                          autoComplete="off"
                           inputProps={{
-                            min: 0.01,
-                            step: 0.01,
+                            inputMode: "decimal",
+                            pattern:
+                              "[0-9]*\\.?[0-9]{0,2}",
+                            maxLength: 12,
                           }}
                         />
                       }
@@ -218,6 +276,30 @@ function PromotionalPriceConfiguration({
           </Stack>
         </Box>
       ))}
+
+      <PaginationFooter
+        page={page}
+        totalPages={totalPages}
+        startItem={startItem}
+        endItem={endItem}
+        total={targets.length}
+        hasPrev={page > 1}
+        hasNext={page < totalPages}
+        onPrev={() =>
+          setPage((current) =>
+            Math.max(1, current - 1)
+          )
+        }
+        onNext={() =>
+          setPage((current) =>
+            Math.min(
+              totalPages,
+              current + 1
+            )
+          )
+        }
+        itemLabel="participantes"
+      />
     </Stack>
   );
 }
