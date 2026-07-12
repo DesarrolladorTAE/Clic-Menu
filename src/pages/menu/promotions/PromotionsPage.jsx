@@ -5,8 +5,17 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
 import PageContainer from "../../../components/common/PageContainer";
 import AppAlert from "../../../components/common/AppAlert";
@@ -36,41 +45,92 @@ const ITEMS_PER_PAGE = 5;
 
 export default function PromotionsPage() {
   const { restaurantId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const [branches, setBranches] = useState([]);
-  const [selectedBranchId, setSelectedBranchId] =
+  const returnedBranchId =
+    location.state?.branchId
+      ? String(location.state.branchId)
+      : "";
+
+  const returnedPromotionType =
+    location.state?.promotionType ||
+    "promotional_price";
+
+  const returnedPromotions = Array.isArray(
+    location.state?.cachedPromotions
+  )
+    ? location.state.cachedPromotions
+    : location.state?.createdPromotion
+      ? [location.state.createdPromotion]
+      : [];
+
+  const restaurantName =
+    location.state?.restaurantName ||
+    "RESTAURANTE";
+
+  const [branches, setBranches] =
+    useState([]);
+
+  const [
+    selectedBranchId,
+    setSelectedBranchId,
+  ] = useState(returnedBranchId);
+
+  const [promotions, setPromotions] =
+    useState(returnedPromotions);
+
+  const [
+    loadingBranches,
+    setLoadingBranches,
+  ] = useState(true);
+
+  const [
+    loadingPromotions,
+    setLoadingPromotions,
+  ] = useState(
+    returnedPromotions.length === 0
+  );
+
+  const [activeType, setActiveType] =
+    useState(returnedPromotionType);
+
+  const [search, setSearch] =
     useState("");
 
-  const [promotions, setPromotions] = useState([]);
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("all");
 
-  const [loadingBranches, setLoadingBranches] =
-    useState(true);
-  const [loadingPromotions, setLoadingPromotions] =
-    useState(false);
-
-  const [activeType, setActiveType] = useState(
-    "promotional_price"
-  );
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState("all");
   const [page, setPage] = useState(1);
 
-  const [updatingIds, setUpdatingIds] = useState(
-    new Set()
+  const [updatingIds, setUpdatingIds] =
+    useState(new Set());
+
+  const [
+    promotionToDelete,
+    setPromotionToDelete,
+  ] = useState(null);
+
+  const [deleting, setDeleting] =
+    useState(false);
+
+  const [alertState, setAlertState] =
+    useState({
+      open: false,
+      severity: "error",
+      title: "",
+      message: "",
+    });
+
+  const initialCacheRef = useRef(
+    returnedPromotions.length > 0 &&
+      !!returnedBranchId
   );
 
-  const [promotionToDelete, setPromotionToDelete] =
-    useState(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const [alertState, setAlertState] = useState({
-    open: false,
-    severity: "error",
-    title: "",
-    message: "",
-  });
+  const successHandledRef =
+    useRef(false);
 
   const showAlert = ({
     severity = "error",
@@ -95,34 +155,68 @@ export default function PromotionsPage() {
   };
 
   useEffect(() => {
+    if (
+      successHandledRef.current ||
+      !location.state?.successMessage
+    ) {
+      return;
+    }
+
+    successHandledRef.current = true;
+
+    showAlert({
+      severity: "success",
+      title: "Hecho",
+      message:
+        location.state.successMessage,
+    });
+  }, [location.state]);
+
+  useEffect(() => {
     let active = true;
 
     const loadBranches = async () => {
       setLoadingBranches(true);
 
       try {
-        const result = await getPromotionBranches(
-          restaurantId
-        );
+        const result =
+          await getPromotionBranches(
+            restaurantId
+          );
 
         if (!active) return;
 
         setBranches(result);
 
-        setSelectedBranchId((current) => {
-          const currentExists = result.some(
-            (branch) =>
-              String(branch.id) === String(current)
-          );
+        setSelectedBranchId(
+          (current) => {
+            const currentExists =
+              result.some(
+                (branch) =>
+                  String(branch.id) ===
+                  String(current)
+              );
 
-          if (currentExists) {
-            return String(current);
+            if (currentExists) {
+              return String(current);
+            }
+
+            const returnedExists =
+              result.some(
+                (branch) =>
+                  String(branch.id) ===
+                  returnedBranchId
+              );
+
+            if (returnedExists) {
+              return returnedBranchId;
+            }
+
+            return result[0]?.id
+              ? String(result[0].id)
+              : "";
           }
-
-          return result[0]?.id
-            ? String(result[0].id)
-            : "";
-        });
+        );
       } catch (error) {
         if (!active) return;
 
@@ -133,7 +227,8 @@ export default function PromotionsPage() {
           severity: "error",
           title: "Error",
           message:
-            error?.response?.data?.message ||
+            error?.response?.data
+              ?.message ||
             error?.message ||
             "No se pudieron cargar las sucursales.",
         });
@@ -149,7 +244,10 @@ export default function PromotionsPage() {
     return () => {
       active = false;
     };
-  }, [restaurantId]);
+  }, [
+    restaurantId,
+    returnedBranchId,
+  ]);
 
   useEffect(() => {
     if (!selectedBranchId) {
@@ -160,13 +258,21 @@ export default function PromotionsPage() {
     let active = true;
 
     const loadPromotions = async () => {
-      setLoadingPromotions(true);
+      const shouldLoadSilently =
+        initialCacheRef.current &&
+        String(selectedBranchId) ===
+          String(returnedBranchId);
+
+      if (!shouldLoadSilently) {
+        setLoadingPromotions(true);
+      }
 
       try {
-        const result = await getPromotions(
-          restaurantId,
-          selectedBranchId
-        );
+        const result =
+          await getPromotions(
+            restaurantId,
+            selectedBranchId
+          );
 
         if (!active) return;
 
@@ -174,19 +280,24 @@ export default function PromotionsPage() {
       } catch (error) {
         if (!active) return;
 
-        setPromotions([]);
+        if (!shouldLoadSilently) {
+          setPromotions([]);
+        }
 
         showAlert({
           severity: "error",
           title: "Error",
           message:
-            error?.response?.data?.message ||
+            error?.response?.data
+              ?.message ||
             error?.message ||
             "No se pudieron cargar las promociones.",
         });
       } finally {
         if (active) {
           setLoadingPromotions(false);
+          initialCacheRef.current =
+            false;
         }
       }
     };
@@ -196,7 +307,11 @@ export default function PromotionsPage() {
     return () => {
       active = false;
     };
-  }, [restaurantId, selectedBranchId]);
+  }, [
+    restaurantId,
+    selectedBranchId,
+    returnedBranchId,
+  ]);
 
   const selectedBranch = useMemo(() => {
     return (
@@ -208,59 +323,78 @@ export default function PromotionsPage() {
     );
   }, [branches, selectedBranchId]);
 
-  const selectedTypePromotions = useMemo(() => {
-    return promotions.filter(
-      (promotion) => promotion?.type === activeType
-    );
-  }, [promotions, activeType]);
+  const selectedTypePromotions =
+    useMemo(() => {
+      return promotions.filter(
+        (promotion) =>
+          promotion?.type ===
+          activeType
+      );
+    }, [promotions, activeType]);
 
   const summary = useMemo(() => {
     return {
-      total: selectedTypePromotions.length,
-      active: selectedTypePromotions.filter(
-        (promotion) =>
-          promotion?.status === "active"
-      ).length,
-      inactive: selectedTypePromotions.filter(
-        (promotion) =>
-          promotion?.status === "inactive"
-      ).length,
-      current: selectedTypePromotions.filter(
-        isPromotionCurrent
-      ).length,
+      total:
+        selectedTypePromotions.length,
+      active:
+        selectedTypePromotions.filter(
+          (promotion) =>
+            promotion?.status ===
+            "active"
+        ).length,
+      inactive:
+        selectedTypePromotions.filter(
+          (promotion) =>
+            promotion?.status ===
+            "inactive"
+        ).length,
+      current:
+        selectedTypePromotions.filter(
+          isPromotionCurrent
+        ).length,
     };
   }, [selectedTypePromotions]);
 
-  const filteredPromotions = useMemo(() => {
-    const normalizedSearch = String(search || "")
-      .trim()
-      .toLocaleLowerCase("es-MX");
+  const filteredPromotions =
+    useMemo(() => {
+      const normalizedSearch = String(
+        search || ""
+      )
+        .trim()
+        .toLocaleLowerCase("es-MX");
 
-    return selectedTypePromotions.filter(
-      (promotion) => {
-        const matchesStatus =
-          statusFilter === "all" ||
-          promotion?.status === statusFilter;
+      return selectedTypePromotions.filter(
+        (promotion) => {
+          const matchesStatus =
+            statusFilter === "all" ||
+            promotion?.status ===
+              statusFilter;
 
-        const matchesSearch =
-          normalizedSearch === "" ||
-          getPromotionSearchText(
-            promotion
-          ).includes(normalizedSearch);
+          const matchesSearch =
+            normalizedSearch === "" ||
+            getPromotionSearchText(
+              promotion
+            ).includes(
+              normalizedSearch
+            );
 
-        return matchesStatus && matchesSearch;
-      }
-    );
-  }, [
-    selectedTypePromotions,
-    search,
-    statusFilter,
-  ]);
+          return (
+            matchesStatus &&
+            matchesSearch
+          );
+        }
+      );
+    }, [
+      selectedTypePromotions,
+      search,
+      statusFilter,
+    ]);
 
   const totalPages = Math.max(
     1,
     Math.ceil(
-      filteredPromotions.length / ITEMS_PER_PAGE
+      filteredPromotions.length /
+        ITEMS_PER_PAGE
     )
   );
 
@@ -279,45 +413,70 @@ export default function PromotionsPage() {
     }
   }, [page, totalPages]);
 
-  const paginatedPromotions = useMemo(() => {
-    const start = (page - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
+  const paginatedPromotions =
+    useMemo(() => {
+      const start =
+        (page - 1) *
+        ITEMS_PER_PAGE;
 
-    return filteredPromotions.slice(start, end);
-  }, [filteredPromotions, page]);
+      return filteredPromotions.slice(
+        start,
+        start + ITEMS_PER_PAGE
+      );
+    }, [filteredPromotions, page]);
 
   const startItem =
     filteredPromotions.length === 0
       ? 0
-      : (page - 1) * ITEMS_PER_PAGE + 1;
+      : (page - 1) *
+          ITEMS_PER_PAGE +
+        1;
 
   const endItem = Math.min(
     page * ITEMS_PER_PAGE,
     filteredPromotions.length
   );
 
-  const handleBranchChange = (branchId) => {
-    setSelectedBranchId(String(branchId));
+  const handleBranchChange = (
+    branchId
+  ) => {
+    initialCacheRef.current = false;
+    setSelectedBranchId(
+      String(branchId)
+    );
     setSearch("");
     setStatusFilter("all");
     setPage(1);
   };
 
   const handleCreate = () => {
-    showAlert({
-      severity: "info",
-      title: "Aviso",
-      message:
-        "La pantalla para crear promociones se agregará en el siguiente paso.",
-    });
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/promotions/create`,
+      {
+        state: {
+          restaurantName,
+          branchId:
+            selectedBranchId,
+          promotionType:
+            activeType,
+          cachedPromotions:
+            promotions,
+        },
+      }
+    );
   };
 
   const handleStatusChange = async (
     promotion,
     checked
   ) => {
-    const promotionId = String(promotion.id);
-    const previousStatus = promotion.status;
+    const promotionId = String(
+      promotion.id
+    );
+
+    const previousStatus =
+      promotion.status;
+
     const nextStatus = checked
       ? "active"
       : "inactive";
@@ -340,19 +499,21 @@ export default function PromotionsPage() {
     );
 
     try {
-      const result = await changePromotionStatus(
-        restaurantId,
-        selectedBranchId,
-        promotion.id,
-        nextStatus
-      );
+      const result =
+        await changePromotionStatus(
+          restaurantId,
+          selectedBranchId,
+          promotion.id,
+          nextStatus
+        );
 
       setPromotions((current) =>
         current.map((item) =>
           String(item.id) === promotionId
             ? {
                 ...item,
-                ...(result?.promotion || {}),
+                ...(result?.promotion ||
+                  {}),
                 status: nextStatus,
               }
             : item
@@ -374,7 +535,8 @@ export default function PromotionsPage() {
           String(item.id) === promotionId
             ? {
                 ...item,
-                status: previousStatus,
+                status:
+                  previousStatus,
               }
             : item
         )
@@ -384,7 +546,8 @@ export default function PromotionsPage() {
         severity: "error",
         title: "Error",
         message:
-          error?.response?.data?.message ||
+          error?.response?.data
+            ?.message ||
           error?.message ||
           "No se pudo actualizar el estado de la promoción.",
       });
@@ -397,7 +560,9 @@ export default function PromotionsPage() {
     }
   };
 
-  const handleDeleteRequest = (promotion) => {
+  const handleDeleteRequest = (
+    promotion
+  ) => {
     setPromotionToDelete(promotion);
   };
 
@@ -406,48 +571,57 @@ export default function PromotionsPage() {
     setPromotionToDelete(null);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!promotionToDelete?.id) return;
+  const handleDeleteConfirm =
+    async () => {
+      if (
+        !promotionToDelete?.id
+      ) {
+        return;
+      }
 
-    setDeleting(true);
+      setDeleting(true);
 
-    try {
-      const response = await deletePromotion(
-        restaurantId,
-        selectedBranchId,
-        promotionToDelete.id
-      );
+      try {
+        const response =
+          await deletePromotion(
+            restaurantId,
+            selectedBranchId,
+            promotionToDelete.id
+          );
 
-      setPromotions((current) =>
-        current.filter(
-          (promotion) =>
-            String(promotion.id) !==
-            String(promotionToDelete.id)
-        )
-      );
+        setPromotions((current) =>
+          current.filter(
+            (promotion) =>
+              String(promotion.id) !==
+              String(
+                promotionToDelete.id
+              )
+          )
+        );
 
-      showAlert({
-        severity: "success",
-        title: "Hecho",
-        message:
-          response?.message ||
-          "Promoción eliminada correctamente.",
-      });
+        showAlert({
+          severity: "success",
+          title: "Hecho",
+          message:
+            response?.message ||
+            "Promoción eliminada correctamente.",
+        });
 
-      setPromotionToDelete(null);
-    } catch (error) {
-      showAlert({
-        severity: "error",
-        title: "Error",
-        message:
-          error?.response?.data?.message ||
-          error?.message ||
-          "No se pudo eliminar la promoción.",
-      });
-    } finally {
-      setDeleting(false);
-    }
-  };
+        setPromotionToDelete(null);
+      } catch (error) {
+        showAlert({
+          severity: "error",
+          title: "Error",
+          message:
+            error?.response?.data
+              ?.message ||
+            error?.message ||
+            "No se pudo eliminar la promoción.",
+        });
+      } finally {
+        setDeleting(false);
+      }
+    };
 
   if (loadingBranches) {
     return (
@@ -459,12 +633,16 @@ export default function PromotionsPage() {
             placeItems: "center",
           }}
         >
-          <Stack spacing={2} alignItems="center">
+          <Stack
+            spacing={2}
+            alignItems="center"
+          >
             <CircularProgress color="primary" />
 
             <Typography
               sx={{
-                color: "text.secondary",
+                color:
+                  "text.secondary",
                 fontSize: 14,
               }}
             >
@@ -480,7 +658,9 @@ export default function PromotionsPage() {
     <PageContainer>
       <Stack spacing={3}>
         <PromotionsHeader
-          branchName={selectedBranch?.name}
+          branchName={
+            selectedBranch?.name
+          }
           onCreate={handleCreate}
         />
 
@@ -489,8 +669,12 @@ export default function PromotionsPage() {
         <PromotionBranchSelector
           branches={branches}
           value={selectedBranchId}
-          onChange={handleBranchChange}
-          disabled={loadingPromotions}
+          onChange={
+            handleBranchChange
+          }
+          disabled={
+            loadingPromotions
+          }
         />
 
         {branches.length === 0 ? (
@@ -500,7 +684,8 @@ export default function PromotionsPage() {
               py: 5,
               textAlign: "center",
               borderRadius: 1,
-              backgroundColor: "background.paper",
+              backgroundColor:
+                "background.paper",
               border: "1px solid",
               borderColor: "divider",
               boxShadow: "none",
@@ -520,19 +705,21 @@ export default function PromotionsPage() {
               sx={{
                 mt: 1,
                 fontSize: 14,
-                color: "text.secondary",
+                color:
+                  "text.secondary",
                 lineHeight: 1.55,
               }}
             >
-              Registra una sucursal antes de administrar
-              promociones.
+              Registra una sucursal antes de administrar promociones.
             </Typography>
           </Paper>
         ) : (
           <>
             <PromotionTypeSelector
               value={activeType}
-              onChange={setActiveType}
+              onChange={
+                setActiveType
+              }
             />
 
             <PromotionSummaryCards
@@ -542,22 +729,41 @@ export default function PromotionsPage() {
             <PromotionFilters
               search={search}
               status={statusFilter}
-              onSearchChange={setSearch}
-              onStatusChange={setStatusFilter}
+              onSearchChange={
+                setSearch
+              }
+              onStatusChange={
+                setStatusFilter
+              }
             />
 
             <PromotionList
-              promotions={paginatedPromotions}
-              loading={loadingPromotions}
-              updatingIds={updatingIds}
+              promotions={
+                paginatedPromotions
+              }
+              loading={
+                loadingPromotions
+              }
+              updatingIds={
+                updatingIds
+              }
               page={page}
-              totalPages={totalPages}
-              startItem={startItem}
+              totalPages={
+                totalPages
+              }
+              startItem={
+                startItem
+              }
               endItem={endItem}
-              total={filteredPromotions.length}
+              total={
+                filteredPromotions.length
+              }
               onPrev={() =>
                 setPage((current) =>
-                  Math.max(1, current - 1)
+                  Math.max(
+                    1,
+                    current - 1
+                  )
                 )
               }
               onNext={() =>
@@ -568,25 +774,39 @@ export default function PromotionsPage() {
                   )
                 )
               }
-              onStatusChange={handleStatusChange}
-              onDelete={handleDeleteRequest}
+              onStatusChange={
+                handleStatusChange
+              }
+              onDelete={
+                handleDeleteRequest
+              }
             />
           </>
         )}
       </Stack>
 
       <PromotionDeleteDialog
-        open={!!promotionToDelete}
-        promotion={promotionToDelete}
+        open={
+          !!promotionToDelete
+        }
+        promotion={
+          promotionToDelete
+        }
         deleting={deleting}
-        onClose={handleCloseDelete}
-        onConfirm={handleDeleteConfirm}
+        onClose={
+          handleCloseDelete
+        }
+        onConfirm={
+          handleDeleteConfirm
+        }
       />
 
       <AppAlert
         open={alertState.open}
         onClose={closeAlert}
-        severity={alertState.severity}
+        severity={
+          alertState.severity
+        }
         title={alertState.title}
         message={alertState.message}
         autoHideDuration={3000}
