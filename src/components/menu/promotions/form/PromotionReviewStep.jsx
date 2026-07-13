@@ -1,9 +1,5 @@
 import {
-  Box,
-  Chip,
-  Paper,
-  Stack,
-  Typography,
+  Box, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 import {
   useEffect,
@@ -25,6 +21,7 @@ export default function PromotionReviewStep({
   form,
   branch,
   channels,
+  isEditing = false,
 }) {
   const selectedChannels = channels.filter(
     (channel) =>
@@ -75,8 +72,9 @@ export default function PromotionReviewStep({
               color: "text.secondary",
             }}
           >
-            Verifica la información antes de crear la
-            promoción.
+            {isEditing
+              ? "Verifica la información antes de guardar los cambios."
+              : "Verifica la información antes de crear la promoción."}
           </Typography>
         </Box>
 

@@ -1,8 +1,5 @@
 import {
-  Button,
-  CircularProgress,
-  Paper,
-  Stack,
+  Button, CircularProgress, Paper, Stack,
 } from "@mui/material";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import ArrowForwardOutlinedIcon from "@mui/icons-material/ArrowForwardOutlined";
@@ -18,6 +15,13 @@ export default function PromotionFormActions({
   onNext,
   onSaveInactive,
   onSave,
+  cancelLabel = "Cancelar",
+  previousLabel = "Anterior",
+  nextLabel = "Siguiente",
+  saveInactiveLabel = "Guardar inactiva",
+  saveLabel = "Crear promoción",
+  savingLabel = "Creando…",
+  showSaveInactive = true,
 }) {
   const isFirst = activeStep === 0;
   const isLast =
@@ -51,7 +55,9 @@ export default function PromotionFormActions({
             )
           }
           onClick={
-            isFirst ? onCancel : onPrevious
+            isFirst
+              ? onCancel
+              : onPrevious
           }
           disabled={saving}
           sx={{
@@ -63,7 +69,9 @@ export default function PromotionFormActions({
             borderRadius: 2,
           }}
         >
-          {isFirst ? "Cancelar" : "Anterior"}
+          {isFirst
+            ? cancelLabel
+            : previousLabel}
         </Button>
 
         {!isLast ? (
@@ -87,7 +95,7 @@ export default function PromotionFormActions({
               fontWeight: 800,
             }}
           >
-            Siguiente
+            {nextLabel}
           </Button>
         ) : (
           <Stack
@@ -103,23 +111,27 @@ export default function PromotionFormActions({
               },
             }}
           >
-            <Button
-              type="button"
-              variant="outlined"
-              onClick={onSaveInactive}
-              disabled={saving}
-              sx={{
-                minWidth: {
-                  xs: "100%",
-                  md: 190,
-                },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Guardar inactiva
-            </Button>
+            {showSaveInactive ? (
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={
+                  onSaveInactive
+                }
+                disabled={saving}
+                sx={{
+                  minWidth: {
+                    xs: "100%",
+                    md: 190,
+                  },
+                  height: 44,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                {saveInactiveLabel}
+              </Button>
+            ) : null}
 
             <Button
               type="button"
@@ -147,8 +159,8 @@ export default function PromotionFormActions({
               }}
             >
               {saving
-                ? "Creando…"
-                : "Crear promoción"}
+                ? savingLabel
+                : saveLabel}
             </Button>
           </Stack>
         )}
