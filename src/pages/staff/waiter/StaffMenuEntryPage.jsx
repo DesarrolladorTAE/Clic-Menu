@@ -17,7 +17,10 @@ import PaginationFooter from "../../../components/common/PaginationFooter";
 import { useMenuProducts } from "../../../hooks/public/useMenuProducts";
 import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
 import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder";
-import { buildModifierContextSections } from "../../../hooks/public/publicMenu.utils";
+import {
+  buildModifierContextSections,
+  money,
+} from "../../../hooks/public/publicMenu.utils";
 
 import MenuHeaderCard from "../../../components/menu/staff/MenuHeaderCard";
 import WaiterWarehouseCreateDialog from "../../../components/menu/staff/WaiterWarehouseCreateDialog";
@@ -581,14 +584,115 @@ export default function StaffMenuEntryPage() {
             </div>
           )}
 
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Items: <strong>{cartOrder.cart.length}</strong> · Total aprox:{" "}
-            <strong>
-              {cartOrder.cartTotal?.toLocaleString?.("es-MX", {
-                style: "currency",
-                currency: "MXN",
-              })}
-            </strong>
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              border: "1px solid rgba(0,0,0,0.10)",
+              borderRadius: 14,
+              padding: 12,
+              background: "#FFFFFF",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              <span>Productos</span>
+
+              <strong>{cartOrder.cart.length}</strong>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              <span>Subtotal de referencia</span>
+
+              <strong>
+                {money(
+                  cartOrder.newItemsPricingSummary?.grossSubtotalReference ??
+                    cartOrder.cartTotal ??
+                    0,
+                )}
+              </strong>
+            </div>
+
+            {Number(
+              cartOrder.newItemsPricingSummary?.promotionDiscountPreview || 0,
+            ) > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  color: "#0F766E",
+                  fontSize: 12,
+                  fontWeight: 850,
+                }}
+              >
+                <span>Promoción visual disponible</span>
+
+                <strong>
+                  −
+                  {money(
+                    cartOrder.newItemsPricingSummary?.promotionDiscountPreview,
+                  )}
+                </strong>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                paddingTop: 8,
+                borderTop: "1px solid rgba(0,0,0,0.08)",
+                color: "#B45309",
+                fontSize: 13,
+                fontWeight: 950,
+              }}
+            >
+              <span>Total aprox.</span>
+
+              <strong>
+                {money(
+                  cartOrder.newItemsPricingSummary?.totalApproximate ??
+                    cartOrder.cartTotal ??
+                    0,
+                )}
+              </strong>
+            </div>
+
+            {cartOrder.newItemsPricingSummary
+              ?.hasUnresolvedQuantityPromotions ? (
+              <div
+                style={{
+                  border: "1px solid rgba(109,40,217,0.18)",
+                  borderRadius: 12,
+                  padding: "9px 10px",
+                  background: "rgba(109,40,217,0.07)",
+                  color: "#5B21B6",
+                  fontSize: 11,
+                  fontWeight: 850,
+                  lineHeight: 1.4,
+                }}
+              >
+                Incluye una promoción por cantidad. El descuento exacto se
+                confirmará al guardar los productos.
+              </div>
+            ) : null}
           </div>
 
           {cartOrder.sendToast ? (
@@ -674,7 +778,10 @@ export default function StaffMenuEntryPage() {
             : "Revisa los productos seleccionados antes de crear la comanda."
         }
         itemCount={cartDrawerItemCount}
-        total={cartOrder.totalGlobal}
+        total={cartOrder.displayTotal}
+        totalLabel={cartOrder.totalLabel}
+        isEstimated={cartOrder.isEstimated}
+        pricingSummary={cartOrder.pricingSummary}
         disabledClose={cartOrder.sending}
       >
         <MenuCartPanel
@@ -685,7 +792,8 @@ export default function StaffMenuEntryPage() {
               : "Selecciona productos y luego crea la comanda."
           }
           customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
-          total={cartOrder.totalGlobal}
+          total={cartOrder.displayTotal}
+          pricingSummary={cartOrder.pricingSummary}
           oldItems={cartOrder.oldItems}
           newItems={cartOrder.cart}
           sendToast={cartOrder.sendToast}
@@ -837,7 +945,9 @@ export default function StaffMenuEntryPage() {
 
       <MenuCartFloatingButton
         itemCount={cartDrawerItemCount}
-        total={cartOrder.totalGlobal}
+        total={cartOrder.displayTotal}
+        totalLabel={cartOrder.totalLabel}
+        isEstimated={cartOrder.isEstimated}
         disabled={false}
         onClick={() => setCartDrawerOpen(true)}
         label={hasCartContent ? "Ver comanda" : "Comanda"}

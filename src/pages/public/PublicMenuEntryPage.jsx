@@ -1191,7 +1191,12 @@ export default function PublicMenuEntryPage() {
         {(isWebMenu || canSelect) ? (
           <MenuCartFloatingButton
             itemCount={cartDrawerItemCount}
-            total={cartOrder.totalGlobal}
+            total={
+              cartOrder.displayTotal ??
+              cartOrder.totalGlobal
+            }
+            totalLabel={cartOrder.totalLabel}
+            isEstimated={cartOrder.isEstimated}
             disabled={false}
             onClick={() => setCartDrawerOpen(true)}
             label={hasCartContent ? "Ver comanda" : "Comanda"}

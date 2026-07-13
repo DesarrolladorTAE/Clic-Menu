@@ -11,17 +11,43 @@ function isValidColor(color) {
 export default function MenuCartFloatingButton({
   itemCount = 0,
   total = 0,
+
+  totalLabel = "",
+  isEstimated,
+
   disabled = false,
   onClick,
   label = "Ver comanda",
   title = "Abrir comanda",
   showTotal = true,
-  themeColor, // 👈 NUEVO
+  themeColor,
 }) {
   const theme = useTheme();
 
   const safeItemCount = Number(itemCount || 0);
   const hasItems = safeItemCount > 0;
+
+  const numericTotal = Number(total);
+  const resolvedTotal = Number.isFinite(numericTotal) ? numericTotal : 0;
+
+  const explicitTotalLabel = String(totalLabel || "").trim();
+  const normalizedTotalLabel = explicitTotalLabel.toLowerCase();
+
+  let resolvedStatusLabel = "";
+
+  if (
+    normalizedTotalLabel.includes("aprox") ||
+    normalizedTotalLabel.includes("estimado") ||
+    normalizedTotalLabel.includes("estimada")
+  ) {
+    resolvedStatusLabel = "Aprox.";
+  } else if (normalizedTotalLabel.includes("confirmado")) {
+    resolvedStatusLabel = "Confirmado";
+  } else if (typeof isEstimated === "boolean") {
+    resolvedStatusLabel = isEstimated ? "Aprox." : "Confirmado";
+  } else if (explicitTotalLabel) {
+    resolvedStatusLabel = explicitTotalLabel;
+  }
 
   const isPublicTheme = isValidColor(themeColor);
   const color = isPublicTheme
@@ -143,7 +169,29 @@ export default function MenuCartFloatingButton({
           }}
         >
           {safeItemCount} item{safeItemCount === 1 ? "" : "s"}
-          {showTotal ? ` · ${money(total)}` : ""}
+
+          {showTotal ? (
+            <>
+              {" · "}
+
+              {resolvedStatusLabel ? (
+                <>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 950,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    {resolvedStatusLabel}
+                  </span>{" "}
+                </>
+              ) : null}
+
+              {money(resolvedTotal)}
+            </>
+          ) : null}
         </span>
       </span>
     </button>

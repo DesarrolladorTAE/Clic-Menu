@@ -63,6 +63,13 @@ export default function PublicMenuModals({
         setChildCount={cartOrder.setChildCount}
         cartCount={cartOrder.cart.length}
         cartTotal={cartOrder.cartTotal}
+        newItemsPricingSummary={cartOrder.newItemsPricingSummary}
+        approximateTotal={
+          cartOrder.newItemsPricingSummary?.totalApproximate
+        }
+        hasQuantityPromotion={
+          cartOrder.newItemsPricingSummary?.hasUnresolvedQuantityPromotions
+        }
         sendToast={cartOrder.sendToast}
         onClose={() => cartOrder.setSendOpen(false)}
         onSubmit={confirmAndCreateOrder}

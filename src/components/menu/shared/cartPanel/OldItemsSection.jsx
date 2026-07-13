@@ -9,6 +9,131 @@ function getOldItemId(item) {
   return Number(item?.id || item?.order_item_id || 0);
 }
 
+function hasOwn(source, key) {
+  return (
+    source != null &&
+    typeof source === "object" &&
+    Object.prototype.hasOwnProperty.call(source, key)
+  );
+}
+
+function roundMoney(value) {
+  return Math.round((safeNum(value, 0) + Number.EPSILON) * 100) / 100;
+}
+
+function resolveConfirmedItemPricing(item) {
+  const quantity = Math.max(0, safeNum(item?.quantity, 1));
+  const unitPrice = roundMoney(Math.max(0, safeNum(item?.unit_price, 0)));
+
+  const legacyGrossLineTotal = roundMoney(unitPrice * quantity);
+
+  const grossLineTotal = roundMoney(
+    Math.max(
+      0,
+      hasOwn(item, "gross_line_total")
+        ? safeNum(item?.gross_line_total, legacyGrossLineTotal)
+        : hasOwn(item, "line_total")
+          ? safeNum(item?.line_total, legacyGrossLineTotal)
+          : legacyGrossLineTotal,
+    ),
+  );
+
+  const promotionDiscountTotal = roundMoney(
+    Math.max(
+      0,
+      hasOwn(item, "promotion_discount_total")
+        ? safeNum(item?.promotion_discount_total, 0)
+        : 0,
+    ),
+  );
+
+  const explicitDiscountTotal = hasOwn(item, "discount_total")
+    ? roundMoney(Math.max(0, safeNum(item?.discount_total, 0)))
+    : null;
+
+  const manualDiscountTotal = roundMoney(
+    Math.max(
+      0,
+      hasOwn(item, "manual_discount_total")
+        ? safeNum(item?.manual_discount_total, 0)
+        : explicitDiscountTotal !== null
+          ? explicitDiscountTotal - promotionDiscountTotal
+          : 0,
+    ),
+  );
+
+  const discountTotal = roundMoney(
+    Math.max(
+      0,
+      explicitDiscountTotal !== null
+        ? explicitDiscountTotal
+        : promotionDiscountTotal + manualDiscountTotal,
+    ),
+  );
+
+  const netLineTotal = roundMoney(
+    Math.max(
+      0,
+      hasOwn(item, "net_line_total")
+        ? safeNum(item?.net_line_total, grossLineTotal - discountTotal)
+        : grossLineTotal - discountTotal,
+    ),
+  );
+
+  const appliedPromotions = Array.isArray(item?.applied_promotions)
+    ? item.applied_promotions
+    : [];
+
+  const hasDetailedPricing = [
+    "gross_line_total",
+    "promotion_discount_total",
+    "manual_discount_total",
+    "discount_total",
+    "net_line_total",
+    "applied_promotions",
+  ].some((field) => hasOwn(item, field));
+
+  return {
+    unitPrice,
+    quantity,
+
+    grossLineTotal,
+    promotionDiscountTotal,
+    manualDiscountTotal,
+    discountTotal,
+    netLineTotal,
+
+    appliedPromotions,
+    hasDetailedPricing,
+    hasDiscount: discountTotal > 0,
+  };
+}
+
+function translatePromotionType(value) {
+  const type = String(value || "").toLowerCase();
+
+  const labels = {
+    promotional_price: "Precio promocional",
+    buy_x_pay_y: "Promoción por cantidad",
+    product_discount: "Descuento de producto",
+  };
+
+  return labels[type] || (value ? String(value) : "Promoción");
+}
+
+function formatAffectedQuantity(value) {
+  const quantity = Math.max(0, safeNum(value, 0));
+
+  if (Number.isInteger(quantity)) {
+    return String(quantity);
+  }
+
+  return quantity
+    .toFixed(3)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "");
+}
+
 function OldRemoveButton({
   item,
   onRemoveOldItem,
@@ -29,6 +154,114 @@ function OldRemoveButton({
     >
       {removing ? "⏳ Quitando..." : `🗑️ ${oldItemRemoveLabel}`}
     </PillButton>
+  );
+}
+
+function AppliedPromotionsBlock({ promotions = [] }) {
+  const rows = Array.isArray(promotions) ? promotions : [];
+
+  if (rows.length <= 0) return null;
+
+  return (
+    <div className="cm-applied-promotions">
+      {rows.map((promotion, index) => {
+        const promotionName =
+          promotion?.promotion_name || "Promoción aplicada";
+
+        const promotionType = translatePromotionType(
+          promotion?.promotion_type,
+        );
+
+        const quantityAffected = formatAffectedQuantity(
+          promotion?.quantity_affected,
+        );
+
+        const discountAmount = Math.max(
+          0,
+          safeNum(promotion?.discount_amount, 0),
+        );
+
+        return (
+          <span
+            key={
+              promotion?.order_item_promotion_application_id ||
+              promotion?.id ||
+              `${promotion?.promotion_id || "promotion"}-${index}`
+            }
+            className="cm-applied-promotion"
+            title={`${promotionName} · ${promotionType}`}
+          >
+            {promotionName} · {promotionType} · {quantityAffected} unidad
+            {Number(quantityAffected) === 1 ? "" : "es"} · −
+            {money(discountAmount)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConfirmedLinePricingBlock({ pricing }) {
+  if (!pricing?.hasDetailedPricing) return null;
+
+  return (
+    <div className="cm-line-discount">
+      <div className="cm-line-discount-row">
+        <span className="cm-line-discount-label">
+          Subtotal bruto
+        </span>
+
+        <span className="cm-line-discount-value">
+          {money(pricing.grossLineTotal)}
+        </span>
+      </div>
+
+      {pricing.promotionDiscountTotal > 0 ? (
+        <div className="cm-line-discount-row">
+          <span className="cm-line-discount-label">
+            Descuento promocional
+          </span>
+
+          <span className="cm-line-discount-value">
+            −{money(pricing.promotionDiscountTotal)}
+          </span>
+        </div>
+      ) : null}
+
+      {pricing.manualDiscountTotal > 0 ? (
+        <div className="cm-line-discount-row">
+          <span className="cm-line-discount-label">
+            Descuento manual
+          </span>
+
+          <span className="cm-line-discount-value">
+            −{money(pricing.manualDiscountTotal)}
+          </span>
+        </div>
+      ) : null}
+
+      {pricing.discountTotal > 0 ? (
+        <div className="cm-line-discount-row">
+          <span className="cm-line-discount-label">
+            Descuento total
+          </span>
+
+          <span className="cm-line-discount-value">
+            −{money(pricing.discountTotal)}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="cm-line-discount-row">
+        <span className="cm-line-discount-label">
+          Total neto confirmado
+        </span>
+
+        <span className="cm-line-discount-value">
+          {money(pricing.netLineTotal)}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -85,10 +318,7 @@ function OldRow({
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
 
-  const subtotal = safeNum(
-    item?.line_total,
-    safeNum(item?.unit_price, 0) * safeNum(item?.quantity, 1),
-  );
+  const pricing = resolveConfirmedItemPricing(item);
 
   const isCompositeParent =
     !!item?.is_composite_parent ||
@@ -117,13 +347,19 @@ function OldRow({
         <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
         <CompositeDetailBlock details={item?.components_detail || []} />
 
+        <AppliedPromotionsBlock
+          promotions={pricing.appliedPromotions}
+        />
+
+        <ConfirmedLinePricingBlock pricing={pricing} />
+
         {item?.notes ? (
           <div className="cm-note">• {renderNotes(item.notes)}</div>
         ) : null}
       </td>
 
       <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
-        {money(item?.unit_price)}
+        {money(pricing.unitPrice)}
       </td>
 
       <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
@@ -134,8 +370,9 @@ function OldRow({
         className={`cm-td cm-right cm-bold ${
           isCompositeParent ? "cm-combo" : ""
         }`}
+        title="Total neto confirmado por el servidor"
       >
-        {money(subtotal)}
+        {money(pricing.netLineTotal)}
       </td>
 
       {onRemoveOldItem ? (
@@ -162,10 +399,7 @@ function OldItemCard({
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
 
-  const subtotal = safeNum(
-    item?.line_total,
-    safeNum(item?.unit_price, 0) * safeNum(item?.quantity, 1),
-  );
+  const pricing = resolveConfirmedItemPricing(item);
 
   const isCompositeParent =
     !!item?.is_composite_parent ||
@@ -177,18 +411,29 @@ function OldItemCard({
         <div>
           <div className="cm-mobile-title">{label}</div>
           <div className="cm-mobile-sub">
-            Cantidad: <strong>{item?.quantity}</strong> · Precio:{" "}
-            <strong>{money(item?.unit_price)}</strong>
+            Cantidad: <strong>{item?.quantity}</strong> · Precio base:{" "}
+            <strong>{money(pricing.unitPrice)}</strong>
           </div>
         </div>
 
-        <div className="cm-mobile-price">{money(subtotal)}</div>
+        <div
+          className="cm-mobile-price"
+          title="Total neto confirmado por el servidor"
+        >
+          {money(pricing.netLineTotal)}
+        </div>
       </div>
 
       {isCompositeParent ? <span className="cm-combo-badge">Combo</span> : null}
 
       <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
       <CompositeDetailBlock details={item?.components_detail || []} />
+
+      <AppliedPromotionsBlock
+        promotions={pricing.appliedPromotions}
+      />
+
+      <ConfirmedLinePricingBlock pricing={pricing} />
 
       {item?.notes ? (
         <div className="cm-note">• {renderNotes(item.notes)}</div>
@@ -270,9 +515,9 @@ export default function OldItemsSection({
           <thead>
             <tr>
               <th>Producto</th>
-              <th style={{ textAlign: "right" }}>Precio</th>
+              <th style={{ textAlign: "right" }}>Precio base</th>
               <th style={{ textAlign: "center" }}>Cant</th>
-              <th style={{ textAlign: "right" }}>Subtotal</th>
+              <th style={{ textAlign: "right" }}>Total neto</th>
               {canRemoveOldItems ? (
                 <th style={{ textAlign: "right" }}>Acción</th>
               ) : null}

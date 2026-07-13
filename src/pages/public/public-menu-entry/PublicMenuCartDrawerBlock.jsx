@@ -35,7 +35,12 @@ export default function PublicMenuCartDrawerBlock({
           : "Revisa los productos seleccionados antes de enviar."
       }
       itemCount={cartDrawerItemCount}
-      total={cartOrder.totalGlobal}
+      total={
+        cartOrder.displayTotal ??
+        cartOrder.totalGlobal
+      }
+      totalLabel={cartOrder.totalLabel}
+      isEstimated={cartOrder.isEstimated}
       disabledClose={cartOrder.sending || billRequesting}
     >
       <MenuCartPanel
@@ -45,8 +50,16 @@ export default function PublicMenuCartDrawerBlock({
             ? "Orden abierta: puedes agregar productos."
             : "Se llena cuando seleccionas productos. Luego presiona Enviar."
         }
-        customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
-        total={cartOrder.totalGlobal}
+        customerName={
+          canAppend
+            ? cartOrder.activeOrder?.customer_name || ""
+            : ""
+        }
+        total={
+          cartOrder.displayTotal ??
+          cartOrder.totalGlobal
+        }
+        pricingSummary={cartOrder.pricingSummary}
         oldItems={cartOrder.oldItems}
         newItems={cartOrder.cart}
         sendToast={cartOrder.sendToast}

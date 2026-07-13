@@ -93,6 +93,572 @@ export function safeNum(v, d = 0) {
   return Number.isFinite(n) ? n : d;
 }
 
+/* =========================
+   Promotion presentation helpers
+========================= */
+
+export const PROMOTION_TYPE_PROMOTIONAL_PRICE = "promotional_price";
+export const PROMOTION_TYPE_BUY_X_PAY_Y = "buy_x_pay_y";
+export const PROMOTION_TYPE_PRODUCT_DISCOUNT = "product_discount";
+
+function hasOwn(source, key) {
+  return (
+    source != null &&
+    typeof source === "object" &&
+    Object.prototype.hasOwnProperty.call(source, key)
+  );
+}
+
+function roundMoney(value) {
+  const number = safeNum(value, 0);
+
+  return Math.round((number + Number.EPSILON) * 100) / 100;
+}
+
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const number = Number(value);
+
+    if (Number.isFinite(number)) {
+      return number;
+    }
+  }
+
+  return null;
+}
+
+function normalizeBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
+/**
+ * Normaliza únicamente la información visual de una promoción.
+ * Puede recibir un producto, una variante o un item local del carrito.
+ * No modifica el objeto original y no calcula las reglas de la promoción.
+ */
+export function normalizePromotionPresentation(source) {
+  const item =
+    source && typeof source === "object"
+      ? source
+      : {};
+
+  const promotion =
+    item?.promotion && typeof item.promotion === "object"
+      ? item.promotion
+      : null;
+
+  const basePrice = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        item?.price,
+        item?.unit_price,
+        0,
+      ) ?? 0,
+    ),
+  );
+
+  const promotionTypeRaw =
+    item?.promotion_type ??
+    promotion?.type ??
+    null;
+
+  const promotionType = promotionTypeRaw
+    ? String(promotionTypeRaw).trim().toLowerCase()
+    : null;
+
+  const hasExplicitPromotionFlag = hasOwn(
+    item,
+    "has_active_promotion",
+  );
+
+  const inferredPromotionState = Boolean(
+    promotion ||
+      promotionType ||
+      item?.promotion_label,
+  );
+
+  const hasActivePromotion = hasExplicitPromotionFlag
+    ? normalizeBoolean(item.has_active_promotion)
+    : inferredPromotionState;
+
+  const originalPrice = hasActivePromotion
+    ? roundMoney(
+        Math.max(
+          0,
+          firstFiniteNumber(
+            item?.original_price,
+            basePrice,
+          ) ?? basePrice,
+        ),
+      )
+    : basePrice;
+
+  const isQuantityPromotion =
+    hasActivePromotion &&
+    promotionType === PROMOTION_TYPE_BUY_X_PAY_Y;
+
+  let displayPrice = originalPrice;
+  let promotionDiscountPreview = 0;
+
+  if (hasActivePromotion && !isQuantityPromotion) {
+    displayPrice = roundMoney(
+      Math.max(
+        0,
+        firstFiniteNumber(
+          item?.display_price,
+          originalPrice,
+        ) ?? originalPrice,
+      ),
+    );
+
+    const explicitDiscountPreview = firstFiniteNumber(
+      item?.promotion_discount_preview,
+    );
+
+    promotionDiscountPreview = roundMoney(
+      Math.max(
+        0,
+        explicitDiscountPreview ??
+          Math.max(0, originalPrice - displayPrice),
+      ),
+    );
+
+    promotionDiscountPreview = roundMoney(
+      Math.min(
+        originalPrice,
+        promotionDiscountPreview,
+      ),
+    );
+  }
+
+  const promotionLabel = hasActivePromotion
+    ? String(
+        item?.promotion_label ||
+          promotion?.label ||
+          promotion?.name ||
+          "",
+      ).trim()
+    : "";
+
+  const hasImmediatePricePreview =
+    hasActivePromotion &&
+    !isQuantityPromotion &&
+    (
+      promotionDiscountPreview > 0 ||
+      displayPrice < originalPrice
+    );
+
+  return {
+    hasActivePromotion,
+    promotion,
+    promotionId: promotion?.id
+      ? Number(promotion.id)
+      : null,
+    promotionName: promotion?.name
+      ? String(promotion.name)
+      : "",
+    promotionType,
+    promotionLabel,
+
+    originalPrice,
+    displayPrice,
+    promotionDiscountPreview,
+
+    isQuantityPromotion,
+    hasImmediatePricePreview,
+    shouldStrikeOriginalPrice:
+      hasImmediatePricePreview &&
+      displayPrice < originalPrice,
+  };
+}
+
+/**
+ * Construye una vista previa local de productos todavía no enviados.
+ * Solo utiliza:
+ * - unit_price como precio base de referencia;
+ * - promotion_discount_preview enviado por backend.
+ * No calcula unidades gratuitas, agrupaciones 2x1/3x2 ni reglas promocionales.
+ */
+export function buildNewItemsPricingSummary(items) {
+  const rows = Array.isArray(items) ? items : [];
+
+  const lines = rows.map((item, index) => {
+    const quantity = Math.max(
+      0,
+      safeNum(item?.quantity, 1),
+    );
+
+    const promotion = normalizePromotionPresentation(item);
+
+    const unitPriceReference = roundMoney(
+      Math.max(
+        0,
+        firstFiniteNumber(
+          item?.unit_price,
+          item?.price,
+          promotion.originalPrice,
+          0,
+        ) ?? 0,
+      ),
+    );
+
+    const grossLineReference = roundMoney(
+      unitPriceReference * quantity,
+    );
+
+    const promotionDiscountPreview =
+      promotion.hasImmediatePricePreview
+        ? roundMoney(
+            Math.min(
+              grossLineReference,
+              promotion.promotionDiscountPreview * quantity,
+            ),
+          )
+        : 0;
+
+    const lineTotalApproximate = roundMoney(
+      Math.max(
+        0,
+        grossLineReference - promotionDiscountPreview,
+      ),
+    );
+
+    return {
+      key:
+        item?.key ||
+        `${Number(item?.product_id || item?.id || 0)}:${Number(
+          item?.variant_id || 0,
+        )}:${index}`,
+
+      productId: Number(
+        item?.product_id ||
+          item?.id ||
+          0,
+      ),
+
+      variantId: item?.variant_id
+        ? Number(item.variant_id)
+        : null,
+
+      quantity,
+      unitPriceReference,
+      grossLineReference,
+      promotionDiscountPreview,
+      lineTotalApproximate,
+      promotion,
+    };
+  });
+
+  const itemCount = lines.reduce(
+    (total, line) => total + line.quantity,
+    0,
+  );
+
+  const grossSubtotalReference = roundMoney(
+    lines.reduce(
+      (total, line) =>
+        total + line.grossLineReference,
+      0,
+    ),
+  );
+
+  const promotionDiscountPreview = roundMoney(
+    lines.reduce(
+      (total, line) =>
+        total + line.promotionDiscountPreview,
+      0,
+    ),
+  );
+
+  const totalApproximate = roundMoney(
+    Math.max(
+      0,
+      grossSubtotalReference -
+        promotionDiscountPreview,
+    ),
+  );
+
+  const hasQuantityPromotions = lines.some(
+    (line) =>
+      line.promotion.hasActivePromotion &&
+      line.promotion.isQuantityPromotion,
+  );
+
+  const hasAnyPromotion = lines.some(
+    (line) =>
+      line.promotion.hasActivePromotion,
+  );
+
+  return {
+    lines,
+    lineCount: lines.length,
+    itemCount,
+
+    grossSubtotalReference,
+    promotionDiscountPreview,
+    totalApproximate,
+
+    hasAnyPromotion,
+    hasQuantityPromotions,
+    hasUnresolvedQuantityPromotions:
+      hasQuantityPromotions,
+
+    isEstimated: lines.length > 0,
+  };
+}
+
+/**
+ * Normaliza los totales confirmados recibidos de una Order o una Sale.
+ * Prioridad del total confirmado:
+ * 1. payable_total
+ * 2. net_total
+ * 3. total
+ */
+export function normalizeConfirmedPricingSummary(source) {
+  const data =
+    source && typeof source === "object"
+      ? source
+      : {};
+
+  const confirmedFields = [
+    "subtotal",
+    "promotion_discount_total",
+    "manual_discount_total",
+    "discount_total",
+    "net_total",
+    "payable_total",
+    "total",
+  ];
+
+  const hasConfirmedData = confirmedFields.some(
+    (field) => hasOwn(data, field),
+  );
+
+  const subtotal = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.subtotal,
+        0,
+      ) ?? 0,
+    ),
+  );
+
+  const promotionDiscountTotal = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.promotion_discount_total,
+        0,
+      ) ?? 0,
+    ),
+  );
+
+  const explicitDiscountTotal = firstFiniteNumber(
+    data?.discount_total,
+  );
+
+  const explicitManualDiscountTotal = firstFiniteNumber(
+    data?.manual_discount_total,
+  );
+
+  const manualDiscountTotal = roundMoney(
+    Math.max(
+      0,
+      explicitManualDiscountTotal ??
+        Math.max(
+          0,
+          safeNum(explicitDiscountTotal, 0) -
+            promotionDiscountTotal,
+        ),
+    ),
+  );
+
+  const discountTotal = roundMoney(
+    Math.max(
+      0,
+      explicitDiscountTotal ??
+        (
+          promotionDiscountTotal +
+          manualDiscountTotal
+        ),
+    ),
+  );
+
+  const calculatedNetTotal = roundMoney(
+    Math.max(
+      0,
+      subtotal - discountTotal,
+    ),
+  );
+
+  const netTotal = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.net_total,
+        calculatedNetTotal,
+      ) ?? calculatedNetTotal,
+    ),
+  );
+
+  const payableTotal = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.payable_total,
+        data?.net_total,
+        data?.total,
+        netTotal,
+      ) ?? netTotal,
+    ),
+  );
+
+  const total = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.total,
+        payableTotal,
+      ) ?? payableTotal,
+    ),
+  );
+
+  const confirmedTotal = roundMoney(
+    Math.max(
+      0,
+      firstFiniteNumber(
+        data?.payable_total,
+        data?.net_total,
+        data?.total,
+        netTotal,
+      ) ?? netTotal,
+    ),
+  );
+
+  return {
+    hasConfirmedData,
+
+    subtotal,
+    promotionDiscountTotal,
+    manualDiscountTotal,
+    discountTotal,
+    netTotal,
+    payableTotal,
+    total,
+
+    confirmedTotal,
+    isEstimated: false,
+  };
+}
+
+/**
+ * Combina una orden o venta confirmada con productos nuevos sin enviar.
+ * Cuando existen productos nuevos, el resultado completo siempre se marca
+ * como aproximado. El backend confirmará promociones y totales al persistir.
+ */
+export function buildCombinedPricingSummary(
+  confirmedSource,
+  newItems = [],
+) {
+  const confirmed =
+    confirmedSource?.hasConfirmedData !== undefined
+      ? confirmedSource
+      : normalizeConfirmedPricingSummary(
+          confirmedSource,
+        );
+
+  const pending =
+    newItems?.grossSubtotalReference !== undefined
+      ? newItems
+      : buildNewItemsPricingSummary(newItems);
+
+  const hasConfirmed = Boolean(
+    confirmed?.hasConfirmedData,
+  );
+
+  const hasPending =
+    safeNum(pending?.lineCount, 0) > 0;
+
+  const combinedGrossSubtotalReference = roundMoney(
+    safeNum(confirmed?.subtotal, 0) +
+      safeNum(
+        pending?.grossSubtotalReference,
+        0,
+      ),
+  );
+
+  const combinedPromotionDiscountReference = roundMoney(
+    safeNum(
+      confirmed?.promotionDiscountTotal,
+      0,
+    ) +
+      safeNum(
+        pending?.promotionDiscountPreview,
+        0,
+      ),
+  );
+
+  const displayTotal = roundMoney(
+    safeNum(
+      confirmed?.confirmedTotal,
+      0,
+    ) +
+      safeNum(
+        pending?.totalApproximate,
+        0,
+      ),
+  );
+
+  const isEstimated = hasPending;
+
+  const totalLabel = isEstimated
+    ? "Total aproximado"
+    : hasConfirmed
+      ? "Total confirmado"
+      : "Total";
+
+  return {
+    confirmed,
+    pending,
+
+    hasConfirmed,
+    hasPending,
+    isEstimated,
+
+    totalLabel,
+    displayTotal,
+
+    combinedGrossSubtotalReference,
+    combinedPromotionDiscountReference,
+
+    hasQuantityPromotions: Boolean(
+      pending?.hasQuantityPromotions,
+    ),
+
+    hasUnresolvedQuantityPromotions: Boolean(
+      pending?.hasUnresolvedQuantityPromotions,
+    ),
+  };
+}
+
 export function safeHash(obj) {
   try {
     const s = JSON.stringify(obj || []);
@@ -101,6 +667,7 @@ export function safeHash(obj) {
     return String(Date.now());
   }
 }
+
 
 export function makeComponentModifierKey(componentProductId, componentVariantId = null) {
   return `${Number(componentProductId || 0)}:${componentVariantId ? Number(componentVariantId) : 0}`;

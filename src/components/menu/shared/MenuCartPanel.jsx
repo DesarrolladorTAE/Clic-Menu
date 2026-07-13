@@ -11,11 +11,239 @@ import {
   getToastStyles,
 } from "./cartPanel/cartPanel.utils";
 
+function toDisplayAmount(value, fallback = 0) {
+  const number = Number(value);
+
+  if (Number.isFinite(number)) {
+    return number;
+  }
+
+  const fallbackNumber = Number(fallback);
+
+  return Number.isFinite(fallbackNumber) ? fallbackNumber : 0;
+}
+
+function PricingSummaryBlock({
+  pricingSummary,
+  fallbackTotal = 0,
+}) {
+  if (!pricingSummary || typeof pricingSummary !== "object") {
+    return null;
+  }
+
+  const confirmed =
+    pricingSummary?.confirmed &&
+    typeof pricingSummary.confirmed === "object"
+      ? pricingSummary.confirmed
+      : {};
+
+  const pending =
+    pricingSummary?.pending &&
+    typeof pricingSummary.pending === "object"
+      ? pricingSummary.pending
+      : {};
+
+  const hasConfirmed = Boolean(pricingSummary?.hasConfirmed);
+  const hasPending = Boolean(pricingSummary?.hasPending);
+  const isEstimated = Boolean(pricingSummary?.isEstimated);
+
+  if (!hasConfirmed && !hasPending) {
+    return null;
+  }
+
+  const confirmedSubtotal = toDisplayAmount(
+    confirmed?.subtotal,
+    0,
+  );
+
+  const confirmedPromotionDiscount = toDisplayAmount(
+    confirmed?.promotionDiscountTotal,
+    0,
+  );
+
+  const confirmedManualDiscount = toDisplayAmount(
+    confirmed?.manualDiscountTotal,
+    0,
+  );
+
+  const confirmedTotal = toDisplayAmount(
+    confirmed?.confirmedTotal,
+    0,
+  );
+
+  const pendingGrossSubtotal = toDisplayAmount(
+    pending?.grossSubtotalReference,
+    0,
+  );
+
+  const pendingPromotionPreview = toDisplayAmount(
+    pending?.promotionDiscountPreview,
+    0,
+  );
+
+  const pendingTotalApproximate = toDisplayAmount(
+    pending?.totalApproximate,
+    pendingGrossSubtotal,
+  );
+
+  const displayTotal = toDisplayAmount(
+    pricingSummary?.displayTotal,
+    fallbackTotal,
+  );
+
+  const totalLabel =
+    hasConfirmed && hasPending
+      ? "Total combinado estimado"
+      : String(
+          pricingSummary?.totalLabel ||
+            (isEstimated
+              ? "Total aproximado"
+              : "Total confirmado"),
+        );
+
+  const hasUnresolvedQuantityPromotions = Boolean(
+    pricingSummary?.hasUnresolvedQuantityPromotions,
+  );
+
+  return (
+    <div className="cm-pricing-summary">
+      <div className="cm-pricing-summary-head">
+        <div className="cm-pricing-summary-title">
+          Resumen de importes
+        </div>
+
+        <span
+          className={`cm-pricing-state ${
+            isEstimated
+              ? "cm-pricing-state-estimated"
+              : "cm-pricing-state-confirmed"
+          }`}
+        >
+          {isEstimated ? "Aproximado" : "Confirmado"}
+        </span>
+      </div>
+
+      <div className="cm-pricing-summary-grid">
+        {hasConfirmed ? (
+          <>
+            <div className="cm-pricing-summary-row">
+              <span className="cm-pricing-summary-label">
+                Subtotal bruto confirmado
+              </span>
+
+              <span className="cm-pricing-summary-value">
+                {money(confirmedSubtotal)}
+              </span>
+            </div>
+
+            {confirmedPromotionDiscount > 0 ? (
+              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
+                <span className="cm-pricing-summary-label">
+                  Promociones confirmadas
+                </span>
+
+                <span className="cm-pricing-summary-value">
+                  −{money(confirmedPromotionDiscount)}
+                </span>
+              </div>
+            ) : null}
+
+            {confirmedManualDiscount > 0 ? (
+              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
+                <span className="cm-pricing-summary-label">
+                  Descuento manual confirmado
+                </span>
+
+                <span className="cm-pricing-summary-value">
+                  −{money(confirmedManualDiscount)}
+                </span>
+              </div>
+            ) : null}
+
+            {hasPending ? (
+              <div className="cm-pricing-summary-row">
+                <span className="cm-pricing-summary-label">
+                  Total confirmado actual
+                </span>
+
+                <span className="cm-pricing-summary-value">
+                  {money(confirmedTotal)}
+                </span>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {hasPending ? (
+          <>
+            <div className="cm-pricing-summary-row">
+              <span className="cm-pricing-summary-label">
+                Nuevos productos · subtotal base
+              </span>
+
+              <span className="cm-pricing-summary-value">
+                {money(pendingGrossSubtotal)}
+              </span>
+            </div>
+
+            {pendingPromotionPreview > 0 ? (
+              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
+                <span className="cm-pricing-summary-label">
+                  Promoción visual pendiente
+                </span>
+
+                <span className="cm-pricing-summary-value">
+                  −{money(pendingPromotionPreview)}
+                </span>
+              </div>
+            ) : null}
+
+            {hasConfirmed ? (
+              <div className="cm-pricing-summary-row">
+                <span className="cm-pricing-summary-label">
+                  Nuevos productos aproximados
+                </span>
+
+                <span className="cm-pricing-summary-value">
+                  {money(pendingTotalApproximate)}
+                </span>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        <div className="cm-pricing-summary-row cm-pricing-summary-row-total">
+          <span className="cm-pricing-summary-label">
+            {totalLabel}
+          </span>
+
+          <span className="cm-pricing-summary-value">
+            {money(displayTotal)}
+          </span>
+        </div>
+      </div>
+
+      {isEstimated ? (
+        <div className="cm-pricing-summary-note cm-pricing-summary-note-estimated">
+          {hasUnresolvedQuantityPromotions
+            ? "Incluye promociones por cantidad. El descuento exacto se confirmará al enviar los productos."
+            : "El total final se confirmará al enviar."}
+        </div>
+      ) : (
+        <div className="cm-pricing-summary-note cm-pricing-summary-note-confirmed">
+          Los importes mostrados fueron confirmados por el servidor.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MenuCartPanel({
   title = "Comanda",
   subtitle = "",
   customerName = "",
   total = 0,
+  pricingSummary = null,
   oldItems = [],
   newItems = [],
   sendToast = "",
@@ -49,6 +277,14 @@ export default function MenuCartPanel({
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
   const toastStyles = getToastStyles(sendToast);
+
+  const hasPricingSummary =
+    pricingSummary &&
+    typeof pricingSummary === "object";
+
+  const resolvedDisplayTotal = hasPricingSummary
+    ? toDisplayAmount(pricingSummary?.displayTotal, total)
+    : toDisplayAmount(total, 0);
 
   const resolvedSubmitTitle =
     submitTitle ||
@@ -104,10 +340,6 @@ export default function MenuCartPanel({
           </div>
 
           <div className="cm-actions">
-            <Badge tone="default">
-              Total: <strong style={{ marginLeft: 6 }}>{money(total)}</strong>
-            </Badge>
-
             <PillButton
               tone="danger"
               onClick={onEmpty}
@@ -173,6 +405,11 @@ export default function MenuCartPanel({
       {requestBillBlock ? (
         <div style={{ marginTop: 12 }}>{requestBillBlock}</div>
       ) : null}
+
+      <PricingSummaryBlock
+        pricingSummary={pricingSummary}
+        fallbackTotal={resolvedDisplayTotal}
+      />
 
       {hasOld ? (
         <OldItemsSection

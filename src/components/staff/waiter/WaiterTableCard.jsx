@@ -1,20 +1,43 @@
 import React, { useMemo } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, Chip, Stack, Typography,
 } from "@mui/material";
 
 function money(n) {
   const num = Number(n || 0);
   try {
-    return num.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+    return num.toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    });
   } catch {
     return `$${num.toFixed(2)}`;
   }
+}
+
+function firstValidAmount(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    const amount = Number(value);
+
+    if (Number.isFinite(amount)) {
+      return amount;
+    }
+  }
+
+  return 0;
+}
+
+function resolveOrderDisplayTotal(order) {
+  return firstValidAmount(
+    order?.sale?.total,
+    order?.payable_total,
+    order?.net_total,
+    order?.total
+  );
 }
 
 function stateVisual(uiState, orderStatus) {
@@ -127,6 +150,13 @@ export default function WaiterTableCard({
   const hasOpenOrder = !!openOrder?.id;
   const openOrderId = Number(openOrder?.id || 0);
   const orderStatus = String(openOrder?.status || "");
+
+  const orderDisplayTotal = resolveOrderDisplayTotal(openOrder);
+
+  const orderTotalLabel =
+    orderStatus === "paying"
+      ? "Total confirmado"
+      : "Total cobrable";
 
   const uiState = String(table?.ui_state || "free");
   const visual = stateVisual(uiState, orderStatus);
@@ -396,7 +426,10 @@ export default function WaiterTableCard({
             </Typography>
 
             <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-              Total: <strong style={{ color: "#3F3A52" }}>{money(openOrder.total)}</strong>
+              {orderTotalLabel}:{" "}
+              <strong style={{ color: "#3F3A52" }}>
+                {money(orderDisplayTotal)}
+              </strong>
             </Typography>
 
             {orderStatus === "paying" ? (

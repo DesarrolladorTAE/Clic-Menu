@@ -602,7 +602,12 @@ export default function CashierDirectOrderPage() {
           menuData={data}
           cashSession={cashSession}
           cartCount={cartDrawerItemCount}
+
           cartTotal={cartOrder.totalGlobal}
+          total={cartOrder.displayTotal}
+          totalLabel={cartOrder.totalLabel}
+          isEstimated={cartOrder.isEstimated}
+
           q={q}
           onSearchChange={setQ}
           totalVisible={filteredProducts.length}
@@ -717,6 +722,7 @@ export default function CashierDirectOrderPage() {
           onKitchenFlowChange={cartOrder.setKitchenFlow}
           cart={cartOrder.cart}
           total={cartOrder.cartTotal}
+          pricingSummary={cartOrder.newItemsPricingSummary}
           saving={cartOrder.sending}
           canChooseKitchenFlow={canChooseKitchenFlow}
         />
@@ -794,7 +800,10 @@ export default function CashierDirectOrderPage() {
             : "Revisa los productos seleccionados antes de crear la venta."
         }
         itemCount={cartDrawerItemCount}
-        total={cartOrder.totalGlobal}
+        total={cartOrder.displayTotal}
+        totalLabel={cartOrder.totalLabel}
+        isEstimated={cartOrder.isEstimated}
+        pricingSummary={cartOrder.pricingSummary}
         disabledClose={cartOrder.sending}
       >
         <MenuCartPanel
@@ -815,7 +824,8 @@ export default function CashierDirectOrderPage() {
               ? cartOrder.activeOrder?.customer_name || ""
               : ""
           }
-          total={cartOrder.totalGlobal}
+          total={cartOrder.displayTotal}
+          pricingSummary={cartOrder.pricingSummary}
           oldItems={cartOrder.oldItems}
           newItems={cartOrder.cart}
           sendToast={cartOrder.sendToast}
@@ -882,7 +892,9 @@ export default function CashierDirectOrderPage() {
 
       <MenuCartFloatingButton
         itemCount={cartDrawerItemCount}
-        total={cartOrder.totalGlobal}
+        total={cartOrder.displayTotal}
+        totalLabel={cartOrder.totalLabel}
+        isEstimated={cartOrder.isEstimated}
         disabled={false}
         onClick={() => setCartDrawerOpen(true)}
         label={hasCartContent ? "Ver venta" : "Venta"}

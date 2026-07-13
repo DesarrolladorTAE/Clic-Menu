@@ -19,6 +19,7 @@ export default function CashierDirectCreateOrderDialog({
   onKitchenFlowChange,
   cart = [],
   total = 0,
+  pricingSummary = null,
   saving = false,
   canChooseKitchenFlow = false,
 }) {
@@ -41,6 +42,56 @@ export default function CashierDirectCreateOrderDialog({
       0
     );
   }, [cart]);
+
+  const pricingPreview = useMemo(() => {
+    const summary =
+      pricingSummary && typeof pricingSummary === "object"
+        ? pricingSummary
+        : {};
+
+    const pending =
+      summary?.pending && typeof summary.pending === "object"
+        ? summary.pending
+        : summary;
+
+    const subtotalReference = Number(
+      pending?.grossSubtotalReference ?? total ?? 0
+    );
+
+    const promotionDiscountPreview = Number(
+      pending?.promotionDiscountPreview ?? 0
+    );
+
+    const approximateTotal = Number(
+      pending?.totalApproximate ??
+        summary?.displayTotal ??
+        total ??
+        0
+    );
+
+    const hasQuantityPromotion = Boolean(
+      pending?.hasUnresolvedQuantityPromotions ??
+        summary?.hasUnresolvedQuantityPromotions
+    );
+
+    return {
+      subtotalReference: Number.isFinite(subtotalReference)
+        ? subtotalReference
+        : 0,
+
+      promotionDiscountPreview: Number.isFinite(
+        promotionDiscountPreview
+      )
+        ? promotionDiscountPreview
+        : 0,
+
+      approximateTotal: Number.isFinite(approximateTotal)
+        ? approximateTotal
+        : 0,
+
+      hasQuantityPromotion,
+    };
+  }, [pricingSummary, total]);
 
   const handleNameChange = (value) => {
     setLocalName(value);
@@ -159,16 +210,166 @@ export default function CashierDirectCreateOrderDialog({
                   Resumen
                 </Typography>
 
-                <Typography
+                <Box
                   sx={{
-                    mt: 0.5,
-                    fontSize: 14,
-                    color: "text.secondary",
+                    mt: 1.25,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    backgroundColor: "#FCFCFC",
+                    p: 1.5,
                   }}
                 >
-                  {itemCount} producto{itemCount === 1 ? "" : "s"} ·{" "}
-                  {formatCurrency(total)}
-                </Typography>
+                  <Stack spacing={1}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={2}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          color: "text.secondary",
+                        }}
+                      >
+                        Productos
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {itemCount}
+                      </Typography>
+                    </Stack>
+
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={2}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          color: "text.secondary",
+                        }}
+                      >
+                        Subtotal de referencia
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatCurrency(
+                          pricingPreview.subtotalReference
+                        )}
+                      </Typography>
+                    </Stack>
+
+                    {pricingPreview.promotionDiscountPreview > 0 ? (
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        spacing={2}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            color: "success.main",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Promoción visual
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            color: "success.main",
+                            fontWeight: 800,
+                          }}
+                        >
+                          −
+                          {formatCurrency(
+                            pricingPreview.promotionDiscountPreview
+                          )}
+                        </Typography>
+                      </Stack>
+                    ) : null}
+
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={2}
+                      sx={{
+                        pt: 1,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: "warning.dark",
+                        }}
+                      >
+                        Importe aproximado
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 15,
+                          fontWeight: 900,
+                          color: "warning.dark",
+                        }}
+                      >
+                        {formatCurrency(
+                          pricingPreview.approximateTotal
+                        )}
+                      </Typography>
+                    </Stack>
+
+                    {pricingPreview.hasQuantityPromotion ? (
+                      <Box
+                        sx={{
+                          border: "1px solid",
+                          borderColor: "warning.light",
+                          borderRadius: 1,
+                          bgcolor: "warning.50",
+                          p: 1.25,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "warning.dark",
+                            fontWeight: 700,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Incluye una promoción por cantidad. El descuento exacto se
+                          confirmará al crear la venta.
+                        </Typography>
+                      </Box>
+                    ) : null}
+
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        color: "text.secondary",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Los importes mostrados son una vista previa.
+                    </Typography>
+                  </Stack>
+                </Box>
               </Box>
 
               <Box

@@ -10,6 +10,7 @@ import {
   getAvailabilityTone,
   isAvailabilityBlocked,
   money,
+  normalizePromotionPresentation,
 } from "../../../hooks/public/publicMenu.utils";
 
 function isValidColor(color) {
@@ -128,7 +129,18 @@ function VariantCard({
   const variantBlocked = canSelect && isAvailabilityBlocked(variantAvailability);
 
   const variantName =
-    variant?.name || variant?.display_name || `Variante ${index + 1}`;
+  variant?.name || variant?.display_name || `Variante ${index + 1}`;
+
+  const variantPromotion = normalizePromotionPresentation(variant);
+
+  const showPromotionalPrice =
+    variantPromotion.hasActivePromotion &&
+    !variantPromotion.isQuantityPromotion &&
+    variantPromotion.hasImmediatePricePreview;
+
+  const showPromotionBadge =
+    variantPromotion.hasActivePromotion &&
+    Boolean(variantPromotion.promotionLabel);
 
   const variantHasExtras =
     Array.isArray(variant?.modifier_groups) &&
@@ -187,23 +199,96 @@ function VariantCard({
           >
             <AvailabilityPill availability={variantAvailability} />
 
+            {showPromotionBadge ? (
+              <span
+                title={
+                  variantPromotion.promotionName
+                    ? `${variantPromotion.promotionName}: ${variantPromotion.promotionLabel}`
+                    : variantPromotion.promotionLabel
+                }
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  maxWidth: "100%",
+                  padding: "5px 10px",
+                  borderRadius: 999,
+                  border: variantPromotion.isQuantityPromotion
+                    ? "1px solid rgba(109, 40, 217, 0.22)"
+                    : "1px solid rgba(15, 118, 110, 0.22)",
+                  background: variantPromotion.isQuantityPromotion
+                    ? "rgba(109, 40, 217, 0.09)"
+                    : "rgba(15, 118, 110, 0.09)",
+                  color: variantPromotion.isQuantityPromotion
+                    ? "#6D28D9"
+                    : "#0F766E",
+                  fontSize: 11,
+                  fontWeight: 950,
+                  lineHeight: 1.1,
+                  wordBreak: "break-word",
+                }}
+              >
+                {variantPromotion.promotionLabel}
+              </span>
+            ) : null}
+
             {variantHasExtras ? (
               <Badge tone="warn" title="Esta variante tiene extras configurables">
                 ✨ Con extras
               </Badge>
             ) : null}
           </div>
+
         </div>
 
         <div
           style={{
-            fontSize: 16,
-            fontWeight: 950,
-            color: safeThemeColor,
-            whiteSpace: "nowrap",
+            display: "grid",
+            justifyItems: "end",
+            gap: 4,
+            flexShrink: 0,
           }}
         >
-          {money(variant?.price)}
+          {showPromotionalPrice ? (
+            <>
+              <span
+                style={{
+                  color: theme.palette.text.secondary,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  textDecoration: "line-through",
+                  textDecorationThickness: "1.5px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {money(variantPromotion.originalPrice)}
+              </span>
+
+              <span
+                style={{
+                  color: safeThemeColor,
+                  fontSize: 17,
+                  fontWeight: 950,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {money(variantPromotion.displayPrice)}
+              </span>
+            </>
+          ) : (
+            <span
+              style={{
+                color: safeThemeColor,
+                fontSize: 16,
+                fontWeight: 950,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {money(variantPromotion.originalPrice)}
+            </span>
+          )}
         </div>
       </div>
 

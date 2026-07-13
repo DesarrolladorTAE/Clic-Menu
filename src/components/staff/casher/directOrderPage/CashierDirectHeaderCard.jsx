@@ -1,14 +1,7 @@
 // src/components/staff/casher/directOrderPage/CashierDirectHeaderCard.jsx
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  TextField,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, TextField, Typography,
 } from "@mui/material";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
@@ -23,7 +16,15 @@ export default function CashierDirectHeaderCard({
   menuData = null,
   cashSession = null,
   cartCount = 0,
+
+  // Compatibilidad con consumidores anteriores.
   cartTotal = 0,
+
+  // Nuevo resumen visual.
+  total = null,
+  totalLabel = "",
+  isEstimated = false,
+
   q = "",
   onSearchChange,
   totalVisible = 0,
@@ -48,6 +49,27 @@ export default function CashierDirectHeaderCard({
     menuData?.cash_session?.warehouse_id ||
     cashSession?.cash_register?.warehouse_id ||
     null;
+
+  const hasVisualTotal =
+    total !== null &&
+    total !== undefined &&
+    total !== "";
+
+  const parsedVisualTotal = Number(total);
+  const parsedLegacyTotal = Number(cartTotal);
+
+  const resolvedTotal = hasVisualTotal && Number.isFinite(parsedVisualTotal)
+    ? parsedVisualTotal
+    : Number.isFinite(parsedLegacyTotal)
+      ? parsedLegacyTotal
+      : 0;
+
+  const resolvedTotalLabel = String(
+    totalLabel ||
+      (isEstimated
+        ? "Total aproximado"
+        : "Total confirmado")
+  );
 
   return (
     <Card
@@ -200,8 +222,12 @@ export default function CashierDirectHeaderCard({
             <MetricCard
               icon={<ShoppingCartRoundedIcon />}
               label="Carrito"
-              value={formatCurrency(cartTotal)}
-              helper={`${cartCount} producto${cartCount === 1 ? "" : "s"}`}
+              value={formatCurrency(resolvedTotal)}
+              helper={`${resolvedTotalLabel} · ${cartCount} producto${
+                cartCount === 1 ? "" : "s"
+              }`}
+              statusLabel={isEstimated ? "Aproximado" : "Confirmado"}
+              statusEstimated={isEstimated}
             />
           </Box>
 
@@ -290,7 +316,14 @@ export default function CashierDirectHeaderCard({
   );
 }
 
-function MetricCard({ icon, label, value, helper }) {
+function MetricCard({
+  icon,
+  label,
+  value,
+  helper,
+  statusLabel = "",
+  statusEstimated = false,
+}) {
   return (
     <Box
       sx={{
@@ -305,7 +338,12 @@ function MetricCard({ icon, label, value, helper }) {
         justifyContent: "space-between",
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        flexWrap="wrap"
+      >
         <Box
           sx={{
             width: 40,
@@ -331,6 +369,24 @@ function MetricCard({ icon, label, value, helper }) {
         >
           {label}
         </Typography>
+
+        {statusLabel ? (
+          <Chip
+            label={statusLabel}
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: 11,
+              fontWeight: 800,
+              bgcolor: statusEstimated
+                ? "#FFF4D9"
+                : "#E7F8EB",
+              color: statusEstimated
+                ? "#8A6D3B"
+                : "#0A7A2F",
+            }}
+          />
+        ) : null}
       </Stack>
 
       <Box sx={{ mt: 2, minWidth: 0 }}>

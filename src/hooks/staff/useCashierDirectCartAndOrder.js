@@ -12,10 +12,14 @@ import {
 import {
   buildAvailabilityErrorMessage,
   buildCartKey,
+  buildCombinedPricingSummary,
+  buildNewItemsPricingSummary,
   extractApiErrorInfo,
   isAvailabilityErrorCode,
   normalizeCompositeComponentsForKey,
+  normalizeConfirmedPricingSummary,
   normalizeModifierGroupsForKey,
+  normalizePromotionPresentation,
   safeNum,
 } from "../public/publicMenu.utils";
 
@@ -79,10 +83,131 @@ function normalizeItemsForApi(cart) {
   });
 }
 
+function hasOwn(source, key) {
+  return (
+    source != null &&
+    typeof source === "object" &&
+    Object.prototype.hasOwnProperty.call(source, key)
+  );
+}
+
+function buildCartPromotionMetadata(source, basePrice) {
+  const safeSource =
+    source && typeof source === "object"
+      ? source
+      : {};
+
+  const normalized = normalizePromotionPresentation({
+    ...safeSource,
+    price: hasOwn(safeSource, "price")
+      ? safeSource.price
+      : basePrice,
+    unit_price: hasOwn(safeSource, "unit_price")
+      ? safeSource.unit_price
+      : basePrice,
+  });
+
+  const hasActivePromotion = Boolean(
+    normalized.hasActivePromotion
+  );
+
+  return {
+    has_active_promotion: hasActivePromotion,
+
+    promotion:
+      hasActivePromotion &&
+      normalized.promotion &&
+      typeof normalized.promotion === "object"
+        ? { ...normalized.promotion }
+        : null,
+
+    promotion_label:
+      hasActivePromotion && normalized.promotionLabel
+        ? String(normalized.promotionLabel)
+        : null,
+
+    promotion_type:
+      hasActivePromotion && normalized.promotionType
+        ? String(normalized.promotionType)
+        : null,
+
+    original_price: safeNum(
+      normalized.originalPrice,
+      basePrice
+    ),
+
+    display_price: hasActivePromotion
+      ? safeNum(normalized.displayPrice, basePrice)
+      : safeNum(basePrice, 0),
+
+    promotion_discount_preview: hasActivePromotion
+      ? safeNum(normalized.promotionDiscountPreview, 0)
+      : 0,
+  };
+}
+
+function buildCashierConfirmedPricingSummary(
+  activeOrder,
+  activeSale
+) {
+  const order =
+    activeOrder && typeof activeOrder === "object"
+      ? activeOrder
+      : null;
+
+  const sale =
+    activeSale && typeof activeSale === "object"
+      ? activeSale
+      : null;
+
+  if (!order && !sale) {
+    return normalizeConfirmedPricingSummary(null);
+  }
+
+  const source = {
+    ...(order || {}),
+  };
+
+  if (!hasOwn(source, "subtotal") && hasOwn(sale, "subtotal")) {
+    source.subtotal = sale.subtotal;
+  }
+
+  if (
+    !hasOwn(source, "promotion_discount_total") &&
+    hasOwn(sale, "promotion_discount_total")
+  ) {
+    source.promotion_discount_total =
+      sale.promotion_discount_total;
+  }
+
+  if (hasOwn(sale, "manual_discount_total")) {
+    source.manual_discount_total =
+      sale.manual_discount_total;
+  }
+
+  if (hasOwn(sale, "discount_total")) {
+    source.discount_total = sale.discount_total;
+  }
+
+  if (!hasOwn(source, "total") && hasOwn(sale, "total")) {
+    source.total = sale.total;
+  }
+
+  source.payable_total = hasOwn(sale, "total")
+    ? safeNum(sale.total, 0)
+    : hasOwn(source, "payable_total")
+      ? safeNum(source.payable_total, 0)
+      : hasOwn(source, "net_total")
+        ? safeNum(source.net_total, 0)
+        : safeNum(source.total, 0);
+
+  return normalizeConfirmedPricingSummary(source);
+}
+
 function normalizeOldItemsFromResponse(data) {
-  if (Array.isArray(data?.items_tree)) return data.items_tree;
-  if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.items_flat)) return data.items_flat;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.items_tree)) return data.items_tree;
   return [];
 }
 
@@ -170,20 +295,54 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
 
         next[idx] = {
           ...next[idx],
+
           quantity: Math.min(
             99,
-            safeNum(next[idx].quantity, 1) + safeNum(nextItem.quantity, 1)
+            safeNum(next[idx].quantity, 1) +
+              safeNum(nextItem.quantity, 1)
           ),
-          components: nextItem.components ?? next[idx].components ?? [],
+
+          has_active_promotion:
+            nextItem.has_active_promotion,
+
+          promotion:
+            nextItem.promotion ?? null,
+
+          promotion_label:
+            nextItem.promotion_label ?? null,
+
+          promotion_type:
+            nextItem.promotion_type ?? null,
+
+          original_price:
+            nextItem.original_price,
+
+          display_price:
+            nextItem.display_price,
+
+          promotion_discount_preview:
+            nextItem.promotion_discount_preview,
+
+          components:
+            nextItem.components ??
+            next[idx].components ??
+            [],
+
           components_detail:
-            nextItem.components_detail ?? next[idx].components_detail ?? [],
-          modifiers: nextItem.modifiers ?? next[idx].modifiers ?? [],
+            nextItem.components_detail ??
+            next[idx].components_detail ??
+            [],
+
+          modifiers:
+            nextItem.modifiers ??
+            next[idx].modifiers ??
+            [],
+
           modifier_groups_display:
             nextItem.modifier_groups_display ??
             next[idx].modifier_groups_display ??
             [],
         };
-
         return next;
       }
 
@@ -214,13 +373,27 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
       normalizedModifiers
     );
 
+    const baseUnitPrice = safeNum(
+      product?.price,
+      0
+    );
+
+    const promotionMetadata =
+      buildCartPromotionMetadata(
+        product,
+        baseUnitPrice
+      );
+
     upsertCartItem({
       key,
       product_id: productId,
       variant_id: null,
       name: product?.display_name || product?.name || "Producto",
       variant_name: null,
-      unit_price: safeNum(product?.price, 0),
+
+      unit_price: baseUnitPrice,
+      ...promotionMetadata,
+
       quantity: 1,
       notes: "",
       product_type: String(product?.product_type || "simple"),
@@ -263,13 +436,27 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
       normalizedModifiers
     );
 
+    const baseUnitPrice = safeNum(
+      variant?.price,
+      safeNum(product?.price, 0)
+    );
+
+    const promotionMetadata =
+      buildCartPromotionMetadata(
+        variant,
+        baseUnitPrice
+      );
+
     upsertCartItem({
       key,
       product_id: productId,
       variant_id: variantId,
       name: product?.display_name || product?.name || "Producto",
       variant_name: variant?.name || "Variante",
-      unit_price: safeNum(variant?.price, safeNum(product?.price, 0)),
+
+      unit_price: baseUnitPrice,
+      ...promotionMetadata,
+
       quantity: 1,
       notes: "",
       product_type: String(product?.product_type || "simple"),
@@ -326,35 +513,73 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
     );
   }
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce(
-      (acc, item) =>
-        acc + safeNum(item.unit_price, 0) * safeNum(item.quantity, 1),
-      0
-    );
+  const newItemsPricingSummary = useMemo(() => {
+    const summary = buildNewItemsPricingSummary(cart);
+
+    return {
+      ...summary,
+
+      lines: (
+        Array.isArray(summary?.lines)
+          ? summary.lines
+          : []
+      ).map((line, index) => ({
+        ...line,
+
+        name:
+          cart[index]?.name ||
+          "Producto",
+
+        variantName:
+          cart[index]?.variant_name ||
+          "",
+      })),
+    };
   }, [cart]);
 
-  const oldTotal = useMemo(() => {
-    const saleTotal = Number(activeSale?.total ?? activeOrder?.total ?? 0);
-
-    if (saleTotal > 0) return saleTotal;
-
-    const arr = Array.isArray(oldItems) ? oldItems : [];
-
-    return arr.reduce(
-      (acc, item) =>
-        acc +
-        safeNum(
-          item.line_total,
-          safeNum(item.unit_price, 0) * safeNum(item.quantity, 1)
-        ),
-      0
+  const confirmedPricingSummary = useMemo(() => {
+    return buildCashierConfirmedPricingSummary(
+      activeOrder,
+      activeSale
     );
-  }, [oldItems, activeSale, activeOrder]);
+  }, [activeOrder, activeSale]);
 
-  const totalGlobal = useMemo(() => {
-    return Math.round((safeNum(oldTotal, 0) + safeNum(cartTotal, 0)) * 100) / 100;
-  }, [oldTotal, cartTotal]);
+  const pricingSummary = useMemo(() => {
+    return buildCombinedPricingSummary(
+      confirmedPricingSummary,
+      newItemsPricingSummary
+    );
+  }, [
+    confirmedPricingSummary,
+    newItemsPricingSummary,
+  ]);
+
+  const displayTotal = safeNum(
+    pricingSummary?.displayTotal,
+    0
+  );
+
+  const totalLabel =
+    pricingSummary?.totalLabel || "Total";
+
+  const isEstimated = Boolean(
+    pricingSummary?.isEstimated
+  );
+
+  /*
+  * Aliases temporales de compatibilidad.
+  */
+  const cartTotal = safeNum(
+    newItemsPricingSummary?.totalApproximate,
+    0
+  );
+
+  const oldTotal = safeNum(
+    confirmedPricingSummary?.confirmedTotal,
+    0
+  );
+
+  const totalGlobal = displayTotal;
 
   const loadExisting = useCallback(
     async ({ orderId, force = false } = {}) => {
@@ -823,6 +1048,17 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
     setCartQty,
     setCartNotes,
 
+    newItemsPricingSummary,
+    confirmedPricingSummary,
+    pricingSummary,
+
+    displayTotal,
+    totalLabel,
+    isEstimated,
+
+    /*
+    * Aliases temporales para consumidores anteriores.
+    */
     cartTotal,
     oldTotal,
     totalGlobal,

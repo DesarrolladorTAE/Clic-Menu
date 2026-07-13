@@ -13,6 +13,7 @@ import {
   hasAnyModifierGroups,
   isAvailabilityBlocked,
   money,
+  normalizePromotionPresentation,
 } from "../../../hooks/public/publicMenu.utils";
 
 function isValidColor(color) {
@@ -159,6 +160,17 @@ export default function MenuProductCard({
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   const hasVariants = variants.length > 0;
 
+  const promotion = normalizePromotionPresentation(product);
+
+  const showPromotionalPrice =
+    promotion.hasActivePromotion &&
+    !promotion.isQuantityPromotion &&
+    promotion.hasImmediatePricePreview;
+
+  const showPromotionBadge =
+    promotion.hasActivePromotion &&
+    Boolean(promotion.promotionLabel);
+
   const isComposite = String(product?.product_type || "simple") === "composite";
   const compositeItems = Array.isArray(product?.composite?.items)
     ? product.composite.items
@@ -284,15 +296,54 @@ export default function MenuProductCard({
 
             <div
               style={{
-                fontWeight: 900,
-                fontSize: 13,
-                lineHeight: 1,
-                color: cardThemeColor,
-                whiteSpace: "nowrap",
+                display: "grid",
+                justifyItems: "end",
+                gap: 3,
+                flexShrink: 0,
                 paddingTop: 2,
               }}
             >
-              {money(product?.price)}
+              {showPromotionalPrice ? (
+                <>
+                  <span
+                    style={{
+                      color: theme.palette.text.secondary,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      textDecoration: "line-through",
+                      textDecorationThickness: "1.5px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {money(promotion.originalPrice)}
+                  </span>
+
+                  <span
+                    style={{
+                      color: cardThemeColor,
+                      fontSize: 14,
+                      fontWeight: 950,
+                      lineHeight: 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {money(promotion.displayPrice)}
+                  </span>
+                </>
+              ) : (
+                <span
+                  style={{
+                    color: cardThemeColor,
+                    fontSize: 13,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {money(promotion.originalPrice)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -322,6 +373,38 @@ export default function MenuProductCard({
             >
               {categoryName}
             </span>
+
+            {showPromotionBadge ? (
+              <span
+                title={
+                  promotion.promotionName
+                    ? `${promotion.promotionName}: ${promotion.promotionLabel}`
+                    : promotion.promotionLabel
+                }
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  maxWidth: "100%",
+                  padding: "4px 9px",
+                  borderRadius: 999,
+                  border: promotion.isQuantityPromotion
+                    ? "1px solid rgba(109, 40, 217, 0.22)"
+                    : "1px solid rgba(15, 118, 110, 0.22)",
+                  background: promotion.isQuantityPromotion
+                    ? "rgba(109, 40, 217, 0.09)"
+                    : "rgba(15, 118, 110, 0.09)",
+                  color: promotion.isQuantityPromotion
+                    ? "#6D28D9"
+                    : "#0F766E",
+                  fontSize: 10,
+                  fontWeight: 950,
+                  lineHeight: 1.1,
+                  wordBreak: "break-word",
+                }}
+              >
+                {promotion.promotionLabel}
+              </span>
+            ) : null}
 
             <AvailabilityPill availability={productAvailability} />
           </div>

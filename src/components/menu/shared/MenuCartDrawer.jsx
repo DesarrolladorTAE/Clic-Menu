@@ -13,6 +13,11 @@ export default function MenuCartDrawer({
   subtitle = "Revisa los productos seleccionados.",
   itemCount = 0,
   total = 0,
+
+  totalLabel = "",
+  isEstimated,
+  pricingSummary = null,
+
   children = null,
   disabledClose = false,
   closeOnBackdrop = true,
@@ -23,6 +28,53 @@ export default function MenuCartDrawer({
   if (!open) return null;
 
   const safeItemCount = Number(itemCount || 0);
+
+  const hasPricingSummary =
+    pricingSummary !== null &&
+    typeof pricingSummary === "object";
+
+  const summaryDisplayTotal = Number(
+    pricingSummary?.displayTotal,
+  );
+
+  const fallbackDisplayTotal = Number(total);
+
+  const resolvedTotal = Number.isFinite(summaryDisplayTotal)
+    ? summaryDisplayTotal
+    : Number.isFinite(fallbackDisplayTotal)
+      ? fallbackDisplayTotal
+      : 0;
+
+  const resolvedIsEstimated =
+    typeof isEstimated === "boolean"
+      ? isEstimated
+      : Boolean(pricingSummary?.isEstimated);
+
+  const explicitTotalLabel = String(
+    totalLabel || "",
+  ).trim();
+
+  const summaryTotalLabel = String(
+    pricingSummary?.totalLabel || "",
+  ).trim();
+
+  const resolvedTotalLabel =
+    explicitTotalLabel ||
+    summaryTotalLabel ||
+    (resolvedIsEstimated
+      ? "Total aproximado"
+      : hasPricingSummary
+        ? "Total confirmado"
+        : "Total");
+
+  const resolvedIsConfirmed =
+    !resolvedIsEstimated &&
+    (
+      hasPricingSummary ||
+      resolvedTotalLabel
+        .toLowerCase()
+        .includes("confirmado")
+    );
 
   return (
     <div
@@ -155,8 +207,26 @@ export default function MenuCartDrawer({
               Items: <strong style={{ marginLeft: 6 }}>{safeItemCount}</strong>
             </Badge>
 
-            <Badge tone="dark">
-              Total: <strong style={{ marginLeft: 6 }}>{money(total)}</strong>
+            <Badge
+              tone={
+                resolvedIsEstimated
+                  ? "warn"
+                  : resolvedIsConfirmed
+                    ? "ok"
+                    : "dark"
+              }
+              title={
+                resolvedIsEstimated
+                  ? "Importe aproximado pendiente de confirmación por el servidor"
+                  : resolvedIsConfirmed
+                    ? "Importe confirmado por el servidor"
+                    : "Importe actual"
+              }
+            >
+              {resolvedTotalLabel}:{" "}
+              <strong style={{ marginLeft: 6 }}>
+                {money(resolvedTotal)}
+              </strong>
             </Badge>
           </div>
         </div>

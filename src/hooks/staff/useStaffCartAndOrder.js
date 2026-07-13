@@ -8,11 +8,15 @@ import {
 import {
   buildAvailabilityErrorMessage,
   buildCartKey,
+  buildCombinedPricingSummary,
+  buildNewItemsPricingSummary,
   extractApiErrorInfo,
   isAvailabilityErrorCode,
   isWarehouseSelectionErrorCode,
   normalizeCompositeComponentsForKey,
+  normalizeConfirmedPricingSummary,
   normalizeModifierGroupsForKey,
+  normalizePromotionPresentation,
   safeNum,
 } from "../public/publicMenu.utils";
 
@@ -65,6 +69,115 @@ function normalizeItemsForApi(cart) {
   });
 }
 
+function hasOwn(source, key) {
+  return (
+    source != null &&
+    typeof source === "object" &&
+    Object.prototype.hasOwnProperty.call(source, key)
+  );
+}
+
+function buildCartPromotionMetadata(source, basePrice) {
+  const safeSource =
+    source && typeof source === "object"
+      ? source
+      : {};
+
+  const normalized = normalizePromotionPresentation({
+    ...safeSource,
+    price: hasOwn(safeSource, "price")
+      ? safeSource.price
+      : basePrice,
+    unit_price: hasOwn(safeSource, "unit_price")
+      ? safeSource.unit_price
+      : basePrice,
+  });
+
+  const hasActivePromotion = Boolean(
+    normalized.hasActivePromotion,
+  );
+
+  return {
+    has_active_promotion: hasActivePromotion,
+
+    promotion:
+      hasActivePromotion &&
+      normalized.promotion &&
+      typeof normalized.promotion === "object"
+        ? { ...normalized.promotion }
+        : null,
+
+    promotion_label:
+      hasActivePromotion && normalized.promotionLabel
+        ? String(normalized.promotionLabel)
+        : null,
+
+    promotion_type:
+      hasActivePromotion && normalized.promotionType
+        ? String(normalized.promotionType)
+        : null,
+
+    original_price: safeNum(
+      normalized.originalPrice,
+      basePrice,
+    ),
+
+    display_price: hasActivePromotion
+      ? safeNum(normalized.displayPrice, basePrice)
+      : safeNum(basePrice, 0),
+
+    promotion_discount_preview: hasActivePromotion
+      ? safeNum(normalized.promotionDiscountPreview, 0)
+      : 0,
+  };
+}
+
+function mergeConfirmedOrderTotals(
+  currentOrder,
+  source,
+  overrides = {},
+) {
+  const current =
+    currentOrder && typeof currentOrder === "object"
+      ? currentOrder
+      : {};
+
+  const data =
+    source && typeof source === "object"
+      ? source
+      : {};
+
+  const next = {
+    ...current,
+    ...overrides,
+  };
+
+  const numericFields = [
+    "total",
+    "subtotal",
+    "promotion_discount_total",
+    "manual_discount_total",
+    "discount_total",
+    "net_total",
+    "payable_total",
+  ];
+
+  numericFields.forEach((field) => {
+    if (hasOwn(data, field)) {
+      next[field] = safeNum(data[field], 0);
+    }
+  });
+
+  if (
+    !hasOwn(data, "payable_total") &&
+    hasOwn(data, "net_total")
+  ) {
+    next.payable_total = safeNum(data.net_total, 0);
+  }
+
+  return next;
+}
+
 export function useStaffCartAndOrder({ tableId }) {
   const [cart, setCart] = useState([]);
 
@@ -89,14 +202,53 @@ export function useStaffCartAndOrder({ tableId }) {
         const next = [...prev];
         next[idx] = {
           ...next[idx],
-          quantity:
-            Math.min(99, safeNum(next[idx].quantity, 1) + safeNum(nextItem.quantity, 1)),
-          components: nextItem.components ?? next[idx].components ?? [],
+
+          quantity: Math.min(
+            99,
+            safeNum(next[idx].quantity, 1) +
+              safeNum(nextItem.quantity, 1),
+          ),
+
+          has_active_promotion:
+            nextItem.has_active_promotion,
+
+          promotion:
+            nextItem.promotion ?? null,
+
+          promotion_label:
+            nextItem.promotion_label ?? null,
+
+          promotion_type:
+            nextItem.promotion_type ?? null,
+
+          original_price:
+            nextItem.original_price,
+
+          display_price:
+            nextItem.display_price,
+
+          promotion_discount_preview:
+            nextItem.promotion_discount_preview,
+
+          components:
+            nextItem.components ??
+            next[idx].components ??
+            [],
+
           components_detail:
-            nextItem.components_detail ?? next[idx].components_detail ?? [],
-          modifiers: nextItem.modifiers ?? next[idx].modifiers ?? [],
+            nextItem.components_detail ??
+            next[idx].components_detail ??
+            [],
+
+          modifiers:
+            nextItem.modifiers ??
+            next[idx].modifiers ??
+            [],
+
           modifier_groups_display:
-            nextItem.modifier_groups_display ?? next[idx].modifier_groups_display ?? [],
+            nextItem.modifier_groups_display ??
+            next[idx].modifier_groups_display ??
+            [],
         };
         return next;
       }
@@ -115,10 +267,34 @@ export function useStaffCartAndOrder({ tableId }) {
     const pid = Number(p?.id);
     if (!pid) return;
 
-    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
-    const normalizedModifiers = normalizeModifierGroupsForKey(modifiersOverride);
-    const key = buildCartKey(pid, null, normalizedComponents, normalizedModifiers);
-    const isComposite = String(p?.product_type || "simple") === "composite";
+    const normalizedComponents =
+      normalizeCompositeComponentsForKey(
+        componentsOverride,
+      );
+
+    const normalizedModifiers =
+      normalizeModifierGroupsForKey(
+        modifiersOverride,
+      );
+
+    const key = buildCartKey(
+      pid,
+      null,
+      normalizedComponents,
+      normalizedModifiers,
+    );
+
+    const isComposite =
+      String(p?.product_type || "simple") ===
+      "composite";
+
+    const baseUnitPrice = safeNum(p?.price, 0);
+
+    const promotionMetadata =
+      buildCartPromotionMetadata(
+        p,
+        baseUnitPrice,
+      );
 
     upsertCartItem({
       key,
@@ -126,7 +302,10 @@ export function useStaffCartAndOrder({ tableId }) {
       variant_id: null,
       name: p?.display_name || p?.name || "Producto",
       variant_name: null,
-      unit_price: safeNum(p?.price, 0),
+
+      unit_price: baseUnitPrice,
+      ...promotionMetadata,
+
       quantity: 1,
       notes: "",
       product_type: String(p?.product_type || "simple"),
@@ -155,10 +334,37 @@ export function useStaffCartAndOrder({ tableId }) {
     const vid = Number(v?.id);
     if (!pid || !vid) return;
 
-    const normalizedComponents = normalizeCompositeComponentsForKey(componentsOverride);
-    const normalizedModifiers = normalizeModifierGroupsForKey(modifiersOverride);
-    const key = buildCartKey(pid, vid, normalizedComponents, normalizedModifiers);
-    const isComposite = String(p?.product_type || "simple") === "composite";
+    const normalizedComponents =
+      normalizeCompositeComponentsForKey(
+        componentsOverride,
+      );
+
+    const normalizedModifiers =
+      normalizeModifierGroupsForKey(
+        modifiersOverride,
+      );
+
+    const key = buildCartKey(
+      pid,
+      vid,
+      normalizedComponents,
+      normalizedModifiers,
+    );
+
+    const isComposite =
+      String(p?.product_type || "simple") ===
+      "composite";
+
+    const baseUnitPrice = safeNum(
+      v?.price,
+      safeNum(p?.price, 0),
+    );
+
+    const promotionMetadata =
+      buildCartPromotionMetadata(
+        v,
+        baseUnitPrice,
+      );
 
     upsertCartItem({
       key,
@@ -166,7 +372,10 @@ export function useStaffCartAndOrder({ tableId }) {
       variant_id: vid,
       name: p?.display_name || p?.name || "Producto",
       variant_name: v?.name || "Variante",
-      unit_price: safeNum(v?.price, safeNum(p?.price, 0)),
+
+      unit_price: baseUnitPrice,
+      ...promotionMetadata,
+
       quantity: 1,
       notes: "",
       product_type: String(p?.product_type || "simple"),
@@ -216,25 +425,73 @@ export function useStaffCartAndOrder({ tableId }) {
     );
   }
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce(
-      (acc, it) => acc + safeNum(it.unit_price, 0) * safeNum(it.quantity, 1),
-      0,
-    );
+  const newItemsPricingSummary = useMemo(() => {
+    const summary = buildNewItemsPricingSummary(cart);
+
+    return {
+      ...summary,
+
+      lines: (
+        Array.isArray(summary?.lines)
+          ? summary.lines
+          : []
+      ).map((line, index) => ({
+        ...line,
+
+        name:
+          cart[index]?.name ||
+          "Producto",
+
+        variantName:
+          cart[index]?.variant_name ||
+          "",
+      })),
+    };
   }, [cart]);
 
-  const oldTotal = useMemo(() => {
-    const arr = Array.isArray(oldItems) ? oldItems : [];
-    return arr.reduce(
-      (acc, it) =>
-        acc + safeNum(it.line_total, safeNum(it.unit_price, 0) * safeNum(it.quantity, 1)),
-      0,
+  const confirmedPricingSummary = useMemo(() => {
+    return normalizeConfirmedPricingSummary(
+      activeOrder,
     );
-  }, [oldItems]);
+  }, [activeOrder]);
 
-  const totalGlobal = useMemo(() => {
-    return Math.round((safeNum(oldTotal, 0) + safeNum(cartTotal, 0)) * 100) / 100;
-  }, [oldTotal, cartTotal]);
+  const pricingSummary = useMemo(() => {
+    return buildCombinedPricingSummary(
+      confirmedPricingSummary,
+      newItemsPricingSummary,
+    );
+  }, [
+    confirmedPricingSummary,
+    newItemsPricingSummary,
+  ]);
+
+  const displayTotal = safeNum(
+    pricingSummary?.displayTotal,
+    0,
+  );
+
+  const totalLabel =
+    pricingSummary?.totalLabel || "Total";
+
+  const isEstimated = Boolean(
+    pricingSummary?.isEstimated,
+  );
+
+  /*
+  * Aliases temporales de compatibilidad.
+  * Los componentes nuevos deben usar los resúmenes.
+  */
+  const cartTotal = safeNum(
+    newItemsPricingSummary?.totalApproximate,
+    0,
+  );
+
+  const oldTotal = safeNum(
+    confirmedPricingSummary?.confirmedTotal,
+    0,
+  );
+
+  const totalGlobal = displayTotal;
 
   const canAppend =
     !!activeOrder?.id &&
@@ -283,11 +540,23 @@ export function useStaffCartAndOrder({ tableId }) {
       }
 
       if (res?.ok) {
-        const o = res?.data?.order || null;
-        const items = Array.isArray(res?.data?.items) ? res.data.items : [];
+        const o =
+          res?.data?.order || null;
+
+        const items =
+          Array.isArray(res?.data?.items_flat)
+            ? res.data.items_flat
+            : Array.isArray(res?.data?.items)
+              ? res.data.items
+              : [];
+
         setActiveOrder(o);
         setOldItems(items);
-        return { order: o, items };
+
+        return {
+          order: o,
+          items,
+        };
       }
 
       return null;
@@ -317,7 +586,48 @@ export function useStaffCartAndOrder({ tableId }) {
         const res = await createWaiterOrder(tid, payload);
 
         if (res?.ok) {
-          const orderId = res?.data?.order_id || res?.data?.id || null;
+          const responseData =
+            res?.data &&
+            typeof res.data === "object"
+              ? res.data
+              : {};
+
+          const orderId =
+            responseData?.order_id ||
+            responseData?.id ||
+            null;
+
+          if (orderId) {
+            const numericOrderId = Number(orderId);
+
+            setActiveOrder((previous) =>
+              mergeConfirmedOrderTotals(
+                previous,
+                responseData,
+                {
+                  id: numericOrderId,
+
+                  status:
+                    String(responseData?.status || "") ||
+                    "open",
+
+                  customer_name:
+                    String(
+                      responseData?.customer_name ||
+                      name ||
+                      "",
+                    ),
+
+                  preferred_warehouse_id:
+                    responseData?.preferred_warehouse_id
+                      ? Number(
+                          responseData.preferred_warehouse_id,
+                        )
+                      : null,
+                },
+              ),
+            );
+          }
 
           setCart([]);
           setCustomerName("");
@@ -325,19 +635,29 @@ export function useStaffCartAndOrder({ tableId }) {
           setWarehouseDialogOpen(false);
           setWarehouseSelectionContext(null);
 
-          if (res?.data?.preferred_warehouse_auto_selected) {
-            setSendToast("✅ Comanda creada. El almacén se resolvió automáticamente.");
+          if (responseData?.preferred_warehouse_auto_selected) {
+            setSendToast(
+              "✅ Comanda creada. El almacén se resolvió automáticamente.",
+            );
           } else {
             setSendToast("✅ Comanda creada.");
           }
 
           if (orderId) {
-            await loadExisting({ orderId, force: true });
+            await loadExisting({
+              orderId,
+              force: true,
+            });
           } else {
-            await loadExisting({ force: true });
+            await loadExisting({
+              force: true,
+            });
           }
 
-          return { ok: true, orderId };
+          return {
+            ok: true,
+            orderId,
+          };
         }
 
         if (isWarehouseSelectionErrorCode(res?.code)) {
@@ -410,10 +730,43 @@ export function useStaffCartAndOrder({ tableId }) {
         const res = await appendWaiterOrderItems(Number(orderId), { items });
 
         if (res?.ok) {
+          const responseData =
+            res?.data &&
+            typeof res.data === "object"
+              ? res.data
+              : {};
+
+          setActiveOrder((previous) =>
+            mergeConfirmedOrderTotals(
+              previous,
+              responseData,
+              {
+                id: Number(orderId),
+
+                status:
+                  String(
+                    responseData?.status ||
+                    previous?.status ||
+                    "",
+                  ) || "open",
+              },
+            ),
+          );
+
           setCart([]);
-          setSendToast("✅ Productos agregados a la orden.");
-          await loadExisting({ orderId, force: true });
-          return { ok: true };
+
+          setSendToast(
+            "✅ Productos agregados a la orden.",
+          );
+
+          await loadExisting({
+            orderId,
+            force: true,
+          });
+
+          return {
+            ok: true,
+          };
         }
 
         setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
@@ -528,6 +881,17 @@ export function useStaffCartAndOrder({ tableId }) {
     setCartQty,
     setCartNotes,
 
+    newItemsPricingSummary,
+    confirmedPricingSummary,
+    pricingSummary,
+
+    displayTotal,
+    totalLabel,
+    isEstimated,
+
+    /*
+    * Aliases temporales para consumidores anteriores.
+    */
     cartTotal,
     oldTotal,
     totalGlobal,
