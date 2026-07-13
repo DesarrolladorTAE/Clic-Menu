@@ -1,20 +1,11 @@
 import {
-  Box,
-  CircularProgress,
-  Paper,
-  Stack,
-  Typography,
+  Box, CircularProgress, Paper, Stack, Typography,
 } from "@mui/material";
 import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+  useEffect, useMemo, useRef, useState,
 } from "react";
 import {
-  useLocation,
-  useNavigate,
-  useParams,
+  useLocation, useNavigate, useParams,
 } from "react-router-dom";
 
 import PageContainer from "../../../components/common/PageContainer";

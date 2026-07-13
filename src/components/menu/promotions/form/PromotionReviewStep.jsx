@@ -147,9 +147,9 @@ export default function PromotionReviewStep({
                   size="small"
                   sx={{
                     backgroundColor:
-                      "rgba(255, 152, 0, 0.06)",
+                      "rgba(255, 152, 0, 0.10)",
                     borderColor:
-                      "rgba(255, 152, 0, 0.45)",
+                      "rgba(255, 152, 0, 0.55)",
                     fontWeight: 700,
                   }}
                 />
@@ -180,9 +180,9 @@ export default function PromotionReviewStep({
                     borderRadius: 1,
                     border: "1px solid",
                     borderColor:
-                      "rgba(255, 152, 0, 0.18)",
+                      "rgba(255, 152, 0, 0.30)",
                     backgroundColor:
-                      "rgba(255, 152, 0, 0.035)",
+                      "rgba(255, 152, 0, 0.07)",
                   }}
                 >
                   <Typography
@@ -303,9 +303,9 @@ function ParticipantsSummary({
                 borderRadius: 1,
                 border: "1px solid",
                 borderColor:
-                  "rgba(255, 152, 0, 0.18)",
+                  "rgba(255, 152, 0, 0.30)",
                 backgroundColor:
-                  "rgba(255, 152, 0, 0.035)",
+                  "rgba(255, 152, 0, 0.07)",
                 minWidth: 0,
               }}
             >
@@ -429,9 +429,9 @@ function RuleSummary({
                 borderRadius: 1,
                 border: "1px solid",
                 borderColor:
-                  "rgba(255, 152, 0, 0.18)",
+                  "rgba(255, 152, 0, 0.30)",
                 backgroundColor:
-                  "rgba(255, 152, 0, 0.035)",
+                  "rgba(255, 152, 0, 0.07)",
               }}
             >
               <Typography
@@ -610,11 +610,11 @@ function ReviewSection({
         borderRadius: 2,
         border: "1px solid",
         borderColor:
-          "rgba(255, 152, 0, 0.24)",
+          "rgba(255, 152, 0, 0.38)",
         backgroundColor:
           "background.paper",
         boxShadow:
-          "0 5px 18px rgba(66, 48, 36, 0.06)",
+          "0 6px 20px rgba(91, 58, 29, 0.09)",
       }}
     >
       <Box
@@ -628,10 +628,10 @@ function ReviewSection({
           alignItems: "center",
           gap: 1.25,
           backgroundColor:
-            "rgba(255, 152, 0, 0.055)",
+            "rgba(255, 152, 0, 0.10)",
           borderBottom: "1px solid",
           borderBottomColor:
-            "rgba(255, 152, 0, 0.16)",
+            "rgba(255, 152, 0, 0.28)",
         }}
       >
         <Box
@@ -703,9 +703,9 @@ function ReviewItem({
         borderRadius: 1.25,
         border: "1px solid",
         borderColor:
-          "rgba(255, 152, 0, 0.14)",
+          "rgba(255, 152, 0, 0.28)",
         backgroundColor:
-          "rgba(255, 152, 0, 0.025)",
+          "rgba(255, 152, 0, 0.065)",
         minHeight: 84,
       }}
     >
