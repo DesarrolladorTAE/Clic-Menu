@@ -52,9 +52,11 @@ export default function PromotionsPage() {
     location.state?.cachedPromotions
   )
     ? location.state.cachedPromotions
-    : location.state?.createdPromotion
-      ? [location.state.createdPromotion]
-      : [];
+    : location.state?.updatedPromotion
+      ? [location.state.updatedPromotion]
+      : location.state?.createdPromotion
+        ? [location.state.createdPromotion]
+        : [];
 
   const restaurantName =
     location.state?.restaurantName ||
@@ -432,9 +434,11 @@ export default function PromotionsPage() {
     branchId
   ) => {
     initialCacheRef.current = false;
+
     setSelectedBranchId(
       String(branchId)
     );
+
     setSearch("");
     setStatusFilter("all");
     setPage(1);
@@ -449,6 +453,35 @@ export default function PromotionsPage() {
           branchId:
             selectedBranchId,
           promotionType:
+            activeType,
+          cachedPromotions:
+            promotions,
+        },
+      }
+    );
+  };
+
+  const handleEdit = (promotion) => {
+    if (!promotion?.id) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message:
+          "No se pudo identificar la promoción que deseas editar.",
+      });
+
+      return;
+    }
+
+    navigate(
+      `/owner/restaurants/${restaurantId}/operation/promotions/${promotion.id}/edit`,
+      {
+        state: {
+          restaurantName,
+          branchId:
+            selectedBranchId,
+          promotionType:
+            promotion?.type ||
             activeType,
           cachedPromotions:
             promotions,
@@ -559,6 +592,7 @@ export default function PromotionsPage() {
 
   const handleCloseDelete = () => {
     if (deleting) return;
+
     setPromotionToDelete(null);
   };
 
@@ -765,6 +799,7 @@ export default function PromotionsPage() {
                   )
                 )
               }
+              onEdit={handleEdit}
               onStatusChange={
                 handleStatusChange
               }

@@ -73,6 +73,15 @@ export default function PromotionFormStepper({
               minWidth: 0,
             },
 
+            "& .MuiStepConnector-alternativeLabel":
+              {
+                top: 23,
+                left:
+                  "calc(-50% + 24px)",
+                right:
+                  "calc(50% + 24px)",
+              },
+
             "& .MuiStepConnector-line": {
               borderColor: alpha(
                 theme.palette.text.primary,
@@ -194,6 +203,9 @@ export default function PromotionFormStepper({
                         useVerticalLayout
                           ? 54
                           : 76,
+                      m: 0,
+                      boxSizing:
+                        "border-box",
                       px: useVerticalLayout
                         ? 1.25
                         : 0.5,
@@ -248,6 +260,11 @@ export default function PromotionFormStepper({
                           pr: useVerticalLayout
                             ? 1.25
                             : 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            "center",
+                          lineHeight: 0,
                         },
 
                       "& .MuiStepLabel-labelContainer":

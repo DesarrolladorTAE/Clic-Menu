@@ -1,6 +1,7 @@
 import {
   Box, Button, Chip, FormControlLabel, Paper, Stack, Switch, Typography,
 } from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
@@ -19,15 +20,27 @@ import {
 export default function PromotionCard({
   promotion,
   updating = false,
+  onEdit,
   onStatusChange,
   onDelete,
 }) {
-  const isActive = promotion?.status === "active";
-  const dateState = getPromotionDateState(promotion);
-  const channels = getPromotionChannels(promotion);
-  const targets = getPromotionTargets(promotion);
-  const schedules = getPromotionSchedules(promotion);
-  const rule = getPromotionRuleSummary(promotion);
+  const isActive =
+    promotion?.status === "active";
+
+  const dateState =
+    getPromotionDateState(promotion);
+
+  const channels =
+    getPromotionChannels(promotion);
+
+  const targets =
+    getPromotionTargets(promotion);
+
+  const schedules =
+    getPromotionSchedules(promotion);
+
+  const rule =
+    getPromotionRuleSummary(promotion);
 
   return (
     <Paper
@@ -35,7 +48,8 @@ export default function PromotionCard({
         p: 0,
         overflow: "hidden",
         borderRadius: 1,
-        backgroundColor: "background.paper",
+        backgroundColor:
+          "background.paper",
         border: "1px solid",
         borderColor: "divider",
         boxShadow: "none",
@@ -70,18 +84,22 @@ export default function PromotionCard({
                   wordBreak: "break-word",
                 }}
               >
-                {promotion?.name || "Promoción sin nombre"}
+                {promotion?.name ||
+                  "Promoción sin nombre"}
               </Typography>
 
               <Typography
                 sx={{
                   mt: 0.5,
                   fontSize: 12,
-                  color: "text.secondary",
+                  color:
+                    "text.secondary",
                   lineHeight: 1.45,
-                  display: "-webkit-box",
+                  display:
+                    "-webkit-box",
                   WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
+                  WebkitBoxOrient:
+                    "vertical",
                   overflow: "hidden",
                   minHeight: 34,
                 }}
@@ -96,11 +114,14 @@ export default function PromotionCard({
               size="small"
               color={dateState.color}
               variant={
-                dateState.color === "default"
+                dateState.color ===
+                "default"
                   ? "outlined"
                   : "filled"
               }
-              sx={{ flexShrink: 0 }}
+              sx={{
+                flexShrink: 0,
+              }}
             />
           </Stack>
 
@@ -132,7 +153,9 @@ export default function PromotionCard({
                     : "text.secondary",
                 }}
               >
-                {isActive ? "Activa" : "Inactiva"}
+                {isActive
+                  ? "Activa"
+                  : "Inactiva"}
               </Typography>
             }
           />
@@ -147,15 +170,24 @@ export default function PromotionCard({
           flexDirection: "column",
         }}
       >
-        <Stack spacing={1.75} sx={{ height: "100%" }}>
+        <Stack
+          spacing={1.75}
+          sx={{ height: "100%" }}
+        >
           <InfoRow
-            icon={<AccessTimeOutlinedIcon fontSize="small" />}
+            icon={
+              <AccessTimeOutlinedIcon fontSize="small" />
+            }
             label="Vigencia"
-            value={formatPromotionValidity(promotion)}
+            value={formatPromotionValidity(
+              promotion
+            )}
           />
 
           <InfoRow
-            icon={<RouteOutlinedIcon fontSize="small" />}
+            icon={
+              <RouteOutlinedIcon fontSize="small" />
+            }
             label="Canales"
             value={
               channels.length > 0
@@ -165,7 +197,9 @@ export default function PromotionCard({
           />
 
           <InfoRow
-            icon={<Inventory2OutlinedIcon fontSize="small" />}
+            icon={
+              <Inventory2OutlinedIcon fontSize="small" />
+            }
             label="Participantes"
             value={
               targets.length === 1
@@ -175,9 +209,14 @@ export default function PromotionCard({
           />
 
           <InfoRow
-            icon={<PriorityHighOutlinedIcon fontSize="small" />}
+            icon={
+              <PriorityHighOutlinedIcon fontSize="small" />
+            }
             label="Prioridad"
-            value={String(promotion?.priority ?? "Sin datos")}
+            value={String(
+              promotion?.priority ??
+                "Sin datos"
+            )}
           />
 
           <Box
@@ -186,15 +225,18 @@ export default function PromotionCard({
               borderRadius: 1,
               border: "1px solid",
               borderColor: "divider",
-              backgroundColor: "background.default",
+              backgroundColor:
+                "background.default",
             }}
           >
             <Typography
               sx={{
                 fontSize: 11,
                 fontWeight: 800,
-                color: "text.secondary",
-                textTransform: "uppercase",
+                color:
+                  "text.secondary",
+                textTransform:
+                  "uppercase",
                 letterSpacing: 0.3,
               }}
             >
@@ -206,7 +248,8 @@ export default function PromotionCard({
                 mt: 0.5,
                 fontSize: 15,
                 fontWeight: 800,
-                color: "primary.main",
+                color:
+                  "primary.main",
                 lineHeight: 1.35,
               }}
             >
@@ -218,7 +261,8 @@ export default function PromotionCard({
                 sx={{
                   mt: 0.35,
                   fontSize: 12,
-                  color: "text.secondary",
+                  color:
+                    "text.secondary",
                 }}
               >
                 {rule.helper}
@@ -229,7 +273,8 @@ export default function PromotionCard({
           <Typography
             sx={{
               fontSize: 12,
-              color: "text.secondary",
+              color:
+                "text.secondary",
             }}
           >
             {schedules.length === 1
@@ -238,18 +283,48 @@ export default function PromotionCard({
           </Typography>
 
           <Stack
-            direction={{ xs: "column", sm: "row" }}
+            direction={{
+              xs: "column",
+              sm: "row",
+            }}
             justifyContent="flex-end"
             spacing={1}
-            sx={{ mt: "auto", pt: 0.5 }}
+            sx={{
+              mt: "auto",
+              pt: 0.5,
+            }}
           >
             <Button
               type="button"
               variant="outlined"
-              color="error"
-              startIcon={<DeleteOutlineOutlinedIcon />}
+              startIcon={
+                <EditOutlinedIcon />
+              }
               disabled={updating}
-              onClick={() => onDelete(promotion)}
+              onClick={() =>
+                onEdit(promotion)
+              }
+              sx={{
+                width: {
+                  xs: "100%",
+                  sm: "auto",
+                },
+              }}
+            >
+              Editar
+            </Button>
+
+            <Button
+              type="button"
+              variant="outlined"
+              color="error"
+              startIcon={
+                <DeleteOutlineOutlinedIcon />
+              }
+              disabled={updating}
+              onClick={() =>
+                onDelete(promotion)
+              }
               sx={{
                 width: {
                   xs: "100%",
@@ -266,7 +341,11 @@ export default function PromotionCard({
   );
 }
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({
+  icon,
+  label,
+  value,
+}) {
   return (
     <Stack
       direction="row"
@@ -280,7 +359,8 @@ function InfoRow({ icon, label, value }) {
           borderRadius: 1,
           display: "grid",
           placeItems: "center",
-          bgcolor: "rgba(255, 152, 0, 0.12)",
+          bgcolor:
+            "rgba(255, 152, 0, 0.12)",
           color: "primary.main",
           flexShrink: 0,
         }}
@@ -293,8 +373,10 @@ function InfoRow({ icon, label, value }) {
           sx={{
             fontSize: 11,
             fontWeight: 800,
-            color: "text.secondary",
-            textTransform: "uppercase",
+            color:
+              "text.secondary",
+            textTransform:
+              "uppercase",
             letterSpacing: 0.3,
           }}
         >

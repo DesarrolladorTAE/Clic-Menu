@@ -1,9 +1,5 @@
 import {
-  Box,
-  LinearProgress,
-  Paper,
-  Stack,
-  Typography,
+  Box, LinearProgress, Paper, Stack, Typography,
 } from "@mui/material";
 import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 
@@ -21,6 +17,7 @@ export default function PromotionList({
   total,
   onPrev,
   onNext,
+  onEdit,
   onStatusChange,
   onDelete,
 }) {
@@ -56,6 +53,7 @@ export default function PromotionList({
               updating={updatingIds.has(
                 String(promotion.id)
               )}
+              onEdit={onEdit}
               onStatusChange={onStatusChange}
               onDelete={onDelete}
             />

@@ -83,6 +83,7 @@ import BranchesPage from "../pages/restaurant/BranchesPage";
 import MenuManager from "../pages/menu/MenuManager";
 import PromotionsPage from "../pages/menu/promotions/PromotionsPage";
 import PromotionCreatePage from "../pages/menu/promotions/PromotionCreatePage";
+import PromotionEditPage from "../pages/menu/promotions/PromotionEditPage";
 import ProductsPage from "../pages/products/ProductsPage";
 import ProductVariantsPage from "../pages/products/products_variants/ProductVariantsPage";
 import ProductCompositionPage from "../pages/products/ProductCompositionPage";
@@ -233,6 +234,7 @@ export default function AppRoutes() {
 
           <Route path="promotions" element={<PromotionsPage />} />
           <Route path="promotions/create" element={<PromotionCreatePage />} />
+          <Route path="promotions/:promotionId/edit" element={<PromotionEditPage />} />
 
           <Route path="modifiers" element={<ModifierManager />} />
           <Route path="modifiers/catalogs/products" element={<ProductModifierCatalogPage />} />
