@@ -1,12 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -119,7 +113,7 @@ export default function CashierSaleCard({
               <InfoRow label="Propina" value={formatCurrency(sale?.tip)} />
               <InfoRow
                 label="Total"
-                value={formatCurrency(sale?.total)}
+                value={formatCurrency(sale?.payable_total ?? sale?.total)}
                 strong
               />
             </Stack>

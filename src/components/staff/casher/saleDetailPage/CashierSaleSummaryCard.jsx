@@ -1,13 +1,8 @@
-//Tarjetita Resumen de Cobro
+// Tarjetita Resumen de Cobro
 
 import React from "react";
 import {
-  Box,
-  Card,
-  CardContent,
-  Divider,
-  Stack,
-  Typography,
+  Box,  Card, CardContent, Divider, Stack, Typography,
 } from "@mui/material";
 
 export default function CashierSaleSummaryCard({
@@ -16,14 +11,60 @@ export default function CashierSaleSummaryCard({
   preview = null,
   selectedTaxOption = null,
 }) {
-  const subtotal = Number(sale?.subtotal || 0);
-  const discount = Number(sale?.discount_total || 0);
-  const tip = Number(liveTip || 0);
+  const subtotal = Number(
+    preview?.subtotal ??
+      sale?.subtotal ??
+      0
+  );
 
-  const estimatedTotal = subtotal - discount + tip;
-  const validatedTotal = Number(preview?.final_total || 0);
-  const totalChange = Number(preview?.total_change || 0);
-  const sumPayments = Number(preview?.sum_payments || 0);
+  const promotionDiscountTotal = Number(
+    preview?.promotion_discount_total ??
+      sale?.promotion_discount_total ??
+      0
+  );
+
+  const manualDiscountTotal = Number(
+    preview?.manual_discount_total ??
+      sale?.manual_discount_total ??
+      0
+  );
+
+  const discountTotal = Number(
+    preview?.discount_total ??
+      sale?.discount_total ??
+      0
+  );
+
+  const saleNetTotal = Number(
+    sale?.net_total ??
+      sale?.taxable_amount ??
+      0
+  );
+
+  const liveTipAmount = Number(liveTip || 0);
+
+  const provisionalTotal =
+    saleNetTotal + liveTipAmount;
+
+  const validatedNetTotal = Number(
+    preview?.taxable_amount ?? 0
+  );
+
+  const validatedTip = Number(
+    preview?.tip ?? 0
+  );
+
+  const validatedTotal = Number(
+    preview?.final_total ?? 0
+  );
+
+  const totalChange = Number(
+    preview?.total_change ?? 0
+  );
+
+  const sumPayments = Number(
+    preview?.sum_payments ?? 0
+  );
 
   return (
     <Card
@@ -48,9 +89,31 @@ export default function CashierSaleSummaryCard({
           </Typography>
 
           <Stack spacing={1}>
-            <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
-            <SummaryRow label="Descuento" value={formatCurrency(discount)} />
-            <SummaryRow label="Propina capturada" value={formatCurrency(tip)} />
+            <SummaryRow
+              label="Subtotal bruto"
+              value={formatCurrency(subtotal)}
+            />
+
+            <SummaryRow
+              label="Promociones"
+              value={formatDiscountCurrency(
+                promotionDiscountTotal
+              )}
+            />
+
+            <SummaryRow
+              label="Descuentos manuales"
+              value={formatDiscountCurrency(
+                manualDiscountTotal
+              )}
+            />
+
+            <SummaryRow
+              label="Descuento total"
+              value={formatDiscountCurrency(
+                discountTotal
+              )}
+            />
           </Stack>
 
           <Divider />
@@ -58,42 +121,77 @@ export default function CashierSaleSummaryCard({
           {!preview ? (
             <Stack spacing={1}>
               <SummaryRow
-                label="Total estimado"
-                value={formatCurrency(estimatedTotal)}
+                label="Neto antes de propina"
+                value={formatCurrency(saleNetTotal)}
+              />
+
+              <SummaryRow
+                label="Propina capturada"
+                value={formatCurrency(liveTipAmount)}
+              />
+
+              <SummaryRow
+                label="Total provisional"
+                value={formatCurrency(provisionalTotal)}
                 strong
               />
+
               <SummaryRow
                 label="Impuesto seleccionado"
-                value={selectedTaxOption?.name || "Pendiente"}
+                value={
+                  selectedTaxOption?.label ||
+                  selectedTaxOption?.name ||
+                  "Pendiente"
+                }
               />
             </Stack>
           ) : (
             <Stack spacing={1}>
               <SummaryRow
-                label="Subtotal gravable"
-                value={formatCurrency(preview?.taxable_amount ?? 0)}
+                label="Neto validado antes de propina"
+                value={formatCurrency(validatedNetTotal)}
               />
+
+              <SummaryRow
+                label="Propina validada"
+                value={formatCurrency(validatedTip)}
+              />
+
               <SummaryRow
                 label="Tasa"
-                value={preview?.tax_option?.name || selectedTaxOption?.name || "—"}
+                value={
+                  preview?.tax_option?.name ||
+                  selectedTaxOption?.label ||
+                  selectedTaxOption?.name ||
+                  "—"
+                }
               />
+
               <SummaryRow
                 label="Base"
-                value={formatCurrency(preview?.tax?.tax_base ?? 0)}
+                value={formatCurrency(
+                  preview?.tax?.tax_base ?? 0
+                )}
               />
+
               <SummaryRow
-                label="Impuesto"
-                value={formatCurrency(preview?.tax?.tax_total ?? 0)}
+                label="Impuesto incluido"
+                value={formatCurrency(
+                  preview?.tax?.tax_total ?? 0
+                )}
               />
+
               <SummaryRow
                 label="Total validado"
                 value={formatCurrency(validatedTotal)}
                 strong
               />
+
               <SummaryRow
                 label="Suma de pagos"
                 value={formatCurrency(sumPayments)}
               />
+
               <SummaryRow
                 label="Cambio"
                 value={formatCurrency(totalChange)}
@@ -129,8 +227,8 @@ export default function CashierSaleSummaryCard({
                   lineHeight: 1.5,
                 }}
               >
-                Ya se validó el impuesto, el total, la suma de pagos y el
-                cambio.
+                Ya se validaron las promociones, los descuentos,
+                el impuesto, el total, la suma de pagos y el cambio.
               </Typography>
             </Box>
           ) : (
@@ -149,8 +247,9 @@ export default function CashierSaleSummaryCard({
                   lineHeight: 1.5,
                 }}
               >
-                El total mostrado aquí todavía es estimado. Genera la vista
-                previa para validar el cobro real antes de confirmarlo.
+                El total mostrado todavía es provisional. Genera la
+                vista previa para validar el cobro real antes de
+                confirmarlo.
               </Typography>
             </Box>
           )}
@@ -162,12 +261,18 @@ export default function CashierSaleSummaryCard({
 
 function SummaryRow({ label, value, strong = false }) {
   return (
-    <Stack direction="row" justifyContent="space-between" spacing={1}>
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      spacing={1}
+    >
       <Typography
         sx={{
           fontSize: strong ? 15 : 14,
           fontWeight: strong ? 800 : 700,
-          color: strong ? "text.primary" : "text.secondary",
+          color: strong
+            ? "text.primary"
+            : "text.secondary",
         }}
       >
         {label}
@@ -185,6 +290,16 @@ function SummaryRow({ label, value, strong = false }) {
       </Typography>
     </Stack>
   );
+}
+
+function formatDiscountCurrency(value) {
+  const amount = Math.abs(Number(value || 0));
+
+  if (amount <= 0) {
+    return formatCurrency(0);
+  }
+
+  return `-${formatCurrency(amount)}`;
 }
 
 function formatCurrency(value) {

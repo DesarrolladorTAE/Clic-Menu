@@ -2,10 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Box,
-  CircularProgress,
-  Stack,
-  Typography,
+  Box, CircularProgress, Stack, Typography,
 } from "@mui/material";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
@@ -366,9 +363,9 @@ export default function CashierSaleDetailPage() {
   };
 
   const syncSaleFromDiscountSummary = (summaryData) => {
-    if (!summaryData?.sale) return;
+    const summarySale = summaryData?.sale || null;
 
-    syncSinglePaymentAmountToSaleTotal(summaryData.sale.total);
+    if (!summarySale) return;
 
     setDetailData((prev) => {
       if (!prev?.sale) return prev;
@@ -377,32 +374,145 @@ export default function CashierSaleDetailPage() {
         ...prev,
         sale: {
           ...prev.sale,
-          subtotal: summaryData.sale.subtotal,
-          discount_total: summaryData.sale.discount_total,
-          tip: summaryData.sale.tip,
-          total: summaryData.sale.total,
-          tax_kind: summaryData.sale.tax_kind,
-          tax_rate: summaryData.sale.tax_rate,
-          tax_base: summaryData.sale.tax_base,
-          tax_total: summaryData.sale.tax_total,
+
+          subtotal:
+            summarySale.subtotal ??
+            prev.sale.subtotal,
+
+          promotion_discount_total:
+            summarySale.promotion_discount_total ??
+            prev.sale.promotion_discount_total,
+
+          manual_discount_total:
+            summarySale.manual_discount_total ??
+            prev.sale.manual_discount_total,
+
+          discount_total:
+            summarySale.discount_total ??
+            prev.sale.discount_total,
+
+          net_total:
+            summarySale.net_total ??
+            prev.sale.net_total,
+
+          tip:
+            summarySale.tip ??
+            prev.sale.tip,
+
+          total:
+            summarySale.total ??
+            prev.sale.total,
+
+          payable_total:
+            summarySale.payable_total ??
+            summarySale.total ??
+            prev.sale.payable_total,
+
+          tax_kind:
+            summarySale.tax_kind ??
+            prev.sale.tax_kind,
+
+          tax_rate:
+            summarySale.tax_rate ??
+            prev.sale.tax_rate,
+
+          tax_base:
+            summarySale.tax_base ??
+            prev.sale.tax_base,
+
+          tax_total:
+            summarySale.tax_total ??
+            prev.sale.tax_total,
         },
       };
     });
   };
 
+  const syncSinglePaymentFromFinancialSale = (
+    financialSale,
+    liveTipValue = tip
+  ) => {
+    if (!financialSale) return;
+
+    const backendPayableTotal = Number(
+      financialSale?.payable_total ??
+        financialSale?.total ??
+        0
+    );
+
+    const backendTip = Number(financialSale?.tip ?? 0);
+    const currentLiveTip = Number(liveTipValue ?? backendTip);
+
+    const backendNetTotal = Number(
+      financialSale?.net_total ??
+        financialSale?.taxable_amount
+    );
+
+    const hasDifferentLiveTip =
+      Number.isFinite(currentLiveTip) &&
+      Math.abs(currentLiveTip - backendTip) > 0.009;
+
+    const nextPaymentTotal =
+      hasDifferentLiveTip && Number.isFinite(backendNetTotal)
+        ? backendNetTotal + currentLiveTip
+        : backendPayableTotal;
+
+    if (!Number.isFinite(nextPaymentTotal)) return;
+
+    syncSinglePaymentAmountToSaleTotal(nextPaymentTotal);
+  };
+
   const initializePayments = (loadedSale, loadedMethods) => {
-    const initialTotal = Number(loadedSale?.total || 0);
+    const initialTotal = Number(
+      loadedSale?.payable_total ??
+        loadedSale?.total ??
+        0
+    );
+
     const firstMethodId = loadedMethods?.[0]?.id
       ? String(loadedMethods[0].id)
       : "";
 
     setTip(String(Number(loadedSale?.tip || 0)));
+
     setPayments([
       {
         ...createEmptyPayment(firstMethodId),
-        amount: initialTotal ? String(initialTotal) : "",
+        amount:
+          initialTotal > 0
+            ? formatPaymentAmountValue(initialTotal)
+            : "",
       },
     ]);
+  };
+
+  const refreshOrderItemsFromBackend = async () => {
+    try {
+      const res = await fetchCashierSaleDetail(saleId);
+      const latestDetail = res?.data || null;
+
+      if (!latestDetail?.order_detail) {
+        return false;
+      }
+
+      setDetailData((prev) => {
+        if (!prev) return latestDetail;
+
+        return {
+          ...prev,
+          order_detail: latestDetail.order_detail,
+        };
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        "No se pudo actualizar el detalle financiero de los productos.",
+        error
+      );
+
+      return false;
+    }
   };
 
   const syncCustomerFormsFromSummary = (summaryData) => {
@@ -604,6 +714,25 @@ export default function CashierSaleDetailPage() {
   const handleTipChange = (value) => {
     setTip(value);
     setPreview(null);
+
+    const nextTip = value === "" ? 0 : Number(value);
+
+    const backendNetTotal = Number(
+      sale?.net_total ??
+        sale?.taxable_amount
+    );
+
+    if (
+      !Number.isFinite(nextTip) ||
+      nextTip < 0 ||
+      !Number.isFinite(backendNetTotal)
+    ) {
+      return;
+    }
+
+    syncSinglePaymentAmountToSaleTotal(
+      backendNetTotal + nextTip
+    );
   };
 
   const handleAddPayment = () => {
@@ -1106,17 +1235,68 @@ export default function CashierSaleDetailPage() {
             ...prev,
             sale: {
               ...prev.sale,
-              status: paidSaleData.status ?? prev.sale.status,
-              subtotal: paidSaleData.subtotal ?? prev.sale.subtotal,
+
+              status:
+                paidSaleData.status ??
+                prev.sale.status,
+
+              subtotal:
+                paidSaleData.subtotal ??
+                prev.sale.subtotal,
+
+              promotion_discount_total:
+                paidSaleData.promotion_discount_total ??
+                prev.sale.promotion_discount_total,
+
+              manual_discount_total:
+                paidSaleData.manual_discount_total ??
+                prev.sale.manual_discount_total,
+
               discount_total:
-                paidSaleData.discount_total ?? prev.sale.discount_total,
-              tip: paidSaleData.tip ?? prev.sale.tip,
-              total: paidSaleData.total ?? prev.sale.total,
-              tax_kind: paidSaleData.tax_kind ?? prev.sale.tax_kind,
-              tax_rate: paidSaleData.tax_rate ?? prev.sale.tax_rate,
-              tax_base: paidSaleData.tax_base ?? prev.sale.tax_base,
-              tax_total: paidSaleData.tax_total ?? prev.sale.tax_total,
-              paid_at: paidSaleData.paid_at ?? prev.sale.paid_at,
+                paidSaleData.discount_total ??
+                prev.sale.discount_total,
+
+              taxable_amount:
+                paidSaleData.taxable_amount ??
+                prev.sale.taxable_amount,
+
+              net_total:
+                paidSaleData.net_total ??
+                paidSaleData.taxable_amount ??
+                prev.sale.net_total,
+
+              tip:
+                paidSaleData.tip ??
+                prev.sale.tip,
+
+              total:
+                paidSaleData.total ??
+                prev.sale.total,
+
+              payable_total:
+                paidSaleData.payable_total ??
+                paidSaleData.total ??
+                prev.sale.payable_total,
+
+              tax_kind:
+                paidSaleData.tax_kind ??
+                prev.sale.tax_kind,
+
+              tax_rate:
+                paidSaleData.tax_rate ??
+                prev.sale.tax_rate,
+
+              tax_base:
+                paidSaleData.tax_base ??
+                prev.sale.tax_base,
+
+              tax_total:
+                paidSaleData.tax_total ??
+                prev.sale.tax_total,
+
+              paid_at:
+                paidSaleData.paid_at ??
+                prev.sale.paid_at,
               order: {
                 ...(prev.sale.order || {}),
                 ...(paidOrderData || {}),
@@ -1218,8 +1398,16 @@ export default function CashierSaleDetailPage() {
   };
 
   const syncDiscountResponseToState = (res) => {
-    setDiscountSummary(res?.data || null);
-    syncSaleFromDiscountSummary(res?.data || null);
+    const summaryData = res?.data || null;
+
+    setDiscountSummary(summaryData);
+    syncSaleFromDiscountSummary(summaryData);
+
+    syncSinglePaymentFromFinancialSale(
+      summaryData?.sale,
+      tip
+    );
+
     setPreview(null);
   };
 
@@ -1398,9 +1586,15 @@ export default function CashierSaleDetailPage() {
       ) {
         setItemDiscountDrafts((prev) =>
           prev.filter(
-            (row) => row.localId !== discountAuthorizationTarget.draftLocalId
+            (row) =>
+              row.localId !==
+              discountAuthorizationTarget.draftLocalId
           )
         );
+      }
+
+      if (discountAuthorizationTarget.scope === "item") {
+        await refreshOrderItemsFromBackend();
       }
 
       resetDiscountAuthorizationState();
@@ -1535,20 +1729,25 @@ export default function CashierSaleDetailPage() {
     try {
       setDiscountBusy(true);
 
-      const res = await removeCashierSaleGlobalDiscount(sale.sale_id);
+      const res = await removeCashierSaleGlobalDiscount(
+        sale.sale_id
+      );
 
-      setDiscountSummary(res?.data || null);
-      syncSaleFromDiscountSummary(res?.data || null);
-      setPreview(null);
+      syncDiscountResponseToState(res);
 
       showAlert({
         severity: "success",
-        message: res?.message || "Descuento global removido correctamente.",
+        message:
+          res?.message ||
+          "Descuento global removido correctamente.",
       });
     } catch (e) {
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo quitar el descuento global."),
+        message: pickErr(
+          e,
+          "No se pudo quitar el descuento global."
+        ),
       });
     } finally {
       setDiscountBusy(false);
@@ -1607,9 +1806,13 @@ export default function CashierSaleDetailPage() {
         prev.filter((row) => row.localId !== localId)
       );
 
+      await refreshOrderItemsFromBackend();
+
       showAlert({
         severity: "success",
-        message: res?.message || "Descuento por ítem aplicado correctamente.",
+        message:
+          res?.message ||
+          "Descuento por ítem aplicado correctamente.",
       });
     } catch (e) {
       const authorizationOpened =
@@ -1658,9 +1861,8 @@ export default function CashierSaleDetailPage() {
         orderItemId
       );
 
-      setDiscountSummary(res?.data || null);
-      syncSaleFromDiscountSummary(res?.data || null);
-      setPreview(null);
+      syncDiscountResponseToState(res);
+      await refreshOrderItemsFromBackend();
 
       showAlert({
         severity: "success",
@@ -2080,14 +2282,31 @@ export default function CashierSaleDetailPage() {
             alignItems: "stretch",
           }}
         >
-          <Box sx={{ height: "100%" }}>
+          <Box
+            sx={{
+              height: "100%",
+              minWidth: 0,
+            }}
+          >
             <CashierOrderItemsCard
               itemsTree={itemsTree}
               itemsSummary={itemsSummary}
             />
           </Box>
 
-          <Stack spacing={3} sx={{ height: "100%" }}>
+          <Box
+            sx={{
+              minWidth: 0,
+              height: "100%",
+              display: "grid",
+              gap: 3,
+              gridTemplateRows: {
+                xs: "auto auto",
+                xl: "minmax(0, 1fr) auto",
+              },
+              alignItems: "stretch",
+            }}
+          >
             <CashierSaleSummaryCard
               sale={sale}
               liveTip={Number(tip || 0)}
@@ -2104,24 +2323,24 @@ export default function CashierSaleDetailPage() {
               }}
               disabled={!canOperate || previewing || paying || postPaymentOpen}
             />
-            </Stack>
+          </Box>
         </Box>
 
-            <CashierPaymentFormCard
-              methods={paymentMethods}
-              tip={tip}
-              onTipChange={handleTipChange}
-              payments={payments}
-              onAddPayment={handleAddPayment}
-              onRemovePayment={handleRemovePayment}
-              onPaymentChange={handlePaymentChange}
-              onPreview={handlePreview}
-              previewing={previewing}
-              paying={paying}
-              hasPreview={!!preview}
-              onPay={handlePay}
-              disabled={!canOperate || postPaymentOpen}
-            />
+        <CashierPaymentFormCard
+          methods={paymentMethods}
+          tip={tip}
+          onTipChange={handleTipChange}
+          payments={payments}
+          onAddPayment={handleAddPayment}
+          onRemovePayment={handleRemovePayment}
+          onPaymentChange={handlePaymentChange}
+          onPreview={handlePreview}
+          previewing={previewing}
+          paying={paying}
+          hasPreview={!!preview}
+          onPay={handlePay}
+          disabled={!canOperate || postPaymentOpen}
+        />
 
       </Stack>
 

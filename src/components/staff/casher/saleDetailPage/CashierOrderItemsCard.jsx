@@ -201,7 +201,33 @@ function OrderItemBlock({ item, level = 0 }) {
 
   const quantity = Number(item?.quantity ?? item?.qty ?? 1);
   const unitPrice = Number(item?.unit_price ?? item?.price ?? 0);
-  const total = Number(item?.line_total ?? item?.total ?? quantity * unitPrice);
+
+  const grossLineTotal = Number(
+    item?.gross_line_total ??
+      item?.line_total ??
+      item?.total ??
+      0
+  );
+
+  const promotionDiscountTotal = Number(
+    item?.promotion_discount_total ?? 0
+  );
+
+  const manualDiscountTotal = Number(
+    item?.manual_discount_total ?? 0
+  );
+
+  const netLineTotal = Number(
+    item?.net_line_total ??
+      item?.gross_line_total ??
+      item?.line_total ??
+      item?.total ??
+      0
+  );
+
+  const appliedPromotions = Array.isArray(item?.applied_promotions)
+    ? item.applied_promotions
+    : [];
 
   const itemName = resolveItemName(item);
   const itemTypeLabel = resolveItemTypeLabel(item, level);
@@ -209,14 +235,19 @@ function OrderItemBlock({ item, level = 0 }) {
 
   return (
     <Box sx={{ pl: level > 0 ? 2.5 : 0 }}>
-      <Stack spacing={1.15} sx={{ py: 1 }}>
+      <Stack spacing={0.8} sx={{ py: 0.75 }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           justifyContent="space-between"
-          spacing={1}
+          spacing={0.75}
         >
           <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+            >
               <Typography
                 sx={{
                   fontSize: level === 0 ? 16 : 14,
@@ -237,11 +268,26 @@ function OrderItemBlock({ item, level = 0 }) {
                     height: 24,
                     fontSize: 12,
                     fontWeight: 800,
-                    bgcolor: level > 0 ? "rgba(255,152,0,0.10)" : "#F5F5F5",
+                    bgcolor:
+                      level > 0
+                        ? "rgba(255,152,0,0.10)"
+                        : "#F5F5F5",
                   }}
                 />
               ) : null}
             </Stack>
+
+            {quantity > 1 ? (
+              <Typography
+                sx={{
+                  mt: 0.25,
+                  fontSize: 12,
+                  color: "text.secondary",
+                }}
+              >
+                {formatCurrency(unitPrice)} c/u
+              </Typography>
+            ) : null}
 
             {noteText ? (
               <Typography
@@ -257,23 +303,53 @@ function OrderItemBlock({ item, level = 0 }) {
             ) : null}
           </Box>
 
-          <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-              Unitario {formatCurrency(unitPrice)}
-            </Typography>
+          <Box
+            sx={{
+              width: { xs: "100%", sm: 220 },
+              flexShrink: 0,
+            }}
+          >
+            <Stack spacing={0.35}>
+              <ItemAmountRow
+                label={quantity > 1 ? "Precio bruto" : "Precio"}
+                value={formatCurrency(grossLineTotal)}
+              />
 
-            <Typography
-              sx={{
-                mt: 0.25,
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              {formatCurrency(total)}
-            </Typography>
+              {promotionDiscountTotal > 0 ? (
+                <ItemAmountRow
+                  label="Promoción automática"
+                  value={formatDiscountCurrency(
+                    promotionDiscountTotal
+                  )}
+                  discount
+                />
+              ) : null}
+
+              {manualDiscountTotal > 0 ? (
+                <ItemAmountRow
+                  label="Descuento manual"
+                  value={formatDiscountCurrency(
+                    manualDiscountTotal
+                  )}
+                  discount
+                />
+              ) : null}
+
+              <Divider sx={{ my: 0.2 }} />
+
+              <ItemAmountRow
+                label="Total neto"
+                value={formatCurrency(netLineTotal)}
+                strong
+              />
+            </Stack>
           </Box>
+
         </Stack>
+
+        {appliedPromotions.length > 0 ? (
+          <PromotionApplicationsBlock promotions={appliedPromotions} />
+        ) : null}
 
         {modifierGroups.length > 0 ? (
           <Stack spacing={0.75}>
@@ -330,6 +406,118 @@ function OrderItemBlock({ item, level = 0 }) {
             ))}
           </Stack>
         ) : null}
+      </Stack>
+    </Box>
+  );
+}
+
+function ItemAmountRow({
+  label,
+  value,
+  strong = false,
+  muted = false,
+  discount = false,
+}) {
+  return (
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="center"
+      spacing={1}
+    >
+      <Typography
+        sx={{
+          fontSize: strong ? 13 : 12,
+          fontWeight: strong ? 800 : 700,
+          color: muted ? "text.secondary" : "text.primary",
+        }}
+      >
+        {label}
+      </Typography>
+
+      <Typography
+        sx={{
+          fontSize: strong ? 14 : 12,
+          fontWeight: strong ? 900 : 800,
+          color: discount ? "error.main" : "text.primary",
+          textAlign: "right",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
+function PromotionApplicationsBlock({ promotions = [] }) {
+  const rows = Array.isArray(promotions) ? promotions : [];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Box
+      sx={{
+        borderRadius: 1,
+        backgroundColor: "rgba(255, 152, 0, 0.06)",
+        px: 1,
+        py: 0.7,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 10,
+          fontWeight: 900,
+          color: "text.secondary",
+          textTransform: "uppercase",
+          letterSpacing: 0.2,
+        }}
+      >
+        {rows.length === 1
+          ? "Promoción aplicada"
+          : "Promociones aplicadas"}
+      </Typography>
+
+      <Stack spacing={0.3} sx={{ mt: 0.35 }}>
+        {rows.map((promotion, index) => {
+          const name =
+            promotion?.promotion_name?.trim() ||
+            "Promoción automática";
+
+          const typeLabel = resolvePromotionTypeLabel(
+            promotion?.promotion_type
+          );
+
+          return (
+            <Typography
+              key={
+                promotion?.order_item_promotion_application_id ||
+                promotion?.id ||
+                `${name}-${index}`
+              }
+              sx={{
+                fontSize: 12,
+                color: "text.secondary",
+                lineHeight: 1.35,
+                wordBreak: "break-word",
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}
+              >
+                {name}
+              </Box>
+
+              {" · "}
+
+              {typeLabel}
+            </Typography>
+          );
+        })}
       </Stack>
     </Box>
   );
@@ -441,6 +629,24 @@ function formatNotes(notes) {
   }
 
   return String(notes);
+}
+
+function resolvePromotionTypeLabel(type) {
+  const key = String(type || "").trim().toLowerCase();
+
+  const labels = {
+    promotional_price: "Precio promocional",
+    buy_x_pay_y: "Compra X y paga Y",
+    product_discount: "Descuento de producto",
+  };
+
+  return labels[key] || "Promoción automática";
+}
+
+function formatDiscountCurrency(value) {
+  const amount = Math.abs(Number(value || 0));
+
+  return `-${formatCurrency(amount)}`;
 }
 
 function formatCurrency(value) {

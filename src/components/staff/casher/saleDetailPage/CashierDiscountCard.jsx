@@ -1,16 +1,7 @@
 // Tarjetita Descuentos
 import React, { useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  IconButton,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
+  Box, Button, Card, CardContent, Chip, IconButton, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import SellRoundedIcon from "@mui/icons-material/SellRounded";
@@ -44,24 +35,45 @@ export default function CashierDiscountCard({
   const hasGlobalDiscount = !!globalDiscount;
   const hasItemDiscounts = itemDiscounts.length > 0;
 
+  const promotionDiscountTotal = Number(
+    summary?.sale?.promotion_discount_total ??
+      sale?.promotion_discount_total ??
+      0
+  );
+
   const normalizedItems = useMemo(() => {
     return (Array.isArray(itemsFlat) ? itemsFlat : [])
       .map((item) => {
-        const orderItemId = Number(item?.id ?? item?.order_item_id ?? 0);
-        const qty = Number(item?.quantity ?? item?.qty ?? 1);
-        const unitPrice = Number(item?.unit_price ?? item?.price ?? 0);
-        const total = Number(
-          item?.line_total ?? item?.total ?? qty * unitPrice
+        const orderItemId = Number(
+          item?.id ?? item?.order_item_id ?? 0
+        );
+
+        const qty = Number(
+          item?.quantity ?? item?.qty ?? 1
+        );
+
+        const netTotal = Number(
+          item?.net_line_total ??
+            item?.line_total ??
+            item?.total ??
+            0
+        );
+
+        const manualDiscountTotal = Number(
+          item?.manual_discount_total ?? 0
         );
 
         return {
           orderItemId,
           qty,
-          total,
+          netTotal,
+          manualDiscountTotal,
           name: resolveItemName(item),
           itemKind:
             item?.item_kind ||
-            (item?.parent_order_item_id ? "composite_child" : "order_item"),
+            (item?.parent_order_item_id
+              ? "composite_child"
+              : "order_item"),
           isCompositeParent: !!item?.is_composite_parent,
         };
       })
@@ -120,7 +132,7 @@ export default function CashierDiscountCard({
                 color: "text.primary",
               }}
             >
-              Descuentos
+              Descuentos manuales
             </Typography>
 
             <Typography
@@ -131,10 +143,21 @@ export default function CashierDiscountCard({
                 lineHeight: 1.5,
               }}
             >
-              Puedes aplicar descuento total o por ítem, pero no ambos al mismo
-              tiempo.
+              Puedes aplicar un descuento manual total o por ítem, pero no ambos al
+              mismo tiempo.
             </Typography>
           </Box>
+
+          {promotionDiscountTotal > 0 ? (
+            <HelperBox>
+              Esta venta ya cuenta con{" "}
+              <strong>
+                {formatCurrency(promotionDiscountTotal)}
+              </strong>{" "}
+              en promociones aplicadas. Los descuentos manuales se aplican de
+              forma adicional.
+            </HelperBox>
+          ) : null}
 
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -150,7 +173,7 @@ export default function CashierDiscountCard({
             <SectionButton
               active={activeSection === "global"}
               icon={<SellRoundedIcon fontSize="small" />}
-              label="Descuento total"
+              label="Descuento manual total"
               helper={
                 hasGlobalDiscount
                   ? `Activo: ${formatCurrency(
@@ -164,7 +187,7 @@ export default function CashierDiscountCard({
             <SectionButton
               active={activeSection === "item"}
               icon={<PercentRoundedIcon fontSize="small" />}
-              label="Descuento por ítem"
+              label="Descuento manual por ítem"
               helper={
                 hasItemDiscounts
                   ? `${itemDiscounts.length} aplicado(s)`
@@ -188,7 +211,7 @@ export default function CashierDiscountCard({
                 <Stack direction="row" spacing={1} alignItems="center">
                   <SellRoundedIcon color="primary" />
                   <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                    Descuento total
+                    Descuento manual total
                   </Typography>
                 </Stack>
 
@@ -340,7 +363,7 @@ export default function CashierDiscountCard({
                   <Stack direction="row" spacing={1} alignItems="center">
                     <PercentRoundedIcon color="primary" />
                     <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                      Descuento por ítem
+                      Descuento manual por ítem
                     </Typography>
                   </Stack>
 
@@ -384,7 +407,17 @@ export default function CashierDiscountCard({
                 {itemDiscounts.length > 0 ? (
                   <Stack spacing={1.25}>
                     {itemDiscounts.map((discount) => {
-                      const item = itemsMap.get(Number(discount.order_item_id));
+                      const item = itemsMap.get(
+                        Number(discount.order_item_id)
+                      );
+
+                      const backendBase = Number(
+                        discount?.base_amount ??
+                          discount?.item_base_amount ??
+                          0
+                      );
+
+                      const hasBackendBase = backendBase > 0;
 
                       return (
                         <Box
@@ -423,8 +456,15 @@ export default function CashierDiscountCard({
                                   color: "text.secondary",
                                 }}
                               >
-                                Base del ítem:{" "}
-                                {formatCurrency(item?.total ?? 0)}
+                                {hasBackendBase
+                                  ? "Base para descuento manual"
+                                  : "Neto actual del ítem"}
+                                :{" "}
+                                {formatCurrency(
+                                  hasBackendBase
+                                    ? backendBase
+                                    : item?.netTotal ?? 0
+                                )}
                               </Typography>
 
                               <Typography
@@ -610,8 +650,8 @@ export default function CashierDiscountCard({
                                     color: "text.primary",
                                   }}
                                 >
-                                  Base del ítem:{" "}
-                                  {formatCurrency(selectedItem.total)}
+                                  Base disponible después de promociones:{" "}
+                                  {formatCurrency(selectedItem.netTotal)}
                                 </Typography>
                               </Box>
                             ) : null}
@@ -740,22 +780,72 @@ export default function CashierDiscountCard({
               p: 1.5,
             }}
           >
-            <InfoRow
-              label="Subtotal"
-              value={formatCurrency(
-                summary?.sale?.subtotal ?? sale?.subtotal ?? 0
-              )}
-            />
-            <InfoRow
-              label="Descuento acumulado"
-              value={formatCurrency(
-                summary?.sale?.discount_total ?? sale?.discount_total ?? 0
-              )}
-            />
-            <InfoRow
-              label="Total actual"
-              value={formatCurrency(summary?.sale?.total ?? sale?.total ?? 0)}
-            />
+            <Stack spacing={0.75}>
+              <InfoRow
+                label="Subtotal bruto"
+                value={formatCurrency(
+                  summary?.sale?.subtotal ??
+                    sale?.subtotal ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Promociones automáticas"
+                value={formatDiscountCurrency(
+                  summary?.sale?.promotion_discount_total ??
+                    sale?.promotion_discount_total ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Descuentos manuales"
+                value={formatDiscountCurrency(
+                  summary?.sale?.manual_discount_total ??
+                    sale?.manual_discount_total ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Descuento total"
+                value={formatDiscountCurrency(
+                  summary?.sale?.discount_total ??
+                    sale?.discount_total ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Neto antes de propina"
+                value={formatCurrency(
+                  summary?.sale?.net_total ??
+                    sale?.net_total ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Propina"
+                value={formatCurrency(
+                  summary?.sale?.tip ??
+                    sale?.tip ??
+                    0
+                )}
+              />
+
+              <InfoRow
+                label="Total actual"
+                value={formatCurrency(
+                  summary?.sale?.payable_total ??
+                    sale?.payable_total ??
+                    summary?.sale?.total ??
+                    sale?.total ??
+                    0
+                )}
+              />
+            </Stack>
           </Box>
         </Stack>
       </CardContent>
@@ -877,6 +967,16 @@ function resolveItemName(item) {
   if (productName) return productName;
   if (variantName) return variantName;
   return "Producto";
+}
+
+function formatDiscountCurrency(value) {
+  const amount = Math.abs(Number(value || 0));
+
+  if (amount <= 0) {
+    return formatCurrency(0);
+  }
+
+  return `-${formatCurrency(amount)}`;
 }
 
 function formatCurrency(value) {

@@ -1,13 +1,7 @@
 // src/components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard.jsx
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
@@ -181,14 +175,39 @@ export default function CashierSaleDetailHeroCard({
           </Box>
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip label={`Subtotal ${formatCurrency(sale?.subtotal)}`} size="small" />
             <Chip
-              label={`Descuento ${formatCurrency(sale?.discount_total)}`}
+              label={`Subtotal ${formatCurrency(sale?.subtotal)}`}
               size="small"
             />
-            <Chip label={`Propina ${formatCurrency(sale?.tip)}`} size="small" />
+
             <Chip
-              label={`Total ${formatCurrency(sale?.total)}`}
+              label={`Promociones ${formatCurrency(
+                sale?.promotion_discount_total
+              )}`}
+              size="small"
+            />
+
+            <Chip
+              label={`Descuento manual ${formatCurrency(
+                sale?.manual_discount_total
+              )}`}
+              size="small"
+            />
+
+            <Chip
+              label={`Neto ${formatCurrency(sale?.net_total)}`}
+              size="small"
+            />
+
+            <Chip
+              label={`Propina ${formatCurrency(sale?.tip)}`}
+              size="small"
+            />
+
+            <Chip
+              label={`Total ${formatCurrency(
+                sale?.payable_total ?? sale?.total
+              )}`}
               size="small"
               sx={{
                 fontWeight: 800,

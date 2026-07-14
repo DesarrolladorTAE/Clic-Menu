@@ -2,10 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
-  CircularProgress,
-  Stack,
-  Typography,
+  Box, CircularProgress, Stack, Typography,
 } from "@mui/material";
 
 import PageContainer from "../../../components/common/PageContainer";
@@ -258,7 +255,11 @@ export default function CashierQueuePage() {
   );
 
   const myTotal = useMemo(() => {
-    return mySales.reduce((acc, item) => acc + Number(item?.total || 0), 0);
+    return mySales.reduce(
+      (acc, sale) =>
+        acc + Number(sale?.payable_total ?? sale?.total ?? 0),
+      0
+    );
   }, [mySales]);
 
   const activeList = tab === "available" ? availableSales : mySales;

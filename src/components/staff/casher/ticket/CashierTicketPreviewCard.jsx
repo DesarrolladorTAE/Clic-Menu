@@ -1,12 +1,6 @@
 import React from "react";
 import {
-  Alert,
-  Box,
-  Card,
-  CardContent,
-  Divider,
-  Stack,
-  Typography,
+  Alert, Box, Card, CardContent, Divider, Stack, Typography,
 } from "@mui/material";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
@@ -16,15 +10,19 @@ function InfoRow({ label, value, highlight = false }) {
   return (
     <Stack
       direction="row"
-      alignItems="center"
+      alignItems="flex-start"
       justifyContent="space-between"
-      spacing={2}
+      spacing={1.5}
     >
       <Typography
         sx={{
+          minWidth: 0,
+          pr: 1,
           fontSize: 14,
           color: "text.secondary",
           fontWeight: 700,
+          lineHeight: 1.4,
+          wordBreak: "break-word",
         }}
       >
         {label}
@@ -32,10 +30,13 @@ function InfoRow({ label, value, highlight = false }) {
 
       <Typography
         sx={{
+          flexShrink: 0,
           fontSize: 14,
           color: highlight ? "primary.main" : "text.primary",
-          fontWeight: 800,
+          fontWeight: highlight ? 900 : 800,
           textAlign: "right",
+          lineHeight: 1.4,
+          whiteSpace: "nowrap",
         }}
       >
         {value || "—"}
@@ -53,7 +54,45 @@ export default function CashierTicketPreviewCard({
   ticketErrorCode = null,
   ticketErrorMessage = null,
 }) {
-  const total = Number(sale?.total || 0);
+  const subtotal = Number(sale?.subtotal ?? 0);
+
+  const promotionDiscountTotal = Number(
+    sale?.promotion_discount_total ?? 0
+  );
+
+  const manualDiscountTotal = Number(
+    sale?.manual_discount_total ?? 0
+  );
+
+  const discountTotal = Number(
+    sale?.discount_total ?? 0
+  );
+
+  const netTotal = Number(
+    sale?.net_total ??
+      sale?.taxable_amount ??
+      0
+  );
+
+  const tip = Number(sale?.tip ?? 0);
+
+  const total = Number(
+    sale?.payable_total ??
+      sale?.total ??
+      0
+  );
+
+  const saleIdentifier = Number(
+    sale?.sale_id ??
+      sale?.id ??
+      0
+  );
+
+  const showDiscountBreakdown =
+    discountTotal > 0 ||
+    promotionDiscountTotal > 0 ||
+    manualDiscountTotal > 0;
+
   const hasTicket = Boolean(ticket?.id);
 
   return (
@@ -147,7 +186,7 @@ export default function CashierTicketPreviewCard({
 
           <Box
             sx={{
-              p: 2,
+              p: { xs: 1.75, sm: 2 },
               borderRadius: 1,
               border: "1px solid",
               borderColor: "divider",
@@ -155,16 +194,78 @@ export default function CashierTicketPreviewCard({
             }}
           >
             <Stack spacing={1.5}>
-              <InfoRow label="Folio" value={ticket?.folio} highlight={hasTicket} />
-              <InfoRow label="Ticket ID" value={ticket?.id} />
-              <InfoRow label="Venta" value={sale?.id ? `#${sale.id}` : "—"} />
-              <InfoRow label="Orden" value={order?.id ? `#${order.id}` : "—"} />
-              <InfoRow label="Mesa" value={table?.name || "Sin mesa"} />
-              <InfoRow
-                label="Total cobrado"
-                value={`$${total.toFixed(2)}`}
-                highlight
-              />
+              <Stack spacing={1.1}>
+                <InfoRow
+                  label="Folio"
+                  value={ticket?.folio}
+                  highlight={hasTicket}
+                />
+
+                <InfoRow
+                  label="Ticket ID"
+                  value={ticket?.id}
+                />
+
+                <InfoRow
+                  label="Venta"
+                  value={saleIdentifier > 0 ? `#${saleIdentifier}` : "—"}
+                />
+
+                <InfoRow
+                  label="Orden"
+                  value={order?.id ? `#${order.id}` : "—"}
+                />
+
+                <InfoRow
+                  label="Mesa"
+                  value={table?.name || "Sin mesa"}
+                />
+              </Stack>
+
+              <Divider />
+
+              <Stack spacing={1.1}>
+                <InfoRow
+                  label="Subtotal bruto"
+                  value={formatCurrency(subtotal)}
+                />
+
+                {showDiscountBreakdown ? (
+                  <>
+                    <InfoRow
+                      label="Promociones aplicadas"
+                      value={formatDiscountCurrency(
+                        promotionDiscountTotal
+                      )}
+                    />
+
+                    <InfoRow
+                      label="Descuentos manuales"
+                      value={formatDiscountCurrency(
+                        manualDiscountTotal
+                      )}
+                    />
+                  </>
+                ) : null}
+
+                <InfoRow
+                  label="Neto antes de propina"
+                  value={formatCurrency(netTotal)}
+                />
+
+                <InfoRow
+                  label="Propina"
+                  value={formatCurrency(tip)}
+                />
+
+                <Divider />
+
+                <InfoRow
+                  label="Total cobrado"
+                  value={formatCurrency(total)}
+                  highlight
+                />
+              </Stack>
             </Stack>
           </Box>
 
@@ -219,4 +320,28 @@ export default function CashierTicketPreviewCard({
       </CardContent>
     </Card>
   );
+}
+
+function formatDiscountCurrency(value) {
+  const amount = Math.abs(Number(value || 0));
+
+  if (amount <= 0) {
+    return formatCurrency(0);
+  }
+
+  return `-${formatCurrency(amount)}`;
+}
+
+function formatCurrency(value) {
+  const safe = Number(value || 0);
+
+  try {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    }).format(safe);
+  } catch {
+    return `$${safe.toFixed(2)}`;
+  }
 }

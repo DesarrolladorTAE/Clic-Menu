@@ -1,17 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  useMediaQuery,
+  Box, Button, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -205,8 +194,10 @@ export default function CashierSalesPanel({
 
                         <TableCell>{order?.status || "—"}</TableCell>
 
-                        <TableCell>{formatCurrency(sale?.total)}</TableCell>
-
+                        <TableCell>
+                          {formatCurrency(sale?.payable_total ?? sale?.total)}
+                        </TableCell>
+                        
                         <TableCell>
                           {formatDateTime(
                             isAvailableMode ? order?.created_at : sale?.taken_at

@@ -1,11 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Chip,
-  Paper,
-  Stack,
-  Typography,
+  Box, Button, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
@@ -35,9 +30,9 @@ export default function CashierSaleOptionalActionsBar({
   const hasFormalCustomer = Boolean(customer?.customer_id || customer?.id);
   const hasSimpleContact = Boolean(contactData?.phone || contactData?.email);
 
-  const discountTotal = Number(
-    discountSummary?.sale?.discount_total ??
-      discountSummary?.discount_total ??
+  const manualDiscountTotal = Number(
+    discountSummary?.sale?.manual_discount_total ??
+      discountSummary?.manual_discount_total ??
       0
   );
 
@@ -117,13 +112,13 @@ export default function CashierSaleOptionalActionsBar({
 
           <ActionButton
             icon={<LocalOfferRoundedIcon />}
-            title="Descuentos"
+            title="Descuentos manuales"
             status={
-              discountTotal > 0
-                ? `${formatCurrency(discountTotal)} aplicado`
-                : "Sin descuentos"
+              manualDiscountTotal > 0
+                ? `${formatCurrency(manualDiscountTotal)} manual aplicado`
+                : "Sin descuentos manuales"
             }
-            active={discountTotal > 0}
+            active={manualDiscountTotal > 0}
             disabled={disabled}
             onClick={onOpenDiscounts}
           />
