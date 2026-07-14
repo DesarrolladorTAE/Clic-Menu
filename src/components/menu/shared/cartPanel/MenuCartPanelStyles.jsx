@@ -141,6 +141,31 @@ export default function MenuCartPanelStyles() {
           border-top: none;
         }
 
+        /* Fila secundaria del detalle promocional */
+        .cm-pricing-detail-row {
+          background: #FFFFFF;
+        }
+
+        .cm-pricing-detail-cell {
+          width: 100%;
+          max-width: 100%;
+          padding: 0 8px 10px;
+          border-top: none !important;
+          background: #FFFFFF;
+          box-sizing: border-box;
+          overflow: visible;
+        }
+
+        .cm-confirmed-detail-stack {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 7px;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
         .cm-right {
           text-align: right;
           white-space: nowrap;
@@ -460,6 +485,17 @@ export default function MenuCartPanelStyles() {
           background: rgba(15, 118, 110, 0.06);
         }
 
+        /*
+        * Cuando el detalle está en la fila completa de la tabla,
+        * ocupa todo el ancho y elimina el margen superior duplicado.
+        */
+        .cm-pricing-detail-cell .cm-line-discount {
+          width: 100%;
+          max-width: 100%;
+          margin: 0;
+          box-sizing: border-box;
+        }
+
         .cm-line-discount-row {
           display: flex;
           align-items: flex-start;
@@ -492,6 +528,21 @@ export default function MenuCartPanelStyles() {
           margin-top: 7px;
         }
 
+        /*
+        * En la fila secundaria de la tabla, las promociones
+        * se muestran a todo el ancho.
+        */
+        .cm-pricing-detail-cell .cm-applied-promotions {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          margin: 0;
+          box-sizing: border-box;
+        }
+
         .cm-applied-promotion {
           display: inline-flex;
           align-items: center;
@@ -508,6 +559,16 @@ export default function MenuCartPanelStyles() {
           white-space: normal;
           overflow-wrap: anywhere;
           word-break: break-word;
+        }
+
+        .cm-pricing-detail-cell .cm-applied-promotion {
+          display: flex;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          padding: 7px 10px;
+          border-radius: 12px;
+          box-sizing: border-box;
         }
 
         /* =========================
@@ -748,17 +809,32 @@ export default function MenuCartPanelStyles() {
 
           .cm-header-main {
             display: grid;
+            grid-template-columns: minmax(0, 1fr);
             gap: 10px;
+            width: 100%;
+            min-width: 0;
           }
 
           .cm-actions {
-            justify-content: stretch;
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
+            align-items: stretch;
+            justify-content: stretch;
+            gap: 8px;
+            width: 100%;
+            max-width: none;
+            min-width: 0;
+            box-sizing: border-box;
           }
 
-          .cm-actions button {
-            width: 100%;
+          .cm-actions > button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100% !important;
+            max-width: none !important;
+            min-width: 0;
+            box-sizing: border-box;
           }
 
           .cm-table-wrap {
@@ -780,7 +856,34 @@ export default function MenuCartPanelStyles() {
           }
         }
 
-        @media (min-width: 761px) {
+       @media (min-width: 761px) {
+          .cm-header-main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            width: 100%;
+            min-width: 0;
+          }
+
+          .cm-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            box-sizing: border-box;
+          }
+
+          .cm-actions > button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100% !important;
+            max-width: none !important;
+            min-width: 0;
+            box-sizing: border-box;
+          }
+
           .cm-new-card-list {
             display: grid;
             gap: 10px;

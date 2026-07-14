@@ -321,64 +321,92 @@ function OldRow({
     !!item?.is_composite_parent ||
     (Array.isArray(item?.children) && item.children.length > 0);
 
+  const hasActionColumn =
+  typeof onRemoveOldItem === "function";
+
+  const hasAppliedPromotions =
+    Array.isArray(pricing.appliedPromotions) &&
+    pricing.appliedPromotions.length > 0;
+
+  const hasFullWidthDetail =
+    hasAppliedPromotions || pricing.hasDiscount;
+
   return (
-    <tr>
-      <td className={`cm-td ${isCompositeParent ? "cm-combo" : ""}`}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontWeight: 950, fontSize: 13, color: "#3F3A52" }}>
-            {label}
+    <>
+      <tr>
+
+        <td className={`cm-td ${isCompositeParent ? "cm-combo" : ""}`}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontWeight: 950, fontSize: 13, color: "#3F3A52" }}>
+              {label}
+            </div>
+
+            {isCompositeParent ? (
+              <span className="cm-combo-badge">Combo</span>
+            ) : null}
           </div>
 
-          {isCompositeParent ? (
-            <span className="cm-combo-badge">Combo</span>
+          <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
+          <CompositeDetailBlock details={item?.components_detail || []} />
+
+          {item?.notes ? (
+            <div className="cm-note">• {renderNotes(item.notes)}</div>
           ) : null}
-        </div>
-
-        <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-        <CompositeDetailBlock details={item?.components_detail || []} />
-
-        <AppliedPromotionsBlock
-          promotions={pricing.appliedPromotions}
-        />
-
-        <ConfirmedLinePricingBlock pricing={pricing} />
-
-        {item?.notes ? (
-          <div className="cm-note">• {renderNotes(item.notes)}</div>
-        ) : null}
-      </td>
-
-      <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
-        {item?.quantity}
-      </td>
-
-      <td
-        className={`cm-td cm-right cm-bold ${
-          isCompositeParent ? "cm-combo" : ""
-        }`}
-        title="Total neto confirmado por el servidor"
-      >
-        {money(pricing.netLineTotal)}
-      </td>
-
-      {onRemoveOldItem ? (
-        <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
-          <OldRemoveButton
-            item={item}
-            onRemoveOldItem={onRemoveOldItem}
-            removingOldItemId={removingOldItemId}
-            oldItemRemoveLabel={oldItemRemoveLabel}
-          />
         </td>
+
+        <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
+          {item?.quantity}
+        </td>
+
+        <td
+          className={`cm-td cm-right cm-bold ${
+            isCompositeParent ? "cm-combo" : ""
+          }`}
+          title="Total neto confirmado por el servidor"
+        >
+          {money(pricing.netLineTotal)}
+        </td>
+
+        {hasActionColumn ? (
+          <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
+            <OldRemoveButton
+              item={item}
+              onRemoveOldItem={onRemoveOldItem}
+              removingOldItemId={removingOldItemId}
+              oldItemRemoveLabel={oldItemRemoveLabel}
+            />
+          </td>
+        ) : null}
+      </tr>
+
+      {hasFullWidthDetail ? (
+        <tr className="cm-pricing-detail-row">
+          <td
+            className="cm-td cm-pricing-detail-cell"
+            colSpan={hasActionColumn ? 4 : 3}
+          >
+            <div className="cm-confirmed-detail-stack">
+              {hasAppliedPromotions ? (
+                <AppliedPromotionsBlock
+                  promotions={pricing.appliedPromotions}
+                />
+              ) : null}
+
+              {pricing.hasDiscount ? (
+                <ConfirmedLinePricingBlock pricing={pricing} />
+              ) : null}
+            </div>
+          </td>
+        </tr>
       ) : null}
-    </tr>
+    </>
   );
 }
 
