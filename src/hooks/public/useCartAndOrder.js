@@ -68,20 +68,6 @@ function normalizeItemsForApi(cart) {
   });
 }
 
-function buildWhatsAppPayload(cart) {
-  const items = Array.isArray(cart) ? cart : [];
-
-  const lines = items.map((it) => {
-    const name = it.name || "Producto";
-    const qty = it.quantity || 1;
-
-    return `• ${qty} x ${name}`;
-  });
-
-  return lines.join("\n");
-}
-
-
 function isActiveOrderStatus(status) {
   return ["open", "ready", "paying", "paid"].includes(String(status || "").toLowerCase());
 }
@@ -159,21 +145,6 @@ function buildCartPromotionMetadata(source, basePrice) {
       ? safeNum(normalized.promotionDiscountPreview, 0)
       : 0,
   };
-}
-
-function stripPromotionMetadata(item) {
-  const {
-    has_active_promotion,
-    promotion,
-    promotion_label,
-    promotion_type,
-    original_price,
-    display_price,
-    promotion_discount_preview,
-    ...payloadItem
-  } = item || {};
-
-  return payloadItem;
 }
 
 function mergeConfirmedOrderTotals(
@@ -262,21 +233,50 @@ export function useCartAndOrder({
   const sendWhatsAppOrder = useCallback(async () => {
     try {
       if (activeMenuType !== "web") {
-        setSendToast("Este menú no permite envío por WhatsApp.");
+        setSendToast(
+          "Este menú no permite envío por WhatsApp.",
+        );
+
         return { ok: false };
       }
 
+      const items = normalizeItemsForApi(cart);
+
       const res = await sendPublicWhatsapp({
-        token,
-        items: cart.map(stripPromotionMetadata),
+        token: String(token || ""),
+        items,
       });
 
       if (res?.ok === false) {
-        setSendToast(res?.message || "No se pudo enviar el mensaje.");
+        setSendToast(
+          res?.message ||
+            "No se pudo construir el mensaje de WhatsApp.",
+        );
+
         return { ok: false };
       }
 
-      const url = res?.whatsapp_url;
+      const url = String(
+        res?.whatsapp_url || "",
+      ).trim();
+
+      if (!url) {
+        setSendToast(
+          "El servidor no devolvió el enlace de WhatsApp.",
+        );
+
+        return { ok: false };
+      }
+
+      /*
+      * Primero se abre el enlace calculado por backend.
+      * Después se limpia el carrito local.
+      */
+      window.open(
+        url,
+        "_blank",
+        "noopener,noreferrer",
+      );
 
       setCart([]);
       setSendOpen(false);
@@ -285,18 +285,64 @@ export function useCartAndOrder({
       setAdultCount("");
       setChildCount("");
 
-      if (url) {
-        window.open(url, "_blank");
+      setSendToast(
+        "Pedido preparado para enviar por WhatsApp.",
+      );
+
+      return {
+        ok: true,
+        pricing:
+          res?.pricing &&
+          typeof res.pricing === "object"
+            ? res.pricing
+            : null,
+      };
+    } catch (error) {
+      const responseData =
+        error?.response?.data &&
+        typeof error.response.data === "object"
+          ? error.response.data
+          : {};
+
+      const validationErrors =
+        responseData?.errors &&
+        typeof responseData.errors === "object"
+          ? responseData.errors
+          : null;
+
+      if (validationErrors) {
+        const firstKey =
+          Object.keys(validationErrors)[0];
+
+        const firstValue =
+          validationErrors[firstKey];
+
+        const firstMessage =
+          Array.isArray(firstValue)
+            ? firstValue[0]
+            : firstValue;
+
+        if (firstMessage) {
+          setSendToast(
+            `⚠️ ${String(firstMessage)}`,
+          );
+
+          return { ok: false };
+        }
       }
 
-      setSendToast("Pedido enviado por WhatsApp");
+      setSendToast(
+        responseData?.message ||
+          "No se pudo construir el mensaje de WhatsApp.",
+      );
 
-      return { ok: true };
-    } catch (e) {
-      setSendToast("No se pudo enviar el mensaje, intente más tarde.");
       return { ok: false };
     }
-  }, [cart, token]);
+  }, [
+    activeMenuType,
+    cart,
+    token,
+  ]);
 
   const currentOrderId = useMemo(() => {
     return Number(
