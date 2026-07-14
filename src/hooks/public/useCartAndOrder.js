@@ -315,6 +315,37 @@ export function useCartAndOrder({
 
     if (!o) return;
 
+    /*
+    * Cuando la orden ya entró a caja, la etapa anterior de
+    * solicitud al mesero queda concluida.
+    */
+    if (status === "paying") {
+      setPendingOrder(null);
+      setSendToast("");
+
+      setActiveOrder({
+        ...o,
+        id: oid || o?.id,
+        status: "paying",
+
+        customer_ui: {
+          ...(o?.customer_ui || {}),
+          show_payment_message: true,
+          can_add_items: false,
+          can_send_items: false,
+        },
+
+        bill_flow: {
+          ...(o?.bill_flow || {}),
+          can_request_bill: false,
+          already_sent: false,
+          request_status: null,
+        },
+      });
+
+      return;
+    }
+
     if (isActiveOrderStatus(status)) {
       setPendingOrder(null);
       setActiveOrder(o);
@@ -1137,49 +1168,94 @@ export function useCartAndOrder({
 
       if (rs === "bill_requested") {
         setPendingOrder(null);
-        setActiveOrder((prev) => ({
-          ...(prev || {}),
-          id: oid,
-          bill_flow: {
-            ...(prev?.bill_flow || {}),
-            already_sent: true,
-            request_status: "sent",
-          },
-        }));
+
+        setActiveOrder((prev) => {
+          const currentStatus = String(
+            prev?.status || "",
+          ).toLowerCase();
+
+          /*
+          * Un evento atrasado de solicitud no debe reactivar
+          * la etapa anterior cuando la cuenta ya está en caja.
+          */
+          if (
+            currentStatus === "paying" ||
+            currentStatus === "paid"
+          ) {
+            return prev;
+          }
+
+          return {
+            ...(prev || {}),
+            id: oid,
+            bill_flow: {
+              ...(prev?.bill_flow || {}),
+              already_sent: true,
+              request_status: "sent",
+            },
+          };
+        });
+
         return;
       }
 
       if (rs === "bill_request_read") {
         setPendingOrder(null);
-        setActiveOrder((prev) => ({
-          ...(prev || {}),
-          id: oid,
-          bill_flow: {
-            ...(prev?.bill_flow || {}),
-            already_sent: true,
-            request_status: "read",
-          },
-        }));
+
+        setActiveOrder((prev) => {
+          const currentStatus = String(
+            prev?.status || "",
+          ).toLowerCase();
+
+          /*
+          * Si la orden ya está pagando o pagada, una lectura
+          * atrasada no debe volver a mostrar la solicitud.
+          */
+          if (
+            currentStatus === "paying" ||
+            currentStatus === "paid"
+          ) {
+            return prev;
+          }
+
+          return {
+            ...(prev || {}),
+            id: oid,
+            bill_flow: {
+              ...(prev?.bill_flow || {}),
+              already_sent: true,
+              request_status: "read",
+            },
+          };
+        });
+
         return;
       }
 
       if (rs === "payment_started") {
         setPendingOrder(null);
+        setSendToast("");
+
         setActiveOrder((prev) => ({
           ...(prev || {}),
           id: oid,
           status: "paying",
+
           customer_ui: {
             ...(prev?.customer_ui || {}),
             show_payment_message: true,
             can_add_items: false,
             can_send_items: false,
           },
+
           bill_flow: {
             ...(prev?.bill_flow || {}),
             can_request_bill: false,
+            already_sent: false,
+            request_status: null,
           },
         }));
+
         return;
       }
 
@@ -1223,6 +1299,34 @@ export function useCartAndOrder({
             can_add_items: true,
             can_send_items: true,
             show_payment_message: false,
+          },
+        }));
+
+        await refreshOrder(oid);
+        return;
+      }
+
+      if (st.includes("paying")) {
+        setPendingOrder(null);
+        setSendToast("");
+
+        setActiveOrder((prev) => ({
+          ...(prev || {}),
+          id: Number(oid),
+          status: "paying",
+
+          customer_ui: {
+            ...(prev?.customer_ui || {}),
+            show_payment_message: true,
+            can_add_items: false,
+            can_send_items: false,
+          },
+
+          bill_flow: {
+            ...(prev?.bill_flow || {}),
+            can_request_bill: false,
+            already_sent: false,
+            request_status: null,
           },
         }));
 

@@ -1,12 +1,15 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../../../pages/public/publicMenu.ui";
 import {
   buildNewItemsPricingSummary,
   money,
 } from "../../../../hooks/public/publicMenu.utils";
+import PaginationFooter from "../../../common/PaginationFooter";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
 import QtyControl from "./QtyControl";
+
+const NEW_ITEMS_PAGE_SIZE = 4;
 
 function NoteButton({ item, onOpenNote }) {
   const note = String(item?.notes || "").trim();
@@ -166,7 +169,7 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
 
         <div
           className="cm-new-total-box"
-          title="Importe de referencia. El total se confirmará el total al enviar."
+          title="Importe de referencia. El total final se confirmará al enviar."
         >
           <span>
             {promotion.hasActivePromotion
@@ -190,15 +193,64 @@ export default function NewItemsSection({
   onRemove,
   onOpenNote,
 }) {
+  const items = Array.isArray(newItems) ? newItems : [];
+
+  const [page, setPage] = useState(1);
+
+  const totalItems = items.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalItems / NEW_ITEMS_PAGE_SIZE),
+  );
+
+  useEffect(() => {
+    setPage((currentPage) =>
+      Math.min(Math.max(currentPage, 1), totalPages),
+    );
+  }, [totalPages]);
+
+  const paginatedItems = useMemo(() => {
+    const startIndex = (page - 1) * NEW_ITEMS_PAGE_SIZE;
+    const endIndex = startIndex + NEW_ITEMS_PAGE_SIZE;
+
+    return items.slice(startIndex, endIndex);
+  }, [items, page]);
+
+  const startItem =
+    totalItems > 0
+      ? (page - 1) * NEW_ITEMS_PAGE_SIZE + 1
+      : 0;
+
+  const endItem = Math.min(
+    page * NEW_ITEMS_PAGE_SIZE,
+    totalItems,
+  );
+
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+
+  const handlePrevPage = () => {
+    setPage((currentPage) =>
+      Math.max(1, currentPage - 1),
+    );
+  };
+
+  const handleNextPage = () => {
+    setPage((currentPage) =>
+      Math.min(totalPages, currentPage + 1),
+    );
+  };
+
   return (
     <div className="cm-section">
       <div className="cm-section-title">
         <span>Items nuevos por {canAppend ? "agregar" : "enviar"}</span>
-        <Badge tone="ok">{newItems.length}</Badge>
+        <Badge tone="ok">{totalItems}</Badge>
       </div>
 
       <div className="cm-new-card-list">
-        {newItems.map((it) => (
+        {paginatedItems.map((it) => (
           <NewItemCard
             key={`new-card-${it.key}`}
             item={it}
@@ -208,6 +260,21 @@ export default function NewItemsSection({
           />
         ))}
       </div>
+
+      {totalItems > NEW_ITEMS_PAGE_SIZE ? (
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={totalItems}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={handlePrevPage}
+          onNext={handleNextPage}
+          itemLabel="productos nuevos"
+        />
+      ) : null}
     </div>
   );
 }

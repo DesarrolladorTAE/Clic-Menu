@@ -24,16 +24,73 @@ export default function PublicMenuCartDrawerBlock({
   showBillButton,
   onRequestBill,
 }) {
+  const orderStatus = String(
+    cartOrder?.activeOrder?.status || "",
+  ).toLowerCase();
+
+  /*
+   * El estado confirmado de la orden tiene prioridad
+   * sobre cualquier estado anterior de solicitud.
+   */
+  const isPaymentInProgress =
+    orderStatus === "paying";
+
+  const effectiveCanAppend =
+    !isPaymentInProgress && Boolean(canAppend);
+
+  const effectivePending =
+    !isPaymentInProgress && Boolean(pending);
+
+  const effectiveShowBillButton =
+    !isPaymentInProgress && Boolean(showBillButton);
+
+  const effectiveCanRequestBill =
+    effectiveShowBillButton && Boolean(canRequestBill);
+
+  const effectiveBillAlreadySent =
+    effectiveShowBillButton && Boolean(billAlreadySent);
+
+  const effectiveBillRequestStatus =
+    effectiveShowBillButton
+      ? String(billRequestStatus || "")
+      : "";
+
+  const effectiveRequestBillReason =
+    effectiveShowBillButton
+      ? String(requestBillReason || "")
+      : "";
+
+  /*
+   * Durante paying no se pasan mensajes de etapas anteriores.
+   */
+  const visibleSendToast =
+    isPaymentInProgress
+      ? ""
+      : String(cartOrder?.sendToast || "");
+
+  const visibleBillToast =
+    isPaymentInProgress
+      ? ""
+      : String(billToast || "");
+
+  const drawerSubtitle = isPaymentInProgress
+    ? "Consulta el detalle de tu comanda."
+    : effectiveCanAppend
+      ? "Orden abierta: puedes agregar productos."
+      : "Revisa los productos seleccionados antes de enviar.";
+
+  const panelSubtitle = isPaymentInProgress
+    ? "Consulta los productos incluidos en tu comanda."
+    : effectiveCanAppend
+      ? "Orden abierta: puedes agregar productos."
+      : "Se llena cuando seleccionas productos. Luego presiona Enviar.";
+
   return (
     <MenuCartDrawer
       open={open}
       onClose={onClose}
       title="Comanda"
-      subtitle={
-        canAppend
-          ? "Orden abierta: puedes agregar productos."
-          : "Revisa los productos seleccionados antes de enviar."
-      }
+      subtitle={drawerSubtitle}
       itemCount={cartDrawerItemCount}
       total={
         cartOrder.displayTotal ??
@@ -41,17 +98,16 @@ export default function PublicMenuCartDrawerBlock({
       }
       totalLabel={cartOrder.totalLabel}
       isEstimated={cartOrder.isEstimated}
-      disabledClose={cartOrder.sending || billRequesting}
+      disabledClose={
+        cartOrder.sending ||
+        (effectiveShowBillButton && billRequesting)
+      }
     >
       <MenuCartPanel
         title="Comanda"
-        subtitle={
-          canAppend
-            ? "Orden abierta: puedes agregar productos."
-            : "Se llena cuando seleccionas productos. Luego presiona Enviar."
-        }
+        subtitle={panelSubtitle}
         customerName={
-          canAppend
+          cartOrder?.activeOrder?.id
             ? cartOrder.activeOrder?.customer_name || ""
             : ""
         }
@@ -62,13 +118,13 @@ export default function PublicMenuCartDrawerBlock({
         pricingSummary={cartOrder.pricingSummary}
         oldItems={cartOrder.oldItems}
         newItems={cartOrder.cart}
-        sendToast={cartOrder.sendToast}
+        sendToast={visibleSendToast}
         sending={cartOrder.sending}
-        canAppend={canAppend}
-        canSubmit={allowSendButton}
-        showPaymentMessage={
-          !!cartOrder?.activeOrder?.customer_ui?.show_payment_message
+        canAppend={effectiveCanAppend}
+        canSubmit={
+          !isPaymentInProgress && Boolean(allowSendButton)
         }
+        showPaymentMessage={isPaymentInProgress}
         onEmpty={() => cartOrder.setCart([])}
         onSubmit={() => {
           cartOrder.submitOrderOrAppend();
@@ -77,11 +133,26 @@ export default function PublicMenuCartDrawerBlock({
         onNotesChange={cartOrder.setCartNotes}
         onRemove={cartOrder.removeCartItem}
         statusBadges={[
-          ...(canAppend ? [{ tone: "ok", label: "✅ Orden abierta" }] : []),
-          ...(!canAppend && pending
-            ? [{ tone: "warn", label: "⏳ En espera de aprobación" }]
+          ...(effectiveCanAppend
+            ? [
+                {
+                  tone: "ok",
+                  label: "✅ Orden abierta",
+                },
+              ]
             : []),
-          ...(Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0
+
+          ...(!effectiveCanAppend && effectivePending
+            ? [
+                {
+                  tone: "warn",
+                  label: "⏳ En espera de aprobación",
+                },
+              ]
+            : []),
+
+          ...(Array.isArray(cartOrder.oldItems) &&
+          cartOrder.oldItems.length > 0
             ? [
                 {
                   tone: "dark",
@@ -90,53 +161,62 @@ export default function PublicMenuCartDrawerBlock({
                 },
               ]
             : []),
+
           {
             tone: cartOrder.cart.length > 0 ? "ok" : "warn",
             label: `Nuevos: ${cartOrder.cart.length}`,
           },
-          ...(showBillButton
+
+          ...(effectiveShowBillButton
             ? [
                 {
-                  tone:
-                    String(cartOrder.activeOrder?.status || "") === "paying"
-                      ? "warn"
-                      : billAlreadySent
-                        ? "dark"
-                        : canRequestBill
-                          ? "ok"
-                          : "warn",
-                  label:
-                    String(cartOrder.activeOrder?.status || "") === "paying"
-                      ? "💳 En proceso de pago"
-                      : billAlreadySent
-                        ? `🧾 Aviso enviado${
-                            billRequestStatus ? ` (${billRequestStatus})` : ""
-                          }`
-                        : canRequestBill
-                          ? "🧾 Puedes pedir cuenta"
-                          : "🧾 Aún no disponible",
-                  title: requestBillReason || "Estado del flujo para pedir cuenta",
+                  tone: effectiveBillAlreadySent
+                    ? "dark"
+                    : effectiveCanRequestBill
+                      ? "ok"
+                      : "warn",
+
+                  label: effectiveBillAlreadySent
+                    ? `🧾 Aviso enviado${
+                        effectiveBillRequestStatus
+                          ? ` (${effectiveBillRequestStatus})`
+                          : ""
+                      }`
+                    : effectiveCanRequestBill
+                      ? "🧾 Puedes pedir cuenta"
+                      : "🧾 Aún no disponible",
+
+                  title:
+                    effectiveRequestBillReason ||
+                    "Estado del flujo para pedir cuenta",
                 },
               ]
             : []),
         ]}
         requestBillBlock={
-          showBillButton ? (
+          effectiveShowBillButton ? (
             <div style={{ display: "grid", gap: 8 }}>
               <PillButton
                 tone="soft"
                 onClick={onRequestBill}
-                disabled={billRequesting || !canRequestBill}
+                disabled={
+                  billRequesting ||
+                  !effectiveCanRequestBill
+                }
                 title={
-                  canRequestBill
+                  effectiveCanRequestBill
                     ? "Enviar solicitud de cuenta al mesero"
-                    : requestBillReason || "La orden aún no puede solicitar cuenta"
+                    : effectiveRequestBillReason ||
+                      "La orden aún no puede solicitar cuenta"
                 }
               >
-                {billRequesting ? "⏳ Solicitando..." : "🧾 Pedir cuenta"}
+                {billRequesting
+                  ? "⏳ Solicitando..."
+                  : "🧾 Pedir cuenta"}
               </PillButton>
 
-              {requestBillReason && !canRequestBill ? (
+              {effectiveRequestBillReason &&
+              !effectiveCanRequestBill ? (
                 <div
                   style={{
                     border: "1px solid rgba(0,0,0,0.10)",
@@ -149,11 +229,11 @@ export default function PublicMenuCartDrawerBlock({
                     opacity: 0.85,
                   }}
                 >
-                  {requestBillReason}
+                  {effectiveRequestBillReason}
                 </div>
               ) : null}
 
-              {billToast ? (
+              {visibleBillToast ? (
                 <div
                   style={{
                     border: "1px solid rgba(0,0,0,0.10)",
@@ -165,7 +245,7 @@ export default function PublicMenuCartDrawerBlock({
                     whiteSpace: "pre-line",
                   }}
                 >
-                  {billToast}
+                  {visibleBillToast}
                 </div>
               ) : null}
             </div>

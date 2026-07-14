@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Badge, PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money, safeNum } from "../../../../hooks/public/publicMenu.utils";
+import PaginationFooter from "../../../common/PaginationFooter";
 import { renderNotes } from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
+
+const OLD_ITEMS_PAGE_SIZE = 4;
 
 function getOldItemId(item) {
   return Number(item?.id || item?.order_item_id || 0);
@@ -176,11 +179,6 @@ function AppliedPromotionsBlock({ promotions = [] }) {
           promotion?.quantity_affected,
         );
 
-        const discountAmount = Math.max(
-          0,
-          safeNum(promotion?.discount_amount, 0),
-        );
-
         return (
           <span
             key={
@@ -192,8 +190,7 @@ function AppliedPromotionsBlock({ promotions = [] }) {
             title={`${promotionName} · ${promotionType}`}
           >
             {promotionName} · {promotionType} · {quantityAffected} unidad
-            {Number(quantityAffected) === 1 ? "" : "es"} · −
-            {money(discountAmount)}
+            {Number(quantityAffected) === 1 ? "" : "es"}
           </span>
         );
       })}
@@ -202,13 +199,17 @@ function AppliedPromotionsBlock({ promotions = [] }) {
 }
 
 function ConfirmedLinePricingBlock({ pricing }) {
-  if (!pricing?.hasDetailedPricing) return null;
+  if (!pricing?.hasDiscount) return null;
+
+  const hasSeparatedDiscount =
+    pricing.promotionDiscountTotal > 0 ||
+    pricing.manualDiscountTotal > 0;
 
   return (
     <div className="cm-line-discount">
       <div className="cm-line-discount-row">
         <span className="cm-line-discount-label">
-          Subtotal bruto
+          Subtotal antes de descuento
         </span>
 
         <span className="cm-line-discount-value">
@@ -219,7 +220,7 @@ function ConfirmedLinePricingBlock({ pricing }) {
       {pricing.promotionDiscountTotal > 0 ? (
         <div className="cm-line-discount-row">
           <span className="cm-line-discount-label">
-            Descuento promocional
+            Promoción
           </span>
 
           <span className="cm-line-discount-value">
@@ -240,10 +241,10 @@ function ConfirmedLinePricingBlock({ pricing }) {
         </div>
       ) : null}
 
-      {pricing.discountTotal > 0 ? (
+      {!hasSeparatedDiscount && pricing.discountTotal > 0 ? (
         <div className="cm-line-discount-row">
           <span className="cm-line-discount-label">
-            Descuento total
+            Descuento aplicado
           </span>
 
           <span className="cm-line-discount-value">
@@ -251,21 +252,15 @@ function ConfirmedLinePricingBlock({ pricing }) {
           </span>
         </div>
       ) : null}
-
-      <div className="cm-line-discount-row">
-        <span className="cm-line-discount-label">
-          Total neto confirmado
-        </span>
-
-        <span className="cm-line-discount-value">
-          {money(pricing.netLineTotal)}
-        </span>
-      </div>
     </div>
   );
 }
 
-function OldChildRow({ item }) {
+
+function OldChildRow({
+  item,
+  hasActionColumn = false,
+}) {
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -295,15 +290,17 @@ function OldChildRow({ item }) {
         ) : null}
       </td>
 
-      <td className="cm-td cm-right cm-child">
-        {hideMoney ? "Incluido" : money(item?.unit_price)}
+      <td className="cm-td cm-center cm-child">
+        {item?.quantity}
       </td>
-
-      <td className="cm-td cm-center cm-child">{item?.quantity}</td>
 
       <td className="cm-td cm-right cm-child cm-bold">
         {hideMoney ? "Incluido" : money(subtotal)}
       </td>
+
+      {hasActionColumn ? (
+        <td className="cm-td cm-child" aria-hidden="true" />
+      ) : null}
     </tr>
   );
 }
@@ -358,10 +355,6 @@ function OldRow({
         ) : null}
       </td>
 
-      <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
-        {money(pricing.unitPrice)}
-      </td>
-
       <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
         {item?.quantity}
       </td>
@@ -411,8 +404,7 @@ function OldItemCard({
         <div>
           <div className="cm-mobile-title">{label}</div>
           <div className="cm-mobile-sub">
-            Cantidad: <strong>{item?.quantity}</strong> · Precio base:{" "}
-            <strong>{money(pricing.unitPrice)}</strong>
+            Cantidad: <strong>{item?.quantity}</strong>
           </div>
         </div>
 
@@ -503,6 +495,55 @@ export default function OldItemsSection({
 }) {
   const canRemoveOldItems = typeof onRemoveOldItem === "function";
 
+  const confirmedItems = Array.isArray(oldItemsTree)
+    ? oldItemsTree
+    : [];
+
+  const [page, setPage] = useState(1);
+
+  const totalConfirmedItems = confirmedItems.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalConfirmedItems / OLD_ITEMS_PAGE_SIZE),
+  );
+
+  useEffect(() => {
+    setPage((currentPage) =>
+      Math.min(Math.max(currentPage, 1), totalPages),
+    );
+  }, [totalPages]);
+
+  const paginatedConfirmedItems = useMemo(() => {
+    const startIndex = (page - 1) * OLD_ITEMS_PAGE_SIZE;
+    const endIndex = startIndex + OLD_ITEMS_PAGE_SIZE;
+
+    return confirmedItems.slice(startIndex, endIndex);
+  }, [confirmedItems, page]);
+
+  const startItem =
+    totalConfirmedItems > 0
+      ? (page - 1) * OLD_ITEMS_PAGE_SIZE + 1
+      : 0;
+
+  const endItem = Math.min(
+    page * OLD_ITEMS_PAGE_SIZE,
+    totalConfirmedItems,
+  );
+
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+
+  const handlePrevPage = () => {
+    setPage((currentPage) => Math.max(1, currentPage - 1));
+  };
+
+  const handleNextPage = () => {
+    setPage((currentPage) =>
+      Math.min(totalPages, currentPage + 1),
+    );
+  };
+
   return (
     <div className="cm-section">
       <div className="cm-section-title">
@@ -515,9 +556,9 @@ export default function OldItemsSection({
           <thead>
             <tr>
               <th>Producto</th>
-              <th style={{ textAlign: "right" }}>Precio base</th>
-              <th style={{ textAlign: "center" }}>Cant</th>
-              <th style={{ textAlign: "right" }}>Total neto</th>
+              <th style={{ textAlign: "center" }}>Cant.</th>
+              <th style={{ textAlign: "right" }}>Total</th>
+
               {canRemoveOldItems ? (
                 <th style={{ textAlign: "right" }}>Acción</th>
               ) : null}
@@ -525,7 +566,7 @@ export default function OldItemsSection({
           </thead>
 
           <tbody>
-            {oldItemsTree.map((it) => (
+            {paginatedConfirmedItems.map((it) => (
               <React.Fragment key={`old-${it?.id}`}>
                 <OldRow
                   item={it}
@@ -539,6 +580,7 @@ export default function OldItemsSection({
                       <OldChildRow
                         key={`old-child-${child?.id}`}
                         item={child}
+                        hasActionColumn={canRemoveOldItems}
                       />
                     ))
                   : null}
@@ -549,7 +591,7 @@ export default function OldItemsSection({
       </div>
 
       <div className="cm-mobile-list">
-        {oldItemsTree.map((it) => (
+        {paginatedConfirmedItems.map((it) => (
           <OldItemCard
             key={`old-mobile-${it?.id}`}
             item={it}
@@ -559,6 +601,22 @@ export default function OldItemsSection({
           />
         ))}
       </div>
+
+      {totalConfirmedItems > OLD_ITEMS_PAGE_SIZE ? (
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={totalConfirmedItems}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={handlePrevPage}
+          onNext={handleNextPage}
+          itemLabel="productos confirmados"
+        />
+      ) : null}
+
     </div>
   );
 }

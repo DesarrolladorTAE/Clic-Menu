@@ -23,6 +23,25 @@ function toDisplayAmount(value, fallback = 0) {
   return Number.isFinite(fallbackNumber) ? fallbackNumber : 0;
 }
 
+function normalizeStatusText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isRepeatedPaymentBadge(badge) {
+  const label = normalizeStatusText(badge?.label);
+
+  return (
+    label.includes("en proceso de pago") ||
+    label.includes("proceso de pago") ||
+    label === "en caja" ||
+    label === "paying"
+  );
+}
+
 function PricingSummaryBlock({
   pricingSummary,
   fallbackTotal = 0,
@@ -51,11 +70,6 @@ function PricingSummaryBlock({
     return null;
   }
 
-  const confirmedSubtotal = toDisplayAmount(
-    confirmed?.subtotal,
-    0,
-  );
-
   const confirmedPromotionDiscount = toDisplayAmount(
     confirmed?.promotionDiscountTotal,
     0,
@@ -65,6 +79,9 @@ function PricingSummaryBlock({
     confirmed?.manualDiscountTotal,
     0,
   );
+
+  const confirmedDiscountTotal =
+    confirmedPromotionDiscount + confirmedManualDiscount;
 
   const confirmedTotal = toDisplayAmount(
     confirmed?.confirmedTotal,
@@ -91,19 +108,13 @@ function PricingSummaryBlock({
     fallbackTotal,
   );
 
-  const totalLabel =
-    hasConfirmed && hasPending
-      ? "Total combinado estimado"
-      : String(
-          pricingSummary?.totalLabel ||
-            (isEstimated
-              ? "Total aproximado"
-              : "Total confirmado"),
-        );
-
   const hasUnresolvedQuantityPromotions = Boolean(
     pricingSummary?.hasUnresolvedQuantityPromotions,
   );
+
+  const hasConfirmedAndPending = hasConfirmed && hasPending;
+  const hasOnlyConfirmed = hasConfirmed && !hasPending;
+  const hasOnlyPending = !hasConfirmed && hasPending;
 
   return (
     <div className="cm-pricing-summary">
@@ -124,61 +135,57 @@ function PricingSummaryBlock({
       </div>
 
       <div className="cm-pricing-summary-grid">
-        {hasConfirmed ? (
+        {hasConfirmedAndPending ? (
           <>
             <div className="cm-pricing-summary-row">
               <span className="cm-pricing-summary-label">
-                Subtotal bruto confirmado
+                Total confirmado actual
               </span>
 
               <span className="cm-pricing-summary-value">
-                {money(confirmedSubtotal)}
+                {money(confirmedTotal)}
               </span>
             </div>
 
-            {confirmedPromotionDiscount > 0 ? (
-              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
-                <span className="cm-pricing-summary-label">
-                  Promociones confirmadas
-                </span>
+            <div className="cm-pricing-summary-row">
+              <span className="cm-pricing-summary-label">
+                Productos nuevos aproximados
+              </span>
 
-                <span className="cm-pricing-summary-value">
-                  −{money(confirmedPromotionDiscount)}
-                </span>
-              </div>
-            ) : null}
+              <span className="cm-pricing-summary-value">
+                {money(pendingTotalApproximate)}
+              </span>
+            </div>
 
-            {confirmedManualDiscount > 0 ? (
-              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
-                <span className="cm-pricing-summary-label">
-                  Descuento manual confirmado
-                </span>
+            <div className="cm-pricing-summary-row cm-pricing-summary-row-total">
+              <span className="cm-pricing-summary-label">
+                Total estimado al enviar
+              </span>
 
-                <span className="cm-pricing-summary-value">
-                  −{money(confirmedManualDiscount)}
-                </span>
-              </div>
-            ) : null}
-
-            {hasPending ? (
-              <div className="cm-pricing-summary-row">
-                <span className="cm-pricing-summary-label">
-                  Total confirmado actual
-                </span>
-
-                <span className="cm-pricing-summary-value">
-                  {money(confirmedTotal)}
-                </span>
-              </div>
-            ) : null}
+              <span className="cm-pricing-summary-value">
+                {money(displayTotal)}
+              </span>
+            </div>
           </>
         ) : null}
 
-        {hasPending ? (
+        {hasOnlyConfirmed ? (
+          <div className="cm-pricing-summary-row cm-pricing-summary-row-total">
+            <span className="cm-pricing-summary-label">
+              Total confirmado
+            </span>
+
+            <span className="cm-pricing-summary-value">
+              {money(confirmedTotal || displayTotal)}
+            </span>
+          </div>
+        ) : null}
+
+        {hasOnlyPending ? (
           <>
             <div className="cm-pricing-summary-row">
               <span className="cm-pricing-summary-label">
-                Nuevos productos · subtotal base
+                Subtotal de referencia
               </span>
 
               <span className="cm-pricing-summary-value">
@@ -186,54 +193,58 @@ function PricingSummaryBlock({
               </span>
             </div>
 
-            {pendingPromotionPreview > 0 ? (
-              <div className="cm-pricing-summary-row cm-pricing-summary-row-discount">
-                <span className="cm-pricing-summary-label">
-                  Promoción visual pendiente
-                </span>
+            <div className="cm-pricing-summary-row cm-pricing-summary-row-total">
+              <span className="cm-pricing-summary-label">
+                Total aproximado
+              </span>
 
-                <span className="cm-pricing-summary-value">
-                  −{money(pendingPromotionPreview)}
-                </span>
-              </div>
-            ) : null}
-
-            {hasConfirmed ? (
-              <div className="cm-pricing-summary-row">
-                <span className="cm-pricing-summary-label">
-                  Nuevos productos aproximados
-                </span>
-
-                <span className="cm-pricing-summary-value">
-                  {money(pendingTotalApproximate)}
-                </span>
-              </div>
-            ) : null}
+              <span className="cm-pricing-summary-value">
+                {money(pendingTotalApproximate || displayTotal)}
+              </span>
+            </div>
           </>
         ) : null}
-
-        <div className="cm-pricing-summary-row cm-pricing-summary-row-total">
-          <span className="cm-pricing-summary-label">
-            {totalLabel}
-          </span>
-
-          <span className="cm-pricing-summary-value">
-            {money(displayTotal)}
-          </span>
-        </div>
       </div>
+
+      {hasConfirmedAndPending ? (
+        <div className="cm-pricing-summary-secondary">
+          {confirmedDiscountTotal > 0 ? (
+            <div>
+              Descuentos ya aplicados:{" "}
+              <strong>−{money(confirmedDiscountTotal)}</strong>
+            </div>
+          ) : null}
+
+          {pendingPromotionPreview > 0 ? (
+            <div>
+              Promoción visual en productos nuevos:{" "}
+              <strong>−{money(pendingPromotionPreview)}</strong>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasOnlyConfirmed && confirmedDiscountTotal > 0 ? (
+        <div className="cm-pricing-summary-secondary">
+          Descuentos aplicados:{" "}
+          <strong>−{money(confirmedDiscountTotal)}</strong>
+        </div>
+      ) : null}
+
+      {hasOnlyPending && pendingPromotionPreview > 0 ? (
+        <div className="cm-pricing-summary-secondary">
+          Promoción visual:{" "}
+          <strong>−{money(pendingPromotionPreview)}</strong>
+        </div>
+      ) : null}
 
       {isEstimated ? (
         <div className="cm-pricing-summary-note cm-pricing-summary-note-estimated">
           {hasUnresolvedQuantityPromotions
-            ? "Incluye promociones por cantidad. El descuento exacto se confirmará al enviar los productos."
+            ? "Hay promociones por cantidad. El descuento exacto se confirmará al enviar."
             : "El total final se confirmará al enviar."}
         </div>
-      ) : (
-        <div className="cm-pricing-summary-note cm-pricing-summary-note-confirmed">
-          Los importes mostrados fueron confirmados por el servidor.
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -276,7 +287,26 @@ export default function MenuCartPanel({
   const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
-  const toastStyles = getToastStyles(sendToast);
+
+  const isPaymentInProgress = Boolean(showPaymentMessage);
+
+  const visibleStatusBadges = useMemo(() => {
+    const badges = Array.isArray(statusBadges) ? statusBadges : [];
+
+    if (!isPaymentInProgress) {
+      return badges;
+    }
+
+    return badges.filter((badge) => !isRepeatedPaymentBadge(badge));
+  }, [statusBadges, isPaymentInProgress]);
+
+  const visibleRequestBillBlock =
+    !isPaymentInProgress ? requestBillBlock : null;
+
+  const visibleSendToast =
+    !isPaymentInProgress ? String(sendToast || "") : "";
+
+  const toastStyles = getToastStyles(visibleSendToast);
 
   const hasPricingSummary =
     pricingSummary &&
@@ -363,7 +393,7 @@ export default function MenuCartPanel({
         </div>
       </div>
 
-      {showPaymentMessage ? (
+      {isPaymentInProgress ? (
         <div
           style={{
             marginTop: 12,
@@ -377,11 +407,11 @@ export default function MenuCartPanel({
             lineHeight: 1.4,
           }}
         >
-          💳 Cuenta en proceso de pago. Un mesero está procesando tu cuenta.
+          💳 Cuenta en proceso de pago. El cajero finalizará el cobro.
         </div>
       ) : null}
 
-      {statusBadges?.length ? (
+      {visibleStatusBadges.length > 0 ? (
         <div
           style={{
             marginTop: 11,
@@ -390,7 +420,7 @@ export default function MenuCartPanel({
             flexWrap: "wrap",
           }}
         >
-          {statusBadges.map((b, idx) => (
+          {visibleStatusBadges.map((b, idx) => (
             <Badge
               key={`${b?.label || idx}-${idx}`}
               tone={b?.tone || "default"}
@@ -402,8 +432,10 @@ export default function MenuCartPanel({
         </div>
       ) : null}
 
-      {requestBillBlock ? (
-        <div style={{ marginTop: 12 }}>{requestBillBlock}</div>
+      {visibleRequestBillBlock ? (
+        <div style={{ marginTop: 12 }}>
+          {visibleRequestBillBlock}
+        </div>
       ) : null}
 
       <PricingSummaryBlock
@@ -433,7 +465,7 @@ export default function MenuCartPanel({
         />
       ) : null}
 
-      {sendToast ? (
+      {visibleSendToast ? (
         <div
           style={{
             marginTop: 12,
@@ -448,7 +480,7 @@ export default function MenuCartPanel({
             lineHeight: 1.45,
           }}
         >
-          {sendToast}
+          {visibleSendToast}
         </div>
       ) : null}
     </div>

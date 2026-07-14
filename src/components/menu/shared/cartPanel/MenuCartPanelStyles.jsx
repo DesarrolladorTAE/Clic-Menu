@@ -74,35 +74,67 @@ export default function MenuCartPanelStyles() {
         }
 
         .cm-table-wrap {
-          overflow-x: auto;
+          width: 100%;
+          max-width: 100%;
+          overflow: hidden;
           border: 1px solid rgba(47,42,61,0.08);
           border-radius: 18px;
           background: #fff;
+          box-sizing: border-box;
         }
 
         .cm-table {
           width: 100%;
-          min-width: 560px;
+          max-width: 100%;
+          min-width: 0;
+          table-layout: fixed;
           border-collapse: separate;
           border-spacing: 0;
         }
 
         .cm-table th {
           text-align: left;
-          padding: 11px 10px;
+          padding: 10px 8px;
           font-size: 11px;
           color: #6E6A6A;
           background: #FBF8F8;
           border-bottom: 1px solid rgba(47,42,61,0.08);
-          white-space: nowrap;
+          white-space: normal;
+          line-height: 1.25;
+        }
+
+        .cm-table th:first-child,
+        .cm-table td:first-child {
+          width: auto;
+          min-width: 0;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
+        .cm-table th:nth-child(2),
+        .cm-table td:nth-child(2) {
+          width: 58px;
+        }
+
+        .cm-table th:nth-child(3),
+        .cm-table td:nth-child(3) {
+          width: 92px;
+        }
+
+        .cm-table th:nth-child(4),
+        .cm-table td:nth-child(4) {
+          width: 108px;
         }
 
         .cm-td {
-          padding: 11px 10px;
+          min-width: 0;
+          padding: 10px 8px;
           border-top: 1px solid rgba(47,42,61,0.07);
           vertical-align: top;
           font-size: 12px;
           color: #3F3A52;
+          box-sizing: border-box;
+          overflow-wrap: anywhere;
         }
 
         .cm-table tbody tr:first-child .cm-td {
@@ -420,11 +452,11 @@ export default function MenuCartPanelStyles() {
 
         .cm-line-discount {
           display: grid;
-          gap: 5px;
-          margin-top: 8px;
-          padding: 8px 10px;
+          gap: 4px;
+          margin-top: 7px;
+          padding: 7px 9px;
           border: 1px solid rgba(15, 118, 110, 0.16);
-          border-radius: 13px;
+          border-radius: 12px;
           background: rgba(15, 118, 110, 0.06);
         }
 
@@ -463,6 +495,7 @@ export default function MenuCartPanelStyles() {
         .cm-applied-promotion {
           display: inline-flex;
           align-items: center;
+          width: fit-content;
           max-width: 100%;
           padding: 4px 8px;
           border-radius: 999px;
@@ -472,6 +505,8 @@ export default function MenuCartPanelStyles() {
           font-size: 10px;
           font-weight: 900;
           line-height: 1.25;
+          white-space: normal;
+          overflow-wrap: anywhere;
           word-break: break-word;
         }
 
@@ -481,13 +516,13 @@ export default function MenuCartPanelStyles() {
 
         .cm-pricing-summary {
           display: grid;
-          gap: 10px;
+          gap: 8px;
           margin-top: 14px;
-          padding: 12px;
+          padding: 11px;
           border: 1px solid rgba(47,42,61,0.10);
-          border-radius: 18px;
+          border-radius: 17px;
           background: #FFFFFF;
-          box-shadow: 0 10px 24px rgba(47,42,61,0.04);
+          box-shadow: 0 8px 18px rgba(47,42,61,0.035);
         }
 
         .cm-pricing-summary-head {
@@ -538,11 +573,11 @@ export default function MenuCartPanelStyles() {
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
-          gap: 12px;
+          gap: 10px;
           min-width: 0;
-          padding: 9px 10px;
+          padding: 8px 9px;
           border: 1px solid rgba(47,42,61,0.08);
-          border-radius: 13px;
+          border-radius: 12px;
           background: #FBF8F8;
         }
 
@@ -589,6 +624,23 @@ export default function MenuCartPanelStyles() {
           font-size: 15px;
         }
 
+        .cm-pricing-summary-secondary {
+          display: grid;
+          gap: 4px;
+          padding-top: 8px;
+          border-top: 1px dashed rgba(47,42,61,0.12);
+          color: #6E6A6A;
+          font-size: 11px;
+          font-weight: 750;
+          line-height: 1.4;
+        }
+
+        .cm-pricing-summary-secondary strong {
+          color: #0F766E;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+
         .cm-pricing-summary-note {
           padding: 9px 10px;
           border-radius: 13px;
@@ -607,6 +659,31 @@ export default function MenuCartPanelStyles() {
           border: 1px solid rgba(21, 128, 61, 0.16);
           background: rgba(22, 163, 74, 0.07);
           color: #166534;
+        }
+
+        /* =========================
+          Cart section pagination
+        ========================= */
+
+        .cm-section > .MuiStack-root {
+          margin-top: 2px;
+          padding: 9px 10px !important;
+          border: 1px solid rgba(47,42,61,0.08) !important;
+          border-radius: 14px;
+          background: #FBF8F8 !important;
+        }
+
+        .cm-section > .MuiStack-root .MuiButton-root {
+          min-width: 92px !important;
+          height: 36px !important;
+          padding-left: 10px;
+          padding-right: 10px;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .cm-section > .MuiStack-root .MuiTypography-root {
+          font-size: 11px;
         }
 
         /* =========================
@@ -633,21 +710,31 @@ export default function MenuCartPanelStyles() {
           }
 
           .cm-pricing-summary-row {
-            display: grid;
-            gap: 4px;
+            display: flex;
+            gap: 8px;
+          }
+
+          .cm-pricing-summary-label {
+            flex: 1;
           }
 
           .cm-pricing-summary-value {
-            text-align: left;
+            flex: 0 0 auto;
+            text-align: right;
           }
 
           .cm-line-discount-row {
-            display: grid;
-            gap: 3px;
+            display: flex;
+            gap: 8px;
+          }
+
+          .cm-line-discount-label {
+            flex: 1;
           }
 
           .cm-line-discount-value {
-            text-align: left;
+            flex: 0 0 auto;
+            text-align: right;
           }
         }
 
@@ -714,6 +801,21 @@ export default function MenuCartPanelStyles() {
             width: 100%;
             box-sizing: border-box;
             text-align: left;
+          }
+
+          .cm-section > .MuiStack-root .MuiStack-root {
+            width: 100%;
+          }
+
+          .cm-section > .MuiStack-root .MuiButton-root {
+            flex: 1;
+            min-width: 0 !important;
+            padding-left: 7px;
+            padding-right: 7px;
+          }
+
+          .cm-section > .MuiStack-root .MuiTypography-root {
+            min-width: 48px;
           }
         }
       `}
