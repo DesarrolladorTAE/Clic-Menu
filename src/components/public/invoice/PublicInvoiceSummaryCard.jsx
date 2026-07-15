@@ -81,6 +81,20 @@ export default function PublicInvoiceSummaryCard({ data }) {
   const status = data?.status || "";
   const canInvoice = !!data?.can_invoice;
 
+  const invoiceableTotal =
+    data?.invoiceable_total ??
+    data?.sale_total;
+
+  const tip = Number(data?.tip ?? 0);
+
+  const paidTotal =
+    data?.paid_total ??
+    data?.sale_total;
+
+  const hasTip =
+    Number.isFinite(tip) &&
+    tip > 0;
+
   return (
     <Paper
       sx={{
@@ -166,8 +180,15 @@ export default function PublicInvoiceSummaryCard({ data }) {
 
           <SummaryItem
             icon={<PaidOutlinedIcon fontSize="small" />}
-            label="Total"
-            value={formatMoney(data?.sale_total)}
+            label="Importe a facturar"
+            value={formatMoney(invoiceableTotal)}
+            secondary={
+              hasTip
+                ? `Propina: ${formatMoney(tip)} · Total pagado: ${formatMoney(
+                    paidTotal
+                  )}`
+                : null
+            }
           />
 
           <SummaryItem
@@ -193,7 +214,7 @@ export default function PublicInvoiceSummaryCard({ data }) {
   );
 }
 
-function SummaryItem({ icon, label, value }) {
+function SummaryItem({ icon, label, value, secondary = null }) {
   return (
     <Box
       sx={{
@@ -248,17 +269,33 @@ function SummaryItem({ icon, label, value }) {
           </Typography>
         </Stack>
 
-        <Typography
-          sx={{
-            fontSize: 15,
-            fontWeight: 800,
-            color: "text.primary",
-            lineHeight: 1.45,
-            wordBreak: "break-word",
-          }}
-        >
-          {value || "Sin datos"}
-        </Typography>
+        <Box>
+          <Typography
+            sx={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: "text.primary",
+              lineHeight: 1.45,
+              wordBreak: "break-word",
+            }}
+          >
+            {value || "Sin datos"}
+          </Typography>
+
+          {secondary ? (
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 12,
+                color: "text.secondary",
+                lineHeight: 1.45,
+                wordBreak: "break-word",
+              }}
+            >
+              {secondary}
+            </Typography>
+          ) : null}
+        </Box>
       </Stack>
     </Box>
   );
