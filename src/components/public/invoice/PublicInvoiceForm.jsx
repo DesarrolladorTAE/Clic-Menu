@@ -250,7 +250,9 @@ export default function PublicInvoiceForm({
 
     const payload = {
       clienteRFC: clean(form.clienteRFC).toUpperCase(),
-      Nombre: clean(form.Nombre).replace(/\s+/g, " "),
+      Nombre: clean(form.Nombre)
+        .replace(/\s+/g, " ")
+        .toLocaleUpperCase("es-MX"),
       RegimenFiscalReceptor: clean(form.RegimenFiscalReceptor),
       DomicilioFiscalReceptor: clean(form.DomicilioFiscalReceptor),
       usoCfdi: clean(form.usoCfdi).toUpperCase(),
@@ -459,18 +461,18 @@ export default function PublicInvoiceForm({
               />
             </Stack>
 
-            <FieldBlock
-              label="Razón social / Nombre fiscal *"
-              input={
-                <TextField
-                  value={form.Nombre}
-                  disabled={submitting}
-                  placeholder="Ej. TECNOLOGIAS ADMINISTRATIVAS"
-                  onChange={(e) => setField("Nombre", e.target.value)}
-                  error={!!getError(mergedErrors, "Nombre")}
-                  helperText={getError(mergedErrors, "Nombre")}
-                />
+            <TextField
+              value={form.Nombre}
+              disabled={submitting}
+              placeholder="Ej. TECNOLOGÍAS ADMINISTRATIVAS"
+              onChange={(e) =>
+                setField(
+                  "Nombre",
+                  e.target.value.toLocaleUpperCase("es-MX")
+                )
               }
+              error={!!getError(mergedErrors, "Nombre")}
+              helperText={getError(mergedErrors, "Nombre")}
             />
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
