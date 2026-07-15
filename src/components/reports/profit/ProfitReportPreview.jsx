@@ -144,61 +144,140 @@ export default function ProfitReportPreview({
             <tbody>
               <tr>
                 <SummaryCell
-                  label="Ingreso total"
-                  value={money(summary?.income_total)}
+                  label="Venta bruta"
+                  value={money(summary?.gross_sales ?? summary?.income_total)}
                 />
+
+                <SummaryCell
+                  label="Promociones"
+                  value={money(summary?.promotion_discount_total)}
+                />
+
+                <SummaryCell
+                  label="Desc. manuales"
+                  value={money(summary?.manual_discount_total)}
+                />
+
+                <SummaryCell
+                  label="Venta neta"
+                  value={money(summary?.net_sales ?? summary?.income_total)}
+                />
+
                 <SummaryCell
                   label="Costo total"
-                  value={money(summary?.cost_total)}
+                  value={money4(summary?.cost_total)}
                 />
+              </tr>
+
+              <tr>
                 <SummaryCell
                   label="Utilidad total"
-                  value={money(summary?.profit_total)}
+                  value={money4(summary?.profit_total)}
                 />
+
                 <SummaryCell
                   label="Margen %"
                   value={percent(summary?.margin_percent)}
                 />
-                <SummaryCell label="Ítems" value={summary?.items_count || 0} />
+
+                <SummaryCell
+                  label="Ítems"
+                  value={summary?.items_count ?? 0}
+                />
+
+                <SummaryCell
+                  label="Descuento total"
+                  value={money(summary?.discount_total)}
+                />
+
+                <SummaryCell
+                  label="Base utilidad"
+                  value="Neta"
+                />
               </tr>
             </tbody>
           </Box>
 
           <SectionTitle title="Detalle resumido" />
 
-          <TableContainer sx={{ width: "100%", overflowX: "hidden" }}>
+          <TableContainer
+            sx={{
+              width: "100%",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             <Table
               size="small"
               sx={{
                 width: "100%",
+                minWidth: { xs: 1120, lg: "100%" },
                 tableLayout: "fixed",
                 borderCollapse: "collapse",
-                "& th": tableHeadCellSx,
-                "& td": tableBodyCellSx,
+
+                "& th": {
+                  ...tableHeadCellSx,
+                  px: "4px",
+                  py: "6px",
+                  fontSize: "8.5px",
+                  lineHeight: 1.2,
+                },
+
+                "& td": {
+                  ...tableBodyCellSx,
+                  px: "4px",
+                  py: "6px",
+                  fontSize: "8.5px",
+                  lineHeight: 1.25,
+                },
               }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: "7%" }}>Sale ID</TableCell>
-                  <TableCell sx={{ width: "7%" }}>Order ID</TableCell>
-                  <TableCell sx={{ width: "18%" }}>Producto</TableCell>
-                  <TableCell sx={{ width: "13%" }}>Categoría</TableCell>
-                  <TableCell align="center" sx={{ width: "8%" }}>
-                    Cantidad
+                  <TableCell sx={{ width: 55 }}>Sale ID</TableCell>
+                  <TableCell sx={{ width: 60 }}>Order ID</TableCell>
+                  <TableCell sx={{ width: 130 }}>Producto</TableCell>
+                  <TableCell sx={{ width: 100 }}>Categoría</TableCell>
+
+                  <TableCell align="center" sx={{ width: 52 }}>
+                    Cant.
                   </TableCell>
-                  <TableCell align="right" sx={{ width: "11%" }}>
-                    Ingreso
+
+                  <TableCell align="center" sx={{ width: 52 }}>
+                    Prep.
                   </TableCell>
-                  <TableCell align="right" sx={{ width: "11%" }}>
+
+                  <TableCell align="right" sx={{ width: 85 }}>
+                    Venta bruta
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 80 }}>
+                    Promos
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 88 }}>
+                    Desc. manual
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 85 }}>
+                    Venta neta
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 80 }}>
                     Costo
                   </TableCell>
-                  <TableCell align="right" sx={{ width: "11%" }}>
+
+                  <TableCell align="right" sx={{ width: 85 }}>
                     Utilidad
                   </TableCell>
-                  <TableCell align="right" sx={{ width: "7%" }}>
+
+                  <TableCell align="right" sx={{ width: 65 }}>
                     Margen %
                   </TableCell>
-                  <TableCell sx={{ width: "7%" }}>Resultado</TableCell>
+
+                  <TableCell sx={{ width: 82 }}>
+                    Resultado
+                  </TableCell>
                 </TableRow>
               </TableHead>
 
@@ -225,17 +304,37 @@ export default function ProfitReportPreview({
                         </TableCell>
 
                         <TableCell align="center">
-                          {number3(row.quantity_net)}
+                          {number3(row.quantity_sold ?? row.quantity_net)}
                         </TableCell>
+
+                        <TableCell align="center">
+                          {number3(row.quantity_prepared ?? row.quantity_net)}
+                        </TableCell>
+
                         <TableCell align="right">
-                          {money(row.income_net)}
+                          {money(row.gross_sales)}
                         </TableCell>
+
                         <TableCell align="right">
-                          {money(row.cost_total)}
+                          {money(row.promotion_discount_total)}
                         </TableCell>
+
                         <TableCell align="right">
-                          {money(row.profit_total)}
+                          {money(row.manual_discount_total)}
                         </TableCell>
+
+                        <TableCell align="right">
+                          {money(row.net_sales ?? row.income_net)}
+                        </TableCell>
+
+                        <TableCell align="right">
+                          {money4(row.cost_total)}
+                        </TableCell>
+
+                        <TableCell align="right">
+                          {money4(row.profit_total)}
+                        </TableCell>
+
                         <TableCell align="right">
                           {percent(row.margin_percent)}
                         </TableCell>
@@ -263,7 +362,7 @@ export default function ProfitReportPreview({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={14}
                       align="center"
                       sx={{
                         color: "#6E6A6A",
@@ -349,6 +448,17 @@ function money(value) {
   return `$${number.toLocaleString("es-MX", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  })}`;
+}
+
+function money4(value) {
+  const number = Number(
+    String(value ?? "0").replace(/[$,\s]/g, "") || 0
+  );
+
+  return `$${number.toLocaleString("es-MX", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
   })}`;
 }
 
@@ -450,7 +560,6 @@ const tableHeadCellSx = {
   fontSize: 9,
   border: "1px solid #D6E7D2",
   p: "7px 6px",
-  textAlign: "left",
   wordBreak: "break-word",
 };
 

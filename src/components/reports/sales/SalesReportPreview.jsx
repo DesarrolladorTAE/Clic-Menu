@@ -149,10 +149,32 @@ export default function SalesReportPreview({
             <tbody>
               <tr>
                 <SummaryCell
-                  label="Ventas totales"
-                  value={money(summary?.sales_total)}
+                  label="Venta bruta"
+                  value={money(summary?.gross_sales ?? summary?.sales_total)}
                 />
-                <SummaryCell label="Tickets" value={summary?.tickets_count || 0} />
+
+                <SummaryCell
+                  label="Promociones"
+                  value={money(summary?.promotion_discount_total)}
+                />
+
+                <SummaryCell
+                  label="Descuentos manuales"
+                  value={money(summary?.manual_discount_total)}
+                />
+              </tr>
+
+              <tr>
+                <SummaryCell
+                  label="Venta neta"
+                  value={money(summary?.net_sales ?? summary?.sales_total)}
+                />
+
+                <SummaryCell
+                  label="Tickets"
+                  value={summary?.tickets_count ?? 0}
+                />
+
                 <SummaryCell
                   label="Ticket promedio"
                   value={money(summary?.ticket_average)}
@@ -214,29 +236,70 @@ export default function SalesReportPreview({
 
           <SectionTitle title="Ventas resumidas" />
 
-          <TableContainer sx={{ width: "100%", overflowX: "hidden" }}>
+          <TableContainer
+            sx={{
+              width: "100%",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             <Table
               size="small"
               sx={{
                 width: "100%",
+                minWidth: { xs: 1120, lg: "100%" },
                 tableLayout: "fixed",
                 borderCollapse: "collapse",
-                "& th": tableHeadCellSx,
-                "& td": tableBodyCellSx,
+
+                "& th": {
+                  ...tableHeadCellSx,
+                  px: "4px",
+                  py: "6px",
+                  fontSize: "8.5px",
+                  lineHeight: 1.2,
+                },
+
+                "& td": {
+                  ...tableBodyCellSx,
+                  px: "4px",
+                  py: "6px",
+                  fontSize: "8.5px",
+                  lineHeight: 1.25,
+                },
               }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: "8%" }}>Sale ID</TableCell>
-                  <TableCell sx={{ width: "8%" }}>Order ID</TableCell>
-                  <TableCell sx={{ width: "15%" }}>Fecha pago</TableCell>
-                  <TableCell sx={{ width: "15%" }}>Sucursal</TableCell>
-                  <TableCell sx={{ width: "10%" }}>Mesa</TableCell>
-                  <TableCell sx={{ width: "12%" }}>Cliente</TableCell>
-                  <TableCell align="right" sx={{ width: "12%" }}>
+                  <TableCell sx={{ width: 60 }}>Sale ID</TableCell>
+                  <TableCell sx={{ width: 62 }}>Order ID</TableCell>
+                  <TableCell sx={{ width: 112 }}>Fecha pago</TableCell>
+                  <TableCell sx={{ width: 100 }}>Sucursal</TableCell>
+                  <TableCell sx={{ width: 68 }}>Mesa</TableCell>
+                  <TableCell sx={{ width: 135 }}>Cliente</TableCell>
+
+                  <TableCell align="right" sx={{ width: 84 }}>
+                    Subtotal
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 90 }}>
+                    Promociones
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 96 }}>
+                    Desc. manual
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 88 }}>
+                    Desc. total
+                  </TableCell>
+
+                  <TableCell align="right" sx={{ width: 82 }}>
                     Total
                   </TableCell>
-                  <TableCell sx={{ width: "20%" }}>Métodos de pago</TableCell>
+
+                  <TableCell sx={{ width: 149 }}>
+                    Métodos de pago
+                  </TableCell>
                 </TableRow>
               </TableHead>
 
@@ -256,7 +319,26 @@ export default function SalesReportPreview({
 
                       <TableCell>{row.table?.name || ""}</TableCell>
                       <TableCell>{row.customer?.name || ""}</TableCell>
-                      <TableCell align="right">{money(row.total)}</TableCell>
+
+                      <TableCell align="right">
+                        {money(row.subtotal ?? row.gross_sales)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        {money(row.promotion_discount_total)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        {money(row.manual_discount_total)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        {money(row.discount_total)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        {money(row.total)}
+                      </TableCell>
 
                       <TableCell>
                         <Box
@@ -274,7 +356,7 @@ export default function SalesReportPreview({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={12}
                       align="center"
                       sx={{
                         color: "#6E6A6A",
@@ -422,7 +504,6 @@ const tableHeadCellSx = {
   fontSize: 9,
   border: "1px solid #D6E7D2",
   p: "7px 6px",
-  textAlign: "left",
   wordBreak: "break-word",
 };
 

@@ -1,18 +1,31 @@
 import { Box, Paper, Stack, Typography } from "@mui/material";
 import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
-import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import DiscountOutlinedIcon from "@mui/icons-material/DiscountOutlined";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 
-export default function SalesReportSummary({ summary, paymentBreakdown }) {
-  const paymentTotal = Array.isArray(paymentBreakdown)
-    ? paymentBreakdown.length
-    : 0;
-
+export default function SalesReportSummary({ summary }) {
   const cards = [
     {
-      label: "Ventas totales",
-      value: money(summary?.sales_total),
+      label: "Venta bruta",
+      value: money(summary?.gross_sales ?? summary?.sales_total),
       icon: <MonetizationOnOutlinedIcon />,
+    },
+    {
+      label: "Promociones",
+      value: money(summary?.promotion_discount_total),
+      icon: <LocalOfferOutlinedIcon />,
+    },
+    {
+      label: "Descuentos manuales",
+      value: money(summary?.manual_discount_total),
+      icon: <DiscountOutlinedIcon />,
+    },
+    {
+      label: "Venta neta",
+      value: money(summary?.net_sales ?? summary?.sales_total),
+      icon: <AccountBalanceWalletOutlinedIcon />,
     },
     {
       label: "Tickets",
@@ -24,20 +37,23 @@ export default function SalesReportSummary({ summary, paymentBreakdown }) {
       value: money(summary?.ticket_average),
       icon: <MonetizationOnOutlinedIcon />,
     },
-    {
-      label: "Métodos de pago",
-      value: paymentTotal,
-      icon: <CreditCardRoundedIcon />,
-    },
   ];
 
   return (
-    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} flexWrap="wrap">
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={1.5}
+      flexWrap="wrap"
+    >
       {cards.map((card) => (
         <Paper
           key={card.label}
           sx={{
-            flex: { xs: "1 1 100%", md: "1 1 190px" },
+            flex: {
+              xs: "1 1 100%",
+              sm: "1 1 calc(50% - 12px)",
+              lg: "1 1 calc(33.333% - 12px)",
+            },
             p: 2,
             borderRadius: 1,
             backgroundColor: "background.paper",

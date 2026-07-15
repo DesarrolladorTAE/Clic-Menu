@@ -147,12 +147,17 @@ export default function ProfitReportPage() {
   }, [appliedFilters, filters]);
 
   const appliedBranchName = useMemo(() => {
-    const branchId = appliedFilters?.branch_id || filters.branch_id;
+    const baseFilters = appliedFilters ?? filters;
+    const branchId = baseFilters.branch_id;
+
     if (!branchId) return "Todas las sucursales";
 
-    const branch = branches.find((item) => String(item.id) === String(branchId));
+    const branch = branches.find(
+      (item) => String(item.id) === String(branchId)
+    );
+
     return branch?.name || `Sucursal ${branchId}`;
-  }, [appliedFilters, filters.branch_id, branches]);
+  }, [appliedFilters, filters, branches]);
 
   const loadInitial = useCallback(async () => {
     setLoadingInitial(true);

@@ -3,22 +3,40 @@ import MonetizationOnOutlinedIcon from "@mui/icons-material/MonetizationOnOutlin
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import PercentRoundedIcon from "@mui/icons-material/PercentRounded";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import DiscountOutlinedIcon from "@mui/icons-material/DiscountOutlined";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 
 export default function ProfitReportSummary({ summary }) {
   const cards = [
     {
-      label: "Ingreso total",
-      value: money(summary?.income_total),
+      label: "Venta bruta",
+      value: money(summary?.gross_sales),
       icon: <MonetizationOnOutlinedIcon />,
     },
     {
+      label: "Promociones",
+      value: money(summary?.promotion_discount_total),
+      icon: <LocalOfferOutlinedIcon />,
+    },
+    {
+      label: "Descuentos manuales",
+      value: money(summary?.manual_discount_total),
+      icon: <DiscountOutlinedIcon />,
+    },
+    {
+      label: "Venta neta",
+      value: money(summary?.net_sales ?? summary?.income_total),
+      icon: <AccountBalanceWalletOutlinedIcon />,
+    },
+    {
       label: "Costo total",
-      value: money(summary?.cost_total),
+      value: money4(summary?.cost_total),
       icon: <Inventory2OutlinedIcon />,
     },
     {
       label: "Utilidad total",
-      value: money(summary?.profit_total),
+      value: money4(summary?.profit_total),
       icon: <TrendingUpRoundedIcon />,
     },
     {
@@ -31,15 +49,29 @@ export default function ProfitReportSummary({ summary }) {
       value: summary?.items_count ?? 0,
       icon: <Inventory2OutlinedIcon />,
     },
+    {
+      label: "Descuento total",
+      value: money(summary?.discount_total),
+      icon: <DiscountOutlinedIcon />,
+    },
   ];
 
   return (
-    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} flexWrap="wrap">
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={1.5}
+      flexWrap="wrap"
+      useFlexGap
+    >
       {cards.map((card) => (
         <Paper
           key={card.label}
           sx={{
-            flex: { xs: "1 1 100%", md: "1 1 170px" },
+            flex: {
+              xs: "1 1 100%",
+              sm: "1 1 calc(50% - 12px)",
+              lg: "1 1 calc(33.333% - 12px)",
+            },
             p: 2,
             borderRadius: 1,
             backgroundColor: "background.paper",
@@ -103,6 +135,18 @@ function money(value) {
     currency: "MXN",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  });
+}
+
+function money4(value) {
+  const raw = String(value ?? "").replace(/[$,\s]/g, "");
+  const number = Number(raw || 0);
+
+  return number.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
   });
 }
 
