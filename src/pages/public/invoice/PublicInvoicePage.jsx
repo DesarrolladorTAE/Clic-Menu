@@ -147,6 +147,7 @@ function buildFallbackPayload(e, token) {
       sale_total: null,
       sale_date: null,
       restaurant_name: null,
+      branch_name: null,
       theme_color: null,
       cover_image_url: null,
       expires_at: null,

@@ -171,6 +171,12 @@ export default function PublicInvoiceSummaryCard({ data }) {
             icon={<StorefrontOutlinedIcon fontSize="small" />}
             label="Restaurante"
             value={data?.restaurant_name || "Sin datos"}
+            secondary={
+              typeof data?.branch_name === "string" &&
+              data.branch_name.trim()
+                ? `Sucursal: ${data.branch_name.trim()}`
+                : null
+            }
           />
 
           <SummaryItem
