@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Button, Chip, Paper, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
@@ -32,8 +33,8 @@ export default function PublicInvoiceSuccessCard({ data }) {
 
   const uuid = data?.uuid || "";
   const pdfUrl = data?.pdf_url || "";
-  const xmlUrl = data?.xml_url || "";
-  const hasDocuments = !!pdfUrl || !!xmlUrl;
+  const xmlDownloadUrl = data?.xml_download_url || "";
+  const hasDocuments = !!pdfUrl || !!xmlDownloadUrl;
 
   const copyUuid = async () => {
     if (!uuid) return;
@@ -70,8 +71,12 @@ export default function PublicInvoiceSuccessCard({ data }) {
           textAlign: "center",
           borderBottom: "1px solid",
           borderColor: "divider",
-          background:
-            "linear-gradient(135deg, rgba(255,152,0,0.14), rgba(255,255,255,0))",
+          background: (theme) =>
+            `linear-gradient(
+              135deg,
+              ${alpha(theme.palette.primary.main, 0.14)},
+              ${alpha(theme.palette.background.paper, 0)}
+            )`,
         }}
       >
         <Box
@@ -207,30 +212,47 @@ export default function PublicInvoiceSuccessCard({ data }) {
                       rel="noopener noreferrer"
                       variant="contained"
                       startIcon={<PictureAsPdfOutlinedIcon />}
-                      sx={{
+                      sx={(theme) => ({
                         minWidth: { xs: "100%", sm: 160 },
                         height: 42,
                         fontWeight: 800,
-                      }}
+                        textDecoration: "none",
+
+                        backgroundColor: theme.palette.primary.main,
+                        color: theme.palette.primary.contrastText,
+
+                        "&:hover": {
+                          backgroundColor: theme.palette.primary.dark,
+                          textDecoration: "none",
+                        },
+                      })}
                     >
                       Abrir PDF
                     </Button>
                   ) : null}
 
-                  {xmlUrl ? (
+                  {xmlDownloadUrl ? (
                     <Button
                       component="a"
-                      href={xmlUrl}
-                      download={data?.xml_filename || undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={xmlDownloadUrl}
                       variant="outlined"
                       startIcon={<FileDownloadOutlinedIcon />}
-                      sx={{
+                      sx={(theme) => ({
                         minWidth: { xs: "100%", sm: 170 },
                         height: 42,
                         fontWeight: 800,
-                      }}
+                        textDecoration: "none",
+
+                        color: theme.palette.primary.main,
+                        borderColor: theme.palette.primary.main,
+
+                        "&:hover": {
+                          color: theme.palette.primary.dark,
+                          borderColor: theme.palette.primary.dark,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                          textDecoration: "none",
+                        },
+                      })}
                     >
                       Descargar XML
                     </Button>
@@ -290,11 +312,20 @@ export default function PublicInvoiceSuccessCard({ data }) {
                   variant="outlined"
                   startIcon={<ContentCopyOutlinedIcon />}
                   onClick={copyUuid}
-                  sx={{
+                  sx={(theme) => ({
                     minWidth: { xs: "100%", sm: 150 },
                     height: 42,
                     fontWeight: 800,
-                  }}
+
+                    color: theme.palette.primary.main,
+                    borderColor: theme.palette.primary.main,
+
+                    "&:hover": {
+                      color: theme.palette.primary.dark,
+                      borderColor: theme.palette.primary.dark,
+                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                    },
+                  })}
                 >
                   {copied ? "Copiado" : "Copiar"}
                 </Button>
@@ -362,7 +393,7 @@ function SuccessItem({ icon, label, value }) {
               borderRadius: 1.5,
               display: "grid",
               placeItems: "center",
-              bgcolor: "rgba(255, 152, 0, 0.12)",
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
               color: "primary.main",
               flexShrink: 0,
             }}

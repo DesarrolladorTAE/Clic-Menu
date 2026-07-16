@@ -1,4 +1,5 @@
 import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import EventBusyOutlinedIcon from "@mui/icons-material/EventBusyOutlined";
@@ -50,7 +51,7 @@ function statusColor(status) {
       status
     )
   ) {
-    return "warning";
+    return "primary";
   }
 
   if (["not_found", "cancelled", "sale_not_found"].includes(status)) {
@@ -97,16 +98,21 @@ export default function PublicInvoiceStatusCard({
             borderRadius: 2,
             display: "grid",
             placeItems: "center",
-            bgcolor:
-              color === "error"
-                ? "rgba(211, 47, 47, 0.10)"
-                : color === "warning"
-                ? "rgba(255, 152, 0, 0.14)"
-                : "rgba(117, 117, 117, 0.12)",
+            bgcolor: (theme) => {
+              if (color === "error") {
+                return alpha(theme.palette.error.main, 0.1);
+              }
+
+              if (color === "primary") {
+                return alpha(theme.palette.primary.main, 0.14);
+              }
+
+              return alpha(theme.palette.text.secondary, 0.12);
+            },
             color:
               color === "error"
                 ? "error.main"
-                : color === "warning"
+                : color === "primary"
                 ? "primary.main"
                 : "text.secondary",
           }}

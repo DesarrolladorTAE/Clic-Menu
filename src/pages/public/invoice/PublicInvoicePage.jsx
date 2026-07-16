@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import {
+  ThemeProvider, alpha, createTheme, useTheme,
+} from "@mui/material/styles";
 import { useParams } from "react-router-dom";
 
 import PageContainer from "../../../components/common/PageContainer";
@@ -36,6 +39,20 @@ const GENERAL_ERROR_KEYS = [
   "payments",
   "billing_mode",
 ];
+
+function normalizeThemeColor(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const color = value.trim().toUpperCase();
+
+  if (!/^#[0-9A-F]{6}$/.test(color)) {
+    return null;
+  }
+
+  return color;
+}
 
 function isGenericValidationMessage(message) {
   const text = String(message || "").trim().toLowerCase();
@@ -130,6 +147,7 @@ function buildFallbackPayload(e, token) {
       sale_total: null,
       sale_date: null,
       restaurant_name: null,
+      theme_color: null,
       expires_at: null,
       invoice_mode: null,
       can_invoice: false,
@@ -244,6 +262,7 @@ function cleanSuccessData(data) {
 
 export default function PublicInvoicePage() {
   const { token } = useParams();
+  const baseTheme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [invoicePayload, setInvoicePayload] = useState(null);
@@ -300,6 +319,28 @@ export default function PublicInvoicePage() {
   const invoiceData = useMemo(() => {
     return invoicePayload?.data || null;
   }, [invoicePayload]);
+
+  const resolvedThemeColor = useMemo(() => {
+    return (
+      normalizeThemeColor(invoiceData?.theme_color) ||
+      baseTheme.palette.primary.main
+    );
+  }, [invoiceData?.theme_color, baseTheme.palette.primary.main]);
+
+  const invoiceTheme = useMemo(() => {
+    const primaryPalette = baseTheme.palette.augmentColor({
+      color: {
+        main: resolvedThemeColor,
+      },
+      name: "primary",
+    });
+
+    return createTheme(baseTheme, {
+      palette: {
+        primary: primaryPalette,
+      },
+    });
+  }, [baseTheme, resolvedThemeColor]);
 
   const canInvoice = !!invoicePayload?.can_invoice;
   const currentStatus = invoicePayload?.status || invoiceData?.status || "";
@@ -448,130 +489,53 @@ export default function PublicInvoicePage() {
 
   if (loading) {
     return (
-      <PageContainer>
-        <Box
-          sx={{
-            minHeight: "70vh",
-            display: "grid",
-            placeItems: "center",
-            py: { xs: 3, sm: 4 },
-          }}
-        >
-          <Paper
+      <ThemeProvider theme={invoiceTheme}>
+        <PageContainer>
+          <Box
             sx={{
-              width: "100%",
-              maxWidth: 720,
-              p: { xs: 3, sm: 4 },
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor: "background.paper",
-              boxShadow: "none",
-              textAlign: "center",
+              minHeight: "70vh",
+              display: "grid",
+              placeItems: "center",
+              py: { xs: 3, sm: 4 },
             }}
           >
-            <Stack spacing={2} alignItems="center">
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 2,
-                  display: "grid",
-                  placeItems: "center",
-                  bgcolor: "rgba(255, 152, 0, 0.12)",
-                  color: "primary.main",
-                }}
-              >
-                <CircularProgress color="primary" size={30} />
-              </Box>
-
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: 22,
-                    fontWeight: 900,
-                    color: "text.primary",
-                  }}
-                >
-                  Consultando ticket
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.75,
-                    fontSize: 14,
-                    color: "text.secondary",
-                  }}
-                >
-                  Estamos verificando si tu ticket está disponible para
-                  facturación.
-                </Typography>
-              </Box>
-            </Stack>
-          </Paper>
-        </Box>
-      </PageContainer>
-    );
-  }
-
-  return (
-    <PageContainer>
-      <Box sx={{ py: { xs: 2, sm: 3, md: 4 } }}>
-        <Stack spacing={3} alignItems="center">
-          <Paper
-            sx={{
-              width: "100%",
-              p: { xs: 2.5, sm: 3 },
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor: "background.paper",
-              boxShadow: "none",
-              overflow: "hidden",
-              position: "relative",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(135deg, rgba(255,152,0,0.14), rgba(255,255,255,0) 48%)",
-                pointerEvents: "none",
-              },
-            }}
-          >
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              justifyContent="space-between"
-              alignItems={{ xs: "flex-start", md: "center" }}
-              spacing={2}
-              sx={{ position: "relative" }}
+            <Paper
+              sx={{
+                width: "100%",
+                maxWidth: 720,
+                p: { xs: 3, sm: 4 },
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.paper",
+                boxShadow: "none",
+                textAlign: "center",
+              }}
             >
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack spacing={2} alignItems="center">
                 <Box
                   sx={{
-                    width: 54,
-                    height: 54,
+                    width: 64,
+                    height: 64,
                     borderRadius: 2,
                     display: "grid",
                     placeItems: "center",
-                    bgcolor: "rgba(255, 152, 0, 0.14)",
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
                     color: "primary.main",
-                    flexShrink: 0,
                   }}
                 >
-                  <ReceiptLongOutlinedIcon sx={{ fontSize: 30 }} />
+                  <CircularProgress color="primary" size={30} />
                 </Box>
 
                 <Box>
                   <Typography
                     sx={{
-                      fontSize: { xs: 24, sm: 30 },
+                      fontSize: 22,
                       fontWeight: 900,
                       color: "text.primary",
-                      lineHeight: 1.1,
                     }}
                   >
-                    Factura tu ticket
+                    Consultando ticket
                   </Typography>
 
                   <Typography
@@ -579,77 +543,162 @@ export default function PublicInvoicePage() {
                       mt: 0.75,
                       fontSize: 14,
                       color: "text.secondary",
-                      lineHeight: 1.55,
                     }}
                   >
-                    Captura tus datos fiscales para generar tu factura desde
-                    Clic Menu.
+                    Estamos verificando si tu ticket está disponible para
+                    facturación.
                   </Typography>
                 </Box>
               </Stack>
+            </Paper>
+          </Box>
+        </PageContainer>
+      </ThemeProvider>
+    );
+  }
 
+  return (
+    <ThemeProvider theme={invoiceTheme}>
+      <PageContainer>
+        <Box sx={{ py: { xs: 2, sm: 3, md: 4 } }}>
+          <Stack spacing={3} alignItems="center">
+            <Paper
+              sx={{
+                width: "100%",
+                p: { xs: 2.5, sm: 3 },
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.paper",
+                boxShadow: "none",
+                overflow: "hidden",
+                position: "relative",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  background: (theme) =>
+                    `linear-gradient(
+                      135deg,
+                      ${alpha(theme.palette.primary.main, 0.14)},
+                      ${alpha(theme.palette.background.paper, 0)} 48%
+                    )`,
+                  pointerEvents: "none",
+                },
+              }}
+            >
               <Stack
-                direction="row"
-                spacing={1}
-                alignItems="center"
-                sx={{
-                  px: 1.5,
-                  py: 1,
-                  borderRadius: 1,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  backgroundColor: "background.default",
-                }}
+                direction={{ xs: "column", md: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", md: "center" }}
+                spacing={2}
+                sx={{ position: "relative" }}
               >
-                <SecurityOutlinedIcon
-                  fontSize="small"
-                  sx={{ color: "primary.main" }}
-                />
-                <Typography
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: 2,
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
+                      color: "primary.main",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ReceiptLongOutlinedIcon sx={{ fontSize: 30 }} />
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: { xs: 24, sm: 30 },
+                        fontWeight: 900,
+                        color: "text.primary",
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      Factura tu ticket
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.75,
+                        fontSize: 14,
+                        color: "text.secondary",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Captura tus datos fiscales para generar tu factura desde
+                      Clic Menu.
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
                   sx={{
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: "text.primary",
+                    px: 1.5,
+                    py: 1,
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    backgroundColor: "background.default",
                   }}
                 >
-                  Sitio seguro
-                </Typography>
+                  <SecurityOutlinedIcon
+                    fontSize="small"
+                    sx={{ color: "primary.main" }}
+                  />
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Sitio seguro
+                  </Typography>
+                </Stack>
               </Stack>
-            </Stack>
-          </Paper>
+            </Paper>
 
-          {invoiceData ? (
-            <PublicInvoiceSummaryCard data={invoiceData} />
-          ) : null}
+            {invoiceData ? (
+              <PublicInvoiceSummaryCard data={invoiceData} />
+            ) : null}
 
-          {successData ? (
-            <PublicInvoiceSuccessCard data={successData} />
-          ) : canInvoice ? (
-            <PublicInvoiceForm
-              invoiceMode={invoiceData?.invoice_mode}
-              submitting={submitting}
-              apiErrors={fieldErrors}
-              generalError={submitError}
-              onSubmit={handleStamp}
-            />
-          ) : (
-            <PublicInvoiceStatusCard
-              status={currentStatus}
-              message={currentMessage}
-              data={invoiceData}
-            />
-          )}
-        </Stack>
-      </Box>
+            {successData ? (
+              <PublicInvoiceSuccessCard data={successData} />
+            ) : canInvoice ? (
+              <PublicInvoiceForm
+                invoiceMode={invoiceData?.invoice_mode}
+                submitting={submitting}
+                apiErrors={fieldErrors}
+                generalError={submitError}
+                onSubmit={handleStamp}
+              />
+            ) : (
+              <PublicInvoiceStatusCard
+                status={currentStatus}
+                message={currentMessage}
+                data={invoiceData}
+              />
+            )}
+          </Stack>
+        </Box>
 
-      <AppAlert
-        open={alertState.open}
-        onClose={closeAlert}
-        severity={alertState.severity}
-        title={alertState.title}
-        message={alertState.message}
-        autoHideDuration={3000}
-      />
-    </PageContainer>
+        <AppAlert
+          open={alertState.open}
+          onClose={closeAlert}
+          severity={alertState.severity}
+          title={alertState.title}
+          message={alertState.message}
+          autoHideDuration={3000}
+        />
+      </PageContainer>
+    </ThemeProvider>
   );
 }

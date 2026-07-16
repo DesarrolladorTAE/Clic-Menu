@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert, Box, Button, CircularProgress, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
@@ -295,7 +296,7 @@ export default function PublicInvoiceForm({
               borderRadius: 1.5,
               display: "grid",
               placeItems: "center",
-              bgcolor: "rgba(255, 152, 0, 0.12)",
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
               color: "primary.main",
               flexShrink: 0,
             }}
@@ -571,10 +572,22 @@ export default function PublicInvoiceForm({
                   <SendOutlinedIcon />
                 )
               }
-              sx={{
+              sx={(theme) => ({
                 height: 46,
                 fontWeight: 900,
-              }}
+
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+
+                "&:hover": {
+                  backgroundColor: theme.palette.primary.dark,
+                },
+
+                "&.Mui-disabled": {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.45),
+                  color: alpha(theme.palette.primary.contrastText, 0.8),
+                },
+              })}
             >
               {submitting ? "Timbrando…" : "Timbrar factura"}
             </Button>

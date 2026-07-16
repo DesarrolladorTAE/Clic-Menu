@@ -1,4 +1,5 @@
 import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
@@ -67,7 +68,7 @@ function statusColor(status, canInvoice) {
   if (canInvoice) return "success";
 
   if (["expired", "used", "already_invoiced"].includes(status)) {
-    return "warning";
+    return "primary";
   }
 
   if (["not_found", "cancelled", "sale_not_found"].includes(status)) {
@@ -248,7 +249,7 @@ function SummaryItem({ icon, label, value, secondary = null }) {
               borderRadius: 1.5,
               display: "grid",
               placeItems: "center",
-              bgcolor: "rgba(255, 152, 0, 0.12)",
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
               color: "primary.main",
               flexShrink: 0,
             }}
