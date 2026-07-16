@@ -148,6 +148,7 @@ function buildFallbackPayload(e, token) {
       sale_date: null,
       restaurant_name: null,
       theme_color: null,
+      cover_image_url: null,
       expires_at: null,
       invoice_mode: null,
       can_invoice: false,
@@ -272,6 +273,8 @@ export default function PublicInvoicePage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
 
+  const [coverImageError, setCoverImageError] = useState(false);
+
   const [alertState, setAlertState] = useState({
     open: false,
     severity: "error",
@@ -319,6 +322,24 @@ export default function PublicInvoicePage() {
   const invoiceData = useMemo(() => {
     return invoicePayload?.data || null;
   }, [invoicePayload]);
+
+  const coverImageUrl = useMemo(() => {
+    const value = invoiceData?.cover_image_url;
+
+    if (typeof value !== "string") {
+      return "";
+    }
+
+    return value.trim();
+  }, [invoiceData?.cover_image_url]);
+
+  /**
+   * Cuando cambia la portada del ticket, se limpia cualquier error
+   * registrado por una imagen anterior.
+   */
+  useEffect(() => {
+    setCoverImageError(false);
+  }, [coverImageUrl]);
 
   const resolvedThemeColor = useMemo(() => {
     return (
@@ -559,8 +580,45 @@ export default function PublicInvoicePage() {
 
   return (
     <ThemeProvider theme={invoiceTheme}>
-      <PageContainer>
-        <Box sx={{ py: { xs: 2, sm: 3, md: 4 } }}>
+
+      {coverImageUrl && !coverImageError ? (
+        <Box
+          component="img"
+          src={coverImageUrl}
+          alt={`Portada de ${
+            invoiceData?.restaurant_name || "restaurante"
+          }`}
+          onError={() => {
+            setCoverImageError(true);
+          }}
+          sx={{
+            width: "100%",
+            height: {
+              xs: 200,
+              sm: 280,
+              md: 360,
+              lg: 400,
+            },
+            display: "block",
+            verticalAlign: "top",
+            objectFit: "cover",
+            objectPosition: "center",
+            borderRadius: 0,
+            border: 0,
+            m: 0,
+            mb: 0,
+            p: 0,
+          }}
+        />
+      ) : null}
+
+      <PageContainer sx={{ py: 0 }}>
+        <Box
+          sx={{
+            pt: 2,
+            pb: { xs: 2, sm: 3, md: 4 },
+          }}
+        >
           <Stack spacing={3} alignItems="center">
             <Paper
               sx={{
