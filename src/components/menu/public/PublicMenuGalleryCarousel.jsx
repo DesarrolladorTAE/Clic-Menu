@@ -1,74 +1,280 @@
 // src/components/menu/public/PublicMenuGalleryCarousel.jsx
 // Card 3: Carrusel de imágenes
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 
 function isValidColor(color) {
-  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
+  return /^#[0-9A-Fa-f]{6}$/.test(
+    String(color || "")
+  );
 }
 
-export default function PublicMenuGalleryCarousel({ publicMenu }) {
-  const themeColor = isValidColor(publicMenu?.theme_color)
+export default function PublicMenuGalleryCarousel({
+  publicMenu,
+}) {
+  const themeColor = isValidColor(
+    publicMenu?.theme_color
+  )
     ? publicMenu.theme_color
     : "#FF7A00";
 
-  const images = useMemo(() => {
-    return (Array.isArray(publicMenu?.gallery) ? publicMenu.gallery : [])
-      .filter((img) => img?.is_active !== false)
-      .map((img) => ({
-        id: img?.id,
-        url: img?.image_url || img?.public_url || img?.url || "",
-        name: img?.original_name || "Imagen",
+  /*
+   * Lista original recibida desde el backend.
+   */
+  const sourceImages = useMemo(() => {
+    return (
+      Array.isArray(publicMenu?.gallery)
+        ? publicMenu.gallery
+        : []
+    )
+      .filter(
+        (image) =>
+          image?.is_active !== false
+      )
+      .map((image) => ({
+        id: image?.id,
+
+        /*
+         * image_url es el contrato público principal.
+         *
+         * Desde el backend contiene:
+         * WebP optimizado → imagen original.
+         *
+         * Los demás campos son fallbacks para mantener
+         * compatibilidad con respuestas anteriores.
+         */
+        url:
+          image?.image_url ||
+          image?.best_public_url ||
+          image?.optimized_public_url ||
+          image?.public_url ||
+          image?.url ||
+          "",
+
+        name:
+          image?.original_name ||
+          "Imagen",
       }))
-      .filter((img) => !!img.url);
+      .filter(
+        (image) => Boolean(image.url)
+      );
   }, [publicMenu]);
+
+  /*
+   * Permite detectar si el backend entregó
+   * un conjunto diferente de imágenes.
+   */
+  const imageSignature = useMemo(() => {
+    return sourceImages
+      .map(
+        (image) =>
+          `${image.id ?? "sin-id"}:${image.url}`
+      )
+      .join("|");
+  }, [sourceImages]);
 
   const [active, setActive] = useState(0);
   const [notice, setNotice] = useState("");
 
+  /*
+   * URLs que fallaron durante esta sesión.
+   *
+   * Se excluyen del carrusel para evitar
+   * que vuelvan a generar errores en cada vuelta.
+   */
+  const [failedUrls, setFailedUrls] =
+    useState([]);
+
+  /*
+   * URLs que ya terminaron de cargar.
+   *
+   * Al volver a una imagen descargada no se muestra
+   * nuevamente el placeholder innecesariamente.
+   */
+  const [loadedUrls, setLoadedUrls] =
+    useState([]);
+
+  /*
+   * Galería utilizable después de excluir
+   * las imágenes que fallaron.
+   */
+  const images = useMemo(() => {
+    return sourceImages.filter(
+      (image) =>
+        !failedUrls.includes(image.url)
+    );
+  }, [
+    sourceImages,
+    failedUrls,
+  ]);
+
+  /*
+   * Reinicia el carrusel cuando cambia
+   * realmente el conjunto de imágenes.
+   */
   useEffect(() => {
     setActive(0);
-  }, [images.length]);
+    setNotice("");
+    setFailedUrls([]);
+    setLoadedUrls([]);
+  }, [imageSignature]);
 
+  /*
+   * Mantiene el índice dentro del rango válido
+   * cuando se elimina una imagen que falló.
+   */
   useEffect(() => {
-    if (images.length <= 1) return;
-
-    const timer = setInterval(() => {
-      setActive((prev) => (prev >= images.length - 1 ? 0 : prev + 1));
-    }, 6000);
-
-    return () => clearInterval(timer);
-  }, [images.length]);
-
-  useEffect(() => {
-    if (!notice) return;
-
-    const timer = setTimeout(() => setNotice(""), 2200);
-    return () => clearTimeout(timer);
-  }, [notice]);
-
-  if (!images.length) return null;
-
-  const currentIndex = Math.min(active, images.length - 1);
-  const current = images[currentIndex] || images[0];
-
-  const handlePrev = () => {
-    if (images.length <= 1) {
-      setNotice("No hay más imágenes por mostrar.");
+    if (!images.length) {
+      setActive(0);
       return;
     }
 
-    setActive((prev) => (prev <= 0 ? images.length - 1 : prev - 1));
+    setActive((currentActive) =>
+      Math.min(
+        currentActive,
+        images.length - 1
+      )
+    );
+  }, [images.length]);
+
+  const currentIndex = images.length
+    ? Math.min(
+        active,
+        images.length - 1
+      )
+    : 0;
+
+  const current =
+    images[currentIndex] || null;
+
+  const imageLoading =
+    Boolean(current?.url) &&
+    !loadedUrls.includes(current.url);
+
+  /*
+   * Rotación automática.
+   *
+   * El tiempo comienza únicamente cuando
+   * la imagen actual terminó de cargar.
+   */
+  useEffect(() => {
+    if (
+      images.length <= 1 ||
+      !current?.url ||
+      imageLoading
+    ) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setActive((previous) =>
+        previous >= images.length - 1
+          ? 0
+          : previous + 1
+      );
+    }, 6000);
+
+    return () => clearTimeout(timer);
+  }, [
+    current?.url,
+    imageLoading,
+    images.length,
+  ]);
+
+  /*
+   * Oculta los avisos temporales.
+   */
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = setTimeout(
+      () => setNotice(""),
+      2200
+    );
+
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  /*
+   * Si la sucursal no tiene imágenes configuradas,
+   * no se muestra el componente.
+   */
+  if (!sourceImages.length) {
+    return null;
+  }
+
+  const handlePrev = () => {
+    if (images.length <= 1) {
+      setNotice(
+        "No hay más imágenes por mostrar."
+      );
+
+      return;
+    }
+
+    setActive((previous) =>
+      previous <= 0
+        ? images.length - 1
+        : previous - 1
+    );
   };
 
   const handleNext = () => {
     if (images.length <= 1) {
-      setNotice("No hay más imágenes por mostrar.");
+      setNotice(
+        "No hay más imágenes por mostrar."
+      );
+
       return;
     }
 
-    setActive((prev) => (prev >= images.length - 1 ? 0 : prev + 1));
+    setActive((previous) =>
+      previous >= images.length - 1
+        ? 0
+        : previous + 1
+    );
+  };
+
+  const handleImageError = () => {
+    const failedUrl = current?.url;
+
+    if (!failedUrl) {
+      return;
+    }
+
+    /*
+     * Registra la URL como fallida para evitar
+     * que vuelva a mostrarse en el carrusel.
+     */
+    setFailedUrls((previous) =>
+      previous.includes(failedUrl)
+        ? previous
+        : [...previous, failedUrl]
+    );
+
+    /*
+     * Se elimina también de las imágenes
+     * consideradas como cargadas.
+     */
+    setLoadedUrls((previous) =>
+      previous.filter(
+        (url) => url !== failedUrl
+      )
+    );
+
+    setNotice(
+      images.length > 1
+        ? "Una imagen no pudo cargarse. Se mostrará la siguiente."
+        : "No se pudieron cargar las imágenes."
+    );
   };
 
   return (
@@ -79,11 +285,16 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
         background: "#FFFFFF",
         overflow: "hidden",
         position: "relative",
-        boxShadow: "0 14px 34px rgba(47,42,61,0.07)",
+        boxShadow:
+          "0 14px 34px rgba(47,42,61,0.07)",
       }}
     >
       <div
         className="cm-gallery-frame"
+        aria-busy={
+          Boolean(current) &&
+          imageLoading
+        }
         style={{
           width: "100%",
           aspectRatio: "16 / 7",
@@ -94,105 +305,217 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
           position: "relative",
         }}
       >
-        <img
-          key={current.url}
-          src={current.url}
-          alt={current.name}
-          loading="lazy"
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            objectPosition: "center",
-            display: "block",
-            animation: "cmGalleryFade 420ms ease both",
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(17,24,39,0.12), rgba(17,24,39,0.02), rgba(17,24,39,0.12))",
-            pointerEvents: "none",
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={handlePrev}
-          className="cm-gallery-arrow cm-gallery-arrow-left"
-          style={{ background: themeColor }}
-          title="Anterior"
-          aria-label="Imagen anterior"
-        >
-          <ChevronLeftRoundedIcon className="cm-gallery-arrow-icon" />
-        </button>
-
-        <button
-          type="button"
-          onClick={handleNext}
-          className="cm-gallery-arrow cm-gallery-arrow-right"
-          style={{ background: themeColor }}
-          title="Siguiente"
-          aria-label="Imagen siguiente"
-        >
-          <ChevronRightRoundedIcon className="cm-gallery-arrow-icon" />
-        </button>
-
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: 16,
-            transform: "translateX(-50%)",
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 3,
-          }}
-        >
-          {images.map((img, index) => {
-            const selected = index === currentIndex;
-
-            return (
-              <button
-                key={`${img.id || img.url}-${index}`}
-                type="button"
-                onClick={() => setActive(index)}
-                title={`Ver imagen ${index + 1}`}
-                style={{
-                  width: selected ? 24 : 9,
-                  height: 9,
-                  borderRadius: 999,
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  background: selected ? themeColor : "rgba(255,255,255,0.82)",
-                  boxShadow: "0 4px 12px rgba(17,24,39,0.22)",
-                  transition: "all 220ms ease",
-                }}
+        {current ? (
+          <>
+            {imageLoading ? (
+              <div
+                aria-hidden="true"
+                className="cm-gallery-placeholder"
               />
-            );
-          })}
-        </div>
+            ) : null}
+
+            <img
+              key={current.url}
+              src={current.url}
+              alt={current.name}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => {
+                setLoadedUrls(
+                  (previous) =>
+                    previous.includes(
+                      current.url
+                    )
+                      ? previous
+                      : [
+                          ...previous,
+                          current.url,
+                        ]
+                );
+              }}
+              onError={handleImageError}
+              style={{
+                position: "relative",
+                zIndex: 1,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+                display: "block",
+
+                opacity: imageLoading
+                  ? 0
+                  : 1,
+
+                transform: imageLoading
+                  ? "scale(1.015)"
+                  : "scale(1)",
+
+                transition:
+                  "opacity 360ms ease, transform 440ms ease",
+              }}
+            />
+
+            <div
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 2,
+
+                background:
+                  "linear-gradient(90deg, rgba(17,24,39,0.12), rgba(17,24,39,0.02), rgba(17,24,39,0.12))",
+
+                pointerEvents: "none",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="cm-gallery-arrow cm-gallery-arrow-left"
+              style={{
+                background: themeColor,
+              }}
+              title="Anterior"
+              aria-label="Imagen anterior"
+            >
+              <ChevronLeftRoundedIcon className="cm-gallery-arrow-icon" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNext}
+              className="cm-gallery-arrow cm-gallery-arrow-right"
+              style={{
+                background: themeColor,
+              }}
+              title="Siguiente"
+              aria-label="Imagen siguiente"
+            >
+              <ChevronRightRoundedIcon className="cm-gallery-arrow-icon" />
+            </button>
+
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: 16,
+                transform:
+                  "translateX(-50%)",
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 3,
+              }}
+            >
+              {images.map(
+                (image, index) => {
+                  const selected =
+                    index === currentIndex;
+
+                  return (
+                    <button
+                      key={`${
+                        image.id ||
+                        image.url
+                      }-${index}`}
+                      type="button"
+                      onClick={() =>
+                        setActive(index)
+                      }
+                      title={`Ver imagen ${
+                        index + 1
+                      }`}
+                      aria-label={`Ver imagen ${
+                        index + 1
+                      }`}
+                      aria-current={
+                        selected
+                          ? "true"
+                          : undefined
+                      }
+                      style={{
+                        width: selected
+                          ? 24
+                          : 9,
+
+                        height: 9,
+                        borderRadius: 999,
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+
+                        background: selected
+                          ? themeColor
+                          : "rgba(255,255,255,0.82)",
+
+                        boxShadow:
+                          "0 4px 12px rgba(17,24,39,0.22)",
+
+                        transition:
+                          "all 220ms ease",
+                      }}
+                    />
+                  );
+                }
+              )}
+            </div>
+          </>
+        ) : (
+          /*
+           * Este estado solo aparece cuando había imágenes
+           * configuradas, pero todas fallaron al descargarse.
+           */
+          <div
+            role="status"
+            style={{
+              width: "100%",
+              height: "100%",
+              minHeight: 210,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 24,
+              textAlign: "center",
+              background:
+                "linear-gradient(135deg, #F6F3EF, #EEE9E2)",
+              color: "#4B5563",
+              fontSize: 14,
+              fontWeight: 750,
+            }}
+          >
+            Las imágenes de la galería no
+            están disponibles.
+          </div>
+        )}
 
         {notice ? (
           <div
+            role="status"
+            aria-live="polite"
             style={{
               position: "absolute",
               left: "50%",
-              bottom: 42,
-              transform: "translateX(-50%)",
-              background: "rgba(17,24,39,0.78)",
+              bottom: current ? 42 : 20,
+
+              transform:
+                "translateX(-50%)",
+
+              background:
+                "rgba(17,24,39,0.82)",
+
               color: "#FFFFFF",
               padding: "8px 12px",
               borderRadius: 999,
               fontSize: 12,
               fontWeight: 850,
               whiteSpace: "nowrap",
+              maxWidth:
+                "calc(100% - 32px)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
               backdropFilter: "blur(8px)",
               zIndex: 4,
             }}
@@ -204,15 +527,33 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
 
       <style>
         {`
-          @keyframes cmGalleryFade {
-            from {
-              opacity: 0.45;
-              transform: scale(1.015);
+          @keyframes cmGallerySkeleton {
+            0% {
+              background-position: 200% 0;
             }
-            to {
-              opacity: 1;
-              transform: scale(1);
+
+            100% {
+              background-position: -200% 0;
             }
+          }
+
+          .cm-gallery-placeholder {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background:
+              linear-gradient(
+                110deg,
+                #E5E1DB 8%,
+                #F7F4F0 18%,
+                #E5E1DB 33%
+              );
+            background-size: 200% 100%;
+            animation:
+              cmGallerySkeleton
+              1.4s
+              ease-in-out
+              infinite;
           }
 
           .cm-gallery-arrow {
@@ -228,8 +569,13 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
             align-items: center;
             justify-content: center;
             padding: 0;
-            box-shadow: 0 14px 28px rgba(17,24,39,0.24);
-            transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
+            box-shadow:
+              0 14px 28px
+              rgba(17,24,39,0.24);
+            transition:
+              transform 180ms ease,
+              filter 180ms ease,
+              opacity 180ms ease;
             z-index: 3;
           }
 
@@ -253,11 +599,15 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
           }
 
           .cm-gallery-arrow-left:hover {
-            transform: translateY(-50%) scale(1.04);
+            transform:
+              translateY(-50%)
+              scale(1.04);
           }
 
           .cm-gallery-arrow-right:hover {
-            transform: translateY(-50%) scale(1.04);
+            transform:
+              translateY(-50%)
+              scale(1.04);
           }
 
           .cm-gallery-arrow:active {
@@ -266,8 +616,10 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
 
           @media (max-width: 640px) {
             .cm-gallery-frame {
-              aspect-ratio: 16 / 9 !important;
-              min-height: 190px !important;
+              aspect-ratio:
+                16 / 9 !important;
+              min-height:
+                190px !important;
             }
 
             .cm-gallery-arrow {
@@ -285,6 +637,19 @@ export default function PublicMenuGalleryCarousel({ publicMenu }) {
 
             .cm-gallery-arrow-right {
               right: 12px;
+            }
+          }
+
+          @media (
+            prefers-reduced-motion:
+            reduce
+          ) {
+            .cm-gallery-placeholder {
+              animation: none;
+            }
+
+            .cm-gallery-arrow {
+              transition: none;
             }
           }
         `}

@@ -207,9 +207,18 @@ export function PillButton({
 }
 
 export function ProductThumb({ imageUrl, title }) {
+  const [loading, setLoading] = useState(Boolean(imageUrl));
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => setFailed(false), [imageUrl]);
+  /*
+   * Cuando cambia la imagen del producto:
+   * - reiniciamos el error anterior;
+   * - volvemos a mostrar el placeholder de carga.
+   */
+  useEffect(() => {
+    setFailed(false);
+    setLoading(Boolean(imageUrl));
+  }, [imageUrl]);
 
   const wrapStyle = {
     width: "100%",
@@ -250,12 +259,61 @@ export function ProductThumb({ imageUrl, title }) {
   }
 
   return (
-    <div style={wrapStyle}>
+    <div
+      style={wrapStyle}
+      aria-busy={loading}
+      aria-label={
+        loading
+          ? `Cargando imagen de ${title || "producto"}`
+          : undefined
+      }
+    >
+      {/* Placeholder visible mientras la imagen termina de cargar. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background:
+            "linear-gradient(135deg, rgba(47,42,61,0.035), rgba(255,122,0,0.075), rgba(47,42,61,0.035))",
+          opacity: loading ? 1 : 0,
+          visibility: loading ? "visible" : "hidden",
+          transition:
+            "opacity 220ms ease, visibility 220ms ease",
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            width: 54,
+            height: 42,
+            borderRadius: 10,
+            border: "1px solid rgba(47,42,61,0.08)",
+            background:
+              "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,255,255,0.62))",
+            boxShadow: "0 8px 22px rgba(47,42,61,0.06)",
+          }}
+        />
+      </div>
+
       <img
+        key={imageUrl}
         src={imageUrl}
-        alt={title}
+        alt={title || "Imagen del producto"}
         loading="lazy"
-        onError={() => setFailed(true)}
+        decoding="async"
+        onLoad={() => {
+          setLoading(false);
+          setFailed(false);
+        }}
+        onError={() => {
+          setLoading(false);
+          setFailed(true);
+        }}
         style={{
           width: "100%",
           height: "100%",
@@ -264,6 +322,14 @@ export function ProductThumb({ imageUrl, title }) {
           display: "block",
           padding: 4,
           boxSizing: "border-box",
+          opacity: loading ? 0 : 1,
+          transform: loading
+            ? "scale(1.01)"
+            : "scale(1)",
+          transition:
+            "opacity 240ms ease, transform 240ms ease",
+          position: "relative",
+          zIndex: 2,
         }}
       />
     </div>

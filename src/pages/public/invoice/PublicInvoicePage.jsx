@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Box, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import {
-  ThemeProvider, alpha, createTheme, useTheme,
+  Box,
+  CircularProgress,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
+import {
+  ThemeProvider,
+  alpha,
+  createTheme,
+  useTheme,
 } from "@mui/material/styles";
 import { useParams } from "react-router-dom";
 
@@ -45,7 +54,9 @@ function normalizeThemeColor(value) {
     return null;
   }
 
-  const color = value.trim().toUpperCase();
+  const color = value
+    .trim()
+    .toUpperCase();
 
   if (!/^#[0-9A-F]{6}$/.test(color)) {
     return null;
@@ -55,13 +66,17 @@ function normalizeThemeColor(value) {
 }
 
 function isGenericValidationMessage(message) {
-  const text = String(message || "").trim().toLowerCase();
+  const text = String(message || "")
+    .trim()
+    .toLowerCase();
 
   return (
     text === "the given data was invalid." ||
     text === "the given data was invalid" ||
-    text === "los datos proporcionados no son válidos." ||
-    text === "los datos proporcionados no son válidos"
+    text ===
+      "los datos proporcionados no son válidos." ||
+    text ===
+      "los datos proporcionados no son válidos"
   );
 }
 
@@ -69,41 +84,72 @@ function errorValueToMessages(value) {
   if (!value) return [];
 
   if (Array.isArray(value)) {
-    return value.flat().filter(Boolean).map((item) => String(item));
+    return value
+      .flat()
+      .filter(Boolean)
+      .map((item) => String(item));
   }
 
   return [String(value)];
 }
 
-function collectErrorMessages(errors, keys = null) {
-  if (!errors || typeof errors !== "object") return [];
+function collectErrorMessages(
+  errors,
+  keys = null
+) {
+  if (
+    !errors ||
+    typeof errors !== "object"
+  ) {
+    return [];
+  }
 
   const entries = keys
-    ? keys.map((key) => [key, errors[key]]).filter(([, value]) => value)
+    ? keys
+        .map((key) => [
+          key,
+          errors[key],
+        ])
+        .filter(([, value]) => value)
     : Object.entries(errors);
 
   return entries
-    .flatMap(([, value]) => errorValueToMessages(value))
+    .flatMap(([, value]) =>
+      errorValueToMessages(value)
+    )
     .map((message) => message.trim())
     .filter(Boolean);
 }
 
-function apiErrorToMessage(e, fallback = "Ocurrió un error") {
-  const responseData = e?.response?.data;
+function apiErrorToMessage(
+  e,
+  fallback = "Ocurrió un error"
+) {
+  const responseData =
+    e?.response?.data;
 
-  if (!responseData || typeof responseData !== "object") {
+  if (
+    !responseData ||
+    typeof responseData !== "object"
+  ) {
     return e?.message || fallback;
   }
 
-  const errors = responseData?.errors || {};
+  const errors =
+    responseData?.errors || {};
 
-  const generalMessages = collectErrorMessages(errors, GENERAL_ERROR_KEYS);
+  const generalMessages =
+    collectErrorMessages(
+      errors,
+      GENERAL_ERROR_KEYS
+    );
 
   if (generalMessages.length > 0) {
     return generalMessages.join("\n");
   }
 
-  const allErrorMessages = collectErrorMessages(errors);
+  const allErrorMessages =
+    collectErrorMessages(errors);
 
   if (allErrorMessages.length > 0) {
     return allErrorMessages.join("\n");
@@ -111,27 +157,51 @@ function apiErrorToMessage(e, fallback = "Ocurrió un error") {
 
   if (
     responseData?.message &&
-    !isGenericValidationMessage(responseData.message)
+    !isGenericValidationMessage(
+      responseData.message
+    )
   ) {
-    return String(responseData.message);
+    return String(
+      responseData.message
+    );
   }
 
   return e?.message || fallback;
 }
 
 function normalizeErrors(errors) {
-  if (!errors || typeof errors !== "object") return {};
+  if (
+    !errors ||
+    typeof errors !== "object"
+  ) {
+    return {};
+  }
 
-  return Object.entries(errors).reduce((acc, [key, value]) => {
-    acc[key] = Array.isArray(value) ? value : [String(value)];
-    return acc;
-  }, {});
+  return Object.entries(
+    errors
+  ).reduce(
+    (acc, [key, value]) => {
+      acc[key] = Array.isArray(value)
+        ? value
+        : [String(value)];
+
+      return acc;
+    },
+    {}
+  );
 }
 
-function buildFallbackPayload(e, token) {
-  const responseData = e?.response?.data;
+function buildFallbackPayload(
+  e,
+  token
+) {
+  const responseData =
+    e?.response?.data;
 
-  if (responseData && typeof responseData === "object") {
+  if (
+    responseData &&
+    typeof responseData === "object"
+  ) {
     return responseData;
   }
 
@@ -162,28 +232,46 @@ function buildFallbackPayload(e, token) {
   };
 }
 
-function downloadXmlFile(xml, filename = "factura.xml") {
-  if (!xml || typeof xml !== "string") {
+function downloadXmlFile(
+  xml,
+  filename = "factura.xml"
+) {
+  if (
+    !xml ||
+    typeof xml !== "string"
+  ) {
     return false;
   }
 
   try {
     const safeFilename =
-      typeof filename === "string" && filename.trim()
+      typeof filename === "string" &&
+      filename.trim()
         ? filename.trim()
         : "factura.xml";
 
-    const blob = new Blob([xml], {
-      type: "application/xml;charset=utf-8",
-    });
+    const blob = new Blob(
+      [xml],
+      {
+        type:
+          "application/xml;charset=utf-8",
+      }
+    );
 
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const url =
+      window.URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement("a");
 
     link.href = url;
-    link.download = safeFilename.endsWith(".xml")
-      ? safeFilename
-      : `${safeFilename}.xml`;
+
+    link.download =
+      safeFilename.endsWith(".xml")
+        ? safeFilename
+        : `${safeFilename}.xml`;
 
     link.style.display = "none";
 
@@ -192,7 +280,9 @@ function downloadXmlFile(xml, filename = "factura.xml") {
     document.body.removeChild(link);
 
     window.setTimeout(() => {
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(
+        url
+      );
     }, 1000);
 
     return true;
@@ -201,40 +291,70 @@ function downloadXmlFile(xml, filename = "factura.xml") {
   }
 }
 
-function downloadPdfBase64File(pdfBase64, filename = "factura.pdf") {
-  if (!pdfBase64 || typeof pdfBase64 !== "string") {
+function downloadPdfBase64File(
+  pdfBase64,
+  filename = "factura.pdf"
+) {
+  if (
+    !pdfBase64 ||
+    typeof pdfBase64 !== "string"
+  ) {
     return false;
   }
 
   try {
     const safeFilename =
-      typeof filename === "string" && filename.trim()
+      typeof filename === "string" &&
+      filename.trim()
         ? filename.trim()
         : "factura.pdf";
 
-    const cleanBase64 = pdfBase64.includes(",")
-      ? pdfBase64.split(",").pop()
-      : pdfBase64;
+    const cleanBase64 =
+      pdfBase64.includes(",")
+        ? pdfBase64
+            .split(",")
+            .pop()
+        : pdfBase64;
 
-    const binaryString = window.atob(cleanBase64);
-    const length = binaryString.length;
-    const bytes = new Uint8Array(length);
+    const binaryString =
+      window.atob(cleanBase64);
 
-    for (let i = 0; i < length; i += 1) {
-      bytes[i] = binaryString.charCodeAt(i);
+    const length =
+      binaryString.length;
+
+    const bytes =
+      new Uint8Array(length);
+
+    for (
+      let i = 0;
+      i < length;
+      i += 1
+    ) {
+      bytes[i] =
+        binaryString.charCodeAt(i);
     }
 
-    const blob = new Blob([bytes], {
-      type: "application/pdf",
-    });
+    const blob = new Blob(
+      [bytes],
+      {
+        type: "application/pdf",
+      }
+    );
 
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const url =
+      window.URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement("a");
 
     link.href = url;
-    link.download = safeFilename.endsWith(".pdf")
-      ? safeFilename
-      : `${safeFilename}.pdf`;
+
+    link.download =
+      safeFilename.endsWith(".pdf")
+        ? safeFilename
+        : `${safeFilename}.pdf`;
 
     link.style.display = "none";
 
@@ -243,7 +363,9 @@ function downloadPdfBase64File(pdfBase64, filename = "factura.pdf") {
     document.body.removeChild(link);
 
     window.setTimeout(() => {
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(
+        url
+      );
     }, 1000);
 
     return true;
@@ -253,11 +375,19 @@ function downloadPdfBase64File(pdfBase64, filename = "factura.pdf") {
 }
 
 function cleanSuccessData(data) {
-  if (!data || typeof data !== "object") {
+  if (
+    !data ||
+    typeof data !== "object"
+  ) {
     return data || null;
   }
 
-  const { xml, pdf_base64, pdf_error_message, ...cleanData } = data;
+  const {
+    xml,
+    pdf_base64,
+    pdf_error_message,
+    ...cleanData
+  } = data;
 
   return cleanData;
 }
@@ -266,17 +396,51 @@ export default function PublicInvoicePage() {
   const { token } = useParams();
   const baseTheme = useTheme();
 
-  const [loading, setLoading] = useState(true);
-  const [invoicePayload, setInvoicePayload] = useState(null);
-  const [successData, setSuccessData] = useState(null);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const [submitError, setSubmitError] = useState("");
+  const [
+    invoicePayload,
+    setInvoicePayload,
+  ] = useState(null);
 
-  const [coverImageError, setCoverImageError] = useState(false);
+  const [
+    successData,
+    setSuccessData,
+  ] = useState(null);
 
-  const [alertState, setAlertState] = useState({
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    fieldErrors,
+    setFieldErrors,
+  ] = useState({});
+
+  const [
+    submitError,
+    setSubmitError,
+  ] = useState("");
+
+  /*
+   * Estado visual de la portada.
+   */
+  const [
+    coverImageLoading,
+    setCoverImageLoading,
+  ] = useState(false);
+
+  const [
+    coverImageError,
+    setCoverImageError,
+  ] = useState(false);
+
+  const [
+    alertState,
+    setAlertState,
+  ] = useState({
     open: false,
     severity: "error",
     title: "",
@@ -296,77 +460,129 @@ export default function PublicInvoicePage() {
     });
   };
 
-  const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
-    setAlertState((prev) => ({ ...prev, open: false }));
+  const closeAlert = (
+    _,
+    reason
+  ) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setAlertState((prev) => ({
+      ...prev,
+      open: false,
+    }));
   };
 
   /**
    * Cierre automático de la alerta superior.
-   * Lo dejamos aquí para garantizar que cierre aunque AppAlert no respete autoHideDuration.
    */
   useEffect(() => {
-    if (!alertState.open) return undefined;
+    if (!alertState.open) {
+      return undefined;
+    }
 
-    const timer = window.setTimeout(() => {
-      setAlertState((prev) => ({
-        ...prev,
-        open: false,
-      }));
-    }, 3000);
+    const timer =
+      window.setTimeout(() => {
+        setAlertState((prev) => ({
+          ...prev,
+          open: false,
+        }));
+      }, 3000);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [alertState.open, alertState.severity, alertState.title, alertState.message]);
+  }, [
+    alertState.open,
+    alertState.severity,
+    alertState.title,
+    alertState.message,
+  ]);
 
   const invoiceData = useMemo(() => {
-    return invoicePayload?.data || null;
+    return (
+      invoicePayload?.data || null
+    );
   }, [invoicePayload]);
 
-  const coverImageUrl = useMemo(() => {
-    const value = invoiceData?.cover_image_url;
+  const coverImageUrl =
+    useMemo(() => {
+      const value =
+        invoiceData?.cover_image_url;
 
-    if (typeof value !== "string") {
-      return "";
-    }
+      if (
+        typeof value !== "string"
+      ) {
+        return "";
+      }
 
-    return value.trim();
-  }, [invoiceData?.cover_image_url]);
+      return value.trim();
+    }, [
+      invoiceData?.cover_image_url,
+    ]);
 
   /**
-   * Cuando cambia la portada del ticket, se limpia cualquier error
-   * registrado por una imagen anterior.
+   * Cuando cambia la portada del ticket,
+   * se reinician los estados visuales.
    */
   useEffect(() => {
     setCoverImageError(false);
+
+    setCoverImageLoading(
+      Boolean(coverImageUrl)
+    );
   }, [coverImageUrl]);
 
-  const resolvedThemeColor = useMemo(() => {
-    return (
-      normalizeThemeColor(invoiceData?.theme_color) ||
-      baseTheme.palette.primary.main
-    );
-  }, [invoiceData?.theme_color, baseTheme.palette.primary.main]);
+  const resolvedThemeColor =
+    useMemo(() => {
+      return (
+        normalizeThemeColor(
+          invoiceData?.theme_color
+        ) ||
+        baseTheme.palette.primary.main
+      );
+    }, [
+      invoiceData?.theme_color,
+      baseTheme.palette.primary.main,
+    ]);
 
-  const invoiceTheme = useMemo(() => {
-    const primaryPalette = baseTheme.palette.augmentColor({
-      color: {
-        main: resolvedThemeColor,
-      },
-      name: "primary",
-    });
+  const invoiceTheme =
+    useMemo(() => {
+      const primaryPalette =
+        baseTheme.palette.augmentColor({
+          color: {
+            main: resolvedThemeColor,
+          },
+          name: "primary",
+        });
 
-    return createTheme(baseTheme, {
-      palette: {
-        primary: primaryPalette,
-      },
-    });
-  }, [baseTheme, resolvedThemeColor]);
+      return createTheme(
+        baseTheme,
+        {
+          palette: {
+            primary:
+              primaryPalette,
+          },
+        }
+      );
+    }, [
+      baseTheme,
+      resolvedThemeColor,
+    ]);
 
-  const canInvoice = !!invoicePayload?.can_invoice;
-  const currentStatus = invoicePayload?.status || invoiceData?.status || "";
-  const currentMessage = invoicePayload?.message || invoiceData?.message || "";
+  const canInvoice =
+    !!invoicePayload?.can_invoice;
+
+  const currentStatus =
+    invoicePayload?.status ||
+    invoiceData?.status ||
+    "";
+
+  const currentMessage =
+    invoicePayload?.message ||
+    invoiceData?.message ||
+    "";
 
   useEffect(() => {
     let alive = true;
@@ -383,7 +599,8 @@ export default function PublicInvoicePage() {
           ok: false,
           can_invoice: false,
           status: "not_found",
-          message: "El ticket de facturación no existe.",
+          message:
+            "El ticket de facturación no existe.",
           data: null,
         });
 
@@ -392,23 +609,41 @@ export default function PublicInvoicePage() {
       }
 
       try {
-        const payload = await getPublicInvoice(token);
+        const payload =
+          await getPublicInvoice(
+            token
+          );
 
         if (!alive) return;
 
         setInvoicePayload(payload);
 
-        const payloadStatus = payload?.status || payload?.data?.status;
+        const payloadStatus =
+          payload?.status ||
+          payload?.data?.status;
 
-        if (payloadStatus === "already_invoiced") {
-          setSuccessData(cleanSuccessData(payload?.data || null));
+        if (
+          payloadStatus ===
+          "already_invoiced"
+        ) {
+          setSuccessData(
+            cleanSuccessData(
+              payload?.data || null
+            )
+          );
         }
       } catch (e) {
         if (!alive) return;
 
-        setInvoicePayload(buildFallbackPayload(e, token));
+        setInvoicePayload(
+          buildFallbackPayload(
+            e,
+            token
+          )
+        );
       } finally {
         if (!alive) return;
+
         setLoading(false);
       }
     }
@@ -420,133 +655,209 @@ export default function PublicInvoicePage() {
     };
   }, [token]);
 
-  const handleStamp = async (payload) => {
-    setSubmitting(true);
-    setFieldErrors({});
-    setSubmitError("");
+  const handleStamp =
+    async (payload) => {
+      setSubmitting(true);
+      setFieldErrors({});
+      setSubmitError("");
 
-    try {
-      const response = await stampPublicInvoice(token, payload);
+      try {
+        const response =
+          await stampPublicInvoice(
+            token,
+            payload
+          );
 
-      if (response?.ok && response?.status === "stamped") {
-        const rawSuccessData = response?.data || null;
+        if (
+          response?.ok &&
+          response?.status ===
+            "stamped"
+        ) {
+          const rawSuccessData =
+            response?.data || null;
 
-        const xmlDownloaded = downloadXmlFile(
-          rawSuccessData?.xml,
-          rawSuccessData?.xml_filename
-        );
+          const xmlDownloaded =
+            downloadXmlFile(
+              rawSuccessData?.xml,
+              rawSuccessData
+                ?.xml_filename
+            );
 
-        const pdfDownloaded = downloadPdfBase64File(
-          rawSuccessData?.pdf_base64,
-          rawSuccessData?.pdf_filename
-        );
+          const pdfDownloaded =
+            downloadPdfBase64File(
+              rawSuccessData
+                ?.pdf_base64,
+              rawSuccessData
+                ?.pdf_filename
+            );
 
-        setSuccessData(cleanSuccessData(rawSuccessData));
+          setSuccessData(
+            cleanSuccessData(
+              rawSuccessData
+            )
+          );
 
-        setInvoicePayload((prev) => ({
-          ...(prev || {}),
-          can_invoice: false,
-          status: "stamped",
-          message: response?.message || "Factura timbrada correctamente.",
-          data: {
-            ...(prev?.data || {}),
-            can_invoice: false,
-            status: "stamped",
-            message: response?.message || "Factura timbrada correctamente.",
-          },
-        }));
+          setInvoicePayload(
+            (prev) => ({
+              ...(prev || {}),
+              can_invoice: false,
+              status: "stamped",
+              message:
+                response?.message ||
+                "Factura timbrada correctamente.",
+              data: {
+                ...(prev?.data || {}),
+                can_invoice: false,
+                status: "stamped",
+                message:
+                  response?.message ||
+                  "Factura timbrada correctamente.",
+              },
+            })
+          );
 
-        let successMessage = "Factura timbrada correctamente.";
+          let successMessage =
+            "Factura timbrada correctamente.";
 
-        if (xmlDownloaded && pdfDownloaded) {
-          successMessage =
-            "Factura timbrada correctamente. El XML y PDF se descargaron automáticamente.";
-        } else if (xmlDownloaded && !pdfDownloaded) {
-          successMessage =
-            rawSuccessData?.pdf_error_message ||
-            "Factura timbrada correctamente. El XML se descargó, pero no fue posible generar el PDF.";
-        } else if (!xmlDownloaded && pdfDownloaded) {
-          successMessage =
-            "Factura timbrada correctamente. El PDF se descargó, pero no se recibió el XML para descarga.";
-        } else {
-          successMessage =
-            "Factura timbrada correctamente, pero no se recibieron archivos para descarga.";
+          if (
+            xmlDownloaded &&
+            pdfDownloaded
+          ) {
+            successMessage =
+              "Factura timbrada correctamente. El XML y PDF se descargaron automáticamente.";
+          } else if (
+            xmlDownloaded &&
+            !pdfDownloaded
+          ) {
+            successMessage =
+              rawSuccessData
+                ?.pdf_error_message ||
+              "Factura timbrada correctamente. El XML se descargó, pero no fue posible generar el PDF.";
+          } else if (
+            !xmlDownloaded &&
+            pdfDownloaded
+          ) {
+            successMessage =
+              "Factura timbrada correctamente. El PDF se descargó, pero no se recibió el XML para descarga.";
+          } else {
+            successMessage =
+              "Factura timbrada correctamente, pero no se recibieron archivos para descarga.";
+          }
+
+          showAlert({
+            severity: "success",
+            title:
+              "Factura timbrada",
+            message:
+              successMessage,
+          });
+
+          return;
         }
 
-        showAlert({
-          severity: "success",
-          title: "Factura timbrada",
-          message: successMessage,
-        });
+        const message =
+          response?.message ||
+          "No fue posible timbrar la factura.";
 
-        return;
+        setSubmitError(message);
+      } catch (e) {
+        const responseData =
+          e?.response?.data;
+
+        const errors =
+          normalizeErrors(
+            responseData?.errors
+          );
+
+        const message =
+          apiErrorToMessage(
+            e,
+            "No fue posible timbrar la factura."
+          );
+
+        setFieldErrors(errors);
+        setSubmitError(message);
+
+        if (
+          responseData &&
+          responseData?.can_invoice ===
+            false &&
+          responseData?.status !==
+            "stamp_failed"
+        ) {
+          setInvoicePayload(
+            responseData
+          );
+        }
+      } finally {
+        setSubmitting(false);
       }
-
-      const message =
-        response?.message || "No fue posible timbrar la factura.";
-
-      setSubmitError(message);
-    } catch (e) {
-      const responseData = e?.response?.data;
-      const errors = normalizeErrors(responseData?.errors);
-      const message = apiErrorToMessage(
-        e,
-        "No fue posible timbrar la factura."
-      );
-
-      setFieldErrors(errors);
-      setSubmitError(message);
-
-      if (
-        responseData &&
-        responseData?.can_invoice === false &&
-        responseData?.status !== "stamp_failed"
-      ) {
-        setInvoicePayload(responseData);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    };
 
   if (loading) {
     return (
-      <ThemeProvider theme={invoiceTheme}>
+      <ThemeProvider
+        theme={invoiceTheme}
+      >
         <PageContainer>
           <Box
             sx={{
               minHeight: "70vh",
               display: "grid",
               placeItems: "center",
-              py: { xs: 3, sm: 4 },
+              py: {
+                xs: 3,
+                sm: 4,
+              },
             }}
           >
             <Paper
               sx={{
                 width: "100%",
                 maxWidth: 720,
-                p: { xs: 3, sm: 4 },
+                p: {
+                  xs: 3,
+                  sm: 4,
+                },
                 borderRadius: 1,
-                border: "1px solid",
-                borderColor: "divider",
-                backgroundColor: "background.paper",
+                border:
+                  "1px solid",
+                borderColor:
+                  "divider",
+                backgroundColor:
+                  "background.paper",
                 boxShadow: "none",
                 textAlign: "center",
               }}
             >
-              <Stack spacing={2} alignItems="center">
+              <Stack
+                spacing={2}
+                alignItems="center"
+              >
                 <Box
                   sx={{
                     width: 64,
                     height: 64,
                     borderRadius: 2,
                     display: "grid",
-                    placeItems: "center",
-                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
-                    color: "primary.main",
+                    placeItems:
+                      "center",
+                    bgcolor: (
+                      theme
+                    ) =>
+                      alpha(
+                        theme.palette
+                          .primary.main,
+                        0.12
+                      ),
+                    color:
+                      "primary.main",
                   }}
                 >
-                  <CircularProgress color="primary" size={30} />
+                  <CircularProgress
+                    color="primary"
+                    size={30}
+                  />
                 </Box>
 
                 <Box>
@@ -554,7 +865,8 @@ export default function PublicInvoicePage() {
                     sx={{
                       fontSize: 22,
                       fontWeight: 900,
-                      color: "text.primary",
+                      color:
+                        "text.primary",
                     }}
                   >
                     Consultando ticket
@@ -564,10 +876,13 @@ export default function PublicInvoicePage() {
                     sx={{
                       mt: 0.75,
                       fontSize: 14,
-                      color: "text.secondary",
+                      color:
+                        "text.secondary",
                     }}
                   >
-                    Estamos verificando si tu ticket está disponible para
+                    Estamos verificando
+                    si tu ticket está
+                    disponible para
                     facturación.
                   </Typography>
                 </Box>
@@ -580,18 +895,15 @@ export default function PublicInvoicePage() {
   }
 
   return (
-    <ThemeProvider theme={invoiceTheme}>
-
-      {coverImageUrl && !coverImageError ? (
+    <ThemeProvider
+      theme={invoiceTheme}
+    >
+      {coverImageUrl &&
+      !coverImageError ? (
         <Box
-          component="img"
-          src={coverImageUrl}
-          alt={`Portada de ${
-            invoiceData?.restaurant_name || "restaurante"
-          }`}
-          onError={() => {
-            setCoverImageError(true);
-          }}
+          aria-busy={
+            coverImageLoading
+          }
           sx={{
             width: "100%",
             height: {
@@ -600,97 +912,273 @@ export default function PublicInvoicePage() {
               md: 360,
               lg: 400,
             },
-            display: "block",
-            verticalAlign: "top",
-            objectFit: "cover",
-            objectPosition: "center",
+            position: "relative",
+            overflow: "hidden",
             borderRadius: 0,
-            border: 0,
+            bgcolor:
+              "background.default",
             m: 0,
-            mb: 0,
             p: 0,
           }}
-        />
+        >
+          {coverImageLoading ? (
+            <Box
+              aria-hidden="true"
+              sx={{
+                position:
+                  "absolute",
+                inset: 0,
+                zIndex: 1,
+                display: "grid",
+                placeItems:
+                  "center",
+
+                background: (
+                  theme
+                ) =>
+                  `linear-gradient(
+                    110deg,
+                    ${alpha(
+                      theme.palette
+                        .grey[300],
+                      0.92
+                    )} 8%,
+                    ${alpha(
+                      theme.palette
+                        .grey[100],
+                      0.98
+                    )} 18%,
+                    ${alpha(
+                      theme.palette
+                        .grey[300],
+                      0.92
+                    )} 33%
+                  )`,
+
+                backgroundSize:
+                  "200% 100%",
+              }}
+            >
+              <CircularProgress
+                size={30}
+                color="primary"
+                thickness={4}
+              />
+            </Box>
+          ) : null}
+
+          <Box
+            key={coverImageUrl}
+            component="img"
+            src={coverImageUrl}
+            alt={`Portada de ${
+              invoiceData
+                ?.restaurant_name ||
+              "restaurante"
+            }`}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+            onLoad={() => {
+              setCoverImageLoading(
+                false
+              );
+
+              setCoverImageError(
+                false
+              );
+            }}
+            onError={() => {
+              setCoverImageLoading(
+                false
+              );
+
+              setCoverImageError(
+                true
+              );
+            }}
+            sx={{
+              position:
+                "relative",
+              zIndex: 2,
+              width: "100%",
+              height: "100%",
+              display: "block",
+              verticalAlign:
+                "top",
+              objectFit: "cover",
+              objectPosition:
+                "center",
+              borderRadius: 0,
+              border: 0,
+              m: 0,
+              p: 0,
+
+              opacity:
+                coverImageLoading
+                  ? 0
+                  : 1,
+
+              transform:
+                coverImageLoading
+                  ? "scale(1.015)"
+                  : "scale(1)",
+
+              transition:
+                "opacity 320ms ease, transform 420ms ease",
+            }}
+          />
+        </Box>
       ) : null}
 
-      <PageContainer sx={{ py: 0 }}>
+      <PageContainer
+        sx={{ py: 0 }}
+      >
         <Box
           sx={{
             pt: 2,
-            pb: { xs: 2, sm: 3, md: 4 },
+            pb: {
+              xs: 2,
+              sm: 3,
+              md: 4,
+            },
           }}
         >
-          <Stack spacing={3} alignItems="center">
+          <Stack
+            spacing={3}
+            alignItems="center"
+          >
             <Paper
               sx={{
                 width: "100%",
-                p: { xs: 2.5, sm: 3 },
+                p: {
+                  xs: 2.5,
+                  sm: 3,
+                },
                 borderRadius: 1,
-                border: "1px solid",
-                borderColor: "divider",
-                backgroundColor: "background.paper",
+                border:
+                  "1px solid",
+                borderColor:
+                  "divider",
+                backgroundColor:
+                  "background.paper",
                 boxShadow: "none",
                 overflow: "hidden",
-                position: "relative",
+                position:
+                  "relative",
+
                 "&::before": {
                   content: '""',
-                  position: "absolute",
+                  position:
+                    "absolute",
                   inset: 0,
-                  background: (theme) =>
+
+                  background: (
+                    theme
+                  ) =>
                     `linear-gradient(
                       135deg,
-                      ${alpha(theme.palette.primary.main, 0.14)},
-                      ${alpha(theme.palette.background.paper, 0)} 48%
+                      ${alpha(
+                        theme.palette
+                          .primary.main,
+                        0.14
+                      )},
+                      ${alpha(
+                        theme.palette
+                          .background
+                          .paper,
+                        0
+                      )} 48%
                     )`,
-                  pointerEvents: "none",
+
+                  pointerEvents:
+                    "none",
                 },
               }}
             >
               <Stack
-                direction={{ xs: "column", md: "row" }}
+                direction={{
+                  xs: "column",
+                  md: "row",
+                }}
                 justifyContent="space-between"
-                alignItems={{ xs: "flex-start", md: "center" }}
+                alignItems={{
+                  xs: "flex-start",
+                  md: "center",
+                }}
                 spacing={2}
-                sx={{ position: "relative" }}
+                sx={{
+                  position:
+                    "relative",
+                }}
               >
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                >
                   <Box
                     sx={{
                       width: 54,
                       height: 54,
                       borderRadius: 2,
                       display: "grid",
-                      placeItems: "center",
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
-                      color: "primary.main",
+                      placeItems:
+                        "center",
+
+                      bgcolor: (
+                        theme
+                      ) =>
+                        alpha(
+                          theme.palette
+                            .primary
+                            .main,
+                          0.14
+                        ),
+
+                      color:
+                        "primary.main",
+
                       flexShrink: 0,
                     }}
                   >
-                    <ReceiptLongOutlinedIcon sx={{ fontSize: 30 }} />
+                    <ReceiptLongOutlinedIcon
+                      sx={{
+                        fontSize: 30,
+                      }}
+                    />
                   </Box>
 
                   <Box>
                     <Typography
                       sx={{
-                        fontSize: { xs: 24, sm: 30 },
+                        fontSize: {
+                          xs: 24,
+                          sm: 30,
+                        },
                         fontWeight: 900,
-                        color: "text.primary",
+                        color:
+                          "text.primary",
                         lineHeight: 1.1,
                       }}
                     >
-                      Factura tu ticket
+                      Factura tu
+                      ticket
                     </Typography>
 
                     <Typography
                       sx={{
                         mt: 0.75,
                         fontSize: 14,
-                        color: "text.secondary",
+                        color:
+                          "text.secondary",
                         lineHeight: 1.55,
                       }}
                     >
-                      Captura tus datos fiscales para generar tu factura desde
-                      Clic Menu.
+                      Captura tus datos
+                      fiscales para
+                      generar tu factura
+                      desde Clic Menu.
                     </Typography>
                   </Box>
                 </Stack>
@@ -703,20 +1191,28 @@ export default function PublicInvoicePage() {
                     px: 1.5,
                     py: 1,
                     borderRadius: 1,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    backgroundColor: "background.default",
+                    border:
+                      "1px solid",
+                    borderColor:
+                      "divider",
+                    backgroundColor:
+                      "background.default",
                   }}
                 >
                   <SecurityOutlinedIcon
                     fontSize="small"
-                    sx={{ color: "primary.main" }}
+                    sx={{
+                      color:
+                        "primary.main",
+                    }}
                   />
+
                   <Typography
                     sx={{
                       fontSize: 13,
                       fontWeight: 800,
-                      color: "text.primary",
+                      color:
+                        "text.primary",
                     }}
                   >
                     Sitio seguro
@@ -726,23 +1222,42 @@ export default function PublicInvoicePage() {
             </Paper>
 
             {invoiceData ? (
-              <PublicInvoiceSummaryCard data={invoiceData} />
+              <PublicInvoiceSummaryCard
+                data={invoiceData}
+              />
             ) : null}
 
             {successData ? (
-              <PublicInvoiceSuccessCard data={successData} />
+              <PublicInvoiceSuccessCard
+                data={successData}
+              />
             ) : canInvoice ? (
               <PublicInvoiceForm
-                invoiceMode={invoiceData?.invoice_mode}
-                submitting={submitting}
-                apiErrors={fieldErrors}
-                generalError={submitError}
-                onSubmit={handleStamp}
+                invoiceMode={
+                  invoiceData
+                    ?.invoice_mode
+                }
+                submitting={
+                  submitting
+                }
+                apiErrors={
+                  fieldErrors
+                }
+                generalError={
+                  submitError
+                }
+                onSubmit={
+                  handleStamp
+                }
               />
             ) : (
               <PublicInvoiceStatusCard
-                status={currentStatus}
-                message={currentMessage}
+                status={
+                  currentStatus
+                }
+                message={
+                  currentMessage
+                }
                 data={invoiceData}
               />
             )}
@@ -750,12 +1265,22 @@ export default function PublicInvoicePage() {
         </Box>
 
         <AppAlert
-          open={alertState.open}
+          open={
+            alertState.open
+          }
           onClose={closeAlert}
-          severity={alertState.severity}
-          title={alertState.title}
-          message={alertState.message}
-          autoHideDuration={3000}
+          severity={
+            alertState.severity
+          }
+          title={
+            alertState.title
+          }
+          message={
+            alertState.message
+          }
+          autoHideDuration={
+            3000
+          }
         />
       </PageContainer>
     </ThemeProvider>
