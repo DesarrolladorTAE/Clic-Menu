@@ -1,7 +1,7 @@
 // src/pages/public/publicMenu.ui.jsx
 // Componentes UI puros (no conocen servicios ni lógica de negocio)
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const MENU_UI = {
@@ -207,17 +207,36 @@ export function PillButton({
 }
 
 export function ProductThumb({ imageUrl, title }) {
+
+  const imageRef = useRef(null);
+
   const [loading, setLoading] = useState(Boolean(imageUrl));
   const [failed, setFailed] = useState(false);
 
-  /*
-   * Cuando cambia la imagen del producto:
-   * - reiniciamos el error anterior;
-   * - volvemos a mostrar el placeholder de carga.
-   */
   useEffect(() => {
     setFailed(false);
-    setLoading(Boolean(imageUrl));
+
+    if (!imageUrl) {
+      setLoading(false);
+      return;
+    }
+
+    const image = imageRef.current;
+
+    if (image?.complete) {
+      const loadedCorrectly = image.naturalWidth > 0;
+
+      setLoading(false);
+      setFailed(!loadedCorrectly);
+
+      return;
+    }
+
+    /*
+     * Solo mantenemos el placeholder cuando realmente
+     * existe una descarga pendiente.
+     */
+    setLoading(true);
   }, [imageUrl]);
 
   const wrapStyle = {
@@ -252,8 +271,13 @@ export function ProductThumb({ imageUrl, title }) {
 
   if (failed) {
     return (
-      <div style={wrapStyle} aria-label="Imagen no disponible">
-        <div style={labelStyle}>Imagen no disponible</div>
+      <div
+        style={wrapStyle}
+        aria-label="Imagen no disponible"
+      >
+        <div style={labelStyle}>
+          Imagen no disponible
+        </div>
       </div>
     );
   }
@@ -268,7 +292,7 @@ export function ProductThumb({ imageUrl, title }) {
           : undefined
       }
     >
-      {/* Placeholder visible mientras la imagen termina de cargar. */}
+      {/* Placeholder visible únicamente durante una carga real. */}
       <div
         aria-hidden="true"
         style={{
@@ -292,15 +316,18 @@ export function ProductThumb({ imageUrl, title }) {
             width: 54,
             height: 42,
             borderRadius: 10,
-            border: "1px solid rgba(47,42,61,0.08)",
+            border:
+              "1px solid rgba(47,42,61,0.08)",
             background:
               "linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,255,255,0.62))",
-            boxShadow: "0 8px 22px rgba(47,42,61,0.06)",
+            boxShadow:
+              "0 8px 22px rgba(47,42,61,0.06)",
           }}
         />
       </div>
 
       <img
+        ref={imageRef}
         key={imageUrl}
         src={imageUrl}
         alt={title || "Imagen del producto"}

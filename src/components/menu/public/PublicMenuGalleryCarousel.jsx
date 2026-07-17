@@ -3,6 +3,7 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -79,6 +80,14 @@ export default function PublicMenuGalleryCarousel({
       .join("|");
   }, [sourceImages]);
 
+  /*
+   * Referencia directa a la imagen actual.
+   *
+   * Permite detectar cuando Chrome ya resolvió
+   * la imagen desde memory cache o disk cache.
+   */
+  const currentImageRef = useRef(null);
+
   const [active, setActive] = useState(0);
   const [notice, setNotice] = useState("");
 
@@ -115,14 +124,17 @@ export default function PublicMenuGalleryCarousel({
   ]);
 
   /*
-   * Reinicia el carrusel cuando cambia
+   * Reinicia la navegación cuando cambia
    * realmente el conjunto de imágenes.
+   *
+   * No vaciamos loadedUrls porque una imagen puede
+   * haber terminado de cargar desde caché antes de
+   * que este efecto se ejecute.
    */
   useEffect(() => {
     setActive(0);
     setNotice("");
     setFailedUrls([]);
-    setLoadedUrls([]);
   }, [imageSignature]);
 
   /*
@@ -156,6 +168,69 @@ export default function PublicMenuGalleryCarousel({
   const imageLoading =
     Boolean(current?.url) &&
     !loadedUrls.includes(current.url);
+
+  /*
+   * Comprueba el estado real del elemento <img>
+   * cada vez que cambia la imagen actual.
+   *
+   * Esto cubre imágenes entregadas inmediatamente
+   * desde memory cache o disk cache.
+   */
+  useEffect(() => {
+    const currentUrl = current?.url;
+    const image = currentImageRef.current;
+
+    if (
+      !currentUrl ||
+      !image ||
+      !image.complete
+    ) {
+      return;
+    }
+
+    /*
+     * La solicitud ya terminó y la imagen es válida.
+     */
+    if (image.naturalWidth > 0) {
+      setLoadedUrls((previous) =>
+        previous.includes(currentUrl)
+          ? previous
+          : [...previous, currentUrl]
+      );
+
+      setFailedUrls((previous) =>
+        previous.filter(
+          (url) => url !== currentUrl
+        )
+      );
+
+      return;
+    }
+
+    /*
+     * La solicitud terminó, pero la imagen está rota.
+     */
+    setLoadedUrls((previous) =>
+      previous.filter(
+        (url) => url !== currentUrl
+      )
+    );
+
+    setFailedUrls((previous) =>
+      previous.includes(currentUrl)
+        ? previous
+        : [...previous, currentUrl]
+    );
+
+    setNotice(
+      images.length > 1
+        ? "Una imagen no pudo cargarse. Se mostrará la siguiente."
+        : "No se pudieron cargar las imágenes."
+    );
+  }, [
+    current?.url,
+    images.length,
+  ]);
 
   /*
    * Rotación automática.
@@ -243,9 +318,9 @@ export default function PublicMenuGalleryCarousel({
     );
   };
 
-  const handleImageError = () => {
-    const failedUrl = current?.url;
-
+  const handleImageError = (
+    failedUrl
+  ) => {
     if (!failedUrl) {
       return;
     }
@@ -315,25 +390,45 @@ export default function PublicMenuGalleryCarousel({
             ) : null}
 
             <img
+              ref={currentImageRef}
               key={current.url}
               src={current.url}
               alt={current.name}
               loading="lazy"
               decoding="async"
               onLoad={() => {
+                const loadedUrl =
+                  current.url;
+
                 setLoadedUrls(
                   (previous) =>
                     previous.includes(
-                      current.url
+                      loadedUrl
                     )
                       ? previous
                       : [
                           ...previous,
-                          current.url,
+                          loadedUrl,
                         ]
                 );
+
+                /*
+                 * Recupera la imagen si había sido
+                 * registrada previamente como fallida.
+                 */
+                setFailedUrls(
+                  (previous) =>
+                    previous.filter(
+                      (url) =>
+                        url !== loadedUrl
+                    )
+                );
               }}
-              onError={handleImageError}
+              onError={() => {
+                handleImageError(
+                  current.url
+                );
+              }}
               style={{
                 position: "relative",
                 zIndex: 1,

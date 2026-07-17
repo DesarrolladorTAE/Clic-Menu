@@ -1,6 +1,7 @@
 // Card 1: Portada de sucursal
 import React, {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -13,18 +14,15 @@ function isValidColor(color) {
 export default function PublicMenuBrandCard({
   publicMenu,
 }) {
+
+  const coverImageRef = useRef(null);
+
   const themeColor = isValidColor(
     publicMenu?.theme_color
   )
     ? publicMenu.theme_color
     : "#FF7A00";
 
-  /*
-   * El backend conserva el mismo contrato:
-   *
-   * cover_image_url contiene:
-   * WebP optimizado → imagen original.
-   */
   const coverUrl =
     publicMenu?.cover_image_url || "";
 
@@ -34,13 +32,34 @@ export default function PublicMenuBrandCard({
   const [coverFailed, setCoverFailed] =
     useState(false);
 
-  /*
-   * Cuando cambia la portada, se reinicia
-   * el estado visual de carga y error.
-   */
   useEffect(() => {
     setCoverFailed(false);
-    setCoverLoading(Boolean(coverUrl));
+
+    if (!coverUrl) {
+      setCoverLoading(false);
+      return;
+    }
+
+    const image =
+      coverImageRef.current;
+
+    if (image?.complete) {
+      const loadedCorrectly =
+        image.naturalWidth > 0;
+
+      setCoverLoading(false);
+      setCoverFailed(
+        !loadedCorrectly
+      );
+
+      return;
+    }
+
+    /*
+     * El placeholder permanece únicamente cuando
+     * todavía existe una carga real pendiente.
+     */
+    setCoverLoading(true);
   }, [coverUrl]);
 
   const hasUsableCover =
@@ -99,6 +118,7 @@ export default function PublicMenuBrandCard({
             )}
 
             <img
+              ref={coverImageRef}
               key={coverUrl}
               src={coverUrl}
               alt="Portada"

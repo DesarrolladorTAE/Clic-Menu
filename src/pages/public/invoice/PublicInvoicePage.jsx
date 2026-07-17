@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect, useMemo,useRef, useState,
+} from "react";
 import {
   Box,
   CircularProgress,
@@ -396,6 +398,8 @@ export default function PublicInvoicePage() {
   const { token } = useParams();
   const baseTheme = useTheme();
 
+  const coverImageRef = useRef(null);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -522,16 +526,40 @@ export default function PublicInvoicePage() {
       invoiceData?.cover_image_url,
     ]);
 
-  /**
-   * Cuando cambia la portada del ticket,
-   * se reinician los estados visuales.
-   */
   useEffect(() => {
     setCoverImageError(false);
 
-    setCoverImageLoading(
-      Boolean(coverImageUrl)
-    );
+    if (!coverImageUrl) {
+      setCoverImageLoading(false);
+      return;
+    }
+
+    const image = coverImageRef.current;
+
+    /*
+    * `complete` confirma que el navegador ya terminó
+    * de resolver la imagen, incluso desde caché.
+    *
+    * `naturalWidth > 0` confirma que la imagen
+    * terminó correctamente y no está rota.
+    */
+    if (image?.complete) {
+      const loadedCorrectly =
+        image.naturalWidth > 0;
+
+      setCoverImageLoading(false);
+      setCoverImageError(
+        !loadedCorrectly
+      );
+
+      return;
+    }
+
+    /*
+    * El placeholder se mantiene únicamente cuando
+    * existe una descarga real pendiente.
+    */
+    setCoverImageLoading(true);
   }, [coverImageUrl]);
 
   const resolvedThemeColor =
@@ -968,6 +996,7 @@ export default function PublicInvoicePage() {
           ) : null}
 
           <Box
+            ref={coverImageRef}
             key={coverImageUrl}
             component="img"
             src={coverImageUrl}
