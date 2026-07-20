@@ -5,6 +5,7 @@ import {
   buildModifierContextSections,
   buildModifierDisplayGroupsFromApiGroups,
   formatModifierGroupMeta,
+  isAvailabilityBlocked,
   money,
 } from "../../../hooks/public/publicMenu.utils";
 import usePagination from "../../../hooks/usePagination";
@@ -265,16 +266,83 @@ function validatePreparedSections(preparedSections, selectionMap) {
   return errors;
 }
 
+function getOptionQuantityLimit(option) {
+  const configuredMax = Math.max(
+    1,
+    Math.floor(
+      Number(option?.max_quantity_per_selection || 1),
+    ),
+  );
+
+  const availabilityMaxRaw =
+    option?.availability?.max_available_qty;
+
+  const hasAvailabilityMax =
+    availabilityMaxRaw !== null &&
+    availabilityMaxRaw !== undefined &&
+    availabilityMaxRaw !== "" &&
+    Number.isFinite(Number(availabilityMaxRaw));
+
+  const availabilityMax = hasAvailabilityMax
+    ? Math.max(
+        0,
+        Math.floor(Number(availabilityMaxRaw)),
+      )
+    : null;
+
+  const effectiveMax =
+    availabilityMax === null
+      ? configuredMax
+      : Math.min(configuredMax, availabilityMax);
+
+  return {
+    configuredMax,
+    availabilityMax,
+    effectiveMax,
+  };
+}
+
 function getAvailabilityUi(option) {
-  const availability = option?.availability || null;
+  const availability =
+    option?.availability &&
+    typeof option.availability === "object"
+      ? option.availability
+      : null;
+
+  /*
+   * availability.status enviado por backend tiene prioridad
+   * sobre cualquier etiqueta visual.
+   */
   const status = String(
-    option?.availability_label || availability?.status || "disponible",
+    availability?.status ||
+      option?.availability_label ||
+      "available",
   ).toLowerCase();
 
-  const maxQty = availability?.max_available_qty;
-  const reason = availability?.reason || null;
+  const maxQty =
+    availability?.max_available_qty ?? null;
+
+  const reason =
+    availability?.reason || null;
+
+  const explicitlyUnavailable =
+    option?.is_available === false;
+
+  const blockedByBackend = availability
+    ? isAvailabilityBlocked(availability)
+    : !["available", "disponible"].includes(status);
+
+  const hasZeroAvailability =
+    maxQty !== null &&
+    maxQty !== undefined &&
+    maxQty !== "" &&
+    Number.isFinite(Number(maxQty)) &&
+    Number(maxQty) <= 0;
+
   const isAvailable =
-    typeof option?.is_available === "boolean" ? option.is_available : true;
+    !explicitlyUnavailable &&
+    !blockedByBackend &&
+    !hasZeroAvailability;
 
   const map = {
     disponible: {
@@ -339,10 +407,18 @@ function getAvailabilityUi(option) {
     },
   };
 
-  const current = map[status] || map.disponible;
+  const current =
+    !isAvailable &&
+    ["available", "disponible"].includes(status)
+      ? map.inventory_blocked
+      : map[status] ||
+        (isAvailable
+          ? map.available
+          : map.inventory_blocked);
 
   return {
     isAvailable,
+    status,
     label: current.label,
     bg: current.bg,
     color: current.color,
@@ -373,9 +449,16 @@ function OptionRow({
   const safeThemeColor = getSafeThemeColor(themeColor);
   const affectsPrice = !!option?.affects_total;
   const price = Number(option?.price || 0);
-  const maxPerSelection = Number(option?.max_quantity_per_selection || 1);
+
+  const quantityLimit = getOptionQuantityLimit(option);
+  const maxPerSelection = quantityLimit.configuredMax;
+  const effectiveMaxQty = quantityLimit.effectiveMax;
+
   const availabilityUi = getAvailabilityUi(option);
-  const disabledByAvailability = !availabilityUi.isAvailable;
+
+  const disabledByAvailability =
+    !availabilityUi.isAvailable ||
+    effectiveMaxQty <= 0;
 
   return (
     <div
@@ -543,8 +626,15 @@ function OptionRow({
               <PillButton
                 tone="soft"
                 onClick={() => onIncrementQty?.(group, option)}
-                disabled={selectedQty >= maxPerSelection || disabledByAvailability}
-                title="Sumar"
+                disabled={
+                  selectedQty >= effectiveMaxQty ||
+                  disabledByAvailability
+                }
+                title={
+                  selectedQty >= effectiveMaxQty
+                    ? "Se alcanzó el máximo disponible"
+                    : "Sumar"
+                }
               >
                 +
               </PillButton>
@@ -792,44 +882,86 @@ export default function ProductExtrasModal({
 
   const handleSelectOption = (group, option) => {
     const optionId = Number(option?.id || 0);
-    const current = { ...(selectionMap?.[group.__selection_key] || {}) };
-    const mode = String(group?.selection_mode || "").toLowerCase();
-    const optionAvailable =
-      typeof option?.is_available === "boolean" ? option.is_available : true;
 
-    if (!optionAvailable) return;
+    const current = {
+      ...(selectionMap?.[group.__selection_key] || {}),
+    };
 
-    if (mode === "single") {
-      updateGroupMap(group, { [optionId]: 1 });
+    const mode = String(
+      group?.selection_mode || "",
+    ).toLowerCase();
+
+    const availabilityUi = getAvailabilityUi(option);
+    const quantityLimit = getOptionQuantityLimit(option);
+
+    if (
+      !optionId ||
+      !availabilityUi.isAvailable ||
+      quantityLimit.effectiveMax < 1
+    ) {
       return;
     }
 
-    current[optionId] = Math.max(1, Number(current?.[optionId] || 0) || 1);
+    if (mode === "single") {
+      updateGroupMap(group, {
+        [optionId]: 1,
+      });
+      return;
+    }
+
+    current[optionId] = 1;
     updateGroupMap(group, current);
   };
 
   const handleIncrementQty = (group, option) => {
     const optionId = Number(option?.id || 0);
-    const maxPerSelection = Number(option?.max_quantity_per_selection || 1);
-    const current = { ...(selectionMap?.[group.__selection_key] || {}) };
-    const mode = String(group?.selection_mode || "").toLowerCase();
-    const distinctCount = countDistinctSelectedOptions(current);
+
+    const current = {
+      ...(selectionMap?.[group.__selection_key] || {}),
+    };
+
+    const mode = String(
+      group?.selection_mode || "",
+    ).toLowerCase();
+
+    const distinctCount =
+      countDistinctSelectedOptions(current);
+
     const maxDistinct =
-      group?.max_select == null || group?.max_select === ""
+      group?.max_select == null ||
+      group?.max_select === ""
         ? null
         : Number(group.max_select);
-    const optionAvailable =
-      typeof option?.is_available === "boolean" ? option.is_available : true;
 
-    if (!optionAvailable) return;
+    const availabilityUi = getAvailabilityUi(option);
+    const quantityLimit = getOptionQuantityLimit(option);
+    const effectiveMaxQty = quantityLimit.effectiveMax;
 
-    if (!current[optionId]) {
+    const currentQty = Number(
+      current?.[optionId] || 0,
+    );
+
+    if (
+      !optionId ||
+      !availabilityUi.isAvailable ||
+      effectiveMaxQty < 1 ||
+      currentQty >= effectiveMaxQty
+    ) {
+      return;
+    }
+
+    if (!currentQty) {
       if (mode === "single") {
-        updateGroupMap(group, { [optionId]: 1 });
+        updateGroupMap(group, {
+          [optionId]: 1,
+        });
         return;
       }
 
-      if (maxDistinct !== null && distinctCount >= maxDistinct) {
+      if (
+        maxDistinct !== null &&
+        distinctCount >= maxDistinct
+      ) {
         return;
       }
 
@@ -838,11 +970,11 @@ export default function ProductExtrasModal({
       return;
     }
 
-    const nextQty = Math.min(
-      maxPerSelection,
-      Number(current?.[optionId] || 0) + 1,
+    current[optionId] = Math.min(
+      effectiveMaxQty,
+      currentQty + 1,
     );
-    current[optionId] = nextQty;
+
     updateGroupMap(group, current);
   };
 
@@ -881,13 +1013,34 @@ export default function ProductExtrasModal({
         for (const option of options) {
           const optionId = Number(option?.id || 0);
           const qty = Number(selected?.[optionId] || 0);
-          const optionAvailable =
-            typeof option?.is_available === "boolean" ? option.is_available : true;
 
-          if (qty > 0 && !optionAvailable) {
+          if (qty <= 0) {
+            continue;
+          }
+
+          const availabilityUi = getAvailabilityUi(option);
+          const quantityLimit = getOptionQuantityLimit(option);
+          const effectiveMaxQty = quantityLimit.effectiveMax;
+
+          if (!availabilityUi.isAvailable) {
+            const reason = String(
+              availabilityUi.reason || "",
+            ).trim();
+
             setErrorMsg(
-              `La opción "${option?.name || "Extra"}" ya no está disponible.`,
+              reason
+                ? `La opción "${option?.name || "Extra"}" no está disponible. ${reason}`
+                : `La opción "${option?.name || "Extra"}" ya no está disponible.`,
             );
+
+            return;
+          }
+
+          if (qty > effectiveMaxQty) {
+            setErrorMsg(
+              `La opción "${option?.name || "Extra"}" permite actualmente un máximo de ${effectiveMaxQty}.`,
+            );
+
             return;
           }
         }

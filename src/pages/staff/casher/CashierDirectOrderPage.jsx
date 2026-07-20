@@ -266,7 +266,24 @@ export default function CashierDirectOrderPage() {
           force: true,
         });
 
-        await cartOrder.reviewStock(orderIdFromQuery).catch(() => {});
+        const reviewRes = await cartOrder.reviewStock(
+          orderIdFromQuery
+        );
+
+        if (!mounted) return;
+
+        if (
+          !reviewRes?.ok &&
+          Number(reviewRes?.__httpStatus || 0) === 409
+        ) {
+          const message =
+            reviewRes?.message ||
+            reviewRes?.data?.message ||
+            "La venta directa no puede continuar con la configuración actual de la caja.";
+
+          setErrorMsg(String(message));
+          return;
+        }
       } catch (e) {
         if (!mounted) return;
 

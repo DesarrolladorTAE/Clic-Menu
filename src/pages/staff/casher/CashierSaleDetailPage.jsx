@@ -1337,9 +1337,28 @@ export default function CashierSaleDetailPage() {
       setPostPaymentOpen(true);
     } catch (e) {
       const code = pickCode(e);
+      const data = pickData(e);
 
-      if (code === "INSUFFICIENT_WAREHOUSE_STOCK_ON_PAYMENT") {
-        const data = pickData(e);
+      const actionRequired = String(
+        data?.action_required || ""
+      );
+
+      const requiresStockReview =
+        actionRequired === "REVIEW_DIRECT_ORDER_STOCK" ||
+        code === "INSUFFICIENT_WAREHOUSE_STOCK_ON_PAYMENT";
+
+      const requiresCashRegisterReconfiguration =
+        actionRequired ===
+          "RECONFIGURE_CASH_REGISTER_WAREHOUSE" ||
+        code === "INVALID_CASH_REGISTER_WAREHOUSE" ||
+        code === "DIRECT_ORDER_WAREHOUSE_MISMATCH";
+
+      if (requiresStockReview) {
+        /*
+        * La vista previa ya no es válida porque las existencias
+        * cambiaron antes de realizar el cobro.
+        */
+        setPreview(null);
 
         const orderId = Number(
           data?.order_id ||
@@ -1349,11 +1368,16 @@ export default function CashierSaleDetailPage() {
             0
         );
 
-        const currentSaleId = Number(sale?.sale_id || sale?.id || saleId || 0);
+        const currentSaleId = Number(
+          sale?.sale_id ||
+            sale?.id ||
+            saleId ||
+            0
+        );
 
         showAlert({
           severity: "warning",
-          title: "Stock insuficiente",
+          title: "Revisa la venta",
           message: pickErr(
             e,
             "Algunos productos ya no tienen stock suficiente. Corrige la venta antes de cobrar."
@@ -1372,6 +1396,22 @@ export default function CashierSaleDetailPage() {
         return;
       }
 
+      if (requiresCashRegisterReconfiguration) {
+
+        setPreview(null);
+
+        showAlert({
+          severity: "warning",
+          title: "Caja pendiente de configuración",
+          message: pickErr(
+            e,
+            "No se puede cobrar esta venta porque la caja necesita que el propietario revise su almacén asignado."
+          ),
+        });
+
+        return;
+      }
+
       if (
         code === "SALE_ALREADY_PAID" ||
         code === "SALE_NOT_OWNED_BY_SESSION" ||
@@ -1379,18 +1419,25 @@ export default function CashierSaleDetailPage() {
       ) {
         showAlert({
           severity: "warning",
-          message: pickErr(e, "La venta ya no está disponible para cobrarse."),
+          message: pickErr(
+            e,
+            "La venta ya no está disponible para cobrarse."
+          ),
         });
 
         setTimeout(() => {
           nav("/staff/cashier/queue", { replace: true });
         }, 600);
+
         return;
       }
 
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo cobrar la venta."),
+        message: pickErr(
+          e,
+          "No se pudo cobrar la venta."
+        ),
       });
     } finally {
       setPaying(false);
