@@ -66,6 +66,9 @@ export default function WarehousesPage() {
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const pickErrorCode = (e) =>
+    e?.response?.data?.code || null;
+
   const inventoryMode = settings?.inventory_mode || "branch";
   const requiresBranch = inventoryMode === "branch";
 
@@ -317,24 +320,55 @@ export default function WarehousesPage() {
 
   const handleToggleStatus = async (row) => {
     try {
-      const nextStatus = row.status === "active" ? "inactive" : "active";
+      const nextStatus =
+        row.status === "active"
+          ? "inactive"
+          : "active";
 
-      const res = await updateWarehouse(restaurantId, row.id, {
-        status: nextStatus,
-      });
+      const res = await updateWarehouse(
+        restaurantId,
+        row.id,
+        {
+          status: nextStatus,
+        }
+      );
 
       const updated = res?.data;
 
       setWarehouses((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
+        prev.map((item) =>
+          item.id === updated.id
+            ? updated
+            : item
+        )
       );
 
       showAlert({
         severity: "success",
         title: "Hecho",
-        message: "Estado del almacén actualizado correctamente.",
+        message:
+          "Estado del almacén actualizado correctamente.",
       });
     } catch (e) {
+      const code = pickErrorCode(e);
+
+      if (
+        code ===
+        "WAREHOUSE_HAS_OPEN_CASH_SESSIONS"
+      ) {
+        await loadWarehouses().catch(() => {});
+
+        showAlert({
+          severity: "warning",
+          title: "Almacén en uso",
+          message:
+            e?.response?.data?.message ||
+            "No puedes desactivar este almacén porque está siendo utilizado por una sesión de caja abierta.",
+        });
+
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",

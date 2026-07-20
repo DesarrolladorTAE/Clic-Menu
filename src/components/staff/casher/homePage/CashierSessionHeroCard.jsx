@@ -1,12 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
@@ -24,6 +18,15 @@ export default function CashierSessionHeroCard({
   showExitButton = true, // 👈 nueva prop
 }) {
   const hasSession = !!currentSession?.id;
+
+  const canOperate =
+    hasSession &&
+    currentSession?.can_operate === true;
+
+  const policyMessage =
+    currentSession?.warehouse_policy?.message ||
+    "La caja abierta no puede operar con su configuración actual.";
+
   const isLogout = exitLabel === "Cerrar sesión";
 
   return (
@@ -65,7 +68,9 @@ export default function CashierSessionHeroCard({
                 }}
               >
                 {hasSession
-                  ? "Tu caja ya está abierta. Desde aquí puedes pasar al tablero de cobro o cerrarla cuando ya no tengas ventas tomadas."
+                  ? canOperate
+                    ? "Tu caja ya está abierta. Desde aquí puedes pasar al tablero de cobro o cerrarla cuando ya no tengas ventas tomadas."
+                    : "Tu caja está abierta, pero no puede operar hasta corregir su configuración."
                   : "Antes de cobrar, necesitas abrir una caja activa de tu sucursal."}
               </Typography>
             </Box>
@@ -77,12 +82,32 @@ export default function CashierSessionHeroCard({
               sx={{ width: { xs: "100%", md: "auto" } }}
             >
               <Chip
-                icon={hasSession ? <LockOpenRoundedIcon /> : <LockRoundedIcon />}
-                label={hasSession ? "Caja abierta" : "Sin caja abierta"}
+                icon={
+                  hasSession && canOperate
+                    ? <LockOpenRoundedIcon />
+                    : <LockRoundedIcon />
+                }
+                label={
+                  hasSession
+                    ? canOperate
+                      ? "Caja abierta"
+                      : "Caja bloqueada"
+                    : "Sin caja abierta"
+                }
                 sx={{
                   fontWeight: 800,
-                  bgcolor: hasSession ? "#E7F8EB" : "#FFF4D9",
-                  color: hasSession ? "#0A7A2F" : "#8A6D3B",
+                  bgcolor:
+                    hasSession && !canOperate
+                      ? "#FDECEC"
+                      : hasSession
+                      ? "#E7F8EB"
+                      : "#FFF4D9",
+                  color:
+                    hasSession && !canOperate
+                      ? "#B42318"
+                      : hasSession
+                      ? "#0A7A2F"
+                      : "#8A6D3B",
                 }}
               />
 
@@ -140,6 +165,29 @@ export default function CashierSessionHeroCard({
             </Box>
           ) : null}
 
+          {hasSession && !canOperate ? (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "error.main",
+                borderRadius: 1,
+                bgcolor: "#FDECEC",
+                p: 1.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "error.main",
+                  lineHeight: 1.5,
+                }}
+              >
+                {policyMessage}
+              </Typography>
+            </Box>
+          ) : null}
+
           {hasSession ? (
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -164,6 +212,7 @@ export default function CashierSessionHeroCard({
               <Button
                 variant="contained"
                 onClick={onGoQueue}
+                disabled={!canOperate || closing}
                 startIcon={<ArrowForwardRoundedIcon />}
                 sx={{
                   minWidth: { xs: "100%", sm: 220 },
@@ -172,7 +221,9 @@ export default function CashierSessionHeroCard({
                   fontWeight: 800,
                 }}
               >
-                Ir al tablero de cobro
+                {canOperate
+                  ? "Ir al tablero de cobro"
+                  : "Tablero no disponible"}
               </Button>
             </Stack>
           ) : null}

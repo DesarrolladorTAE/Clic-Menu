@@ -8,6 +8,8 @@ export async function getRestaurantSettings(restaurantId) {
     _meta: {
       ui: data?.ui ?? null,
       plan_access: data?.plan_access ?? null,
+      cash_register_reconfiguration:
+        data?.cash_register_reconfiguration ?? null,
     },
   };
 }
@@ -20,9 +22,20 @@ export async function upsertRestaurantSettings(restaurantId, payload) {
     ui: data?.ui ?? null,
     plan_access: data?.plan_access ?? null,
 
-    recipe_mode_forced: Boolean(data?.recipe_mode_forced),
+    inventory_mode_changed:
+      Boolean(data?.inventory_mode_changed),
 
-    attention_mode_sync: data?.attention_mode_sync ?? null,
+    previous_inventory_mode:
+      data?.previous_inventory_mode ?? null,
+
+    cash_register_reconfiguration:
+      data?.cash_register_reconfiguration ?? null,
+
+    recipe_mode_forced:
+      Boolean(data?.recipe_mode_forced),
+
+    attention_mode_sync:
+      data?.attention_mode_sync ?? null,
 
     message: data?.message ?? null,
   };

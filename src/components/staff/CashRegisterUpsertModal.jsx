@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack,
-  Switch, TextField, Typography, useMediaQuery, CircularProgress,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton,
+  MenuItem, Stack, Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -9,7 +9,6 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../components/common/AppAlert";
-import { getWarehouses } from "../../services/inventory/warehouses/warehouses.service";
 
 export default function CashRegisterUpsertModal({
   open,
@@ -18,6 +17,8 @@ export default function CashRegisterUpsertModal({
   branches,
   editing,
   planAccess,
+  cashRegisterMeta = {},
+  warehouseOptionsByBranch = [],
   cashRegisterRequiresWarehouse = false,
   onSaved,
   api,
@@ -28,8 +29,6 @@ export default function CashRegisterUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
-  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
-  const [warehouses, setWarehouses] = useState([]);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -58,31 +57,244 @@ export default function CashRegisterUpsertModal({
     [branches]
   );
 
-  const activeWarehouses = useMemo(() => {
-    if (!Array.isArray(warehouses)) return [];
+  const selectedBranchId = useMemo(() => {
+    if (isEdit) {
+      return editing?.branch_id
+        ? Number(editing.branch_id)
+        : null;
+    }
 
-    return warehouses.filter((warehouse) => {
-      if (!warehouse?.id) return false;
-      if (warehouse?.status && warehouse.status !== "active") return false;
-      return true;
-    });
-  }, [warehouses]);
+    return branchId ? Number(branchId) : null;
+  }, [isEdit, editing, branchId]);
+
+  const selectedBranchPolicy = useMemo(() => {
+    if (!selectedBranchId) return null;
+
+    if (!Array.isArray(warehouseOptionsByBranch)) {
+      return null;
+    }
+
+    return (
+      warehouseOptionsByBranch.find(
+        (item) =>
+          Number(item?.branch_id) ===
+          Number(selectedBranchId)
+      ) || null
+    );
+  }, [
+    warehouseOptionsByBranch,
+    selectedBranchId,
+  ]);
+
+  const warehouseAllowed = useMemo(() => {
+    if (selectedBranchPolicy) {
+      return selectedBranchPolicy?.warehouse_allowed === true;
+    }
+
+    /*
+    * Respaldo de compatibilidad.
+    * La página corregida siempre debe entregar selectedBranchPolicy.
+    */
+    return !!cashRegisterRequiresWarehouse;
+  }, [
+    selectedBranchPolicy,
+    cashRegisterRequiresWarehouse,
+  ]);
+
+  const warehouseRequired = useMemo(() => {
+    if (selectedBranchPolicy) {
+      return selectedBranchPolicy?.warehouse_required === true;
+    }
+
+    return !!cashRegisterRequiresWarehouse;
+  }, [
+    selectedBranchPolicy,
+    cashRegisterRequiresWarehouse,
+  ]);
 
   const availableWarehouses = useMemo(() => {
-    if (!branchId) return activeWarehouses;
+    if (!warehouseAllowed) return [];
 
-    return activeWarehouses.filter((warehouse) => {
-      const warehouseBranchId = warehouse?.branch_id;
+    const rows = Array.isArray(
+      selectedBranchPolicy?.warehouses
+    )
+      ? selectedBranchPolicy.warehouses
+      : [];
 
-      return (
-        warehouseBranchId === null ||
-        warehouseBranchId === undefined ||
-        Number(warehouseBranchId) === Number(branchId) ||
-        warehouse?.scope === "global" ||
-        warehouse?.is_global === true
-      );
+    return rows.filter((warehouse) => {
+      if (!warehouse?.id) return false;
+
+      if (
+        warehouse?.status &&
+        warehouse.status !== "active"
+      ) {
+        return false;
+      }
+
+      return true;
     });
-  }, [activeWarehouses, branchId]);
+  }, [
+    selectedBranchPolicy,
+    warehouseAllowed,
+  ]);
+
+  const inventoryMode = useMemo(() => {
+    return (
+      selectedBranchPolicy?.inventory_mode ||
+      cashRegisterMeta?.inventory_mode ||
+      "branch"
+    );
+  }, [
+    selectedBranchPolicy,
+    cashRegisterMeta,
+  ]);
+
+  const cashierDirectMode = useMemo(() => {
+    return (
+      selectedBranchPolicy?.cashier_direct_mode ||
+      "disabled"
+    );
+  }, [selectedBranchPolicy]);
+
+  const cashierDirectEnabled = useMemo(() => {
+    const backendValue =
+      selectedBranchPolicy?.cashier_direct_enabled;
+
+    if (typeof backendValue === "boolean") {
+      return backendValue;
+    }
+
+    return !["", "disabled"].includes(
+      cashierDirectMode
+    );
+  }, [
+    selectedBranchPolicy,
+    cashierDirectMode,
+  ]);
+
+  const warehouseAllowedByPlan = useMemo(() => {
+    const branchValue =
+      selectedBranchPolicy?.warehouse_allowed_by_plan;
+
+    if (typeof branchValue === "boolean") {
+      return branchValue;
+    }
+
+    const metaValue =
+      cashRegisterMeta?.plan_allows_warehouses;
+
+    if (typeof metaValue === "boolean") {
+      return metaValue;
+    }
+
+    /*
+    * Respaldo de compatibilidad para respuestas anteriores
+    * que todavía no incluyan la capacidad explícita del plan.
+    */
+    return warehouseAllowed;
+  }, [
+    selectedBranchPolicy,
+    cashRegisterMeta,
+    warehouseAllowed,
+  ]);
+
+  const hasOpenSession = useMemo(() => {
+    return Boolean(
+      editing?.has_open_session ||
+      editing?.active_session ||
+      editing?.activeSession
+    );
+  }, [editing]);
+
+  const selectedWarehouseIsValid = useMemo(() => {
+    if (!warehouseId) return true;
+
+    return availableWarehouses.some(
+      (warehouse) =>
+        Number(warehouse.id) === Number(warehouseId)
+    );
+  }, [
+    availableWarehouses,
+    warehouseId,
+  ]);
+
+  const currentWarehouseNeedsCorrection = useMemo(() => {
+    if (!isEdit) return false;
+
+    if (editing?.warehouse_policy?.ok === false) {
+      return true;
+    }
+
+    if (!editing?.warehouse_id) {
+      return false;
+    }
+
+    return !availableWarehouses.some(
+      (warehouse) =>
+        Number(warehouse.id) ===
+        Number(editing.warehouse_id)
+    );
+  }, [
+    isEdit,
+    editing,
+    availableWarehouses,
+  ]);
+
+  const warehouseHelp = useMemo(() => {
+    if (!selectedBranchId) {
+      return "Selecciona una sucursal para consultar sus almacenes disponibles.";
+    }
+
+    /*
+    * Primera causa posible:
+    * el plan no permite utilizar almacenes.
+    */
+    if (!warehouseAllowedByPlan) {
+      return "Tu plan actual no permite utilizar almacenes. La caja debe operar sin almacén asignado.";
+    }
+
+    /*
+    * Segunda causa posible:
+    * el plan sí permite almacenes, pero la venta directa
+    * está desactivada en esta sucursal.
+    */
+    if (!cashierDirectEnabled) {
+      return "La venta directa desde caja está desactivada en esta sucursal, por lo que la caja no debe tener almacén asignado.";
+    }
+
+    /*
+    * Respaldo ante alguna combinación futura donde el backend
+    * indique que no está permitido sin corresponder a las
+    * dos causas anteriores.
+    */
+    if (!warehouseAllowed) {
+      return "La caja debe operar sin almacén asignado.";
+    }
+
+    if (hasOpenSession) {
+      return "Esta caja tiene una sesión abierta. Debes cerrar la sesión antes de cambiar su almacén.";
+    }
+
+    const modeDescription =
+      inventoryMode === "global"
+        ? "Solo se muestran almacenes globales válidos para el restaurante."
+        : "Solo se muestran almacenes pertenecientes a esta sucursal.";
+
+    if (warehouseRequired) {
+      return `${currentPlanName}: el almacén es obligatorio. ${modeDescription}`;
+    }
+
+    return `${currentPlanName}: el almacén es opcional. ${modeDescription}`;
+  }, [
+    selectedBranchId,
+    warehouseAllowedByPlan,
+    cashierDirectEnabled,
+    warehouseAllowed,
+    hasOpenSession,
+    inventoryMode,
+    warehouseRequired,
+    currentPlanName,
+  ]);
 
   const selectedBranchLabel = useMemo(() => {
     if (!editing?.branch_id) return "—";
@@ -114,98 +326,153 @@ export default function CashRegisterUpsertModal({
     if (!open) return;
 
     if (isEdit) {
-      setBranchId(String(editing?.branch_id || ""));
-      setWarehouseId(editing?.warehouse_id ? String(editing.warehouse_id) : "");
+      setBranchId(
+        editing?.branch_id
+          ? String(editing.branch_id)
+          : ""
+      );
+
+      setWarehouseId("");
       setName(editing?.name || "");
       setCode(editing?.code || "");
-      setIsActive((editing?.status || "active") === "active");
-    } else {
-      setBranchId(activeBranches?.[0]?.id ? String(activeBranches[0].id) : "");
-      setWarehouseId("");
-      setName("");
-      setCode("");
-      setIsActive(true);
+      setIsActive(
+        (editing?.status || "active") === "active"
+      );
+
+      return;
     }
-  }, [open, isEdit, editing, activeBranches]);
+
+    setBranchId(
+      activeBranches?.[0]?.id
+        ? String(activeBranches[0].id)
+        : ""
+    );
+
+    setWarehouseId("");
+    setName("");
+    setCode("");
+    setIsActive(true);
+  }, [
+    open,
+    isEdit,
+    editing,
+    activeBranches,
+  ]);
 
   useEffect(() => {
     if (!open) return;
 
-    const selectedBranchId = isEdit
-      ? editing?.branch_id
-      : branchId;
-
-    if (!cashRegisterRequiresWarehouse || !selectedBranchId) {
-      setWarehouses([]);
+    if (!selectedBranchId || !warehouseAllowed) {
       setWarehouseId("");
       return;
     }
 
-    let alive = true;
+    const validWarehouseIds = availableWarehouses.map(
+      (warehouse) => Number(warehouse.id)
+    );
 
-    const loadWarehouses = async () => {
-      setLoadingWarehouses(true);
-
-      try {
-        const response = await getWarehouses(restaurantId, {
-          status: "active",
-        });
-
-        const rows = Array.isArray(response?.data)
-          ? response.data
-          : Array.isArray(response)
-            ? response
-            : [];
-
-        if (!alive) return;
-
-        setWarehouses(rows);
-
-        if (!isEdit) {
-          const firstWarehouse = rows.find((warehouse) => warehouse?.id);
-          setWarehouseId(firstWarehouse?.id ? String(firstWarehouse.id) : "");
-        } else if (editing?.warehouse_id) {
-          setWarehouseId(String(editing.warehouse_id));
-        }
-      } catch (e) {
-        if (!alive) return;
-
-        setWarehouses([]);
-
-        showAlert({
-          severity: "error",
-          title: "Error",
-          message:
-            e?.response?.data?.message ||
-            "No se pudieron cargar los almacenes disponibles.",
-        });
-      } finally {
-        if (alive) {
-          setLoadingWarehouses(false);
-        }
+    setWarehouseId((currentValue) => {
+      if (
+        currentValue &&
+        validWarehouseIds.includes(
+          Number(currentValue)
+        )
+      ) {
+        return currentValue;
       }
-    };
 
-    loadWarehouses();
+      if (
+        isEdit &&
+        editing?.warehouse_id &&
+        validWarehouseIds.includes(
+          Number(editing.warehouse_id)
+        )
+      ) {
+        return String(editing.warehouse_id);
+      }
 
-    return () => {
-      alive = false;
-    };
+      /*
+      * En creación se selecciona automáticamente el primer
+      * almacén solamente cuando es obligatorio.
+      */
+      if (
+        !isEdit &&
+        warehouseRequired &&
+        availableWarehouses[0]?.id
+      ) {
+        return String(
+          availableWarehouses[0].id
+        );
+      }
+
+      return "";
+    });
   }, [
     open,
-    restaurantId,
-    branchId,
+    selectedBranchId,
+    warehouseAllowed,
+    warehouseRequired,
+    availableWarehouses,
     isEdit,
-    editing,
-    cashRegisterRequiresWarehouse,
+    editing?.warehouse_id,
   ]);
 
   const canSave = useMemo(() => {
     if (!name.trim()) return false;
-    if (!isEdit && !branchId) return false;
-    if (cashRegisterRequiresWarehouse && !warehouseId) return false;
+
+    if (!isEdit && !branchId) {
+      return false;
+    }
+
+    if (
+      warehouseAllowed &&
+      warehouseRequired &&
+      !warehouseId
+    ) {
+      return false;
+    }
+
+    if (
+      warehouseId &&
+      !selectedWarehouseIsValid
+    ) {
+      return false;
+    }
+
+    if (
+      isEdit &&
+      hasOpenSession
+    ) {
+      const currentWarehouseId =
+        editing?.warehouse_id
+          ? Number(editing.warehouse_id)
+          : null;
+
+      const requestedWarehouseId =
+        warehouseId
+          ? Number(warehouseId)
+          : null;
+
+      if (
+        currentWarehouseId !==
+        requestedWarehouseId
+      ) {
+        return false;
+      }
+    }
+
     return true;
-  }, [name, branchId, isEdit, cashRegisterRequiresWarehouse, warehouseId]);
+  }, [
+    name,
+    branchId,
+    isEdit,
+    warehouseAllowed,
+    warehouseRequired,
+    warehouseId,
+    selectedWarehouseIsValid,
+    hasOpenSession,
+    editing,
+  ]);
 
   const save = async () => {
     if (!name.trim()) {
@@ -226,13 +493,62 @@ export default function CashRegisterUpsertModal({
       return;
     }
 
-    if (cashRegisterRequiresWarehouse && !warehouseId) {
+    if (
+      warehouseAllowed &&
+      warehouseRequired &&
+      !warehouseId
+    ) {
       showAlert({
         severity: "warning",
         title: "Nota",
-        message: "Selecciona un almacén para esta caja.",
+        message:
+          "Selecciona un almacén válido para esta caja.",
       });
+
       return;
+    }
+
+    if (
+      warehouseId &&
+      !selectedWarehouseIsValid
+    ) {
+      showAlert({
+        severity: "warning",
+        title: "Nota",
+        message:
+          "El almacén seleccionado ya no es válido para esta sucursal.",
+      });
+
+      return;
+    }
+
+    if (
+      isEdit &&
+      hasOpenSession
+    ) {
+      const currentWarehouseId =
+        editing?.warehouse_id
+          ? Number(editing.warehouse_id)
+          : null;
+
+      const requestedWarehouseId =
+        warehouseId
+          ? Number(warehouseId)
+          : null;
+
+      if (
+        currentWarehouseId !==
+        requestedWarehouseId
+      ) {
+        showAlert({
+          severity: "warning",
+          title: "Sesión abierta",
+          message:
+            "Debes cerrar la sesión de caja antes de cambiar el almacén.",
+        });
+
+        return;
+      }
     }
 
     setSaving(true);
@@ -240,9 +556,10 @@ export default function CashRegisterUpsertModal({
     try {
       let saved;
 
-      const warehousePayload = cashRegisterRequiresWarehouse
-        ? Number(warehouseId)
-        : null;
+      const warehousePayload =
+        warehouseAllowed && warehouseId
+          ? Number(warehouseId)
+          : null;
 
       if (isEdit) {
         saved = await api.updateCashRegister(restaurantId, editing.id, {
@@ -414,49 +731,111 @@ export default function CashRegisterUpsertModal({
                     />
                   )}
 
-                  {cashRegisterRequiresWarehouse ? (
+                  {warehouseAllowed ? (
                     <FieldBlock
-                      label="Almacén *"
-                      help={`${currentPlanName}: si la venta directa está activa, esta caja necesita un almacén asignado.`}
+                      label={
+                        warehouseRequired
+                          ? "Almacén *"
+                          : "Almacén"
+                      }
+                      help={warehouseHelp}
                       input={
-                        <TextField
-                          select
-                          value={warehouseId}
-                          onChange={(e) => setWarehouseId(e.target.value)}
-                          disabled={loadingWarehouses || !branchId}
-                          helperText={
-                            loadingWarehouses
-                              ? "Cargando almacenes..."
-                              : availableWarehouses.length === 0
-                                ? "No hay almacenes activos disponibles para esta sucursal."
+                        <Stack spacing={1}>
+                          <TextField
+                            select
+                            value={warehouseId}
+                            onChange={(e) =>
+                              setWarehouseId(e.target.value)
+                            }
+                            disabled={
+                              !selectedBranchId ||
+                              hasOpenSession ||
+                              availableWarehouses.length === 0
+                            }
+                            helperText={
+                              availableWarehouses.length === 0
+                                ? "No hay almacenes válidos disponibles para esta sucursal y modo de inventario."
                                 : ""
-                          }
-                          InputProps={{
-                            endAdornment: loadingWarehouses ? (
-                              <CircularProgress size={18} sx={{ mr: 2 }} />
-                            ) : null,
-                          }}
-                        >
-                          {availableWarehouses.map((warehouse) => (
-                            <MenuItem key={warehouse.id} value={String(warehouse.id)}>
-                              {warehouse.name}
-                            </MenuItem>
-                          ))}
-                        </TextField>
+                            }
+                          >
+                            {!warehouseRequired ? (
+                              <MenuItem value="">
+                                Sin almacén
+                              </MenuItem>
+                            ) : null}
+
+                            {availableWarehouses.map(
+                              (warehouse) => (
+                                <MenuItem
+                                  key={warehouse.id}
+                                  value={String(warehouse.id)}
+                                >
+                                  {warehouse.name}
+                                </MenuItem>
+                              )
+                            )}
+                          </TextField>
+
+                          {currentWarehouseNeedsCorrection ? (
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: "error.main",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {editing?.warehouse_policy?.message ||
+                                "El almacén actual ya no es válido. Selecciona uno compatible antes de guardar."}
+                            </Typography>
+                          ) : null}
+                        </Stack>
                       }
                     />
                   ) : (
                     <FieldBlock
                       label="Almacén"
-                      help={`${currentPlanName}: esta caja puede operar sin almacén para productos simples sin inventario.`}
+                      help={warehouseHelp}
                       input={
                         <TextField
-                          value="Sin almacén requerido"
+                          value="Sin almacén permitido"
                           disabled
                         />
                       }
                     />
                   )}
+
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      bgcolor: "background.default",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        color: "text.secondary",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Modo de inventario:{" "}
+                      <strong>
+                        {inventoryMode === "global"
+                          ? "Global"
+                          : "Por sucursal"}
+                      </strong>
+                      {" · "}
+                      Venta directa:{" "}
+                      <strong>
+                        {cashierDirectEnabled
+                          ? "Activada"
+                          : "Desactivada"}
+                      </strong>
+                    </Typography>
+                  </Box>
 
                   <FieldBlock
                     label="Nombre *"
@@ -536,7 +915,7 @@ export default function CashRegisterUpsertModal({
                   <Button
                     type="button"
                     onClick={save}
-                    disabled={!canSave || saving || loadingWarehouses}
+                    disabled={!canSave || saving}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{

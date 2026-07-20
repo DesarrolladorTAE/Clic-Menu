@@ -20,7 +20,7 @@ import CashRegisterUpsertModal from "../../components/staff/CashRegisterUpsertMo
 
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
 import {
-  getCashRegisters,
+  getCashRegistersOverview,
   createCashRegister,
   updateCashRegister,
   deleteCashRegister,
@@ -39,6 +39,12 @@ export default function CashRegistersPage() {
   const [cashRegisters, setCashRegisters] = useState([]);
   const [planAccess, setPlanAccess] = useState(null);
 
+  const [cashRegisterMeta, setCashRegisterMeta] = useState({});
+  const [
+    warehouseOptionsByBranch,
+    setWarehouseOptionsByBranch,
+  ] = useState([]);
+
   const [savingMap, setSavingMap] = useState({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -51,12 +57,61 @@ export default function CashRegistersPage() {
   });
 
   const cashRegisterRequiresWarehouse = useMemo(() => {
+    const backendValue =
+      cashRegisterMeta?.plan_requires_cash_register_warehouse;
+
+    if (typeof backendValue === "boolean") {
+      return backendValue;
+    }
+
     return !!planAccess?.features?.cash_register_requires_warehouse;
-  }, [planAccess]);
+  }, [cashRegisterMeta, planAccess]);
 
   const currentPlanName = useMemo(() => {
     return planAccess?.plan?.name || "Plan actual";
   }, [planAccess]);
+
+  const hasWarehouseAllowedBranches = useMemo(() => {
+    return warehouseOptionsByBranch.some(
+      (row) => row?.warehouse_allowed === true
+    );
+  }, [warehouseOptionsByBranch]);
+
+  const hasWarehouseRequiredBranches = useMemo(() => {
+    return warehouseOptionsByBranch.some(
+      (row) => row?.warehouse_required === true
+    );
+  }, [warehouseOptionsByBranch]);
+
+  const showWarehouseColumn = useMemo(() => {
+    if (hasWarehouseAllowedBranches) {
+      return true;
+    }
+
+    return cashRegisters.some((row) => {
+      return (
+        !!row?.warehouse_id ||
+        !!row?.warehouse ||
+        row?.warehouse_policy?.ok === false
+      );
+    });
+  }, [cashRegisters, hasWarehouseAllowedBranches]);
+
+  const warehouseInstructionText = useMemo(() => {
+    if (!hasWarehouseAllowedBranches) {
+      return "La venta directa desde caja está desactivada en las sucursales actuales; las cajas no deben tener almacén asignado.";
+    }
+
+    if (hasWarehouseRequiredBranches) {
+      return `${currentPlanName}: el almacén será obligatorio únicamente en las sucursales donde así lo indique la configuración del backend.`;
+    }
+
+    return `${currentPlanName}: el almacén puede ser opcional en las sucursales con venta directa activa.`;
+  }, [
+    currentPlanName,
+    hasWarehouseAllowedBranches,
+    hasWarehouseRequiredBranches,
+  ]);
 
   const showAlert = ({
     severity = "error",
@@ -128,14 +183,42 @@ export default function CashRegistersPage() {
     setLoading(true);
 
     try {
-      const [branchRows, registerRows, planAccessRow] = await Promise.all([
+      const [
+        branchRows,
+        registerOverview,
+        planAccessRow,
+      ] = await Promise.all([
         getBranchesByRestaurant(restaurantId),
-        getCashRegisters(restaurantId),
+        getCashRegistersOverview(restaurantId),
         getRestaurantPlanAccess(restaurantId),
       ]);
 
-      setBranches(Array.isArray(branchRows) ? branchRows : []);
-      setCashRegisters(Array.isArray(registerRows) ? registerRows : []);
+      setBranches(
+        Array.isArray(branchRows) ? branchRows : []
+      );
+
+      setCashRegisters(
+        Array.isArray(registerOverview?.data)
+          ? registerOverview.data
+          : []
+      );
+
+      setCashRegisterMeta(
+        registerOverview?.meta &&
+          typeof registerOverview.meta === "object" &&
+          !Array.isArray(registerOverview.meta)
+          ? registerOverview.meta
+          : {}
+      );
+
+      setWarehouseOptionsByBranch(
+        Array.isArray(
+          registerOverview?.warehouse_options_by_branch
+        )
+          ? registerOverview.warehouse_options_by_branch
+          : []
+      );
+
       setPlanAccess(planAccessRow || null);
     } catch (e) {
       showAlert({
@@ -213,14 +296,15 @@ export default function CashRegistersPage() {
     );
 
     try {
-      const updated = await updateCashRegister(restaurantId, cashRegisterId, {
-        name: row.name,
-        code: row.code || null,
-        warehouse_id: cashRegisterRequiresWarehouse && row.warehouse_id
-          ? Number(row.warehouse_id)
-          : null,
-        status: nextStatus,
-      });
+      const updated = await updateCashRegister(
+        restaurantId,
+        cashRegisterId,
+        {
+          name: row.name,
+          code: row.code || null,
+          status: nextStatus,
+        }
+      );
 
       setCashRegisters((prev) =>
         prev.map((item) =>
@@ -393,11 +477,7 @@ export default function CashRegistersPage() {
 
             <InstructionRow
               step="4"
-              text={
-                cashRegisterRequiresWarehouse
-                  ? `${currentPlanName}: si la venta directa está activa, las cajas deben tener almacén asignado.`
-                  : `${currentPlanName}: puedes crear cajas sin almacén para vender productos simples sin inventario.`
-              }
+              text={warehouseInstructionText}
             />
           </Stack>
         </Paper>
@@ -519,7 +599,17 @@ export default function CashRegistersPage() {
                             .filter(Boolean)
                             .join(" ")
                         : null;
+                    
+                    const hasOpenSession = Boolean(
+                      row?.has_open_session || activeSession
+                    );
 
+                    const warehousePolicy =
+                      row?.warehouse_policy || null;
+
+                    const warehousePolicyInvalid =
+                      warehousePolicy?.ok === false;
+    
                     return (
                       <Card
                         key={row.id}
@@ -575,14 +665,30 @@ export default function CashRegistersPage() {
                               />
                             </Stack>
 
-                            {cashRegisterRequiresWarehouse ? (
+                            {showWarehouseColumn ? (
                               <Box>
                                 <Typography sx={mobileLabelSx}>
                                   Almacén
                                 </Typography>
+
                                 <Typography sx={mobileValueSx}>
                                   {warehouseLabel}
                                 </Typography>
+
+                                {warehousePolicyInvalid ? (
+                                  <Typography
+                                    sx={{
+                                      mt: 0.75,
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      color: "error.main",
+                                      lineHeight: 1.45,
+                                    }}
+                                  >
+                                    {warehousePolicy?.message ||
+                                      "La configuración del almacén requiere corrección."}
+                                  </Typography>
+                                ) : null}
                               </Box>
                             ) : null}
 
@@ -612,7 +718,9 @@ export default function CashRegistersPage() {
                                   <Switch
                                     checked={active}
                                     onChange={() => onToggleStatus(row)}
-                                    disabled={busy}
+                                    disabled={
+                                      busy || (active && hasOpenSession)
+                                    }
                                     color="primary"
                                   />
                                 }
@@ -633,13 +741,22 @@ export default function CashRegistersPage() {
                                   </IconButton>
                                 </Tooltip>
 
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(row)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
+                                <Tooltip
+                                  title={
+                                    hasOpenSession
+                                      ? "No puedes eliminar una caja con sesión abierta"
+                                      : "Eliminar"
+                                  }
+                                >
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onDelete(row)}
+                                      disabled={hasOpenSession}
+                                      sx={iconDeleteSx}
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
                               </Stack>
                             </Box>
@@ -651,7 +768,11 @@ export default function CashRegistersPage() {
                 </Stack>
               ) : (
                 <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                  <Table sx={{ minWidth: cashRegisterRequiresWarehouse ? 1100 : 950 }}>
+                  <Table
+                    sx={{
+                      minWidth: showWarehouseColumn ? 1100 : 950,
+                    }}
+                  >
                     <TableHead>
                       <TableRow
                         sx={{
@@ -668,7 +789,7 @@ export default function CashRegistersPage() {
                         <TableCell>Nombre</TableCell>
                         <TableCell>Código</TableCell>
                         <TableCell>Sucursal</TableCell>
-                        {cashRegisterRequiresWarehouse ? (
+                        {showWarehouseColumn ? (
                           <TableCell>Almacén</TableCell>
                         ) : null}
                         <TableCell>Sesión actual</TableCell>
@@ -702,6 +823,16 @@ export default function CashRegistersPage() {
                                 .filter(Boolean)
                                 .join(" ")
                             : null;
+                        
+                        const hasOpenSession = Boolean(
+                          row?.has_open_session || activeSession
+                        );
+
+                        const warehousePolicy =
+                          row?.warehouse_policy || null;
+
+                        const warehousePolicyInvalid =
+                          warehousePolicy?.ok === false;
 
                         return (
                           <TableRow
@@ -727,8 +858,33 @@ export default function CashRegistersPage() {
 
                             <TableCell>{branchLabel}</TableCell>
 
-                            {cashRegisterRequiresWarehouse ? (
-                              <TableCell>{warehouseLabel}</TableCell>
+                            {showWarehouseColumn ? (
+                              <TableCell
+                                sx={{
+                                  whiteSpace: "normal !important",
+                                  minWidth: 230,
+                                }}
+                              >
+                                <Stack spacing={0.5}>
+                                  <Typography sx={{ fontSize: 14 }}>
+                                    {warehouseLabel}
+                                  </Typography>
+
+                                  {warehousePolicyInvalid ? (
+                                    <Typography
+                                      sx={{
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        color: "error.main",
+                                        lineHeight: 1.4,
+                                      }}
+                                    >
+                                      {warehousePolicy?.message ||
+                                        "La configuración del almacén requiere corrección."}
+                                    </Typography>
+                                  ) : null}
+                                </Stack>
+                              </TableCell>
                             ) : null}
 
                             <TableCell
@@ -753,7 +909,9 @@ export default function CashRegistersPage() {
                                   <Switch
                                     checked={active}
                                     onChange={() => onToggleStatus(row)}
-                                    disabled={busy}
+                                    disabled={
+                                      busy || (active && hasOpenSession)
+                                    }
                                     color="primary"
                                   />
                                 }
@@ -782,13 +940,22 @@ export default function CashRegistersPage() {
                                   </IconButton>
                                 </Tooltip>
 
-                                <Tooltip title="Eliminar">
-                                  <IconButton
-                                    onClick={() => onDelete(row)}
-                                    sx={iconDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
+                                <Tooltip
+                                  title={
+                                    hasOpenSession
+                                      ? "No puedes eliminar una caja con sesión abierta"
+                                      : "Eliminar"
+                                  }
+                                >
+                                  <span>
+                                    <IconButton
+                                      onClick={() => onDelete(row)}
+                                      disabled={hasOpenSession}
+                                      sx={iconDeleteSx}
+                                    >
+                                      <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
                               </Stack>
                             </TableCell>
@@ -824,7 +991,11 @@ export default function CashRegistersPage() {
         branches={branches}
         editing={editing}
         planAccess={planAccess}
-        cashRegisterRequiresWarehouse={cashRegisterRequiresWarehouse}
+        cashRegisterMeta={cashRegisterMeta}
+        warehouseOptionsByBranch={warehouseOptionsByBranch}
+        cashRegisterRequiresWarehouse={
+          cashRegisterRequiresWarehouse
+        }
         onSaved={handleSaved}
         api={{
           createCashRegister,
@@ -914,7 +1085,13 @@ const iconDeleteSx = {
   bgcolor: "error.main",
   color: "#fff",
   borderRadius: 1.5,
+
   "&:hover": {
     bgcolor: "error.dark",
+  },
+
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
   },
 };

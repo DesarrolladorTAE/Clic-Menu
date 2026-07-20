@@ -24,6 +24,11 @@ const ATTENTION_MODES = [
   { value: "direct", label: "Atención directa" },
 ];
 
+const inventoryModeLabel = (value) =>
+  value === "branch"
+    ? "Por sucursal"
+    : "Global";
+
 export default function RestaurantSettings() {
   const nav = useNavigate();
   const { restaurantId } = useParams();
@@ -44,6 +49,11 @@ export default function RestaurantSettings() {
   });
 
   const [planAccess, setPlanAccess] = useState(null);
+
+  const [
+    cashRegisterReconfiguration,
+    setCashRegisterReconfiguration,
+  ] = useState(null);
 
   const [form, setForm] = useState({
     inventory_mode: "global",
@@ -87,6 +97,10 @@ export default function RestaurantSettings() {
 
       setUiMeta(nextUi);
       setPlanAccess(st?._meta?.plan_access ?? null);
+
+      setCashRegisterReconfiguration(
+        st?._meta?.cash_register_reconfiguration ?? null
+      );
 
       if (st) {
         const next = {
@@ -208,6 +222,10 @@ export default function RestaurantSettings() {
         setPlanAccess(res.plan_access);
       }
 
+      setCashRegisterReconfiguration(
+        res?.cash_register_reconfiguration ?? null
+      );
+
       if (res?.settings) {
         const st = res.settings;
 
@@ -227,9 +245,32 @@ export default function RestaurantSettings() {
         );
       }
 
-      setSuccessMsg("La configuración se guardó correctamente.");
+      setSuccessMsg(
+        res?.inventory_mode_changed
+          ? `La configuración se guardó y el modo de inventario cambió de ${inventoryModeLabel(
+              res?.previous_inventory_mode
+            )} a ${inventoryModeLabel(
+              res?.settings?.inventory_mode
+            )}.`
+          : "La configuración se guardó correctamente."
+      );
     } catch (e) {
-      setErr(e?.response?.data?.message || "No se pudo guardar la configuración");
+      const code = e?.response?.data?.code;
+
+      const message =
+        e?.response?.data?.message ||
+        "No se pudo guardar la configuración";
+
+      if (
+        code ===
+        "INVENTORY_MODE_CHANGE_HAS_OPEN_CASH_SESSIONS"
+      ) {
+        await load();
+        setErr(message);
+        return;
+      }
+
+      setErr(message);
 
       if (e?.response?.data?.ui) {
         setUiMeta(e.response.data.ui);
@@ -306,6 +347,30 @@ export default function RestaurantSettings() {
                 <Typography variant="body2">
                   {uiMeta?.locked_reason ||
                     "Tu plan actual no permite modificar la configuración por modo."}
+                </Typography>
+              </Box>
+            </Alert>
+          )}
+
+          {cashRegisterReconfiguration?.required && (
+            <Alert
+              severity="warning"
+              sx={{
+                borderRadius: 1,
+                alignItems: "flex-start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+                  Cajas pendientes de reconfiguración
+                </Typography>
+
+                <Typography variant="body2">
+                  El modo de inventario actual dejó{" "}
+                  {cashRegisterReconfiguration?.count || 0} caja(s)
+                  con una configuración incompatible. Debes revisar
+                  manualmente el almacén asignado a cada caja antes de
+                  volver a utilizarla.
                 </Typography>
               </Box>
             </Alert>

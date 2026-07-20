@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, IconButton, Stack,
+  TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -30,6 +20,14 @@ export default function OpenCashSessionModal({
 
   const [openingNotes, setOpeningNotes] = useState("");
 
+  const canUseRegister =
+    register?.can_open === true ||
+    register?.can_resume === true;
+
+  const policyMessage =
+    register?.warehouse_policy?.message ||
+    "Esta caja no puede operar con su configuración actual.";
+
   useEffect(() => {
     if (open) {
       setOpeningNotes("");
@@ -37,6 +35,10 @@ export default function OpenCashSessionModal({
   }, [open]);
 
   const handleConfirm = () => {
+    if (!canUseRegister || saving) {
+      return;
+    }
+
     onConfirm?.({
       cash_register_id: register?.id,
       opening_notes: openingNotes.trim() || null,
@@ -151,6 +153,29 @@ export default function OpenCashSessionModal({
                 </Typography>
               </Box>
 
+              {!canUseRegister ? (
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "error.main",
+                    borderRadius: 1,
+                    bgcolor: "error.lighter",
+                    p: 1.5,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 14,
+                      color: "error.main",
+                      lineHeight: 1.5,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {policyMessage}
+                  </Typography>
+                </Box>
+              ) : null}
+
               <Box
                 sx={{
                   border: "1px solid",
@@ -204,7 +229,7 @@ export default function OpenCashSessionModal({
                 <Button
                   variant="contained"
                   onClick={handleConfirm}
-                  disabled={saving}
+                  disabled={saving || !canUseRegister}
                   startIcon={saving ? <PointOfSaleRoundedIcon /> : <SaveRoundedIcon />}
                   sx={{
                     minWidth: { xs: "100%", sm: 180 },
@@ -213,7 +238,11 @@ export default function OpenCashSessionModal({
                     fontWeight: 800,
                   }}
                 >
-                  {saving ? "Abriendo…" : "Confirmar apertura"}
+                  {saving
+                    ? "Abriendo…"
+                    : register?.can_resume === true
+                    ? "Retomar caja"
+                    : "Confirmar apertura"}
                 </Button>
               </Stack>
             </Stack>

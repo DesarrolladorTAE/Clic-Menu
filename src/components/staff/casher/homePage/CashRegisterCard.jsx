@@ -1,12 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
@@ -28,12 +22,57 @@ export default function CashRegisterCard({
         .join(" ")
     : null;
 
-  const isBusy = !!activeSession;
+  const hasOpenSession =
+    typeof register?.has_open_session === "boolean"
+      ? register.has_open_session
+      : !!activeSession;
+
+  const isOpenByCurrentUser =
+    register?.is_open_by_current_user === true;
+
+  const canOpen =
+    register?.can_open === true;
+
+  const canResume =
+    register?.can_resume === true &&
+    isOpenByCurrentUser;
+
+  const policyBlocked =
+    register?.warehouse_policy?.ok === false;
+
+  const policyMessage =
+    register?.warehouse_policy?.message || "";
+
+  const canUseRegister =
+    canOpen || canResume;
+
+  const statusLabel = policyBlocked
+    ? "Bloqueada"
+    : canResume
+    ? "Tu caja abierta"
+    : hasOpenSession
+    ? "Ocupada"
+    : canOpen
+    ? "Disponible"
+    : "No disponible";
+
+  const statusMessage = policyBlocked
+    ? policyMessage ||
+      "Esta caja no puede operar con su configuración actual."
+    : canResume
+    ? "Tienes una sesión abierta en esta caja. Puedes retomarla."
+    : hasOpenSession
+    ? `Tiene sesión abierta por ${
+        activeUser || "otro usuario"
+      }`
+    : canOpen
+    ? "Lista para abrir una nueva sesión."
+    : "Esta caja no está disponible para operar.";
 
   return (
     <Card
       sx={{
-        height: 250,
+        minHeight: 250,
         display: "flex",
         flexDirection: "column",
         border: "1px solid",
@@ -83,11 +122,27 @@ export default function CashRegisterCard({
             </Box>
 
             <Chip
-              label={isBusy ? "Ocupada" : "Disponible"}
+              label={statusLabel}
               sx={{
                 fontWeight: 800,
-                bgcolor: isBusy ? "#FFF4D9" : "#E7F8EB",
-                color: isBusy ? "#8A6D3B" : "#0A7A2F",
+                bgcolor: policyBlocked
+                  ? "#FDECEC"
+                  : canResume
+                  ? "#E8F0FE"
+                  : hasOpenSession
+                  ? "#FFF4D9"
+                  : canOpen
+                  ? "#E7F8EB"
+                  : "#F2F2F2",
+                color: policyBlocked
+                  ? "#B42318"
+                  : canResume
+                  ? "#175CD3"
+                  : hasOpenSession
+                  ? "#8A6D3B"
+                  : canOpen
+                  ? "#0A7A2F"
+                  : "#666666",
               }}
             />
           </Stack>
@@ -117,32 +172,52 @@ export default function CashRegisterCard({
               sx={{
                 mt: 0.75,
                 fontSize: 14,
-                color: "text.primary",
+                color: policyBlocked
+                  ? "error.main"
+                  : "text.primary",
                 lineHeight: 1.5,
                 wordBreak: "break-word",
               }}
             >
-              {isBusy
-                ? `Tiene sesión abierta por ${activeUser || "otro usuario"}`
-                : "Lista para abrir una nueva sesión."}
+              {statusMessage}
             </Typography>
           </Box>
 
           <Box sx={{ flex: 1 }} />
 
           <Button
-            variant={isBusy ? "outlined" : "contained"}
-            color={isBusy ? "inherit" : "primary"}
-            disabled={disabled || isBusy}
+            variant={
+              canUseRegister
+                ? "contained"
+                : "outlined"
+            }
+            color={
+              canUseRegister
+                ? "primary"
+                : "inherit"
+            }
+            disabled={
+              disabled || !canUseRegister
+            }
             onClick={() => onOpen?.(register)}
-            startIcon={isBusy ? <LockRoundedIcon /> : <PointOfSaleRoundedIcon />}
+            startIcon={
+              canUseRegister
+                ? <PointOfSaleRoundedIcon />
+                : <LockRoundedIcon />
+            }
             sx={{
               height: 44,
               borderRadius: 2,
               fontWeight: 800,
             }}
           >
-            {isBusy ? "No disponible" : "Abrir esta caja"}
+            {canResume
+              ? "Retomar esta caja"
+              : canOpen
+              ? "Abrir esta caja"
+              : policyBlocked
+              ? "Caja bloqueada"
+              : "No disponible"}
           </Button>
         </Stack>
       </CardContent>

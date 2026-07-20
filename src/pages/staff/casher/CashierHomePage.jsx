@@ -1,10 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Box,
-  CircularProgress,
-  Stack,
-  Typography,
+  Box, CircularProgress, Stack, Typography,
 } from "@mui/material";
 
 import PageContainer from "../../../components/common/PageContainer";
@@ -98,7 +95,10 @@ export default function CashierHomePage() {
       setCurrentSession(sessionData);
       setRegisters(Array.isArray(registersRes?.data) ? registersRes.data : []);
 
-      if (sessionData?.id) {
+      if (
+        sessionData?.id &&
+        sessionData?.can_operate === true
+      ) {
         nav("/staff/cashier/queue", { replace: true });
         return;
       }
@@ -168,6 +168,21 @@ export default function CashierHomePage() {
   });
 
   const handleOpenModal = (register) => {
+    const canUseRegister =
+      register?.can_open === true ||
+      register?.can_resume === true;
+
+    if (!canUseRegister) {
+      showAlert({
+        severity: "warning",
+        title: "Caja no disponible",
+        message:
+          register?.warehouse_policy?.message ||
+          "Esta caja no puede abrirse en este momento.",
+      });
+      return;
+    }
+
     setSelectedRegister(register);
     setOpenModal(true);
   };
@@ -178,15 +193,30 @@ export default function CashierHomePage() {
     try {
       const res = await openCashierSession(payload);
       const code = res?.code;
+      const sessionData = res?.data || null;
 
-      setCurrentSession(res?.data || null);
+      setCurrentSession(sessionData);
       setOpenModal(false);
       setSelectedRegister(null);
+
+      if (sessionData?.can_operate !== true) {
+        showAlert({
+          severity: "warning",
+          title: "Caja no disponible",
+          message:
+            sessionData?.warehouse_policy?.message ||
+            res?.message ||
+            "La caja no puede operar con su configuración actual.",
+        });
+        return;
+      }
 
       showAlert({
         severity: "success",
         title:
-          code === "EXISTING_OPEN_CASH_SESSION" ? "Caja recuperada" : "Listo",
+          code === "EXISTING_OPEN_CASH_SESSION"
+            ? "Caja recuperada"
+            : "Listo",
         message:
           code === "EXISTING_OPEN_CASH_SESSION"
             ? "Se recuperó tu caja abierta anterior. Puedes continuar con tu tablero de cobro."
@@ -241,6 +271,17 @@ export default function CashierHomePage() {
   };
 
   const handleGoQueue = () => {
+    if (currentSession?.can_operate !== true) {
+      showAlert({
+        severity: "warning",
+        title: "Caja no disponible",
+        message:
+          currentSession?.warehouse_policy?.message ||
+          "La caja no puede operar con su configuración actual.",
+      });
+      return;
+    }
+
     nav("/staff/cashier/queue");
   };
 
@@ -463,18 +504,26 @@ export default function CashierHomePage() {
                 color: "text.primary",
               }}
             >
-              Redirigiendo al tablero de cobro…
+              {currentSession?.can_operate === true
+                ? "Redirigiendo al tablero de cobro…"
+                : "La caja no puede operar"}
             </Typography>
 
             <Typography
               sx={{
                 mt: 1,
                 fontSize: 14,
-                color: "text.secondary",
+                color:
+                  currentSession?.can_operate === true
+                    ? "text.secondary"
+                    : "error.main",
                 lineHeight: 1.6,
               }}
             >
-              Ya tienes una caja abierta en este contexto.
+              {currentSession?.can_operate === true
+                ? "Ya tienes una caja abierta en este contexto."
+                : currentSession?.warehouse_policy?.message ||
+                  "La caja abierta tiene una configuración inválida."}
             </Typography>
           </Box>
         )}
