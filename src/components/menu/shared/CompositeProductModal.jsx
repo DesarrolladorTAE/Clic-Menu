@@ -3,6 +3,9 @@ import {
   Modal,
   PillButton,
 } from "../../../pages/public/publicMenu.ui";
+import {
+  isAvailabilityBlocked,
+} from "../../../hooks/public/publicMenu.utils";
 
 function getAvailabilityTone(status = "") {
   const s = String(status || "").toLowerCase();
@@ -37,6 +40,49 @@ function getAvailabilityLabel(itemOrVariant) {
 
 function getAvailabilityReason(itemOrVariant) {
   return String(itemOrVariant?.availability?.reason || "").trim();
+}
+
+function isSourceUnavailable(source) {
+  if (!source || typeof source !== "object") {
+    return true;
+  }
+
+  const availability =
+    source?.availability &&
+    typeof source.availability === "object"
+      ? source.availability
+      : null;
+
+  if (availability) {
+    return isAvailabilityBlocked(availability);
+  }
+
+  return source?.is_available === false;
+}
+
+function getEffectiveComponentSource(component) {
+  const variants = Array.isArray(component?.variants)
+    ? component.variants
+    : [];
+
+  const selectedVariantId = Number(
+    component?.variant_id || 0,
+  );
+
+  if (selectedVariantId > 0) {
+    return (
+      variants.find(
+        (variant) =>
+          Number(variant?.id) === selectedVariantId,
+      ) || null
+    );
+  }
+
+  if (component?.default_option) {
+    return component.default_option;
+  }
+
+  return component;
 }
 
 function AvailabilityChip({ source }) {
@@ -97,7 +143,7 @@ function AvailabilityNotice({ source }) {
   const reason = getAvailabilityReason(source);
   if (!reason) return null;
 
-  const blocked = source?.is_available === false;
+  const blocked = isSourceUnavailable(source);
 
   return (
     <div
@@ -132,21 +178,24 @@ export default function CompositeProductModal({
 
   const title = product?.display_name || product?.name || "Producto compuesto";
 
-  const hasBlockingRequiredUnavailable = (draft || []).some((c) => {
-    if (c?.is_optional) return false;
-
-    if (!c?.allow_variant) {
-      return c?.is_available === false;
+  const hasBlockingIncludedUnavailable = (
+    Array.isArray(draft) ? draft : []
+  ).some((component) => {
+    /*
+    * Un componente opcional no incluido no participa
+    * en la validación de disponibilidad.
+    */
+    if (
+      component?.is_optional &&
+      component?.included === false
+    ) {
+      return false;
     }
 
-    const variants = Array.isArray(c?.variants) ? c.variants : [];
-    const hasAnyVariantAvailable = variants.some((v) => v?.is_available !== false);
+    const effectiveSource =
+      getEffectiveComponentSource(component);
 
-    if (variants.length > 0) {
-      return !hasAnyVariantAvailable;
-    }
-
-    return c?.is_available === false;
+    return isSourceUnavailable(effectiveSource);
   });
 
   return (
@@ -163,10 +212,10 @@ export default function CompositeProductModal({
           <PillButton
             tone="orange"
             onClick={onConfirm}
-            disabled={busy || hasBlockingRequiredUnavailable}
+            disabled={busy || hasBlockingIncludedUnavailable}
             title={
-              hasBlockingRequiredUnavailable
-                ? "Hay componentes requeridos sin disponibilidad"
+              hasBlockingIncludedUnavailable
+                ? "Hay componentes seleccionados sin disponibilidad"
                 : "Guardar selección"
             }
           >
@@ -189,6 +238,18 @@ export default function CompositeProductModal({
           const selectedVariant = c.variant_id
             ? variants.find((v) => Number(v.id) === Number(c.variant_id))
             : null;
+
+          const effectiveSelectionSource =
+            selectedVariant ||
+            (
+              !c.variant_id
+                ? c.default_option || c
+                : null
+            );
+
+          const effectiveSelectionUnavailable =
+            included &&
+            isSourceUnavailable(effectiveSelectionSource);
 
           return (
             <div
@@ -295,26 +356,38 @@ export default function CompositeProductModal({
                     {c.default_option ? (
                       <option
                         value=""
-                        disabled={c.default_option?.is_available === false}
+                        disabled={isSourceUnavailable(c.default_option)}
                       >
                         {c.name}
-                        {c.default_option?.is_available === false ? " · Agotado" : ""}
+                        {isSourceUnavailable(c.default_option)
+                          ? " · No disponible"
+                          : ""}
                       </option>
                     ) : (
-                      <option value="">(Sin variante)</option>
+                      <option
+                        value=""
+                        disabled={isSourceUnavailable(c)}
+                      >
+                        (Sin variante)
+                        {isSourceUnavailable(c)
+                          ? " · No disponible"
+                          : ""}
+                      </option>
                     )}
 
                     {variants.map((v) => (
                       <option
                         key={v.id}
                         value={String(v.id)}
-                        disabled={v?.is_available === false}
+                        disabled={isSourceUnavailable(v)}
                       >
                         {v.name}
                         {Number(v.price_adjustment_preview || 0) > 0
                           ? ` (+$${Number(v.price_adjustment_preview).toFixed(2)})`
                           : ""}
-                        {v?.is_available === false ? " · Agotado" : ""}
+                        {isSourceUnavailable(v)
+                          ? " · No disponible"
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -327,17 +400,52 @@ export default function CompositeProductModal({
                       alignItems: "center",
                     }}
                   >
-                    {selectedVariant ? (
-                      <AvailabilityChip source={selectedVariant} />
-                    ) : c.default_option ? (
-                      <AvailabilityChip source={c.default_option} />
+                    {effectiveSelectionSource ? (
+                      <AvailabilityChip
+                        source={effectiveSelectionSource}
+                      />
                     ) : null}
                   </div>
 
-                  {selectedVariant ? (
-                    <AvailabilityNotice source={selectedVariant} />
-                  ) : c.default_option ? (
-                    <AvailabilityNotice source={c.default_option} />
+                  {effectiveSelectionSource ? (
+                    <AvailabilityNotice
+                      source={effectiveSelectionSource}
+                    />
+                  ) : included ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        border:
+                          "1px solid rgba(239, 68, 68, 0.20)",
+                        background: "#fff5f5",
+                        color: "#B91C1C",
+                        fontWeight: 800,
+                      }}
+                    >
+                      La variante seleccionada ya no está disponible.
+                      Elige otra opción.
+                    </div>
+                  ) : null}
+
+                  {effectiveSelectionUnavailable &&
+                  effectiveSelectionSource &&
+                  !getAvailabilityReason(effectiveSelectionSource) ? (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        border:
+                          "1px solid rgba(239, 68, 68, 0.20)",
+                        background: "#fff5f5",
+                        color: "#B91C1C",
+                        fontWeight: 800,
+                      }}
+                    >
+                      La opción seleccionada no está disponible.
+                    </div>
                   ) : null}
 
                   <div style={{ fontSize: 12, opacity: 0.72 }}>
@@ -355,7 +463,7 @@ export default function CompositeProductModal({
           );
         })}
 
-        {hasBlockingRequiredUnavailable ? (
+        {hasBlockingIncludedUnavailable ? (
           <div
             style={{
               fontSize: 12,
@@ -367,8 +475,9 @@ export default function CompositeProductModal({
               fontWeight: 800,
             }}
           >
-            Hay componentes requeridos sin disponibilidad. No puedes agregar este compuesto
-            hasta elegir una opción disponible.
+            Hay componentes seleccionados sin disponibilidad.
+            Elige una opción disponible o retira los componentes
+            opcionales bloqueados antes de continuar.
           </div>
         ) : null}
       </div>

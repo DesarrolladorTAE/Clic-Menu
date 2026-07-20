@@ -49,6 +49,97 @@ import WaiterOccupyTableDialog from "../../../components/staff/waiter/WaiterOccu
 
 const PAGE_SIZE = 8;
 
+function getAllowedWarehouseIds(context) {
+  if (!context || typeof context !== "object") {
+    return [];
+  }
+
+  /*
+   * La lista enviada expresamente por backend es autoritativa,
+   * incluso cuando viene vacía.
+   */
+  if (Array.isArray(context?.allowed_warehouse_ids)) {
+    return context.allowed_warehouse_ids
+      .map((id) => Number(id))
+      .filter((id) => id > 0);
+  }
+
+  if (Array.isArray(context?.allowed_warehouses)) {
+    return context.allowed_warehouses
+      .map((warehouse) => Number(warehouse?.id || 0))
+      .filter((id) => id > 0);
+  }
+
+  /*
+   * Compatibilidad temporal con respuestas anteriores:
+   * si hay almacenes completamente válidos, solo se permiten esos;
+   * si no existe ninguno, se permiten los seleccionables.
+   */
+  const validIds = Array.isArray(context?.valid_warehouse_ids)
+    ? context.valid_warehouse_ids
+        .map((id) => Number(id))
+        .filter((id) => id > 0)
+    : [];
+
+  if (validIds.length > 0) {
+    return validIds;
+  }
+
+  return Array.isArray(context?.selectable_warehouses)
+    ? context.selectable_warehouses
+        .map((warehouse) => Number(warehouse?.id || 0))
+        .filter((id) => id > 0)
+    : [];
+}
+
+function getAllowedWarehouses(context) {
+  if (Array.isArray(context?.allowed_warehouses)) {
+    return context.allowed_warehouses;
+  }
+
+  const allowedIds = new Set(
+    getAllowedWarehouseIds(context),
+  );
+
+  const selectable = Array.isArray(
+    context?.selectable_warehouses,
+  )
+    ? context.selectable_warehouses
+    : [];
+
+  return selectable.filter((warehouse) =>
+    allowedIds.has(Number(warehouse?.id || 0)),
+  );
+}
+
+function getInitialAllowedWarehouseId(context) {
+  const allowedWarehouses =
+    getAllowedWarehouses(context);
+
+  const allowedIds = new Set(
+    getAllowedWarehouseIds(context),
+  );
+
+  const autoSelectedId = Number(
+    context?.auto_selected_warehouse_id || 0,
+  );
+
+  if (
+    autoSelectedId > 0 &&
+    allowedIds.has(autoSelectedId)
+  ) {
+    return autoSelectedId;
+  }
+
+  if (allowedWarehouses.length === 1) {
+    return Number(
+      allowedWarehouses[0]?.id || 0,
+    ) || "";
+  }
+
+  return "";
+}
+
 export default function WaiterTablesGrid() {
   const nav = useNavigate();
   const { clearStaff, contexts, exitContext, logout } = useStaffAuth() || {};
@@ -146,13 +237,8 @@ export default function WaiterTablesGrid() {
   };
 
   const openWarehouseDialog = ({ table, orderId, context }) => {
-    const selectable = Array.isArray(context?.selectable_warehouses)
-      ? context.selectable_warehouses
-      : [];
-
     const preselected =
-      context?.auto_selected_warehouse_id ||
-      (selectable.length === 1 ? Number(selectable[0]?.id || 0) : "");
+      getInitialAllowedWarehouseId(context);
 
     setWarehouseDialog({
       open: true,
@@ -161,7 +247,7 @@ export default function WaiterTablesGrid() {
       tableName: table?.name || "",
       orderId: orderId || null,
       context: context || null,
-      selectedWarehouseId: preselected || "",
+      selectedWarehouseId: preselected,
     });
   };
 
@@ -614,7 +700,34 @@ export default function WaiterTablesGrid() {
     );
 
     if (!orderId || !preferredWarehouseId) {
-      showAlert("Debes seleccionar un almacén preferido.", "warning");
+      showAlert(
+        "Debes seleccionar un almacén preferido.",
+        "warning",
+      );
+      return;
+    }
+
+    const allowedWarehouseIds =
+      getAllowedWarehouseIds(
+        warehouseDialog?.context,
+      );
+
+    const selectedWarehouseIsAllowed =
+      allowedWarehouseIds.includes(
+        preferredWarehouseId,
+      );
+
+    if (!selectedWarehouseIsAllowed) {
+      setWarehouseDialog((prev) => ({
+        ...prev,
+        selectedWarehouseId: "",
+      }));
+
+      showAlert(
+        "El almacén seleccionado ya no está permitido. Selecciona una opción de la lista actualizada.",
+        "warning",
+      );
+
       return;
     }
 
@@ -640,25 +753,24 @@ export default function WaiterTablesGrid() {
           res?.code === "INVALID_SELECTED_WAREHOUSE") &&
         res?.data?.ok
       ) {
-        const selectable = Array.isArray(res?.data?.selectable_warehouses)
-          ? res.data.selectable_warehouses
-          : [];
+        const nextContext = res.data;
 
         setWarehouseDialog((prev) => ({
           ...prev,
           loading: false,
-          context: res.data,
+          context: nextContext,
           selectedWarehouseId:
-            res?.data?.auto_selected_warehouse_id ||
-            (selectable.length === 1
-              ? Number(selectable[0]?.id || 0)
-              : prev.selectedWarehouseId),
+            getInitialAllowedWarehouseId(
+              nextContext,
+            ),
         }));
 
         showAlert(
-          res?.message || "Debes seleccionar un almacén válido.",
-          "warning"
+          res?.message ||
+            "Debes seleccionar un almacén permitido.",
+          "warning",
         );
+
         return;
       }
 

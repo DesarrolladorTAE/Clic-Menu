@@ -1,20 +1,7 @@
 // src/components/staff/waiter/WaiterWarehouseSelectionDialog.jsx
 import React, { useMemo } from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, Typography,
 } from "@mui/material";
 
 function getModeCopy(selectionMode) {
@@ -64,9 +51,35 @@ export default function WaiterWarehouseSelectionDialog({
   onClose,
   onConfirm,
 }) {
-  const selectableWarehouses = Array.isArray(context?.selectable_warehouses)
-    ? context.selectable_warehouses
-    : [];
+  const allowedWarehouses = useMemo(() => {
+    if (Array.isArray(context?.allowed_warehouses)) {
+      return context.allowed_warehouses;
+    }
+
+    const allowedWarehouseIds = Array.isArray(
+      context?.allowed_warehouse_ids,
+    )
+      ? context.allowed_warehouse_ids
+          .map((id) => Number(id))
+          .filter((id) => id > 0)
+      : [];
+
+    if (allowedWarehouseIds.length === 0) {
+      return [];
+    }
+
+    const allowedIdSet = new Set(allowedWarehouseIds);
+
+    const selectableWarehouses = Array.isArray(
+      context?.selectable_warehouses,
+    )
+      ? context.selectable_warehouses
+      : [];
+
+    return selectableWarehouses.filter((warehouse) =>
+      allowedIdSet.has(Number(warehouse?.id || 0)),
+    );
+  }, [context]);
 
   const validWarehouseIds = Array.isArray(context?.valid_warehouse_ids)
     ? context.valid_warehouse_ids.map((id) => Number(id))
@@ -78,14 +91,26 @@ export default function WaiterWarehouseSelectionDialog({
   );
 
   const selectedWarehouse = useMemo(() => {
-    return selectableWarehouses.find(
-      (warehouse) => Number(warehouse?.id) === Number(selectedWarehouseId || 0)
+    return allowedWarehouses.find(
+      (warehouse) =>
+        Number(warehouse?.id) ===
+        Number(selectedWarehouseId || 0),
     );
-  }, [selectableWarehouses, selectedWarehouseId]);
+  }, [allowedWarehouses, selectedWarehouseId]);
+
+  const selectedWarehouseIsAllowed =
+    Boolean(selectedWarehouse);
 
   const selectedIsValid =
-    !!selectedWarehouse &&
-    validWarehouseIds.includes(Number(selectedWarehouse.id));
+    selectedWarehouseIsAllowed &&
+    validWarehouseIds.includes(
+      Number(selectedWarehouse?.id || 0),
+    );
+
+  const safeSelectedWarehouseId =
+    selectedWarehouseIsAllowed
+      ? Number(selectedWarehouse?.id || 0)
+      : "";
 
   return (
     <Dialog
@@ -126,7 +151,7 @@ export default function WaiterWarehouseSelectionDialog({
                 sx={{ fontWeight: 800 }}
               />
               <Chip
-                label={`Seleccionables: ${selectableWarehouses.length}`}
+                label={`Permitidos: ${allowedWarehouses.length}`}
                 sx={{ fontWeight: 800 }}
               />
               <Chip
@@ -143,12 +168,12 @@ export default function WaiterWarehouseSelectionDialog({
             </InputLabel>
             <Select
               labelId="warehouse-select-label"
-              value={selectedWarehouseId || ""}
+              value={safeSelectedWarehouseId}
               label="Almacén preferido"
               onChange={(e) => onChange?.(e.target.value ? Number(e.target.value) : "")}
               disabled={loading}
             >
-              {selectableWarehouses.map((warehouse) => {
+              {allowedWarehouses.map((warehouse) => {
                 const isValid = validWarehouseIds.includes(Number(warehouse.id));
                 return (
                   <MenuItem key={warehouse.id} value={warehouse.id}>
@@ -170,8 +195,10 @@ export default function WaiterWarehouseSelectionDialog({
                 </>
               ) : (
                 <>
-                  El almacén <strong>{selectedWarehouse.name}</strong> es
-                  seleccionable, pero no cubre completamente toda la comanda.
+                  El almacén <strong>{selectedWarehouse.name}</strong> está
+                  permitido como almacén preferido, pero no cubre completamente
+                  toda la comanda. Cocina resolverá los productos por ítem cuando
+                  sea necesario.
                 </>
               )}
             </Alert>
@@ -185,8 +212,16 @@ export default function WaiterWarehouseSelectionDialog({
         </Button>
         <Button
           variant="contained"
-          onClick={onConfirm}
-          disabled={loading || !selectedWarehouseId}
+          onClick={() => {
+            if (!selectedWarehouseIsAllowed) return;
+
+            onConfirm?.();
+          }}
+          disabled={
+            loading ||
+            !selectedWarehouseId ||
+            !selectedWarehouseIsAllowed
+          }
         >
           {loading ? "Aceptando…" : "Aceptar comanda"}
         </Button>

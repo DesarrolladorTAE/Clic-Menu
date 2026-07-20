@@ -28,6 +28,91 @@ import {
   wrap,
 } from "../../../components/staff/kitchen/kitchen.helpers";
 
+const ITEM_WAREHOUSE_SELECTION_FIELD =
+  "selected_warehouse_id";
+
+const PARENT_WAREHOUSE_SELECTION_FIELD =
+  "selected_parent_warehouse_id";
+
+function createEmptyWarehouseSelections() {
+  return {
+    selected_warehouse_id: null,
+    selected_parent_warehouse_id: null,
+  };
+}
+
+function createClosedWarehouseDialogState() {
+  return {
+    open: false,
+    item: null,
+    payload: null,
+    inventoryContext: null,
+    selectionField: null,
+    selections: createEmptyWarehouseSelections(),
+    message: "",
+    loading: false,
+  };
+}
+
+function normalizeWarehouseSelections(selections = {}) {
+  const selectedWarehouseId = Number(
+    selections?.selected_warehouse_id || 0
+  );
+
+  const selectedParentWarehouseId = Number(
+    selections?.selected_parent_warehouse_id || 0
+  );
+
+  return {
+    selected_warehouse_id:
+      selectedWarehouseId > 0
+        ? selectedWarehouseId
+        : null,
+
+    selected_parent_warehouse_id:
+      selectedParentWarehouseId > 0
+        ? selectedParentWarehouseId
+        : null,
+  };
+}
+
+function buildKitchenStartPayload(selections = {}) {
+  const normalized =
+    normalizeWarehouseSelections(selections);
+
+  const payload = {};
+
+  if (normalized.selected_warehouse_id) {
+    payload.selected_warehouse_id =
+      normalized.selected_warehouse_id;
+  }
+
+  if (normalized.selected_parent_warehouse_id) {
+    payload.selected_parent_warehouse_id =
+      normalized.selected_parent_warehouse_id;
+  }
+
+  return payload;
+}
+
+function resolveWarehouseSelectionField(response) {
+  const selectionField = String(
+    response?.selection_field || ""
+  ).trim();
+
+  if (
+    selectionField === ITEM_WAREHOUSE_SELECTION_FIELD ||
+    selectionField === PARENT_WAREHOUSE_SELECTION_FIELD
+  ) {
+    return selectionField;
+  }
+
+  return String(response?.inventory_context || "") ===
+    "composite_parent"
+    ? PARENT_WAREHOUSE_SELECTION_FIELD
+    : ITEM_WAREHOUSE_SELECTION_FIELD;
+}
+
 export default function KitchenDashboard() {
   const nav = useNavigate();
   const { clearStaff, exitSmart } = useStaffAuth();
@@ -44,12 +129,9 @@ export default function KitchenDashboard() {
   const [busyItemIds, setBusyItemIds] = useState({});
   const [itemConsumptionState, setItemConsumptionState] = useState({});
 
-  const [warehouseDialogState, setWarehouseDialogState] = useState({
-    open: false,
-    item: null,
-    payload: null,
-    loading: false,
-  });
+  const [warehouseDialogState, setWarehouseDialogState] = useState(
+    createClosedWarehouseDialogState
+  );
 
   const pollRef = useRef(null);
   const abortRef = useRef(false);
@@ -328,101 +410,205 @@ export default function KitchenDashboard() {
     });
   }, [orders, includeReady]);
 
-  const openWarehouseDialog = (item, payload) => {
+  const resetWarehouseDialog = () => {
+    setWarehouseDialogState(
+      createClosedWarehouseDialogState()
+    );
+  };
+
+  const openWarehouseDialog = (
+    item,
+    response,
+    currentSelections = {}
+  ) => {
+    const selectionField =
+      resolveWarehouseSelectionField(response);
+
+    const inventoryPayload =
+      response?.inventory?.data || null;
+
     setWarehouseDialogState({
       open: true,
       item,
-      payload,
+      payload: inventoryPayload,
+      inventoryContext:
+        response?.inventory_context || null,
+      selectionField,
+      selections:
+        normalizeWarehouseSelections(
+          currentSelections
+        ),
+      message: String(
+        response?.message ||
+          response?.inventory?.message ||
+          ""
+      ),
       loading: false,
     });
   };
 
   const closeWarehouseDialog = () => {
-    if (warehouseDialogState.loading) return;
-    setWarehouseDialogState({
-      open: false,
-      item: null,
-      payload: null,
-      loading: false,
+    setWarehouseDialogState((prev) => {
+      if (prev.loading) {
+        return prev;
+      }
+
+      return createClosedWarehouseDialogState();
     });
   };
 
-  const attemptStartItem = async (item, selectedWarehouseId = null) => {
-    const id = item?.id;
-    if (!id) return;
+  const attemptStartItem = async (
+    item,
+    warehouseSelections = {}
+  ) => {
+    const id = Number(item?.id || 0);
+
+    if (!id) {
+      return;
+    }
+
+    const normalizedSelections =
+      normalizeWarehouseSelections(
+        warehouseSelections
+      );
+
+    const requestPayload =
+      buildKitchenStartPayload(
+        normalizedSelections
+      );
 
     setErr("");
     setOkMsg("");
     setItemBusy(id, "start");
 
     patchOrderByItemId(id, (order) => {
-      const nextItems = (order.items || []).map((it) => {
-        if (Number(it?.id) !== Number(id)) return it;
-        return {
-          ...it,
-          kitchen_status: "in_progress",
-          kitchen_started_at: it?.kitchen_started_at || new Date().toISOString(),
-        };
-      });
+      const nextItems = (order.items || []).map(
+        (it) => {
+          if (Number(it?.id) !== id) {
+            return it;
+          }
 
-      return recalcOrderDerived({ ...order, items: nextItems }, includeReady);
+          return {
+            ...it,
+            kitchen_status: "in_progress",
+            kitchen_started_at:
+              it?.kitchen_started_at ||
+              new Date().toISOString(),
+          };
+        }
+      );
+
+      return recalcOrderDerived(
+        {
+          ...order,
+          items: nextItems,
+        },
+        includeReady
+      );
     });
 
     try {
       const res = await startKitchenItem(
         id,
-        selectedWarehouseId ? { selected_warehouse_id: selectedWarehouseId } : {}
+        requestPayload
       );
 
       if (res?.ok) {
-        const consumptionUi = buildConsumptionUi(res);
-        setOkMsg(consumptionUi.toast || "Ítem enviado a preparación.");
-        setConsumptionBadge(id, consumptionUi.badge || null);
+        const consumptionUi =
+          buildConsumptionUi(res);
+
+        setOkMsg(
+          consumptionUi.toast ||
+            "Ítem enviado a preparación."
+        );
+
+        setConsumptionBadge(
+          id,
+          consumptionUi.badge || null
+        );
+
+        /*
+        * El proceso completo terminó correctamente.
+        * Ya no queda ninguna selección pendiente.
+        */
+        resetWarehouseDialog();
+
+        return;
+      }
+
+      /*
+      * La actualización optimista se revierte con los
+      * datos autoritativos del backend.
+      */
+      await loadOrders({ silent: true });
+      setConsumptionBadge(id, null);
+
+      const responseCode = String(
+        res?.code || ""
+      ).trim();
+
+      const requiresWarehouseSelection =
+        responseCode ===
+          "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM" ||
+        responseCode ===
+          "INVALID_SELECTED_WAREHOUSE_FOR_ITEM";
+
+      if (
+        requiresWarehouseSelection &&
+        res?.inventory?.data
+      ) {
+        /*
+        * Conservamos la selección que ya se había realizado.
+        */
+        openWarehouseDialog(
+          item,
+          res,
+          normalizedSelections
+        );
 
         if (
-          warehouseDialogState.open &&
-          Number(warehouseDialogState.item?.id) === Number(id)
+          responseCode ===
+          "INVALID_SELECTED_WAREHOUSE_FOR_ITEM"
         ) {
-          closeWarehouseDialog();
+          const isParentSelection =
+            resolveWarehouseSelectionField(res) ===
+            PARENT_WAREHOUSE_SELECTION_FIELD;
+
+          setErr(
+            res?.message ||
+              (isParentSelection
+                ? "El almacén seleccionado ya no puede surtir los modificadores del producto compuesto."
+                : "El almacén seleccionado ya no puede surtir este ítem.")
+          );
         }
 
         return;
       }
 
-      await loadOrders({ silent: true });
-      setConsumptionBadge(id, null);
-
       if (
-        res?.code === "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM" &&
-        res?.inventory?.data
+        responseCode ===
+        "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM"
       ) {
-        openWarehouseDialog(item, res.inventory.data);
-        return;
-      }
+        const isParentInventory =
+          String(
+            res?.inventory_context || ""
+          ) === "composite_parent";
 
-      if (
-        res?.code === "INVALID_SELECTED_WAREHOUSE_FOR_ITEM" &&
-        res?.inventory?.data
-      ) {
-        openWarehouseDialog(item, res.inventory.data);
         setErr(
           res?.message ||
-            "El almacén seleccionado ya no puede surtir este ítem."
+            (isParentInventory
+              ? "No hay almacenes válidos para consumir los modificadores del producto compuesto."
+              : "No hay opciones de almacén para resolver este ítem.")
         );
-        return;
-      }
 
-      if (res?.code === "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM") {
-        setErr(
-          res?.message ||
-            "No hay opciones de almacén para resolver este ítem."
-        );
         return;
       }
 
       setErr(
         buildKitchenInventoryError({
-          response: { data: res },
+          response: {
+            data: res,
+          },
         })
       );
     } catch (e) {
@@ -435,20 +621,57 @@ export default function KitchenDashboard() {
   };
 
   const doStart = async (item) => {
-    await attemptStartItem(item, null);
+    resetWarehouseDialog();
+
+    await attemptStartItem(
+      item,
+      createEmptyWarehouseSelections()
+    );
   };
 
-  const doStartWithWarehouseSelection = async (selectedWarehouseId) => {
+  const doStartWithWarehouseSelection = async (
+    selectedWarehouseId
+  ) => {
     const item = warehouseDialogState.item;
-    if (!item?.id || !selectedWarehouseId) return;
+
+    const selectionField =
+      warehouseDialogState.selectionField;
+
+    const normalizedWarehouseId = Number(
+      selectedWarehouseId || 0
+    );
+
+    if (
+      !item?.id ||
+      normalizedWarehouseId <= 0 ||
+      (
+        selectionField !==
+          ITEM_WAREHOUSE_SELECTION_FIELD &&
+        selectionField !==
+          PARENT_WAREHOUSE_SELECTION_FIELD
+      )
+    ) {
+      return;
+    }
+
+    const nextSelections = {
+      ...normalizeWarehouseSelections(
+        warehouseDialogState.selections
+      ),
+      [selectionField]: normalizedWarehouseId,
+    };
 
     setWarehouseDialogState((prev) => ({
       ...prev,
+      selections: nextSelections,
       loading: true,
     }));
 
     try {
-      await attemptStartItem(item, selectedWarehouseId);
+      await attemptStartItem(
+        item,
+        nextSelections
+      );
     } finally {
       setWarehouseDialogState((prev) => ({
         ...prev,
@@ -582,6 +805,20 @@ export default function KitchenDashboard() {
       <KitchenWarehouseSelectorDialog
         open={warehouseDialogState.open}
         payload={warehouseDialogState.payload}
+        inventoryContext={
+          warehouseDialogState.inventoryContext
+        }
+        selectionField={
+          warehouseDialogState.selectionField
+        }
+        initialSelectedWarehouseId={
+          warehouseDialogState.selectionField
+            ? warehouseDialogState.selections?.[
+                warehouseDialogState.selectionField
+              ] || null
+            : null
+        }
+        message={warehouseDialogState.message}
         loading={warehouseDialogState.loading}
         onClose={closeWarehouseDialog}
         onConfirm={doStartWithWarehouseSelection}

@@ -223,169 +223,474 @@ export function buildKitchenItemsView(items = []) {
   return combined;
 }
 
+function describeKitchenInventoryConsumption(
+  inventory,
+  scope = "item"
+) {
+  if (!inventory || typeof inventory !== "object") {
+    return null;
+  }
+
+  const isParent = scope === "parent";
+
+  const subjectText = isParent
+    ? "los modificadores del producto compuesto"
+    : "el ítem";
+
+  const warehouseText = inventory?.warehouse_id
+    ? `almacén #${inventory.warehouse_id}`
+    : "almacén efectivo";
+
+  const already = Boolean(inventory?.already);
+
+  const type = String(
+    inventory?.consumption_type || ""
+  ).trim();
+
+  const ingredientMovements = Array.isArray(
+    inventory?.ingredient_movements
+  )
+    ? inventory.ingredient_movements
+    : [];
+
+  const productMovement =
+    inventory?.product_movement || null;
+
+  const productQuantity = Math.abs(
+    Number(productMovement?.quantity || 0)
+  );
+
+  if (already) {
+    return {
+      state: "already",
+      detail: `El consumo de ${subjectText} ya existía previamente.`,
+    };
+  }
+
+  if (type === "cashier_payment") {
+    return {
+      state: "already",
+      detail:
+        "El inventario del ítem ya fue consumido durante el pago en caja.",
+    };
+  }
+
+  if (ingredientMovements.length > 0) {
+    return {
+      state: "applied",
+      detail: isParent
+        ? `Se aplicaron ${ingredientMovements.length} movimiento(s) de ingredientes correspondientes a los modificadores del producto compuesto en el ${warehouseText}.`
+        : `Se descontaron ${ingredientMovements.length} ingrediente(s) del ítem en el ${warehouseText}.`,
+    };
+  }
+
+  if (productMovement && productQuantity > 0) {
+    return {
+      state: "applied",
+      detail: isParent
+        ? `Se descontaron ${productQuantity} unidad(es) correspondientes a los modificadores del producto compuesto en el ${warehouseText}.`
+        : `Se descontaron ${productQuantity} unidad(es) del producto en el ${warehouseText}.`,
+    };
+  }
+
+  if (type === "ingredients") {
+    return {
+      state: "applied",
+      detail: isParent
+        ? `Se aplicó el consumo por ingredientes de los modificadores del producto compuesto en el ${warehouseText}.`
+        : `Se aplicó el consumo por ingredientes del ítem en el ${warehouseText}.`,
+    };
+  }
+
+  if (type === "product") {
+    return {
+      state: "applied",
+      detail: isParent
+        ? `Se aplicó el consumo de producto correspondiente a los modificadores del producto compuesto en el ${warehouseText}.`
+        : `Se aplicó el consumo directo del producto en el ${warehouseText}.`,
+    };
+  }
+
+  if (type === "none") {
+    return {
+      state: "neutral",
+      detail: isParent
+        ? "Los modificadores del producto compuesto no generaron consumo de inventario."
+        : "Este ítem no consume inventario.",
+    };
+  }
+
+  if (type === "composite_parent_skipped") {
+    return {
+      state: "neutral",
+      detail:
+        "El producto compuesto padre no consume inventario base directamente.",
+    };
+  }
+
+  return {
+    state: "applied",
+    detail: isParent
+      ? `Se procesó el consumo de los modificadores del producto compuesto en el ${warehouseText}.`
+      : `Se procesó el consumo del ítem en el ${warehouseText}.`,
+  };
+}
+
 export function buildConsumptionUi(result) {
-  const inventory = result?.data?.inventory_consumption || null;
+  const responseData =
+    result?.data && typeof result.data === "object"
+      ? result.data
+      : {};
+
+  const itemInventory =
+    responseData?.inventory_consumption || null;
+
+  const parentInventory =
+    responseData?.parent_inventory_consumption || null;
+
   const baseMessage = String(
     result?.message || "Ítem enviado a preparación."
   ).trim();
 
-  if (!inventory) {
+  const parentSummary =
+    describeKitchenInventoryConsumption(
+      parentInventory,
+      "parent"
+    );
+
+  const itemSummary =
+    describeKitchenInventoryConsumption(
+      itemInventory,
+      "item"
+    );
+
+  const summaries = [
+    parentSummary,
+    itemSummary,
+  ].filter(Boolean);
+
+  if (!summaries.length) {
     return {
       toast: baseMessage,
       badge: null,
     };
   }
 
-  const warehouseText = inventory?.warehouse_id
-    ? `almacén #${inventory.warehouse_id}`
-    : "almacén efectivo";
+  const details = summaries
+    .map((summary) => summary.detail)
+    .filter(Boolean);
 
-  const already = !!inventory?.already;
-  const type = String(inventory?.consumption_type || "").trim();
+  const hasApplied = summaries.some(
+    (summary) => summary.state === "applied"
+  );
 
-  if (already) {
-    return {
-      toast: `${baseMessage} El consumo de inventario ya existía previamente.`,
-      badge: {
-        kind: "already",
-        text: "Consumo ya existía",
-      },
+  const hasAlready = summaries.some(
+    (summary) => summary.state === "already"
+  );
+
+  const hasNeutral = summaries.some(
+    (summary) => summary.state === "neutral"
+  );
+
+  const hasParentConsumption = Boolean(
+    parentSummary
+  );
+
+  const hasItemConsumption = Boolean(
+    itemSummary
+  );
+
+  let badge = null;
+
+  if (hasApplied) {
+    badge = {
+      kind: "applied",
+      text:
+        hasParentConsumption &&
+        hasItemConsumption
+          ? "Consumos aplicados"
+          : hasParentConsumption
+          ? "Extras consumidos"
+          : "Consumo aplicado",
     };
-  }
-
-  if (type === "ingredients") {
-    const ingredientMovements = Array.isArray(inventory?.ingredient_movements)
-      ? inventory.ingredient_movements
-      : [];
-
-    const ingredientCount = ingredientMovements.length;
-
-    return {
-      toast:
-        ingredientCount > 0
-          ? `${baseMessage} Se descontaron ${ingredientCount} ingrediente(s) del ${warehouseText}.`
-          : `${baseMessage} Se aplicó consumo por ingredientes en el ${warehouseText}.`,
-      badge: {
-        kind: "applied",
-        text: "Consumo aplicado",
-      },
+  } else if (hasAlready) {
+    badge = {
+      kind: "already",
+      text:
+        hasParentConsumption &&
+        hasItemConsumption
+          ? "Consumos ya existentes"
+          : hasParentConsumption
+          ? "Extras ya consumidos"
+          : "Consumo ya existía",
     };
-  }
-
-  if (type === "product") {
-    const productMovement = inventory?.product_movement || null;
-    const qty = Math.abs(Number(productMovement?.quantity || 0));
-
-    return {
-      toast:
-        qty > 0
-          ? `${baseMessage} Se descontó ${qty} unidad(es) del producto en el ${warehouseText}.`
-          : `${baseMessage} Se aplicó consumo de producto directo en el ${warehouseText}.`,
-      badge: {
-        kind: "applied",
-        text: "Consumo aplicado",
-      },
-    };
-  }
-
-  if (type === "none") {
-    return {
-      toast: `${baseMessage} Este producto no consume inventario.`,
-      badge: {
-        kind: "neutral",
-        text: "Sin consumo",
-      },
-    };
-  }
-
-  if (type === "composite_parent_skipped") {
-    return {
-      toast: `${baseMessage} El padre compuesto no consume inventario directamente.`,
-      badge: {
-        kind: "neutral",
-        text: "Consumo omitido",
-      },
+  } else if (hasNeutral) {
+    badge = {
+      kind: "neutral",
+      text:
+        hasParentConsumption &&
+        hasItemConsumption
+          ? "Sin consumo pendiente"
+          : hasParentConsumption
+          ? "Extras sin consumo"
+          : "Sin consumo",
     };
   }
 
   return {
-    toast: baseMessage,
-    badge: null,
+    toast: [
+      baseMessage,
+      ...details,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    badge,
   };
 }
 
 export function buildKitchenInventoryError(e) {
-  const responseData = e?.response?.data || {};
+  const responseData =
+    e?.response?.data ||
+    e?.data ||
+    e ||
+    {};
+
+  const inventory =
+    responseData?.inventory &&
+    typeof responseData.inventory === "object"
+      ? responseData.inventory
+      : {};
+
   const code = String(
-    responseData?.code || responseData?.inventory?.code || ""
+    responseData?.code ||
+      inventory?.code ||
+      ""
   ).trim();
+
+  const inventoryContext = String(
+    responseData?.inventory_context || ""
+  ).trim();
+
+  const selectionField = String(
+    responseData?.selection_field || ""
+  ).trim();
+
+  const isParentInventory =
+    inventoryContext === "composite_parent" ||
+    selectionField ===
+      "selected_parent_warehouse_id";
+
+  const inventoryMessage = String(
+    inventory?.message || ""
+  ).trim();
+
   const fallbackMessage = String(
-    responseData?.message || "No se pudo iniciar el ítem."
+    responseData?.message ||
+      inventoryMessage ||
+      "No se pudo iniciar el ítem."
   ).trim();
 
   const map = {
     EFFECTIVE_WAREHOUSE_NOT_FOUND:
-      "No se pudo iniciar porque no hay un almacén efectivo activo para este pedido.",
+      isParentInventory
+        ? "No se pudo iniciar porque no hay un almacén efectivo activo para consumir los modificadores del producto compuesto."
+        : "No se pudo iniciar porque no hay un almacén efectivo activo para este pedido.",
+
     RECIPE_INGREDIENT_NOT_FOUND:
-      "No se pudo iniciar porque falta un ingrediente de la receta.",
+      isParentInventory
+        ? "No se pudo iniciar porque falta un ingrediente requerido por los modificadores del producto compuesto."
+        : "No se pudo iniciar porque falta un ingrediente de la receta.",
+
     RECIPE_INGREDIENT_NOT_STOCK_ITEM:
-      "No se pudo iniciar porque uno de los ingredientes no es inventariable.",
+      isParentInventory
+        ? "No se pudo iniciar porque un ingrediente de los modificadores del producto compuesto no es inventariable."
+        : "No se pudo iniciar porque uno de los ingredientes no es inventariable.",
+
     RECIPE_INGREDIENT_INACTIVE:
-      "No se pudo iniciar porque uno de los ingredientes está inactivo.",
+      isParentInventory
+        ? "No se pudo iniciar porque un ingrediente de los modificadores del producto compuesto está inactivo."
+        : "No se pudo iniciar porque uno de los ingredientes está inactivo.",
+
     PRODUCT_NOT_FOUND_FOR_ORDER_ITEM:
-      "No se pudo iniciar porque no se encontró el producto del ítem.",
+      isParentInventory
+        ? "No se pudo iniciar porque no se encontró el producto compuesto padre."
+        : "No se pudo iniciar porque no se encontró el producto del ítem.",
+
     PRODUCT_INACTIVE_FOR_ORDER_ITEM:
-      "No se pudo iniciar porque el producto está inactivo.",
+      isParentInventory
+        ? "No se pudo iniciar porque el producto compuesto padre está inactivo."
+        : "No se pudo iniciar porque el producto está inactivo.",
+
     PRODUCT_TYPE_NOT_SUPPORTED_FOR_DIRECT_CONSUMPTION:
       "No se pudo iniciar porque ese tipo de producto no soporta consumo directo desde cocina.",
+
     MISSING_RECIPE_FOR_ORDER_ITEM:
-      "No se pudo iniciar porque el producto no tiene receta activa para consumir inventario.",
+      isParentInventory
+        ? "No se pudo iniciar porque un consumo requerido por los modificadores del producto compuesto no tiene una receta activa."
+        : "No se pudo iniciar porque el producto no tiene receta activa para consumir inventario.",
+
     INGREDIENT_NOT_STOCK_ITEM:
-      "No se pudo iniciar porque el ingrediente no es inventariable.",
+      isParentInventory
+        ? "No se pudo iniciar porque un ingrediente de los modificadores del producto compuesto no es inventariable."
+        : "No se pudo iniciar porque el ingrediente no es inventariable.",
+
     INGREDIENT_INACTIVE:
-      "No se pudo iniciar porque el ingrediente está inactivo.",
+      isParentInventory
+        ? "No se pudo iniciar porque un ingrediente de los modificadores del producto compuesto está inactivo."
+        : "No se pudo iniciar porque el ingrediente está inactivo.",
+
     PRODUCT_NOT_DIRECT_STOCK:
-      "No se pudo descontar producto directo porque el producto no usa stock directo.",
+      isParentInventory
+        ? "No se pudo consumir un modificador del producto compuesto porque su producto asociado no usa stock directo."
+        : "No se pudo descontar producto directo porque el producto no usa stock directo.",
+
     PRODUCT_INACTIVE:
-      "No se pudo descontar producto directo porque el producto está inactivo.",
+      isParentInventory
+        ? "No se pudo consumir un modificador del producto compuesto porque su producto asociado está inactivo."
+        : "No se pudo descontar producto directo porque el producto está inactivo.",
+
     INSUFFICIENT_STOCK:
-      "No se pudo iniciar porque no hay existencia suficiente.",
+      isParentInventory
+        ? "No se pudo iniciar porque no hay existencia suficiente para los modificadores del producto compuesto."
+        : "No se pudo iniciar porque no hay existencia suficiente para este ítem.",
+
     STOCK_NOT_FOUND:
-      "No se pudo iniciar porque no existe registro de stock para este ítem.",
-    INVALID_TRANSITION: fallbackMessage,
-    ALREADY_READY: fallbackMessage,
-    ALREADY_PICKED_UP: fallbackMessage,
+      isParentInventory
+        ? "No se pudo iniciar porque no existe un registro de stock para los modificadores del producto compuesto."
+        : "No se pudo iniciar porque no existe registro de stock para este ítem.",
+
+    MODIFIER_INVENTORY_CONSUMPTION_MISSING:
+      isParentInventory
+        ? "No se pudo iniciar porque un modificador inventariable del producto compuesto no tiene configuración de consumo."
+        : "No se pudo iniciar porque un modificador inventariable del ítem no tiene configuración de consumo.",
+
+    MODIFIER_INVENTORY_CONSUMPTION_INACTIVE:
+      isParentInventory
+        ? "No se pudo iniciar porque la configuración de consumo de un modificador del producto compuesto está inactiva."
+        : "No se pudo iniciar porque la configuración de consumo de un modificador del ítem está inactiva.",
+
+    MODIFIER_INVENTORY_CONSUMPTION_TYPE_REQUIRED:
+      isParentInventory
+        ? "No se pudo iniciar porque un modificador del producto compuesto no tiene definido cómo consume inventario."
+        : "No se pudo iniciar porque un modificador del ítem no tiene definido cómo consume inventario.",
+
+    MODIFIER_INVENTORY_CONSUMPTION_INVALID_QTY:
+      isParentInventory
+        ? "No se pudo iniciar porque un modificador del producto compuesto tiene una cantidad de consumo inválida."
+        : "No se pudo iniciar porque un modificador del ítem tiene una cantidad de consumo inválida.",
+
+    COMPOSITE_PARENT_NOT_FOUND:
+      "No se pudo iniciar porque no se encontró el padre del producto compuesto.",
+
+    COMPOSITE_PARENT_NOT_KITCHEN_ACTIONABLE:
+      "El padre de un producto compuesto no se opera directamente en cocina.",
+
+    PARENT_INVENTORY_CONSUMPTION_FAILED:
+      "No se pudo consumir el inventario pendiente del producto compuesto.",
+
+    INVALID_TRANSITION:
+      fallbackMessage,
+
+    ALREADY_READY:
+      fallbackMessage,
+
+    ALREADY_PICKED_UP:
+      fallbackMessage,
+
     NO_VALID_WAREHOUSE_FOR_ORDER_ITEM:
-      responseData?.inventory?.message ||
-      "No existe ningún almacén válido que pueda surtir este ítem en este momento.",
+      inventoryMessage ||
+      (isParentInventory
+        ? "No existe ningún almacén válido que pueda surtir los modificadores pendientes del producto compuesto."
+        : "No existe ningún almacén válido que pueda surtir este ítem en este momento."),
+
     WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM:
-      responseData?.inventory?.message ||
-      "Hay varios almacenes válidos para este ítem. Cocina debe elegir uno.",
+      inventoryMessage ||
+      (isParentInventory
+        ? "Hay varios almacenes válidos para los modificadores pendientes del producto compuesto. Cocina debe elegir uno."
+        : "Hay varios almacenes válidos para este ítem. Cocina debe elegir uno."),
+
     INVALID_SELECTED_WAREHOUSE_FOR_ITEM:
-      responseData?.inventory?.message ||
-      "El almacén seleccionado no puede surtir este ítem.",
+      inventoryMessage ||
+      (isParentInventory
+        ? "El almacén seleccionado no puede surtir los modificadores pendientes del producto compuesto."
+        : "El almacén seleccionado no puede surtir este ítem."),
   };
 
   return map[code] || fallbackMessage;
 }
 
-export function extractWarehouseResolutionError(e) {
-  const responseData = e?.response?.data || {};
-  const inventory = responseData?.inventory || null;
-  const code = String(responseData?.code || inventory?.code || "").trim();
 
-  if (
-    code !== "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM" &&
-    code !== "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM" &&
-    code !== "INVALID_SELECTED_WAREHOUSE_FOR_ITEM"
-  ) {
+export function extractWarehouseResolutionError(e) {
+  const responseData =
+    e?.response?.data ||
+    e?.data ||
+    e ||
+    {};
+
+  const inventory =
+    responseData?.inventory &&
+    typeof responseData.inventory === "object"
+      ? responseData.inventory
+      : null;
+
+  const code = String(
+    responseData?.code ||
+      inventory?.code ||
+      ""
+  ).trim();
+
+  const supportedCodes = [
+    "WAREHOUSE_SELECTION_REQUIRED_FOR_ITEM",
+    "NO_VALID_WAREHOUSE_FOR_ORDER_ITEM",
+    "INVALID_SELECTED_WAREHOUSE_FOR_ITEM",
+  ];
+
+  if (!supportedCodes.includes(code)) {
     return null;
   }
 
+  const inventoryContext = String(
+    responseData?.inventory_context || ""
+  ).trim();
+
+  const selectionField = String(
+    responseData?.selection_field || ""
+  ).trim();
+
+  const isParentInventory =
+    inventoryContext === "composite_parent" ||
+    selectionField ===
+      "selected_parent_warehouse_id";
+
   return {
     code,
-    message: String(inventory?.message || responseData?.message || "").trim(),
+
+    message: String(
+      responseData?.message ||
+        inventory?.message ||
+        ""
+    ).trim(),
+
     data: inventory?.data || null,
+
+    inventoryContext:
+      inventoryContext || null,
+
+    selectionField:
+      selectionField || null,
+
+    isParentInventory,
+
+    orderItemId: responseData?.order_item_id
+      ? Number(responseData.order_item_id)
+      : null,
+
+    parentOrderItemId:
+      responseData?.parent_order_item_id
+        ? Number(
+            responseData.parent_order_item_id
+          )
+        : null,
   };
 }
 

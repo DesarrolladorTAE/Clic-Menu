@@ -193,68 +193,25 @@ export function useStaffCartAndOrder({ tableId }) {
   const [warehouseSelectionContext, setWarehouseSelectionContext] = useState(null);
 
   const lastLoadedRef = useRef({ tableId: null, orderId: null });
+  const cartLineSequenceRef = useRef(0);
 
   function upsertCartItem(nextItem) {
-    setCart((prev) => {
-      const idx = prev.findIndex((x) => x.key === nextItem.key);
+    cartLineSequenceRef.current += 1;
 
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
+    const uniqueLineKey = [
+      String(nextItem?.key || "cart-item"),
+      "line",
+      Date.now(),
+      cartLineSequenceRef.current,
+    ].join(":");
 
-          quantity: Math.min(
-            99,
-            safeNum(next[idx].quantity, 1) +
-              safeNum(nextItem.quantity, 1),
-          ),
-
-          has_active_promotion:
-            nextItem.has_active_promotion,
-
-          promotion:
-            nextItem.promotion ?? null,
-
-          promotion_label:
-            nextItem.promotion_label ?? null,
-
-          promotion_type:
-            nextItem.promotion_type ?? null,
-
-          original_price:
-            nextItem.original_price,
-
-          display_price:
-            nextItem.display_price,
-
-          promotion_discount_preview:
-            nextItem.promotion_discount_preview,
-
-          components:
-            nextItem.components ??
-            next[idx].components ??
-            [],
-
-          components_detail:
-            nextItem.components_detail ??
-            next[idx].components_detail ??
-            [],
-
-          modifiers:
-            nextItem.modifiers ??
-            next[idx].modifiers ??
-            [],
-
-          modifier_groups_display:
-            nextItem.modifier_groups_display ??
-            next[idx].modifier_groups_display ??
-            [],
-        };
-        return next;
-      }
-
-      return [...prev, nextItem];
-    });
+    setCart((prev) => [
+      ...prev,
+      {
+        ...nextItem,
+        key: uniqueLineKey,
+      },
+    ]);
   }
 
   function addToCartFromProduct(

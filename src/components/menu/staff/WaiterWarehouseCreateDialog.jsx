@@ -26,10 +26,34 @@ export default function WaiterWarehouseCreateDialog({
 }) {
   const [warehouseId, setWarehouseId] = useState("");
 
-  const selectableWarehouses = useMemo(() => {
-    return Array.isArray(selection?.selectable_warehouses)
+  const allowedWarehouses = useMemo(() => {
+    if (Array.isArray(selection?.allowed_warehouses)) {
+      return selection.allowed_warehouses;
+    }
+
+    const allowedIds = Array.isArray(
+      selection?.allowed_warehouse_ids,
+    )
+      ? selection.allowed_warehouse_ids
+          .map((id) => Number(id))
+          .filter((id) => id > 0)
+      : [];
+
+    if (allowedIds.length === 0) {
+      return [];
+    }
+
+    const allowedIdSet = new Set(allowedIds);
+
+    const selectable = Array.isArray(
+      selection?.selectable_warehouses,
+    )
       ? selection.selectable_warehouses
       : [];
+
+    return selectable.filter((warehouse) =>
+      allowedIdSet.has(Number(warehouse?.id || 0)),
+    );
   }, [selection]);
 
   const validWarehouseIds = useMemo(() => {
@@ -38,14 +62,52 @@ export default function WaiterWarehouseCreateDialog({
       : [];
   }, [selection]);
 
+  const allowedWarehouseIds = useMemo(() => {
+    return allowedWarehouses
+      .map((warehouse) => Number(warehouse?.id || 0))
+      .filter((id) => id > 0);
+  }, [allowedWarehouses]);
+
+  const selectedWarehouseIsAllowed =
+    allowedWarehouseIds.includes(
+      Number(warehouseId || 0),
+    );
+
   useEffect(() => {
     if (!open) {
       setWarehouseId("");
       return;
     }
 
-    setWarehouseId(getInitialWarehouseSelectionId(selection));
-  }, [open, selection]);
+    const initialWarehouseId =
+      getInitialWarehouseSelectionId(selection);
+
+    const initialId = Number(
+      initialWarehouseId || 0,
+    );
+
+    if (
+      initialId > 0 &&
+      allowedWarehouseIds.includes(initialId)
+    ) {
+      setWarehouseId(String(initialId));
+      return;
+    }
+
+    if (allowedWarehouses.length === 1) {
+      setWarehouseId(
+        String(allowedWarehouses[0]?.id || ""),
+      );
+      return;
+    }
+
+    setWarehouseId("");
+  }, [
+    open,
+    selection,
+    allowedWarehouses,
+    allowedWarehouseIds,
+  ]);
 
   const selectionMode = String(selection?.selection_mode || "").toLowerCase();
   const requiresAttention = selectionMode === "no_fully_valid_warehouse";
@@ -70,8 +132,16 @@ export default function WaiterWarehouseCreateDialog({
 
           <PillButton
             tone="orange"
-            disabled={loading || !warehouseId}
-            onClick={() => onConfirm?.(Number(warehouseId))}
+            disabled={
+              loading ||
+              !warehouseId ||
+              !selectedWarehouseIsAllowed
+            }
+            onClick={() => {
+              if (!selectedWarehouseIsAllowed) return;
+
+              onConfirm?.(Number(warehouseId));
+            }}
             title="Confirmar almacén"
           >
             {loading ? "⏳ Creando..." : "✅ Confirmar almacén"}
@@ -146,12 +216,12 @@ export default function WaiterWarehouseCreateDialog({
             }}
           >
             <option value="">Selecciona un almacén</option>
-            {selectableWarehouses.map((warehouse) => {
+            {allowedWarehouses.map((warehouse) => {
               const isValid = validWarehouseIds.includes(Number(warehouse?.id));
               return (
                 <option key={warehouse?.id} value={String(warehouse?.id)}>
                   {warehouse?.name}
-                  {isValid ? " · válido" : " · manual"}
+                  {isValid ? " · válido" : " · preferido"}
                 </option>
               );
             })}
@@ -159,7 +229,7 @@ export default function WaiterWarehouseCreateDialog({
         </div>
 
         <div style={{ display: "grid", gap: 8 }}>
-          {selectableWarehouses.map((warehouse) => {
+          {allowedWarehouses.map((warehouse) => {
             const isValid = validWarehouseIds.includes(Number(warehouse?.id));
 
             return (

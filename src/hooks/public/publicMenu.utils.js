@@ -1199,17 +1199,89 @@ export function buildAvailabilityErrorMessage(errorInfo) {
 }
 
 export function getInitialWarehouseSelectionId(selection) {
-  if (!selection || typeof selection !== "object") return "";
+  if (!selection || typeof selection !== "object") {
+    return "";
+  }
 
-  const autoId = Number(selection?.auto_selected_warehouse_id || 0);
-  if (autoId > 0) return String(autoId);
-
-  const selectable = Array.isArray(selection?.selectable_warehouses)
+  const selectableWarehouses = Array.isArray(
+    selection?.selectable_warehouses,
+  )
     ? selection.selectable_warehouses
     : [];
 
-  if (selectable.length === 1) {
-    return String(selectable[0]?.id || "");
+  let allowedWarehouses = [];
+
+  /*
+   * Si backend envía allowed_warehouses, esa lista es
+   * autoritativa, incluso cuando está vacía.
+   */
+  if (Array.isArray(selection?.allowed_warehouses)) {
+    allowedWarehouses = selection.allowed_warehouses;
+  } else if (
+    Array.isArray(selection?.allowed_warehouse_ids)
+  ) {
+    /*
+     * Si solo llegan los IDs permitidos, se utilizan para
+     * filtrar la información completa de los seleccionables.
+     */
+    const allowedIdSet = new Set(
+      selection.allowed_warehouse_ids
+        .map((id) => Number(id))
+        .filter((id) => id > 0),
+    );
+
+    allowedWarehouses = selectableWarehouses.filter(
+      (warehouse) =>
+        allowedIdSet.has(
+          Number(warehouse?.id || 0),
+        ),
+    );
+  } else {
+    /*
+     * Compatibilidad con respuestas anteriores:
+     * si existen almacenes completamente válidos, solo esos
+     * son permitidos; si no existen, se usan los seleccionables.
+     */
+    const validIdSet = new Set(
+      (
+        Array.isArray(selection?.valid_warehouse_ids)
+          ? selection.valid_warehouse_ids
+          : []
+      )
+        .map((id) => Number(id))
+        .filter((id) => id > 0),
+    );
+
+    allowedWarehouses =
+      validIdSet.size > 0
+        ? selectableWarehouses.filter(
+            (warehouse) =>
+              validIdSet.has(
+                Number(warehouse?.id || 0),
+              ),
+          )
+        : selectableWarehouses;
+  }
+
+  const allowedWarehouseIds = allowedWarehouses
+    .map((warehouse) =>
+      Number(warehouse?.id || 0),
+    )
+    .filter((id) => id > 0);
+
+  const autoId = Number(
+    selection?.auto_selected_warehouse_id || 0,
+  );
+
+  if (
+    autoId > 0 &&
+    allowedWarehouseIds.includes(autoId)
+  ) {
+    return String(autoId);
+  }
+
+  if (allowedWarehouseIds.length === 1) {
+    return String(allowedWarehouseIds[0]);
   }
 
   return "";
