@@ -36,16 +36,19 @@ const billingOptions = [
     key: "monthly",
     label: "Mensual",
     helper: "Pagas 1 mes",
+    visible: true,
   },
   {
     key: "semester",
     label: "Semestral",
     helper: "Pagas 5 y recibes 6",
+    visible: false,
   },
   {
     key: "annual",
     label: "Anual",
     helper: "Pagas 10 y recibes 12",
+    visible: false,
   },
 ];
 
@@ -310,7 +313,9 @@ export default function LandingPlansPage() {
                       boxShadow: "0 14px 34px rgba(15,23,42,0.10)",
                     }}
                   >
-                    {billingOptions.map((option) => {
+                    {billingOptions
+                      .filter((option) => option.visible)
+                      .map((option) => {
                       const selected = billingPeriod === option.key;
 
                       return (
