@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
-  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch, Table,
+  Box, Button, Card, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch, Table,
   TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, MenuItem,
   useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
 import SettingsIcon from "@mui/icons-material/Settings";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import BlockIcon from "@mui/icons-material/Block";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import { getRestaurantSubscriptionStatus } from "../../services/restaurant/restaurant.service";
@@ -35,6 +33,8 @@ function normalizeCode(value) {
 }
 
 function isSystemChannel(row) {
+  if (typeof row?.sales_channel?.is_system_channel === "boolean") return row.sales_channel.is_system_channel;
+
   const code = normalizeCode(row?.sales_channel?.code || row?.code);
   return SYSTEM_CHANNEL_CODES.includes(code);
 }
@@ -46,6 +46,26 @@ function getSystemChannelLabel(row) {
   if (code === "SALON") return "SALON";
 
   return "CANAL";
+}
+
+function getMenuConfigurationColor(status) {
+  if (status === "complete") return "success";
+  if (status === "incomplete") return "warning";
+  return "default";
+}
+
+function getMenuConfigurationMessage(configuration) {
+  if (configuration?.status === "complete") return "";
+
+  return configuration?.message || configuration?.issues?.[0]?.message || "";
+}
+
+function getChannelStatus(channel, branch) {
+  if (channel?.status !== "active") return { label: "INACTIVO", color: "default" };
+  if (branch?.effective_is_active === true) return { label: "HABILITADO", color: "success" };
+  if (branch?.is_active === true) return { label: "NO DISPONIBLE", color: "warning" };
+
+  return { label: "DESHABILITADO", color: "default" };
 }
 
 export default function BranchSalesChannelsPage() {
@@ -302,59 +322,25 @@ export default function BranchSalesChannelsPage() {
       return;
     }
 
-    const prevBranch = {
-      ...(br || {}),
-    };
-
-    const next = !prevBranch?.is_active;
-
-    setRows((prevRows) =>
-      prevRows.map((r) => {
-        if (r?.sales_channel?.id !== salesChannelId) return r;
-
-        return {
-          ...r,
-          branch: {
-            ...(r.branch || {}),
-            is_active: next,
-            effective_is_active: next,
-            blocked_by_channel_status: false,
-          },
-        };
-      })
-    );
+    const next = !br?.is_active;
 
     setSaving(salesChannelId, true);
 
     try {
-      await upsertBranchSalesChannel(
-        effectiveRestaurantId,
-        Number(selectedBranchId),
-        salesChannelId,
-        next
-      );
+      const result = await upsertBranchSalesChannel(effectiveRestaurantId, Number(selectedBranchId), salesChannelId, next);
+      const updatedRow = result?.data;
+
+      if (updatedRow) {
+        setRows((prevRows) => prevRows.map((r) => Number(r?.sales_channel?.id) === Number(salesChannelId) ? updatedRow : r));
+      } else {
+        await loadChannels(selectedBranchId);
+      }
     } catch (e) {
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message ||
-          "No se pudo actualizar el canal en esta sucursal",
+        message: e?.response?.data?.message || "No se pudo actualizar el canal en esta sucursal",
       });
-
-      setRows((prevRows) =>
-        prevRows.map((r) => {
-          if (r?.sales_channel?.id !== salesChannelId) return r;
-
-          return {
-            ...r,
-            branch: {
-              ...(r.branch || {}),
-              ...prevBranch,
-            },
-          };
-        })
-      );
     } finally {
       setSaving(salesChannelId, false);
     }
@@ -578,7 +564,7 @@ export default function BranchSalesChannelsPage() {
                         }
                         label={
                           <Typography sx={switchLabelSx}>
-                            Solo activos en la sucursal
+                            Solo disponibles en la sucursal
                           </Typography>
                         }
                         sx={{ m: 0 }}
@@ -658,12 +644,17 @@ export default function BranchSalesChannelsPage() {
                         {paginatedItems.map((r) => {
                           const ch = r?.sales_channel;
                           const br = r?.branch;
+                          const menuConfiguration = r?.menu_configuration || {};
 
                           const restaurantActive = ch?.status === "active";
-                          const enabled = !!br?.effective_is_active;
+                          const branchActive = !!br?.is_active;
                           const busy = isSaving(ch?.id);
                           const systemChannel = isSystemChannel(r);
                           const blockedByPlan = !!br?.blocked_by_plan;
+                          const channelStatus = getChannelStatus(ch, br);
+                          const defaultMenuName = r?.default_menu?.name || "Sin menú predeterminado";
+                          const enabledMenusCount = Array.isArray(r?.enabled_menus) ? r.enabled_menus.length : Number(menuConfiguration?.enabled_menus_count || 0);
+                          const configurationMessage = getMenuConfigurationMessage(menuConfiguration);
 
                           return (
                             <Card
@@ -711,142 +702,85 @@ export default function BranchSalesChannelsPage() {
                                     </Box>
 
                                     <Stack spacing={0.75} alignItems="flex-end">
-                                      <Chip
-                                        label={restaurantActive ? "ACTIVO" : "INACTIVO"}
-                                        color={restaurantActive ? "success" : "default"}
-                                        size="small"
-                                        sx={{ fontWeight: 800 }}
-                                      />
+                                      <Chip label={channelStatus.label} color={channelStatus.color} size="small" sx={{ fontWeight: 800 }} />
 
-                                      <Chip
-                                        label={enabled ? "HABILITADO" : "DESHABILITADO"}
-                                        color={enabled ? "success" : "default"}
-                                        size="small"
-                                        sx={{
-                                          fontWeight: 800,
-                                          minWidth: 110,
-                                        }}
-                                      />
-
-                                      {systemChannel && (
-                                        <Chip
-                                          label="FIJO"
-                                          size="small"
-                                          sx={{ fontWeight: 800 }}
-                                        />
-                                      )}
-
-                                      {blockedByPlan && (
-                                        <Chip
-                                          label="BLOQUEADO POR PLAN"
-                                          color="warning"
-                                          size="small"
-                                          sx={{ fontWeight: 800 }}
-                                        />
-                                      )}
+                                      {systemChannel && <Chip label="FIJO" size="small" sx={{ fontWeight: 800 }} />}
                                     </Stack>
                                   </Stack>
 
-                                  {!restaurantActive && (
-                                    <Alert
-                                      severity="warning"
-                                      sx={{
-                                        borderRadius: 1,
-                                        py: 0.5,
-                                        alignItems: "center",
-                                      }}
-                                    >
-                                      <Typography variant="body2">
-                                        Este canal está inactivo a nivel restaurante.
-                                      </Typography>
-                                    </Alert>
-                                  )}
+                                  <Box
+                                    sx={{
+                                      p: 1.5,
+                                      border: "1px solid",
+                                      borderColor: "divider",
+                                      borderRadius: 1,
+                                      backgroundColor: "background.default",
+                                    }}
+                                  >
+                                    <Stack spacing={0.75}>
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography sx={mobileLabelSx}>Menú</Typography>
+                                        <Typography sx={{ ...mobileValueSx, mt: 0.25, fontWeight: 800 }}>{defaultMenuName}</Typography>
 
-                                  <Stack spacing={1}>
-                                    <Box>
-                                      <Typography sx={mobileLabelSx}>
-                                        Estado en sucursal
-                                      </Typography>
-
-                                      <Stack
-                                        direction="row"
-                                        alignItems="center"
-                                        spacing={1}
-                                        sx={{ mt: 0.5 }}
-                                      >
-                                        {enabled ? (
-                                          <CheckCircleIcon
-                                            sx={{ fontSize: 18, color: "success.main" }}
-                                          />
-                                        ) : (
-                                          <BlockIcon
-                                            sx={{ fontSize: 18, color: "text.secondary" }}
-                                          />
-                                        )}
-
-                                        <Typography sx={mobileValueSx}>
-                                          {enabled ? "Activo para esta sucursal" : "No disponible en esta sucursal"}
-                                        </Typography>
-
-                                        {busy && (
-                                          <CircularProgress size={16} color="primary" />
-                                        )}
-                                      </Stack>
-                                    </Box>
-
-                                    <Stack spacing={1.25}>
-                                      <Box
-                                        sx={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "flex-start",
-                                          minWidth: 0,
-                                        }}
-                                      >
-                                        <FormControlLabel
-                                          sx={{
-                                            m: 0,
-                                            minWidth: 0,
-                                            "& .MuiFormControlLabel-label": {
-                                              minWidth: 0,
-                                            },
-                                          }}
-                                          control={
-                                            <Switch
-                                              checked={enabled}
-                                              disabled={busy || !restaurantActive || systemChannel || blockedByPlan}
-                                              onChange={() => onToggle(r)}
-                                              color="primary"
-                                            />
-                                          }
-                                          label={
-                                            <Typography sx={switchLabelSx}>
-                                              {enabled ? "Activo" : "Inactivo"}
-                                            </Typography>
-                                          }
+                                        <Chip
+                                          label={menuConfiguration?.status_label || "Sin diagnóstico"}
+                                          color={getMenuConfigurationColor(menuConfiguration?.status)}
+                                          size="small"
+                                          sx={{ mt: 0.75, fontWeight: 800, width: "fit-content" }}
                                         />
+
+                                        {enabledMenusCount > 1 && (
+                                          <Typography sx={{ mt: 0.5, fontSize: 12, color: "text.secondary" }}>
+                                            {enabledMenusCount} menús habilitados
+                                          </Typography>
+                                        )}
                                       </Box>
 
-                                      <Button
-                                        onClick={() => onConfig(r)}
-                                        variant="contained"
-                                        color="secondary"
-                                        startIcon={<SettingsIcon />}
-                                        disabled={br?.effective_is_active !== true}
-                                        fullWidth
-                                        sx={{
-                                          height: 42,
-                                          fontSize: 13,
-                                          fontWeight: 800,
-                                          whiteSpace: "normal",
-                                          textAlign: "center",
-                                          lineHeight: 1.2,
-                                          px: 1.75,
-                                        }}
-                                      >
-                                        Configurar productos
-                                      </Button>
+                                      {configurationMessage && (
+                                        <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.4, wordBreak: "break-word" }}>
+                                          {configurationMessage}
+                                        </Typography>
+                                      )}
                                     </Stack>
+                                  </Box>
+
+                                  <Stack spacing={1.25}>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                      <FormControlLabel
+                                        sx={{ m: 0 }}
+                                        control={
+                                          <Switch
+                                            checked={branchActive}
+                                            disabled={busy || !restaurantActive || systemChannel || blockedByPlan}
+                                            onChange={() => onToggle(r)}
+                                            color="primary"
+                                          />
+                                        }
+                                        label={<Typography sx={switchLabelSx}>{branchActive ? "Activo" : "Inactivo"}</Typography>}
+                                      />
+
+                                      {busy && <CircularProgress size={16} color="primary" />}
+                                    </Stack>
+
+                                    <Button
+                                      onClick={() => onConfig(r)}
+                                      variant="contained"
+                                      color="secondary"
+                                      startIcon={<SettingsIcon />}
+                                      disabled={br?.effective_is_active !== true}
+                                      fullWidth
+                                      sx={{
+                                        height: 42,
+                                        fontSize: 13,
+                                        fontWeight: 800,
+                                        whiteSpace: "normal",
+                                        textAlign: "center",
+                                        lineHeight: 1.2,
+                                        px: 1.75,
+                                      }}
+                                    >
+                                      Configurar productos
+                                    </Button>
                                   </Stack>
                                 </Stack>
                               </Box>
@@ -856,7 +790,7 @@ export default function BranchSalesChannelsPage() {
                       </Stack>
                     ) : (
                       <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                        <Table sx={{ minWidth: 980 }}>
+                        <Table sx={{ width: "100%" }}>
                           <TableHead>
                             <TableRow
                               sx={{
@@ -870,10 +804,9 @@ export default function BranchSalesChannelsPage() {
                                 },
                               }}
                             >
-                              <TableCell>Canal</TableCell>
-                              <TableCell>Code</TableCell>
-                              <TableCell>Estado restaurante</TableCell>
-                              <TableCell>Estado sucursal</TableCell>
+                              <TableCell sx={{ minWidth: 170 }}>Canal</TableCell>
+                              <TableCell sx={{ minWidth: 130 }}>Estado</TableCell>
+                              <TableCell sx={{ minWidth: 240 }}>Menú / configuración</TableCell>
                               <TableCell align="center">Activo</TableCell>
                               <TableCell align="right">Acciones</TableCell>
                             </TableRow>
@@ -883,12 +816,17 @@ export default function BranchSalesChannelsPage() {
                             {paginatedItems.map((r) => {
                               const ch = r?.sales_channel;
                               const br = r?.branch;
+                              const menuConfiguration = r?.menu_configuration || {};
 
                               const restaurantActive = ch?.status === "active";
-                              const enabled = !!br?.effective_is_active;
+                              const branchActive = !!br?.is_active;
                               const busy = isSaving(ch?.id);
                               const systemChannel = isSystemChannel(r);
                               const blockedByPlan = !!br?.blocked_by_plan;
+                              const channelStatus = getChannelStatus(ch, br);
+                              const defaultMenuName = r?.default_menu?.name || "Sin menú predeterminado";
+                              const enabledMenusCount = Array.isArray(r?.enabled_menus) ? r.enabled_menus.length : Number(menuConfiguration?.enabled_menus_count || 0);
+                              const configurationMessage = getMenuConfigurationMessage(menuConfiguration);
 
                               return (
                                 <TableRow
@@ -905,76 +843,51 @@ export default function BranchSalesChannelsPage() {
                                   }}
                                 >
                                   <TableCell>
-                                    <Stack spacing={0.5} alignItems="flex-start">
-                                      <Typography sx={{ fontWeight: 800 }}>
-                                        {ch?.name || "Canal sin nombre"}
+                                    <Stack spacing={0.35} alignItems="flex-start">
+                                      <Typography sx={{ fontWeight: 800 }}>{ch?.name || "Canal sin nombre"}</Typography>
+
+                                      <Typography sx={{ fontSize: 11, color: "text.secondary", fontFamily: "monospace" }}>
+                                        {ch?.code || "—"}
                                       </Typography>
 
-                                      {systemChannel && (
-                                        <Chip
-                                          label="FIJO"
-                                          size="small"
-                                          sx={{
-                                            mt: 0.5,
-                                            fontWeight: 800,
-                                            width: "fit-content",
-                                          }}
-                                        />
-                                      )}
-
-                                      {blockedByPlan && (
-                                        <Chip
-                                          label="BLOQUEADO POR PLAN"
-                                          color="warning"
-                                          size="small"
-                                          sx={{
-                                            mt: 0.5,
-                                            fontWeight: 800,
-                                            width: "fit-content",
-                                          }}
-                                        />
-                                      )}
-
-                                      {!restaurantActive && (
-                                        <Typography
-                                          sx={{
-                                            fontSize: 12,
-                                            color: "text.secondary",
-                                            whiteSpace: "normal",
-                                          }}
-                                        >
-                                          Este canal está inactivo a nivel restaurante.
-                                        </Typography>
-                                      )}
+                                      {systemChannel && <Chip label="FIJO" size="small" sx={{ mt: 0.25, fontWeight: 800, width: "fit-content" }} />}
                                     </Stack>
                                   </TableCell>
 
-                                  <TableCell sx={{ fontFamily: "monospace", fontWeight: 700 }}>
-                                    {ch?.code || "—"}
-                                  </TableCell>
-
                                   <TableCell>
                                     <Chip
-                                      label={restaurantActive ? "ACTIVO" : "INACTIVO"}
-                                      color={restaurantActive ? "success" : "default"}
+                                      label={channelStatus.label}
+                                      color={channelStatus.color}
                                       size="small"
-                                      sx={{
-                                        fontWeight: 800,
-                                        minWidth: 92,
-                                      }}
+                                      sx={{ fontWeight: 800, minWidth: 110 }}
                                     />
                                   </TableCell>
 
-                                  <TableCell>
-                                    <Chip
-                                      label={enabled ? "HABILITADO" : "DESHABILITADO"}
-                                      color={enabled ? "success" : "default"}
-                                      size="small"
-                                      sx={{
-                                        fontWeight: 800,
-                                        minWidth: 120,
-                                      }}
-                                    />
+                                  <TableCell sx={{ minWidth: 240, whiteSpace: "normal !important" }}>
+                                    <Stack spacing={0.55} alignItems="flex-start">
+                                      <Typography sx={{ fontSize: 13, fontWeight: 800, color: "text.primary" }}>
+                                        {defaultMenuName}
+                                      </Typography>
+
+                                      <Chip
+                                        label={menuConfiguration?.status_label || "Sin diagnóstico"}
+                                        color={getMenuConfigurationColor(menuConfiguration?.status)}
+                                        size="small"
+                                        sx={{ fontWeight: 800, width: "fit-content" }}
+                                      />
+
+                                      {enabledMenusCount > 1 && (
+                                        <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+                                          {enabledMenusCount} menús habilitados
+                                        </Typography>
+                                      )}
+
+                                      {configurationMessage && (
+                                        <Typography sx={{ fontSize: 11, color: "text.secondary", lineHeight: 1.35, whiteSpace: "normal", wordBreak: "break-word" }}>
+                                          {configurationMessage}
+                                        </Typography>
+                                      )}
+                                    </Stack>
                                   </TableCell>
 
                                   <TableCell align="center">
@@ -985,7 +898,7 @@ export default function BranchSalesChannelsPage() {
                                       alignItems="center"
                                     >
                                       <Switch
-                                        checked={enabled}
+                                        checked={branchActive}
                                         disabled={busy || !restaurantActive || systemChannel || blockedByPlan}
                                         onChange={() => onToggle(r)}
                                         color="primary"
@@ -1011,7 +924,7 @@ export default function BranchSalesChannelsPage() {
                                         disabled={br?.effective_is_active !== true}
                                         sx={{
                                           height: 36,
-                                          minWidth: 190,
+                                          minWidth: 165,
                                           borderRadius: 2,
                                           fontSize: 12,
                                           fontWeight: 800,
@@ -1053,7 +966,7 @@ export default function BranchSalesChannelsPage() {
                   lineHeight: 1.5,
                 }}
               >
-                Nota: Un canal <strong>Inactivo</strong> a nivel restaurante no puede activarse en sucursales.
+                Nota: Un canal <strong>Inactivo</strong> a nivel restaurante no puede activarse en sucursales. Un canal habilitado también necesita un menú predeterminado válido para quedar completamente configurado.
               </Typography>
             </>
           )}
