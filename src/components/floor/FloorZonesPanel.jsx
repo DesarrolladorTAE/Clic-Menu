@@ -98,10 +98,12 @@ export default function FloorZonesPanel({
           >
             {zones.map((zone) => {
               const zoneTables = tablesByZone[String(zone.id)] || [];
-              const missingZoneWaiter =
-                isZoneAssignmentEnabled &&
-                (zone?.assigned_waiter_id === null ||
-                  typeof zone?.assigned_waiter_id === "undefined");
+              const missingZoneWaiter = isZoneAssignmentEnabled && (zone?.assigned_waiter_id === null || typeof zone?.assigned_waiter_id === "undefined");
+
+              const menuConfiguration = zone?.menu_configuration || {};
+              const menuName = zone?.menu?.name || "Sin configurar";
+              const hasMenuProblem = menuConfiguration?.is_valid === false;
+              const menuWarningLabel = menuConfiguration?.status === "missing_menu" ? "Menú sin configurar" : menuConfiguration?.status_label || "Menú con problema";
 
               return (
                 <Card
@@ -145,6 +147,35 @@ export default function FloorZonesPanel({
                           >
                             {zoneTables.length} mesa(s) en esta zona
                           </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.5,
+                              fontSize: 13,
+                              color: "text.secondary",
+                              lineHeight: 1.4,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
+                              Menú:
+                            </Box>{" "}
+                            {menuName}
+                          </Typography>
+
+                          {hasMenuProblem && (
+                            <Chip
+                              label={menuWarningLabel}
+                              size="small"
+                              color="warning"
+                              sx={{
+                                mt: 0.75,
+                                fontWeight: 800,
+                                width: "fit-content",
+                                maxWidth: "100%",
+                              }}
+                            />
+                          )}
                         </Box>
 
                         {missingZoneWaiter ? (

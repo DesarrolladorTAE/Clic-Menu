@@ -1,21 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { handleFormApiError } from "../../utils/useFormApiHandler";
 import { createZone, updateZone } from "../../services/floor/zones.service";
+import { getBranchSalesChannels } from "../../services/restaurant/branchSalesChannels.service";
 
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -93,15 +83,20 @@ export default function ZoneModal({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [saving, setSaving] = useState(false);
+  const [menusLoading, setMenusLoading] = useState(false);
+  const [salonMenus, setSalonMenus] = useState([]);
+  const [menusLoadError, setMenusLoadError] = useState("");
 
   const defaultValues = useMemo(
     () => ({
       name: initialData?.name ?? "",
+      menu_id: initialData?.menu_id ? String(initialData.menu_id) : "",
     }),
     [initialData]
   );
 
   const {
+    control,
     register,
     handleSubmit,
     setError,
@@ -114,6 +109,56 @@ export default function ZoneModal({
     reset(defaultValues);
   }, [open, reset, defaultValues]);
 
+  useEffect(() => {
+    if (!open || !restaurantId || !branchId) return;
+
+    let active = true;
+
+    const loadSalonMenus = async () => {
+      setMenusLoading(true);
+      setMenusLoadError("");
+      setSalonMenus([]);
+
+      try {
+        const rows = await getBranchSalesChannels(restaurantId, branchId);
+        const salonRow = (Array.isArray(rows) ? rows : []).find((row) => String(row?.sales_channel?.code || "").trim().toUpperCase() === "SALON");
+        const menus = Array.isArray(salonRow?.enabled_menus) ? salonRow.enabled_menus : [];
+
+        if (!active) return;
+
+        const activeMenus = menus.filter((menu) => menu?.is_active === true || menu?.status === "active");
+
+        setSalonMenus(activeMenus);
+
+        if (activeMenus.length === 0) {
+          setMenusLoadError("No hay menús activos habilitados para SALON en esta sucursal.");
+        }
+      } catch (e) {
+        if (!active) return;
+
+        setSalonMenus([]);
+        setMenusLoadError(e?.response?.data?.message || "No se pudieron cargar los menús SALON.");
+      } finally {
+        if (active) setMenusLoading(false);
+      }
+    };
+
+    loadSalonMenus();
+
+    return () => {
+      active = false;
+    };
+  }, [open, restaurantId, branchId]);
+
+  const menuChangeBlocked = mode === "edit" && initialData?.menu_change?.can_change_menu === false;
+  const menuChangeMessage = menuChangeBlocked ? initialData?.menu_change?.message || "El menú no puede cambiarse mientras la zona tenga actividad en curso." : "";
+
+  const menuOptions = [...salonMenus];
+
+  if (initialData?.menu?.id && !menuOptions.some((menu) => Number(menu.id) === Number(initialData.menu.id))) {
+    menuOptions.push(initialData.menu);
+  }
+
   if (!open) return null;
 
   const title = mode === "create" ? "Nueva zona" : "Editar zona";
@@ -121,7 +166,14 @@ export default function ZoneModal({
   const onSubmit = async (form) => {
     setSaving(true);
     try {
-      const payload = { name: (form.name || "").trim() };
+      const menuId = menuChangeBlocked
+        ? Number(initialData?.menu_id)
+        : Number(form.menu_id);
+
+      const payload = {
+        name: (form.name || "").trim(),
+        menu_id: menuId,
+      };
 
       const saved =
         mode === "create"
@@ -259,6 +311,63 @@ export default function ZoneModal({
                   }
                   help="No se permiten nombres duplicados dentro de la misma sucursal."
                   error={errors?.name?.message}
+                />
+
+                <FieldBlock
+                  label="Menú a usar"
+                  input={
+                    <Controller
+                      name="menu_id"
+                      control={control}
+                      rules={{
+                        required: "Selecciona un menú SALON.",
+                      }}
+                      render={({ field }) => (
+                        <TextField
+                          select
+                          fullWidth
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          inputRef={field.ref}
+                          disabled={
+                            saving ||
+                            menusLoading ||
+                            menuOptions.length === 0 ||
+                            menuChangeBlocked
+                          }
+                          SelectProps={{
+                            MenuProps: {
+                              PaperProps: {
+                                sx: {
+                                  maxHeight: 280,
+                                },
+                              },
+                              MenuListProps: {
+                                sx: {
+                                  py: 0.5,
+                                },
+                              },
+                            },
+                          }}
+                        >
+                          {menuOptions.map((menu) => (
+                            <MenuItem key={menu.id} value={String(menu.id)}>
+                              {menu.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  }
+                  help={
+                    menuChangeBlocked
+                      ? menuChangeMessage
+                      : menusLoading
+                      ? "Cargando menús SALON…"
+                      : menusLoadError || null
+                  }
+                  error={errors?.menu_id?.message}
                 />
 
                 <Stack
