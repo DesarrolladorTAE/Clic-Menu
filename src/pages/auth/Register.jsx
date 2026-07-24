@@ -98,7 +98,7 @@ export default function Register() {
 
     if (!ref) return;
 
-    const cleanRef = String(ref).trim().slice(-4);
+    const cleanRef = String(ref).trim();
 
     if (cleanRef) {
       setValue("codigo_ref", cleanRef, {
@@ -119,7 +119,7 @@ export default function Register() {
       return;
     }
 
-    if (cleanCodigoRef.length < 4) {
+    if (cleanCodigoRef.length === 0) {
       setRefStatus("idle");
       return;
     }
@@ -573,9 +573,7 @@ export default function Register() {
                         value={codigoRef || ""}
                         {...register("codigo_ref")}
                         onChange={(e) => {
-                          const clean = e.target.value
-                            .replace(/\D/g, "")
-                            .slice(-4);
+                          const clean = e.target.value.replace(/\D/g, "").slice(0, 12);
 
                           setValue("codigo_ref", clean, {
                             shouldValidate: true,
