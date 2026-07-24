@@ -77,7 +77,8 @@ export default function RestaurantOperationLayout() {
     if (pathname.includes("/ingredients")) return "ingredients";
     if (pathname.includes("/public-menu-settings")) return "public-menu-settings";
     if (pathname.includes("/promotions")) return "promotions";
-    if (pathname.includes("/menu")) return "menu";
+    if (pathname.includes("/menus")) return "menus";
+    if (pathname.includes("/menu")) return "menu-structure";
     if (pathname.includes("/catalog")) return "catalog";
     if (pathname.includes("/tables")) return "tables";
     if (pathname.includes("/cash-registers")) return "cash-registers";
@@ -215,7 +216,11 @@ export default function RestaurantOperationLayout() {
         nav(`${base}/purchases`, { state: { restaurantName } });
         break;
 
-      case "menu":
+      case "menus":
+        nav(`${base}/menus`, { state: { restaurantName } });
+        break;
+
+      case "menu-structure":
         nav(`${base}/menu`, { state: { restaurantName } });
         break;
 

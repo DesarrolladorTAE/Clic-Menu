@@ -81,6 +81,10 @@ import BranchesPage from "../pages/restaurant/BranchesPage";
 
 //Menu y así
 import MenuManager from "../pages/menu/MenuManager";
+import MenuListPage from "../pages/menu/menus/MenuListPage";
+import MenuContentPage from "../pages/menu/menus/menuContent/MenuContentPage";
+import MenuChannelsPage from "../pages/menu/menus/menuChannels/MenuChannelsPage";
+
 import PromotionsPage from "../pages/menu/promotions/PromotionsPage";
 import PromotionCreatePage from "../pages/menu/promotions/PromotionCreatePage";
 import PromotionEditPage from "../pages/menu/promotions/PromotionEditPage";
@@ -223,6 +227,10 @@ export default function AppRoutes() {
 
           <Route path="branch-sales-channels" element={<BranchSalesChannelsPage />} />
           <Route path="branches/:branchId/sales-channels/:salesChannelId/products" element={<ChannelProductsConfigPage />} />
+
+          <Route path="menus" element={<MenuListPage />} />
+          <Route path="menus/:menuId/content" element={<MenuContentPage />} />
+          <Route path="menus/:menuId/channels" element={<MenuChannelsPage />} />
 
           <Route path="menu" element={<MenuManager />} />
           <Route path="menu/products" element={<ProductsPage />} />

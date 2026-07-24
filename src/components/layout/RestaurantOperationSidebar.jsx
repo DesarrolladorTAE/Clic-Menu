@@ -102,12 +102,25 @@ export default function RestaurantOperationSidebar({
         label: "Menú",
         icon: <LocalDiningRoundedIcon />,
         items: [
-          { key: "menu", label: "Menú", icon: <MenuBookIcon /> },
-          { key: "catalog", label: "Catálogo", icon: <CategoryIcon /> },
+          {
+            key: "menu-structure",
+            label: "Estructura del catálogo",
+            icon: <RestaurantMenuIcon />,
+          },
+          {
+            key: "catalog",
+            label: "Catálogo por sucursal",
+            icon: <CategoryIcon />,
+          },
           {
             key: "branch-sales-channels",
             label: "Canales de venta por sucursal",
             icon: <CampaignIcon />,
+          },
+          {
+            key: "menus",
+            label: "Menús por sucursal",
+            icon: <MenuBookIcon />,
           },
           {
             key: "promotions",
