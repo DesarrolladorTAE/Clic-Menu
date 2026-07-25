@@ -1,68 +1,161 @@
-/// src/hooks/public/useMenuProducts.js
+// src/hooks/public/useMenuProducts.js
 // indexación y filtrado de productos (categorías, búsqueda, expanded variants)
 // Objetivo: sacar del Page la lógica de “armar arrays” sin tocar el resultado.
 
 import { useMemo } from "react";
 
-export function useMenuProducts({ sections, categoryFilter, q, expanded }) {
+export function useMenuProducts({
+  sections,
+  categoryFilter,
+  q,
+  expanded,
+  selectedSectionId,
+}) {
+  /**
+   * Determina qué secciones debe utilizar este hook.
+   *
+   * Compatibilidad temporal:
+   * - Si selectedSectionId no fue enviado, se conservan todas las secciones.
+   * - Si fue enviado, se utiliza únicamente la sección seleccionada.
+   */
+  const scopedSections = useMemo(() => {
+    const sourceSections = Array.isArray(sections) ? sections : [];
+
+    /**
+     * Mesero y cajero todavía no enviarán selectedSectionId.
+     * En esos casos se conserva el comportamiento anterior.
+     */
+    if (selectedSectionId === undefined) {
+      return sourceSections;
+    }
+
+    /**
+     * El consumidor ya maneja secciones, pero todavía no tiene
+     * una selección válida. No debemos mostrar todas como respaldo.
+     */
+    if (selectedSectionId === null || selectedSectionId === "") {
+      return [];
+    }
+
+    const selectedSection = sourceSections.find(
+      (section) =>
+        section?.id !== null &&
+        section?.id !== undefined &&
+        String(section.id) === String(selectedSectionId)
+    );
+
+    /**
+     * Si la sección desapareció del payload, se devuelve vacío
+     * mientras el hook de selección establece la primera disponible.
+     */
+    return selectedSection ? [selectedSection] : [];
+  }, [sections, selectedSectionId]);
+
   const categoryNameById = useMemo(() => {
     const map = new Map();
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        if (c?.id) map.set(Number(c.id), c?.name || "");
+
+    for (const section of scopedSections) {
+      for (const category of section?.categories || []) {
+        if (category?.id) {
+          map.set(Number(category.id), category?.name || "");
+        }
       }
     }
+
     return map;
-  }, [sections]);
+  }, [scopedSections]);
 
   const categoryOptions = useMemo(() => {
     const opts = [{ value: "all", label: "Todos" }];
     const seen = new Set();
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        if (!c?.id || seen.has(c.id)) continue;
-        seen.add(c.id);
-        opts.push({ value: String(c.id), label: c.name || "Categoría" });
+
+    for (const section of scopedSections) {
+      for (const category of section?.categories || []) {
+        if (!category?.id) continue;
+
+        const categoryKey = String(category.id);
+
+        if (seen.has(categoryKey)) continue;
+
+        seen.add(categoryKey);
+
+        opts.push({
+          value: categoryKey,
+          label: category.name || "Categoría",
+        });
       }
     }
+
     return opts;
-  }, [sections]);
+  }, [scopedSections]);
 
   const allProducts = useMemo(() => {
     const out = [];
-    for (const s of sections || []) {
-      for (const c of s?.categories || []) {
-        const catName = c?.name || "";
-        for (const p of c?.products || []) out.push({ ...p, __categoryName: catName });
+
+    for (const section of scopedSections) {
+      for (const category of section?.categories || []) {
+        const categoryName = category?.name || "";
+
+        for (const product of category?.products || []) {
+          out.push({
+            ...product,
+            __categoryName: categoryName,
+          });
+        }
       }
     }
+
     return out;
-  }, [sections]);
+  }, [scopedSections]);
 
   const productIndex = useMemo(() => {
-    const m = new Map();
-    for (const p of allProducts || []) m.set(Number(p.id), p);
-    return m;
+    const map = new Map();
+
+    for (const product of allProducts || []) {
+      map.set(Number(product.id), product);
+    }
+
+    return map;
   }, [allProducts]);
 
   const filteredProducts = useMemo(() => {
     const needle = (q || "").trim().toLowerCase();
-    const catId = categoryFilter === "all" ? null : Number(categoryFilter);
+    const categoryId =
+      categoryFilter === "all" ? null : Number(categoryFilter);
 
-    const matchText = (txt) => {
+    const matchText = (text) => {
       if (!needle) return true;
-      return String(txt || "").toLowerCase().includes(needle);
+
+      return String(text || "")
+        .toLowerCase()
+        .includes(needle);
     };
 
-    return (allProducts || []).filter((p) => {
-      if (catId && Number(p.category_id) !== catId) return false;
-      if (!needle) return true;
+    return (allProducts || []).filter((product) => {
+      if (
+        categoryId &&
+        Number(product.category_id) !== categoryId
+      ) {
+        return false;
+      }
 
-      const title = p.display_name || p.name;
-      if (matchText(title)) return true;
+      if (!needle) {
+        return true;
+      }
 
-      const vars = Array.isArray(p.variants) ? p.variants : [];
-      return vars.some((v) => matchText(v?.name || v?.display_name));
+      const title = product.display_name || product.name;
+
+      if (matchText(title)) {
+        return true;
+      }
+
+      const variants = Array.isArray(product.variants)
+        ? product.variants
+        : [];
+
+      return variants.some((variant) =>
+        matchText(variant?.name || variant?.display_name)
+      );
     });
   }, [allProducts, categoryFilter, q]);
 

@@ -27,8 +27,10 @@ import { useMenuProducts } from "../../hooks/public/useMenuProducts";
 import { useCartAndOrder } from "../../hooks/public/useCartAndOrder";
 import { useCompositeDrafts } from "../../hooks/public/useCompositeDrafts";
 
+import useMenuSectionSelection from "../../hooks/menu/useMenuSectionSelection";
 import MenuCartFloatingButton from "../../components/menu/shared/MenuCartFloatingButton";
 import PublicMenuCategoryTabs from "../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
+import MenuSectionTabs from "../../components/menu/shared/menuUi/MenuSectionTabs";
 
 import PublicMenuBrandCard from "../../components/menu/public/PublicMenuBrandCard";
 import PublicMenuGalleryCarousel from "../../components/menu/public/PublicMenuGalleryCarousel";
@@ -147,6 +149,27 @@ export default function PublicMenuEntryPage() {
     setCallLocked,
   });
 
+  const {
+    selectedSectionId,
+    selectSection,
+    showSectionSelector,
+  } = useMenuSectionSelection(sections);
+
+  
+  const handleSectionChange = (nextSectionId) => {
+    setCategoryFilter("all");
+    selectSection(nextSectionId);
+  };
+
+  /**
+   * También limpia la categoría cuando la sección cambia
+   * automáticamente porque el backend devolvió otro payload,
+   * cambió el horario o desapareció la sección anterior.
+   */
+  useEffect(() => {
+    setCategoryFilter("all");
+  }, [selectedSectionId]);
+
   const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
 
   const uiFlags = ui || {};
@@ -205,9 +228,30 @@ export default function PublicMenuEntryPage() {
   const { categoryNameById, categoryOptions, filteredProducts } =
     useMenuProducts({
       sections,
+      selectedSectionId,
       categoryFilter,
       q,
     });
+
+  /**
+   * Protección adicional:
+   * si el backend actualiza las categorías de la misma sección
+   * y la categoría seleccionada deja de existir, volvemos a "all".
+   *
+   * "all" aquí significa todas las categorías de la sección activa,
+   * no todas las secciones.
+   */
+  useEffect(() => {
+    const currentCategory = String(categoryFilter || "all");
+
+    const categoryStillExists = categoryOptions.some(
+      (option) => String(option?.value) === currentCategory,
+    );
+
+    if (!categoryStillExists) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, categoryOptions]);
 
   const {
     page,
@@ -1146,6 +1190,15 @@ export default function PublicMenuEntryPage() {
         </div>
 
         <PublicMenuCallToast message={qr.callToast} />
+
+        {showSectionSelector ? (
+          <MenuSectionTabs
+            sections={sections}
+            selectedSectionId={selectedSectionId}
+            onSectionChange={handleSectionChange}
+            themeColor={themeColor}
+          />
+        ) : null}
 
         <PublicMenuCategoryTabs
           categoryOptions={categoryOptions}
