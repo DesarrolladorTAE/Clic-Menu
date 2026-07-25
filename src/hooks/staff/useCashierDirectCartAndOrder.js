@@ -260,7 +260,10 @@ function buildReviewErrorMessage(res) {
   );
 }
 
-export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
+export function useCashierDirectCartAndOrder({
+  returnSaleId = null,
+  selectedMenuId = null,
+} = {}) {
   const navigate = useNavigate();
 
   const [cart, setCart] = useState([]);
@@ -279,6 +282,15 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
   const lastLoadedRef = useRef({ orderId: null });
 
   const normalizedReturnSaleId = Number(returnSaleId || 0);
+
+  /*
+   * Menú seleccionado para crear una venta directa nueva.
+   *
+   * Este valor no se utiliza al agregar productos a una orden
+   * existente, porque el backend bloquea el menú de esa orden.
+   */
+  const normalizedSelectedMenuId =
+    Number(selectedMenuId || 0) || null;
 
   const canAppend =
     !!activeOrder?.id &&
@@ -656,11 +668,41 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
 
       if (!items.length) {
         setSendToast("⚠️ No hay productos seleccionados.");
-        return { ok: false };
+
+        return {
+          ok: false,
+        };
+      }
+
+      /*
+       * Para una venta nueva debe existir un menú seleccionado.
+       *
+       * Esto evita crear accidentalmente la venta con otro menú
+       * cuando el catálogo mostrado todavía no tiene contexto.
+       */
+      if (!normalizedSelectedMenuId) {
+        setSendToast(
+          "⚠️ No se pudo identificar el menú seleccionado para esta venta."
+        );
+
+        return {
+          ok: false,
+          menuContextError: true,
+        };
       }
 
       const payload = {
-        customer_name: String(name || customerName || "Cliente mostrador").trim(),
+        customer_name: String(
+          name ||
+            customerName ||
+            "Cliente mostrador"
+        ).trim(),
+
+        /*
+         * Solo se envía al crear la primera venta.
+         */
+        menu_id: normalizedSelectedMenuId,
+
         items,
       };
 
@@ -679,11 +721,19 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
         setSendToast("✅ Venta directa creada correctamente.");
 
         if (orderId) {
-          await loadExisting({ orderId, force: true }).catch(() => {});
+          await loadExisting({
+            orderId,
+            force: true,
+          }).catch(() => {});
         }
 
         if (saleId) {
-          navigate(`/staff/cashier/sales/${saleId}`, { replace: true });
+          navigate(
+            `/staff/cashier/sales/${saleId}`,
+            {
+              replace: true,
+            }
+          );
         }
 
         return {
@@ -701,7 +751,9 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
           data: res?.data,
         };
 
-        setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+        setSendToast(
+          `⚠️ ${buildAvailabilityErrorMessage(apiError)}`
+        );
 
         return {
           ok: false,
@@ -710,15 +762,27 @@ export function useCashierDirectCartAndOrder({ returnSaleId = null } = {}) {
         };
       }
 
-      setSendToast(`⚠️ ${res?.message || "No se pudo crear la venta directa."}`);
+      setSendToast(
+        `⚠️ ${
+          res?.message ||
+          "No se pudo crear la venta directa."
+        }`
+      );
 
       return {
         ok: false,
         data: res?.data || null,
       };
     },
-    [cart, customerName, loadExisting, navigate]
+    [
+      cart,
+      customerName,
+      normalizedSelectedMenuId,
+      loadExisting,
+      navigate,
+    ]
   );
+
 
   const appendToDirectOrder = useCallback(
     async (orderId, options = {}) => {

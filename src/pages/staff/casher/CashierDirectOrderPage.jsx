@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import PageContainer from "../../../components/common/PageContainer";
 import PaginationFooter from "../../../components/common/PaginationFooter";
 import usePagination from "../../../hooks/usePagination";
+import useMenuSectionSelection from "../../../hooks/menu/useMenuSectionSelection";
 
 import { fetchCashierDirectMenu } from "../../../services/staff/casher/cashierDirectOrder.service";
 
@@ -22,6 +23,7 @@ import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
 import MenuCartDrawer from "../../../components/menu/shared/MenuCartDrawer";
 import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloatingButton";
 import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
+import MenuSectionTabs from "../../../components/menu/shared/menuUi/MenuSectionTabs";
 
 import CashierDirectHeaderCard from "../../../components/staff/casher/directOrderPage/CashierDirectHeaderCard";
 import CashierDirectCreateOrderDialog from "../../../components/staff/casher/directOrderPage/CashierDirectCreateOrderDialog";
@@ -152,8 +154,11 @@ export default function CashierDirectOrderPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [data, setData] = useState(null);
 
+  const [selectedMenuId, setSelectedMenuId] = useState(null);
+
   const cartOrder = useCashierDirectCartAndOrder({
     returnSaleId,
+    selectedMenuId,
   });
 
   const composite = useCompositeDrafts();
@@ -161,17 +166,61 @@ export default function CashierDirectOrderPage() {
   const sections = Array.isArray(data?.sections)
     ? data.sections
     : Array.isArray(data?.data?.sections)
-    ? data.data.sections
+      ? data.data.sections
+      : [];
+
+  /*
+   * Catálogo de menús que el backend autorizó para caja directa.
+   */
+  const availableMenus = Array.isArray(data?.available_menus)
+    ? data.available_menus
     : [];
+
+  const defaultMenuId = Number(data?.default_menu_id || 0) || null;
+
+  /*
+   * En una venta existente el menú siempre queda bloqueado,
+   * aunque el endpoint del catálogo devuelva selection_locked = false.
+   */
+  const selectionLocked =
+    isEditingExistingDirectOrder ||
+    Boolean(data?.selection_locked);
+
+  const selectedMenu =
+    data?.selected_menu ||
+    availableMenus.find(
+      (menu) => String(menu?.id) === String(selectedMenuId)
+    ) ||
+    null;
+
+  const {
+    selectedSectionId,
+    selectSection,
+    showSectionSelector,
+  } = useMenuSectionSelection(sections);
 
   const cashSession = data?.cash_session || null;
 
   const { categoryNameById, categoryOptions, filteredProducts } =
     useMenuProducts({
       sections,
+      selectedSectionId,
       categoryFilter,
       q,
     });
+
+  /*
+   * Si el backend cambia las secciones o el usuario selecciona
+   * otra sección, regresamos a todas las categorías de esa sección.
+   */
+  useEffect(() => {
+    setCategoryFilter("all");
+  }, [selectedSectionId]);
+
+  const handleSectionChange = (nextSectionId) => {
+    setCategoryFilter("all");
+    selectSection(nextSectionId);
+  };
 
   const {
     page,
@@ -211,7 +260,10 @@ export default function CashierDirectOrderPage() {
     );
   }, [data]);
 
-  const load = async ({ silent = false } = {}) => {
+  const load = async ({
+    silent = false,
+    menuId = undefined,
+  } = {}) => {
     if (!silent) {
       setLoading(true);
       setErrorMsg("");
@@ -219,11 +271,48 @@ export default function CashierDirectOrderPage() {
       setSyncing(true);
     }
 
+    /*
+     * Cuando menuId no se envía explícitamente:
+     *
+     * 1. Una venta existente utiliza el menu_id de su orden.
+     * 2. Una venta nueva conserva el menú seleccionado actualmente.
+     * 3. Si todavía no existe selección, el backend devuelve
+     *    el menú predeterminado.
+     */
+    const currentMenuId = Number(
+      cartOrder.activeOrder?.menu_id ||
+        selectedMenuId ||
+        0
+    );
+
+    const requestedMenuId =
+      menuId === undefined
+        ? currentMenuId || null
+        : Number(menuId || 0) || null;
+
     try {
-      const res = await fetchCashierDirectMenu();
+      const res = await fetchCashierDirectMenu(
+        requestedMenuId
+          ? {
+              menuId: requestedMenuId,
+            }
+          : undefined
+      );
+
       const payload = res?.data ? res.data : res;
 
+      const resolvedMenuId =
+        Number(
+          payload?.selected_menu?.id ||
+            payload?.default_menu_id ||
+            requestedMenuId ||
+            0
+        ) || null;
+
       setData(payload || null);
+      setSelectedMenuId(resolvedMenuId);
+
+      return payload || null;
     } catch (e) {
       const code = e?.response?.data?.code;
       const msg =
@@ -234,37 +323,74 @@ export default function CashierDirectOrderPage() {
 
       if (code === "NO_OPEN_CASH_SESSION") {
         navigate("/staff/cashier", { replace: true });
-        return;
+        return null;
       }
 
       setErrorMsg(String(msg));
-      setData(null);
+
+      if (!silent) {
+        setData(null);
+      }
+
+      return null;
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
+
       setSyncing(false);
     }
   };
 
+  
   useEffect(() => {
-    load();
-
-    return () => cartOrder.resetAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!orderIdFromQuery) return;
-
     let mounted = true;
 
-    const loadOrder = async () => {
-      try {
-        setLoadingExistingOrder(true);
+    const initializePage = async () => {
+      /*
+       * Nueva venta directa:
+       * se solicita el menú predeterminado.
+       */
+      if (!orderIdFromQuery) {
+        await load();
+        return;
+      }
 
-        await cartOrder.loadExisting({
+      /*
+       * Venta directa existente:
+       *
+       * 1. Cargar la orden.
+       * 2. Obtener su menu_id.
+       * 3. Cargar exactamente ese catálogo.
+       * 4. Revisar stock.
+       */
+      try {
+        setLoading(true);
+        setLoadingExistingOrder(true);
+        setErrorMsg("");
+
+        const existing = await cartOrder.loadExisting({
           orderId: orderIdFromQuery,
           force: true,
         });
+
+        if (!mounted) return;
+
+        const lockedMenuId =
+          Number(existing?.order?.menu_id || 0) || null;
+
+        if (!lockedMenuId) {
+          setErrorMsg(
+            "La venta directa existente no tiene un menú válido asociado."
+          );
+          return;
+        }
+
+        const menuPayload = await load({
+          menuId: lockedMenuId,
+        });
+
+        if (!mounted || !menuPayload) return;
 
         const reviewRes = await cartOrder.reviewStock(
           orderIdFromQuery
@@ -282,7 +408,6 @@ export default function CashierDirectOrderPage() {
             "La venta directa no puede continuar con la configuración actual de la caja.";
 
           setErrorMsg(String(message));
-          return;
         }
       } catch (e) {
         if (!mounted) return;
@@ -295,15 +420,20 @@ export default function CashierDirectOrderPage() {
 
         setErrorMsg(String(msg));
       } finally {
-        if (mounted) setLoadingExistingOrder(false);
+        if (mounted) {
+          setLoading(false);
+          setLoadingExistingOrder(false);
+        }
       }
     };
 
-    loadOrder();
+    initializePage();
 
     return () => {
       mounted = false;
+      cartOrder.resetAll();
     };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderIdFromQuery]);
 
@@ -319,6 +449,62 @@ export default function CashierDirectOrderPage() {
     setSelectedExtrasSelectionScope("all");
     setPendingCompositeComponents([]);
     setPendingCompositeDetails([]);
+  };
+
+    /*
+   * Limpia únicamente la captura pendiente.
+   *
+   * No elimina productos ya guardados en una orden existente.
+   * No reinicia la búsqueda.
+   * No modifica el cliente ni el flujo de cocina.
+   */
+  const resetPendingCaptureForMenuChange = () => {
+    cartOrder.setCart([]);
+
+    setCartDrawerOpen(false);
+
+    setVariantsModalOpen(false);
+    setSelectedVariantsProduct(null);
+
+    setCompositeModalOpen(false);
+    setSelectedCompositeProduct(null);
+
+    resetExtrasFlow();
+
+    composite.resetCompositeDrafts?.();
+
+    setCategoryFilter("all");
+  };
+
+  const handleMenuChange = async (nextMenuId) => {
+    if (selectionLocked || syncing) {
+      return;
+    }
+
+    const normalizedMenuId =
+      Number(nextMenuId || 0) || null;
+
+    if (!normalizedMenuId) {
+      return;
+    }
+
+    if (
+      String(normalizedMenuId) ===
+      String(selectedMenuId)
+    ) {
+      return;
+    }
+
+    /*
+     * Los productos pendientes pertenecen al catálogo anterior.
+     * Deben eliminarse antes de abrir el nuevo menú.
+     */
+    resetPendingCaptureForMenuChange();
+
+    await load({
+      silent: true,
+      menuId: normalizedMenuId,
+    });
   };
 
   const openReadOnlyExtrasViewer = (product) => {
@@ -620,6 +806,14 @@ export default function CashierDirectOrderPage() {
           cashSession={cashSession}
           cartCount={cartDrawerItemCount}
 
+          availableMenus={availableMenus}
+          defaultMenuId={defaultMenuId}
+          selectedMenuId={selectedMenuId}
+          selectedMenu={selectedMenu}
+          selectionLocked={selectionLocked}
+          menuLoading={syncing}
+          onMenuChange={handleMenuChange}
+
           cartTotal={cartOrder.totalGlobal}
           total={cartOrder.displayTotal}
           totalLabel={cartOrder.totalLabel}
@@ -633,11 +827,21 @@ export default function CashierDirectOrderPage() {
           syncing={syncing}
         />
 
-        <PublicMenuCategoryTabs
-          categoryOptions={categoryOptions}
-          value={categoryFilter}
-          onChange={setCategoryFilter}
-        />
+        {showSectionSelector ? (
+          <MenuSectionTabs
+            sections={sections}
+            selectedSectionId={selectedSectionId}
+            onSectionChange={handleSectionChange}
+          />
+        ) : null}
+
+        {sections.length > 0 ? (
+          <PublicMenuCategoryTabs
+            categoryOptions={categoryOptions}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+          />
+        ) : null}
 
         <Box>
           <Box
@@ -652,7 +856,7 @@ export default function CashierDirectOrderPage() {
               },
             }}
           >
-            {filteredProducts.length > 0 ? (
+            {sections.length > 0 && filteredProducts.length > 0 ? (
               paginatedProducts.map((product) => (
                 <MenuProductCard
                   key={product.id}
@@ -690,7 +894,9 @@ export default function CashierDirectOrderPage() {
                     color: "text.primary",
                   }}
                 >
-                  Sin productos
+                  {sections.length === 0
+                    ? "Sin secciones disponibles"
+                    : "Sin productos"}
                 </Typography>
 
                 <Typography
@@ -700,7 +906,9 @@ export default function CashierDirectOrderPage() {
                     color: "text.secondary",
                   }}
                 >
-                  Prueba con otro texto o cambia de categoría.
+                  {sections.length === 0
+                    ? "El menú seleccionado no tiene secciones disponibles."
+                    : "Prueba con otro texto o cambia de categoría."}
                 </Typography>
               </Box>
             )}

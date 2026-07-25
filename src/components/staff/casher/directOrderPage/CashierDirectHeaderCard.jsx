@@ -1,7 +1,15 @@
 // src/components/staff/casher/directOrderPage/CashierDirectHeaderCard.jsx
 import React from "react";
 import {
-  Box, Button, Card, CardContent, Chip, Stack, TextField, Typography,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
@@ -16,6 +24,17 @@ export default function CashierDirectHeaderCard({
   menuData = null,
   cashSession = null,
   cartCount = 0,
+
+  /*
+   * Menús autorizados por el backend para caja directa.
+   */
+  availableMenus = [],
+  defaultMenuId = null,
+  selectedMenuId = null,
+  selectedMenu = null,
+  selectionLocked = false,
+  menuLoading = false,
+  onMenuChange,
 
   // Compatibilidad con consumidores anteriores.
   cartTotal = 0,
@@ -49,6 +68,69 @@ export default function CashierDirectHeaderCard({
     menuData?.cash_session?.warehouse_id ||
     cashSession?.cash_register?.warehouse_id ||
     null;
+
+  /*
+   * Se muestran únicamente los menús entregados por el backend.
+   * Este componente no decide cuáles son válidos ni calcula
+   * disponibilidad.
+   */
+  const safeAvailableMenus = Array.isArray(availableMenus)
+    ? availableMenus.filter(
+        (menu) =>
+          menu &&
+          menu.id !== null &&
+          menu.id !== undefined &&
+          menu.id !== ""
+      )
+    : [];
+
+  const requestedMenuId =
+    Number(
+      selectedMenuId ||
+        selectedMenu?.id ||
+        menuData?.selected_menu?.id ||
+        defaultMenuId ||
+        0
+    ) || null;
+
+  const selectedMenuOption =
+    safeAvailableMenus.find(
+      (menu) =>
+        String(menu?.id) === String(requestedMenuId)
+    ) || null;
+
+  const resolvedSelectedMenu =
+    selectedMenu ||
+    menuData?.selected_menu ||
+    selectedMenuOption ||
+    null;
+
+  const selectedMenuName =
+    String(resolvedSelectedMenu?.name || "").trim() ||
+    "Sin menú seleccionado";
+
+  /*
+   * MUI requiere que el valor del select exista dentro de
+   * las opciones para evitar advertencias.
+   */
+  const selectedMenuExists =
+    requestedMenuId !== null &&
+    safeAvailableMenus.some(
+      (menu) =>
+        String(menu?.id) === String(requestedMenuId)
+    );
+
+  const safeSelectedMenuValue =
+    selectedMenuExists
+      ? String(requestedMenuId)
+      : "";
+
+  const menuSelectorDisabled = Boolean(
+    selectionLocked ||
+      menuLoading ||
+      syncing ||
+      safeAvailableMenus.length <= 1
+  );
 
   const hasVisualTotal =
     total !== null &&
@@ -114,10 +196,28 @@ export default function CashierDirectHeaderCard({
                 />
 
                 <Chip
-                  label={syncing ? "Sincronizando…" : "Menú activo"}
+                  icon={<RestaurantMenuRoundedIcon />}
+                  label={
+                    menuLoading || syncing
+                      ? "Cargando menú…"
+                      : `Menú: ${selectedMenuName}`
+                  }
                   size="small"
-                  sx={{ fontWeight: 800 }}
+                  sx={{
+                    fontWeight: 800,
+                    maxWidth: {
+                      xs: "100%",
+                      sm: 320,
+                    },
+
+                    "& .MuiChip-label": {
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    },
+                  }}
                 />
+
               </Stack>
 
               <Typography
@@ -219,7 +319,7 @@ export default function CashierDirectHeaderCard({
               helper="Stock validado al cobrar"
             />
 
-            <MetricCard
+                        <MetricCard
               icon={<ShoppingCartRoundedIcon />}
               label="Carrito"
               value={formatCurrency(resolvedTotal)}
@@ -229,6 +329,141 @@ export default function CashierDirectHeaderCard({
               statusLabel={isEstimated ? "Aproximado" : "Confirmado"}
               statusEstimated={isEstimated}
             />
+          </Box>
+
+          {/* Selector del menú utilizado para la venta directa */}
+          <Box
+            sx={{
+              border: "1px solid",
+              borderColor: selectionLocked
+                ? "warning.light"
+                : "divider",
+              borderRadius: 1,
+              backgroundColor: selectionLocked
+                ? "#FFFDF5"
+                : "#FCFCFC",
+              p: {
+                xs: 1.5,
+                sm: 2,
+              },
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  flexWrap="wrap"
+                >
+                  <RestaurantMenuRoundedIcon
+                    sx={{
+                      color: selectionLocked
+                        ? "warning.dark"
+                        : "primary.main",
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      fontSize: 15,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Menú de venta
+                  </Typography>
+
+                  <Chip
+                    label={
+                      selectionLocked
+                        ? "Menú bloqueado"
+                        : "Menú seleccionable"
+                    }
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: selectionLocked
+                        ? "#FFF4D9"
+                        : "#E7F8EB",
+                      color: selectionLocked
+                        ? "#8A6D3B"
+                        : "#0A7A2F",
+                    }}
+                  />
+                </Stack>
+
+                <Typography
+                  sx={{
+                    mt: 0.75,
+                    fontSize: 13,
+                    color: "text.secondary",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {selectionLocked
+                    ? "Esta venta ya fue creada. Debe conservar el menú original de la orden."
+                    : safeAvailableMenus.length > 1
+                      ? "Selecciona el catálogo que utilizarás. Cambiarlo eliminará los productos nuevos pendientes."
+                      : "Solo existe un menú disponible para esta venta directa."}
+                </Typography>
+              </Box>
+
+              <TextField
+                select
+                fullWidth
+                label="Menú"
+                value={safeSelectedMenuValue}
+                onChange={(event) => {
+                  onMenuChange?.(event.target.value);
+                }}
+                disabled={menuSelectorDisabled}
+                helperText={
+                  menuLoading || syncing
+                    ? "Cargando el catálogo seleccionado…"
+                    : selectionLocked
+                      ? `Menú original: ${selectedMenuName}`
+                      : `Menú actual: ${selectedMenuName}`
+                }
+                sx={{
+                  width: {
+                    xs: "100%",
+                    md: 360,
+                  },
+                  flexShrink: 0,
+                }}
+              >
+                {safeAvailableMenus.length > 0 ? (
+                  safeAvailableMenus.map((menu) => {
+                    const isDefault =
+                      Boolean(menu?.is_default) ||
+                      String(menu?.id) ===
+                        String(defaultMenuId);
+
+                    return (
+                      <MenuItem
+                        key={String(menu.id)}
+                        value={String(menu.id)}
+                      >
+                        {String(menu?.name || "Menú")}
+                        {isDefault
+                          ? " · Predeterminado"
+                          : ""}
+                      </MenuItem>
+                    );
+                  })
+                ) : (
+                  <MenuItem value="" disabled>
+                    Sin menús disponibles
+                  </MenuItem>
+                )}
+              </TextField>
+            </Stack>
           </Box>
 
           <Box

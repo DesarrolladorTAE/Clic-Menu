@@ -6,11 +6,26 @@ const NO_CACHE_HEADERS = {
   Expires: "0",
 };
 
-export async function fetchCashierDirectMenu() {
-  const res = await staffApi.get("/staff/cashier/direct-orders/menu", {
-    params: { _t: Date.now() },
-    headers: NO_CACHE_HEADERS,
-  });
+export async function fetchCashierDirectMenu({
+  menuId = null,
+} = {}) {
+  const normalizedMenuId = Number(menuId || 0);
+
+  const params = {
+    _t: Date.now(),
+
+    ...(normalizedMenuId > 0
+      ? { menu_id: normalizedMenuId }
+      : {}),
+  };
+
+  const res = await staffApi.get(
+    "/staff/cashier/direct-orders/menu",
+    {
+      params,
+      headers: NO_CACHE_HEADERS,
+    },
+  );
 
   return res?.data;
 }
