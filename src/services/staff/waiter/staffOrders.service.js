@@ -1,27 +1,50 @@
 // src/services/staff/waiter/staffOrders.service.js
 import staffApi from "../../staffApi";
 
-/**
- * StaffTableOrderController
- * - menu (SALON)
- * - occupy / free
- * - createOrder
- * - showCurrent
- * - history
- * - appendItems
- */
-
 const NO_CACHE_HEADERS = {
   "Cache-Control": "no-cache, no-store, must-revalidate",
   Pragma: "no-cache",
   Expires: "0",
 };
 
-export async function fetchStaffWaiterMenu() {
-  const res = await staffApi.get(`/staff/waiter/menu`, {
-    params: { _t: Date.now() },
-    headers: NO_CACHE_HEADERS,
-  });
+export async function fetchStaffWaiterMenu({
+  tableId = null,
+  orderId = null,
+} = {}) {
+  const normalizedTableId = Number(tableId || 0);
+  const normalizedOrderId = Number(orderId || 0);
+
+  const hasTableId = normalizedTableId > 0;
+  const hasOrderId = normalizedOrderId > 0;
+
+  /*
+   * El backend exige exactamente un contexto:
+   * - table_id: crear una orden nueva usando el menú de la zona.
+   * - order_id: continuar una orden existente conservando su menú original.
+   * No se permite enviar ambos ni omitir ambos.
+   */
+  if (hasTableId === hasOrderId) {
+    throw new Error(
+      "Debes enviar tableId para una orden nueva u orderId para continuar una orden existente, pero no ambos.",
+    );
+  }
+
+  const params = {
+    _t: Date.now(),
+
+    ...(hasTableId
+      ? { table_id: normalizedTableId }
+      : { order_id: normalizedOrderId }),
+  };
+
+  const res = await staffApi.get(
+    `/staff/waiter/menu`,
+    {
+      params,
+      headers: NO_CACHE_HEADERS,
+    },
+  );
+
   return res?.data;
 }
 

@@ -1,3 +1,4 @@
+// src/hooks/menu/useMenuSectionSelection.js
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 /**

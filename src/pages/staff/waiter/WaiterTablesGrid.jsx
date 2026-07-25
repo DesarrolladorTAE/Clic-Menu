@@ -986,14 +986,30 @@ export default function WaiterTablesGrid() {
   };
 
   const doCreateOrder = async (table) => {
-    const tableId = table?.id;
+    const tableId = Number(table?.id || 0);
+
     if (!tableId) return;
 
     try {
-      const res = await fetchStaffWaiterMenu();
-      const payload = res?.data || res?.payload || res || null;
+      const res = await fetchStaffWaiterMenu({
+        tableId,
+      });
 
-      nav(`/staff/waiter/tables/${tableId}/order`, {
+      const payload =
+        res?.data ||
+        res?.payload ||
+        res ||
+        null;
+
+      /*
+      * Es una comanda nueva.
+      * Todavía no existe order_id, por lo que la URL
+      * debe conservar únicamente el tableId.
+      */
+      const orderUrl =
+        `/staff/waiter/tables/${tableId}/order`;
+
+      nav(orderUrl, {
         state: {
           table: {
             id: tableId,
@@ -1004,34 +1020,66 @@ export default function WaiterTablesGrid() {
             adult_count: table?.adult_count ?? null,
             child_count: table?.child_count ?? null,
             remaining_seats: table?.remaining_seats ?? null,
-            ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
+            ordering_mode:
+              table?.ordering_mode ||
+              meta?.ordering_mode ||
+              null,
             table_service_mode:
-              table?.table_service_mode || meta?.table_service_mode || null,
+              table?.table_service_mode ||
+              meta?.table_service_mode ||
+              null,
           },
+
           preloadedMenu: payload,
+
           intent: "create",
+
+          /*
+          * Es una orden nueva.
+          * El backend resolvió el menú usando table_id.
+          */
           existingOrderId: null,
         },
       });
     } catch (e) {
       showAlert(
-        pickErr(e, "No se pudo abrir el menú para crear comanda."),
-        "error"
+        pickErr(
+          e,
+          "No se pudo abrir el menú para crear comanda.",
+        ),
+        "error",
       );
     }
   };
 
   const doViewOrder = async (table) => {
-    const tableId = table?.id;
-    const openOrderId = table?.active_order?.id || null;
+    const tableId = Number(table?.id || 0);
+    const openOrderId = Number(
+      table?.active_order?.id || 0,
+    );
 
     if (!tableId || !openOrderId) return;
 
     try {
-      const res = await fetchStaffWaiterMenu();
-      const payload = res?.data || res?.payload || res || null;
+      const res = await fetchStaffWaiterMenu({
+        orderId: openOrderId,
+      });
 
-      nav(`/staff/waiter/tables/${tableId}/order`, {
+      const payload =
+        res?.data ||
+        res?.payload ||
+        res ||
+        null;
+
+      /*
+      * El order_id también se conserva en la URL.
+      * Así no se pierde el contexto al recargar la página.
+      */
+      const orderUrl =
+        `/staff/waiter/tables/${tableId}/order` +
+        `?order_id=${encodeURIComponent(openOrderId)}`;
+
+      nav(orderUrl, {
         state: {
           table: {
             id: tableId,
@@ -1042,19 +1090,34 @@ export default function WaiterTablesGrid() {
             adult_count: table?.adult_count ?? null,
             child_count: table?.child_count ?? null,
             remaining_seats: table?.remaining_seats ?? null,
-            ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
+            ordering_mode:
+              table?.ordering_mode ||
+              meta?.ordering_mode ||
+              null,
             table_service_mode:
-              table?.table_service_mode || meta?.table_service_mode || null,
+              table?.table_service_mode ||
+              meta?.table_service_mode ||
+              null,
           },
+
           preloadedMenu: payload,
+
           intent: "view",
+
+          /*
+          * Se conserva también en location.state para el acceso
+          * normal desde el tablero.
+          */
           existingOrderId: openOrderId,
         },
       });
     } catch (e) {
       showAlert(
-        pickErr(e, "No se pudo abrir el menú para ver la comanda."),
-        "error"
+        pickErr(
+          e,
+          "No se pudo abrir el menú para ver la comanda.",
+        ),
+        "error",
       );
     }
   };
