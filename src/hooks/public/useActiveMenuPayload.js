@@ -47,20 +47,48 @@ export function useActiveMenuPayload({
     }
 
     const menusByChannel =
-      data?.menus_by_channel && typeof data.menus_by_channel === "object"
+      data?.menus_by_channel &&
+      typeof data.menus_by_channel === "object" &&
+      !Array.isArray(data.menus_by_channel)
         ? data.menus_by_channel
         : {};
 
+    const hasMenusByChannel =
+      Object.keys(menusByChannel).length > 0;
+
+    /**
+     * El backend actual del QR web de WhatsApp ya entrega
+     * directamente el menú predeterminado del canal:
+     *
+     * - data.menu
+     * - data.menu_context
+     * - data.sections
+     * - data.sales_channel
+     *
+     * Cuando no existe menus_by_channel, data ya es el payload
+     * activo y no deben eliminarse sus secciones.
+     */
+    if (!hasMenusByChannel) {
+      return {
+        ...data,
+        sections: Array.isArray(data?.sections)
+          ? data.sections
+          : [],
+      };
+    }
+
+    /**
+     * Compatibilidad con la estructura anterior, en la que
+     * el backend podía entregar varios payloads web agrupados
+     * por canal.
+     */
     const selectedPayload =
       menusByChannel?.[String(activeWebChannelId)] || null;
 
     /**
-     * Si no existe payload para el canal activo, no se debe
-     * utilizar data.sections ni el payload de otro canal.
-     *
-     * Se conservan los datos generales para que la pantalla pueda
-     * seguir mostrando encabezado, sucursal y configuración UI,
-     * pero el menú queda sin secciones.
+     * Cuando existe una respuesta multicanal, pero no existe
+     * payload para el canal seleccionado, no se debe utilizar
+     * accidentalmente el menú de otro canal.
      */
     if (!selectedPayload) {
       return {
@@ -77,9 +105,6 @@ export function useActiveMenuPayload({
     /**
      * Las secciones pertenecen exclusivamente al payload
      * correspondiente al canal web seleccionado.
-     *
-     * Un arreglo vacío es un resultado válido y no debe
-     * reemplazarse con data.sections.
      */
     return {
       ...selectedPayload,
