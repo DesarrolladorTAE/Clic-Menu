@@ -1178,10 +1178,17 @@ export function isAvailabilityErrorCode(code) {
 }
 
 export function isWarehouseSelectionErrorCode(code) {
-  const v = String(code || "").toUpperCase();
+  const normalizedCode = String(code || "")
+    .trim()
+    .toUpperCase();
+
   return (
-    v === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" ||
-    v === "INVALID_SELECTED_WAREHOUSE"
+    normalizedCode ===
+      "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" ||
+    normalizedCode ===
+      "INVALID_SELECTED_WAREHOUSE" ||
+    normalizedCode ===
+      "WAREHOUSE_NOT_FULLY_VALID_FOR_ORDER"
   );
 }
 
@@ -1203,46 +1210,12 @@ export function getInitialWarehouseSelectionId(selection) {
     return "";
   }
 
-  const selectableWarehouses = Array.isArray(
-    selection?.selectable_warehouses,
-  )
-    ? selection.selectable_warehouses
-    : [];
-
-  let allowedWarehouses = [];
-
   /*
-   * Si backend envía allowed_warehouses, esa lista es
-   * autoritativa, incluso cuando está vacía.
+   * Almacenes que pueden surtir completamente la orden.
+   * el mesero solamente puede elegir entre esos almacenes.
    */
-  if (Array.isArray(selection?.allowed_warehouses)) {
-    allowedWarehouses = selection.allowed_warehouses;
-  } else if (
-    Array.isArray(selection?.allowed_warehouse_ids)
-  ) {
-    /*
-     * Si solo llegan los IDs permitidos, se utilizan para
-     * filtrar la información completa de los seleccionables.
-     */
-    const allowedIdSet = new Set(
-      selection.allowed_warehouse_ids
-        .map((id) => Number(id))
-        .filter((id) => id > 0),
-    );
-
-    allowedWarehouses = selectableWarehouses.filter(
-      (warehouse) =>
-        allowedIdSet.has(
-          Number(warehouse?.id || 0),
-        ),
-    );
-  } else {
-    /*
-     * Compatibilidad con respuestas anteriores:
-     * si existen almacenes completamente válidos, solo esos
-     * son permitidos; si no existen, se usan los seleccionables.
-     */
-    const validIdSet = new Set(
+  const validWarehouseIds = Array.from(
+    new Set(
       (
         Array.isArray(selection?.valid_warehouse_ids)
           ? selection.valid_warehouse_ids
@@ -1250,39 +1223,87 @@ export function getInitialWarehouseSelectionId(selection) {
       )
         .map((id) => Number(id))
         .filter((id) => id > 0),
-    );
+    ),
+  );
 
-    allowedWarehouses =
-      validIdSet.size > 0
-        ? selectableWarehouses.filter(
-            (warehouse) =>
-              validIdSet.has(
-                Number(warehouse?.id || 0),
-              ),
-          )
-        : selectableWarehouses;
+  /*
+   * Lista alternativa para el caso donde ningún almacén
+   * puede surtir completamente la orden.
+   */
+  let allowedWarehouseIds = [];
+
+  if (
+    Array.isArray(selection?.allowed_warehouse_ids)
+  ) {
+    allowedWarehouseIds =
+      selection.allowed_warehouse_ids
+        .map((id) => Number(id))
+        .filter((id) => id > 0);
+  } else if (
+    Array.isArray(selection?.allowed_warehouses)
+  ) {
+    allowedWarehouseIds =
+      selection.allowed_warehouses
+        .map((warehouse) =>
+          Number(warehouse?.id || 0),
+        )
+        .filter((id) => id > 0);
+  } else if (
+    Array.isArray(selection?.selectable_warehouses)
+  ) {
+    allowedWarehouseIds =
+      selection.selectable_warehouses
+        .map((warehouse) =>
+          Number(warehouse?.id || 0),
+        )
+        .filter((id) => id > 0);
   }
 
-  const allowedWarehouseIds = allowedWarehouses
-    .map((warehouse) =>
-      Number(warehouse?.id || 0),
-    )
-    .filter((id) => id > 0);
+  allowedWarehouseIds = Array.from(
+    new Set(allowedWarehouseIds),
+  );
 
-  const autoId = Number(
+  /*
+   * Regla definitiva:
+   *
+   * - Si existen almacenes completamente válidos,
+   *   solo se trabaja con valid_warehouse_ids.
+   *
+   * - Si no existe ninguno completamente válido,
+   *   se trabaja con allowed_warehouse_ids.
+   */
+  const selectableWarehouseIds =
+    validWarehouseIds.length > 0
+      ? validWarehouseIds
+      : allowedWarehouseIds;
+
+  const autoSelectedWarehouseId = Number(
     selection?.auto_selected_warehouse_id || 0,
   );
 
+  /*
+   * Solo se acepta la selección automática cuando también
+   * pertenece a la lista aplicable al escenario actual.
+   */
   if (
-    autoId > 0 &&
-    allowedWarehouseIds.includes(autoId)
+    autoSelectedWarehouseId > 0 &&
+    selectableWarehouseIds.includes(
+      autoSelectedWarehouseId,
+    )
   ) {
-    return String(autoId);
+    return String(autoSelectedWarehouseId);
   }
 
-  if (allowedWarehouseIds.length === 1) {
-    return String(allowedWarehouseIds[0]);
+  /*
+   * Si solo existe una opción aplicable, se deja
+   * preseleccionada en el diálogo.
+   */
+  if (selectableWarehouseIds.length === 1) {
+    return String(selectableWarehouseIds[0]);
   }
 
+  /*
+   * Cuando existen varias opciones, el mesero debe escoger.
+   */
   return "";
 }

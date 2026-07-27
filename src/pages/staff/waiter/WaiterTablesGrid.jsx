@@ -55,88 +55,162 @@ function getAllowedWarehouseIds(context) {
   }
 
   /*
-   * La lista enviada expresamente por backend es autoritativa,
-   * incluso cuando viene vacía.
+   * Primera prioridad:
+   * almacenes que pueden surtir completamente la orden.
+   *
+   * Cuando existe al menos uno, el mesero solamente puede
+   * seleccionar entre esos almacenes.
    */
-  if (Array.isArray(context?.allowed_warehouse_ids)) {
-    return context.allowed_warehouse_ids
-      .map((id) => Number(id))
-      .filter((id) => id > 0);
-  }
+  const validWarehouseIds = Array.from(
+    new Set(
+      (
+        Array.isArray(context?.valid_warehouse_ids)
+          ? context.valid_warehouse_ids
+          : []
+      )
+        .map((id) => Number(id))
+        .filter((id) => id > 0),
+    ),
+  );
 
-  if (Array.isArray(context?.allowed_warehouses)) {
-    return context.allowed_warehouses
-      .map((warehouse) => Number(warehouse?.id || 0))
-      .filter((id) => id > 0);
+  if (validWarehouseIds.length > 0) {
+    return validWarehouseIds;
   }
 
   /*
-   * Compatibilidad temporal con respuestas anteriores:
-   * si hay almacenes completamente válidos, solo se permiten esos;
-   * si no existe ninguno, se permiten los seleccionables.
+   * Segunda prioridad:
+   * ningún almacén puede surtir completamente la orden.
+   *
+   * En este caso se permiten los almacenes enviados por
+   * backend como opciones de preferencia inicial.
    */
-  const validIds = Array.isArray(context?.valid_warehouse_ids)
-    ? context.valid_warehouse_ids
-        .map((id) => Number(id))
-        .filter((id) => id > 0)
-    : [];
-
-  if (validIds.length > 0) {
-    return validIds;
+  if (
+    Array.isArray(context?.allowed_warehouse_ids)
+  ) {
+    return Array.from(
+      new Set(
+        context.allowed_warehouse_ids
+          .map((id) => Number(id))
+          .filter((id) => id > 0),
+      ),
+    );
   }
 
-  return Array.isArray(context?.selectable_warehouses)
-    ? context.selectable_warehouses
-        .map((warehouse) => Number(warehouse?.id || 0))
-        .filter((id) => id > 0)
+  if (
+    Array.isArray(context?.allowed_warehouses)
+  ) {
+    return Array.from(
+      new Set(
+        context.allowed_warehouses
+          .map((warehouse) =>
+            Number(warehouse?.id || 0),
+          )
+          .filter((id) => id > 0),
+      ),
+    );
+  }
+
+  /*
+   * Compatibilidad con respuestas anteriores que solo
+   * incluyan selectable_warehouses.
+   */
+  return Array.isArray(
+    context?.selectable_warehouses,
+  )
+    ? Array.from(
+        new Set(
+          context.selectable_warehouses
+            .map((warehouse) =>
+              Number(warehouse?.id || 0),
+            )
+            .filter((id) => id > 0),
+        ),
+      )
     : [];
 }
 
 function getAllowedWarehouses(context) {
-  if (Array.isArray(context?.allowed_warehouses)) {
-    return context.allowed_warehouses;
+  if (!context || typeof context !== "object") {
+    return [];
   }
 
-  const allowedIds = new Set(
-    getAllowedWarehouseIds(context),
+  const allowedWarehouseIds =
+    getAllowedWarehouseIds(context);
+
+  if (allowedWarehouseIds.length === 0) {
+    return [];
+  }
+
+  const allowedIdSet = new Set(
+    allowedWarehouseIds,
   );
 
-  const selectable = Array.isArray(
-    context?.selectable_warehouses,
-  )
-    ? context.selectable_warehouses
-    : [];
+  const warehouseSources = [
+    ...(
+      Array.isArray(context?.selectable_warehouses)
+        ? context.selectable_warehouses
+        : []
+    ),
+    ...(
+      Array.isArray(context?.allowed_warehouses)
+        ? context.allowed_warehouses
+        : []
+    ),
+  ];
 
-  return selectable.filter((warehouse) =>
-    allowedIds.has(Number(warehouse?.id || 0)),
-  );
+  const seenWarehouseIds = new Set();
+
+  return warehouseSources.filter((warehouse) => {
+    const warehouseId = Number(
+      warehouse?.id || 0,
+    );
+
+    if (
+      warehouseId <= 0 ||
+      !allowedIdSet.has(warehouseId) ||
+      seenWarehouseIds.has(warehouseId)
+    ) {
+      return false;
+    }
+
+    seenWarehouseIds.add(warehouseId);
+
+    return true;
+  });
 }
 
 function getInitialAllowedWarehouseId(context) {
-  const allowedWarehouses =
-    getAllowedWarehouses(context);
+  const allowedWarehouseIds =
+    getAllowedWarehouseIds(context);
 
-  const allowedIds = new Set(
-    getAllowedWarehouseIds(context),
-  );
-
-  const autoSelectedId = Number(
+  const autoSelectedWarehouseId = Number(
     context?.auto_selected_warehouse_id || 0,
   );
 
+  /*
+   * Solo se respeta la selección automática cuando pertenece
+   * a la lista aplicable al escenario actual.
+   */
   if (
-    autoSelectedId > 0 &&
-    allowedIds.has(autoSelectedId)
+    autoSelectedWarehouseId > 0 &&
+    allowedWarehouseIds.includes(
+      autoSelectedWarehouseId,
+    )
   ) {
-    return autoSelectedId;
+    return autoSelectedWarehouseId;
   }
 
-  if (allowedWarehouses.length === 1) {
-    return Number(
-      allowedWarehouses[0]?.id || 0,
-    ) || "";
+  /*
+   * Cuando solo existe una opción aplicable, se deja
+   * preseleccionada.
+   */
+  if (allowedWarehouseIds.length === 1) {
+    return allowedWarehouseIds[0];
   }
 
+  /*
+   * Cuando existen varias opciones, el mesero debe elegir.
+   */
   return "";
 }
 
@@ -655,8 +729,20 @@ export default function WaiterTablesGrid() {
         return;
       }
 
+      const warehouseSelectionCode = String(
+        res?.code || "",
+      )
+        .trim()
+        .toUpperCase();
+
+      const requiresWarehouseSelection = [
+        "PREFERRED_WAREHOUSE_SELECTION_REQUIRED",
+        "INVALID_SELECTED_WAREHOUSE",
+        "WAREHOUSE_NOT_FULLY_VALID_FOR_ORDER",
+      ].includes(warehouseSelectionCode);
+
       if (
-        res?.code === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" &&
+        requiresWarehouseSelection &&
         res?.data?.ok
       ) {
         openWarehouseDialog({
@@ -664,23 +750,19 @@ export default function WaiterTablesGrid() {
           orderId,
           context: res.data,
         });
-        return;
-      }
 
-      if (
-        res?.code === "INVALID_SELECTED_WAREHOUSE" &&
-        res?.data?.ok
-      ) {
-        openWarehouseDialog({
-          table,
-          orderId,
-          context: res.data,
-        });
+        
+        if (
+          warehouseSelectionCode !==
+          "PREFERRED_WAREHOUSE_SELECTION_REQUIRED"
+        ) {
+          showAlert(
+            res?.message ||
+              "La disponibilidad de almacenes cambió. Selecciona una opción actualizada para continuar.",
+            "warning",
+          );
+        }
 
-        showAlert(
-          "El almacén seleccionado ya no es válido. Elige otro para continuar.",
-          "warning"
-        );
         return;
       }
 
@@ -748,13 +830,31 @@ export default function WaiterTablesGrid() {
         return;
       }
 
+      const warehouseSelectionCode = String(
+        res?.code || "",
+      )
+        .trim()
+        .toUpperCase();
+
+      const requiresNewWarehouseSelection = [
+        "PREFERRED_WAREHOUSE_SELECTION_REQUIRED",
+        "INVALID_SELECTED_WAREHOUSE",
+        "WAREHOUSE_NOT_FULLY_VALID_FOR_ORDER",
+      ].includes(warehouseSelectionCode);
+
       if (
-        (res?.code === "PREFERRED_WAREHOUSE_SELECTION_REQUIRED" ||
-          res?.code === "INVALID_SELECTED_WAREHOUSE") &&
+        requiresNewWarehouseSelection &&
         res?.data?.ok
       ) {
         const nextContext = res.data;
 
+        /*
+        * Se reemplaza el contexto anterior por el más reciente
+        * enviado por backend.
+        *
+        * La selección anterior no se conserva porque pudo dejar
+        * de estar permitida o completamente válida.
+        */
         setWarehouseDialog((prev) => ({
           ...prev,
           loading: false,
@@ -767,7 +867,7 @@ export default function WaiterTablesGrid() {
 
         showAlert(
           res?.message ||
-            "Debes seleccionar un almacén permitido.",
+            "La disponibilidad de almacenes cambió. Selecciona una opción actualizada.",
           "warning",
         );
 

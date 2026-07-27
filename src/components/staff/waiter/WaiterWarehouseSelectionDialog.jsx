@@ -51,39 +51,109 @@ export default function WaiterWarehouseSelectionDialog({
   onClose,
   onConfirm,
 }) {
-  const allowedWarehouses = useMemo(() => {
-    if (Array.isArray(context?.allowed_warehouses)) {
-      return context.allowed_warehouses;
-    }
-
-    const allowedWarehouseIds = Array.isArray(
-      context?.allowed_warehouse_ids,
-    )
-      ? context.allowed_warehouse_ids
+  
+  const validWarehouseIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        (
+          Array.isArray(context?.valid_warehouse_ids)
+            ? context.valid_warehouse_ids
+            : []
+        )
           .map((id) => Number(id))
-          .filter((id) => id > 0)
-      : [];
-
-    if (allowedWarehouseIds.length === 0) {
-      return [];
-    }
-
-    const allowedIdSet = new Set(allowedWarehouseIds);
-
-    const selectableWarehouses = Array.isArray(
-      context?.selectable_warehouses,
-    )
-      ? context.selectable_warehouses
-      : [];
-
-    return selectableWarehouses.filter((warehouse) =>
-      allowedIdSet.has(Number(warehouse?.id || 0)),
+          .filter((id) => id > 0),
+      ),
     );
   }, [context]);
 
-  const validWarehouseIds = Array.isArray(context?.valid_warehouse_ids)
-    ? context.valid_warehouse_ids.map((id) => Number(id))
-    : [];
+  const allowedWarehouses = useMemo(() => {
+
+    let applicableWarehouseIds = [];
+
+    if (validWarehouseIds.length > 0) {
+      applicableWarehouseIds = validWarehouseIds;
+    } else if (
+      Array.isArray(context?.allowed_warehouse_ids)
+    ) {
+      applicableWarehouseIds =
+        context.allowed_warehouse_ids
+          .map((id) => Number(id))
+          .filter((id) => id > 0);
+    } else if (
+      Array.isArray(context?.allowed_warehouses)
+    ) {
+      applicableWarehouseIds =
+        context.allowed_warehouses
+          .map((warehouse) =>
+            Number(warehouse?.id || 0),
+          )
+          .filter((id) => id > 0);
+    } else if (
+      Array.isArray(context?.selectable_warehouses)
+    ) {
+      /*
+      * Compatibilidad con respuestas anteriores.
+      */
+      applicableWarehouseIds =
+        context.selectable_warehouses
+          .map((warehouse) =>
+            Number(warehouse?.id || 0),
+          )
+          .filter((id) => id > 0);
+    }
+
+    applicableWarehouseIds = Array.from(
+      new Set(applicableWarehouseIds),
+    );
+
+    if (applicableWarehouseIds.length === 0) {
+      return [];
+    }
+
+    const applicableWarehouseIdSet = new Set(
+      applicableWarehouseIds,
+    );
+
+    /*
+    * Se combinan las colecciones que contienen los datos
+    * completos de los almacenes.
+    *
+    * Posteriormente se filtran usando únicamente los IDs
+    * aplicables al escenario actual.
+    */
+    const warehouseSources = [
+      ...(
+        Array.isArray(context?.selectable_warehouses)
+          ? context.selectable_warehouses
+          : []
+      ),
+      ...(
+        Array.isArray(context?.allowed_warehouses)
+          ? context.allowed_warehouses
+          : []
+      ),
+    ];
+
+    const seenWarehouseIds = new Set();
+
+    return warehouseSources.filter((warehouse) => {
+      const warehouseId = Number(
+        warehouse?.id || 0,
+      );
+
+      if (
+        warehouseId <= 0 ||
+        !applicableWarehouseIdSet.has(warehouseId) ||
+        seenWarehouseIds.has(warehouseId)
+      ) {
+        return false;
+      }
+
+      seenWarehouseIds.add(warehouseId);
+
+      return true;
+    });
+  }, [context, validWarehouseIds]);
 
   const copy = useMemo(
     () => getModeCopy(context?.selection_mode),
