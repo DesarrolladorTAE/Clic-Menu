@@ -1071,20 +1071,44 @@ export function buildModifierContextSections(product, opts = {}) {
 /* =========================
    Availability helpers
 ========================= */
+export const AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE = "unavailable_by_schedule";
+
+export const AVAILABILITY_STATUS_NO_LONGER_SELLABLE = "no_longer_sellable";
+
+const AVAILABILITY_ERROR_CODES = new Set([
+  "INSUFFICIENT_PRODUCT_AVAILABILITY",
+  "MENU_NOT_AVAILABLE",
+  "PRODUCT_NOT_AVAILABLE_IN_MENU",
+  "SECTION_NOT_AVAILABLE_BY_SCHEDULE",
+  "CATEGORY_NOT_AVAILABLE_BY_SCHEDULE",
+  "PRODUCT_NOT_AVAILABLE_BY_SCHEDULE",
+  "VARIANT_NOT_AVAILABLE",
+]);
 
 export function getAvailabilityData(source) {
-  if (!source) return null;
-  if (source?.availability && typeof source.availability === "object") {
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return null;
+  }
+
+  if (source?.availability && typeof source.availability === "object" && !Array.isArray(source.availability)) {
     return source.availability;
   }
-  if (source?.status && Object.prototype.hasOwnProperty.call(source, "max_available_qty")) {
+
+  const status = String(
+    source?.status || "",
+  ).trim();
+
+  if (status !== "") {
     return source;
   }
+
   return null;
 }
 
 export function translateAvailabilityStatus(status) {
-  const v = String(status || "").toLowerCase();
+  const v = String(status || "")
+    .trim()
+    .toLowerCase();
 
   const map = {
     available: "Disponible",
@@ -1092,19 +1116,45 @@ export function translateAvailabilityStatus(status) {
     insufficient_stock: "Stock insuficiente",
     recipe_missing: "Receta faltante",
     inventory_blocked: "Bloqueado por inventario",
+
+    unavailable_by_schedule:
+      "No disponible por horario",
+
+    no_longer_sellable:
+      "Ya no está disponible",
   };
 
-  return map[v] || (status ? String(status) : "Sin disponibilidad");
+  return map[v] || (
+    status
+      ? String(status)
+      : "Sin disponibilidad"
+  );
 }
 
 export function getAvailabilityTone(status) {
-  const v = String(status || "").toLowerCase();
+  const v = String(status || "")
+    .trim()
+    .toLowerCase();
 
-  if (v === "available") return "ok";
-  if (v === "insufficient_stock") return "warn";
-  if (v === "recipe_missing") return "warn";
-  if (v === "inventory_blocked") return "danger";
-  if (v === "out_of_stock") return "danger";
+  if (v === "available") {
+    return "ok";
+  }
+
+  if (
+    v === "insufficient_stock" ||
+    v === "recipe_missing" ||
+    v === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE
+  ) {
+    return "warn";
+  }
+
+  if (
+    v === "inventory_blocked" ||
+    v === "out_of_stock" ||
+    v === AVAILABILITY_STATUS_NO_LONGER_SELLABLE
+  ) {
+    return "danger";
+  }
 
   return "default";
 }
@@ -1124,36 +1174,93 @@ export function isAvailabilityBlocked(availability) {
 
 export function formatAvailabilityCaption(availability) {
   const a = getAvailabilityData(availability);
-  if (!a) return "";
 
-  const status = String(a?.status || "").toLowerCase();
-  const reason = String(a?.reason || "").trim();
-  const maxQty = Number(a?.max_available_qty || 0);
+  if (!a) {
+    return "";
+  }
+
+  const status = String(
+    a?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  const reason = String(
+    a?.reason || "",
+  ).trim();
+
+  const rawMaxQty = a?.max_available_qty;
+
+  const maxQty =
+    rawMaxQty === null ||
+    rawMaxQty === undefined ||
+    rawMaxQty === ""
+      ? null
+      : Number(rawMaxQty);
 
   if (status === "available") {
-    if (maxQty > 0) {
+    if (Number.isFinite(maxQty) && maxQty > 0) {
       return `Máx. disponible: ${maxQty}`;
     }
     return "Disponible";
   }
 
-  if (reason) return reason;
+  if (reason) {
+    return reason;
+  }
 
-  return translateAvailabilityStatus(status);
+  if (status === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE) {
+    return "No disponible por horario.";
+  }
+
+  if (status === AVAILABILITY_STATUS_NO_LONGER_SELLABLE) {
+    return "Este producto dejó de estar disponible.";
+  }
+
+  return translateAvailabilityStatus(
+    status,
+  );
 }
 
 export function formatAvailabilityShortLabel(availability) {
   const a = getAvailabilityData(availability);
-  if (!a) return "";
 
-  const status = String(a?.status || "").toLowerCase();
-  const maxQty = Number(a?.max_available_qty || 0);
-
-  if (status === "available") {
-    return maxQty > 0 ? `Disponible · ${maxQty}` : "Disponible";
+  if (!a) {
+    return "";
   }
 
-  return translateAvailabilityStatus(status);
+  const status = String(
+    a?.status || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  const rawMaxQty = a?.max_available_qty;
+
+  const maxQty =
+    rawMaxQty === null ||
+    rawMaxQty === undefined ||
+    rawMaxQty === ""
+      ? null
+      : Number(rawMaxQty);
+
+  if (status === "available") {
+    return ( Number.isFinite(maxQty) && maxQty > 0 )
+      ? `Disponible · ${maxQty}`
+      : "Disponible";
+  }
+
+  if (status === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE) {
+    return "No disponible por horario";
+  }
+
+  if (status === AVAILABILITY_STATUS_NO_LONGER_SELLABLE) {
+    return "Ya no está disponible";
+  }
+
+  return translateAvailabilityStatus(
+    status,
+  );
 }
 
 export function extractApiErrorInfo(error) {
@@ -1174,7 +1281,15 @@ export function extractApiErrorInfo(error) {
 }
 
 export function isAvailabilityErrorCode(code) {
-  return String(code || "").toUpperCase() === "INSUFFICIENT_PRODUCT_AVAILABILITY";
+  const normalizedCode = String(
+    code || "",
+  )
+    .trim()
+    .toUpperCase();
+
+  return AVAILABILITY_ERROR_CODES.has(
+    normalizedCode,
+  );
 }
 
 export function isWarehouseSelectionErrorCode(code) {
@@ -1193,12 +1308,81 @@ export function isWarehouseSelectionErrorCode(code) {
 }
 
 export function buildAvailabilityErrorMessage(errorInfo) {
-  const info = errorInfo?.data ? errorInfo : extractApiErrorInfo(errorInfo);
-  const baseMessage = String(info?.message || "No hay disponibilidad suficiente.");
-  const data = info?.data || {};
-  const maxQty = Number(data?.max_available_qty || 0);
+  const alreadyExtracted =
+    errorInfo &&
+    typeof errorInfo === "object" &&
+    Object.prototype.hasOwnProperty.call(
+      errorInfo,
+      "code",
+    ) &&
+    Object.prototype.hasOwnProperty.call(
+      errorInfo,
+      "message",
+    );
 
-  if (maxQty > 0) {
+  const info = alreadyExtracted
+    ? errorInfo
+    : extractApiErrorInfo(errorInfo);
+
+  const code = String(
+    info?.code || "",
+  )
+    .trim()
+    .toUpperCase();
+
+  const fallbackMessages = {
+    INSUFFICIENT_PRODUCT_AVAILABILITY: "No hay disponibilidad suficiente.",
+
+    MENU_NOT_AVAILABLE: "El menú ya no está disponible.",
+
+    PRODUCT_NOT_AVAILABLE_IN_MENU: "Este producto dejó de estar disponible en el menú.",
+
+    SECTION_NOT_AVAILABLE_BY_SCHEDULE: "Esta sección no está disponible por horario.",
+
+    CATEGORY_NOT_AVAILABLE_BY_SCHEDULE: "Esta categoría no está disponible por horario.",
+
+    PRODUCT_NOT_AVAILABLE_BY_SCHEDULE:"Este producto no está disponible por horario.",
+
+    VARIANT_NOT_AVAILABLE: "La variante seleccionada ya no está disponible.",
+  };
+
+  const data =
+    info?.data &&
+    typeof info.data === "object"
+      ? info.data
+      : {};
+
+  const effectiveAvailability =
+    getAvailabilityData(data);
+
+  const availabilityReason = String(
+    effectiveAvailability?.reason ||
+    data?.reason ||
+    "",
+  ).trim();
+
+  const baseMessage = String(
+    info?.message ||
+    availabilityReason ||
+    fallbackMessages[code] ||
+    "No hay disponibilidad suficiente.",
+  ).trim();
+
+  const rawMaxQty =
+    data?.max_available_qty ??
+    effectiveAvailability?.max_available_qty;
+
+  const maxQty =
+    rawMaxQty === null ||
+    rawMaxQty === undefined ||
+    rawMaxQty === ""
+      ? null
+      : Number(rawMaxQty);
+
+  if (
+    Number.isFinite(maxQty) &&
+    maxQty > 0
+  ) {
     return `${baseMessage}\nMáximo disponible: ${maxQty}.`;
   }
 

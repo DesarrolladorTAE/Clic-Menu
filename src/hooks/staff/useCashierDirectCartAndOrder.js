@@ -23,6 +23,16 @@ import {
   safeNum,
 } from "../public/publicMenu.utils";
 
+import {
+  countInvalidCartItems,
+  getCartLineProductId,
+  getCartLineVariantId,
+  reconcilePendingCartAvailability,
+} from "../menu/menuAvailability.utils";
+
+const INVALID_CART_MESSAGE =
+  "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
+
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
@@ -260,6 +270,85 @@ function buildReviewErrorMessage(res) {
   );
 }
 
+function applyAvailabilityErrorToCart(items, apiError) {
+  const rows = Array.isArray(items) ? items : [];
+  const data = apiError?.data && typeof apiError.data === "object" ? apiError.data : {};
+  const sourceAvailability =
+    data?.availability && typeof data.availability === "object"
+      ? data.availability
+      : {};
+
+  const code = String(apiError?.code || "").trim().toUpperCase();
+  const fallbackStatus =
+    code === "INSUFFICIENT_PRODUCT_AVAILABILITY"
+      ? "insufficient_stock"
+      : code.endsWith("_BY_SCHEDULE")
+        ? "unavailable_by_schedule"
+        : "no_longer_sellable";
+
+  const receivedStatus = String(sourceAvailability?.status || "").trim().toLowerCase();
+  const status =
+    receivedStatus && receivedStatus !== "available"
+      ? receivedStatus
+      : fallbackStatus;
+
+  const reason = String(
+    sourceAvailability?.reason ||
+      apiError?.message ||
+      "Este producto dejó de estar disponible.",
+  ).trim();
+
+  const availability = {
+    ...sourceAvailability,
+    status,
+    is_available_now: false,
+    reason,
+    source:
+      sourceAvailability?.source ||
+      (status === "unavailable_by_schedule"
+        ? "schedule"
+        : status === "insufficient_stock"
+          ? "inventory"
+          : "catalog"),
+  };
+
+  const rawItemIndex = data?.item_index;
+  const itemIndex =
+    rawItemIndex === null || rawItemIndex === undefined || rawItemIndex === ""
+      ? -1
+      : Number(rawItemIndex);
+
+  const hasItemIndex =
+    Number.isInteger(itemIndex) && itemIndex >= 0 && itemIndex < rows.length;
+
+  const productId = Number(data?.product_id || 0);
+  const parsedVariantId = Number(data?.variant_id || 0);
+  const variantId = parsedVariantId > 0 ? parsedVariantId : null;
+  let marked = false;
+
+  return rows.map((item, index) => {
+    const sameIndex = hasItemIndex && index === itemIndex;
+    const sameIdentity =
+      !hasItemIndex &&
+      !marked &&
+      productId > 0 &&
+      getCartLineProductId(item) === productId &&
+      getCartLineVariantId(item) === variantId;
+
+    if (!sameIndex && !sameIdentity) return item;
+
+    marked = true;
+
+    return {
+      ...item,
+      availability_status: status,
+      availability_reason: reason,
+      is_available_now: false,
+      availability,
+    };
+  });
+}
+
 export function useCashierDirectCartAndOrder({
   returnSaleId = null,
   selectedMenuId = null,
@@ -280,6 +369,18 @@ export function useCashierDirectCartAndOrder({
   const [stockReview, setStockReview] = useState(null);
 
   const lastLoadedRef = useRef({ orderId: null });
+
+  const invalidCartItemsCount = useMemo(() => countInvalidCartItems(cart), [cart]);
+  const hasInvalidCartItems = invalidCartItemsCount > 0;
+
+  const reconcileCartAvailability = useCallback((menuSource) => {
+    if (!menuSource) return;
+    setCart((previous) => reconcilePendingCartAvailability(previous, menuSource));
+  }, []);
+
+  const markCartAvailabilityError = useCallback((apiError) => {
+    setCart((previous) => applyAvailabilityErrorToCart(previous, apiError));
+  }, []);
 
   const normalizedReturnSaleId = Number(returnSaleId || 0);
 
@@ -664,6 +765,11 @@ export function useCashierDirectCartAndOrder({
 
   const createFirstOrder = useCallback(
     async ({ name, requestedKitchenFlow = "" } = {}) => {
+      if (hasInvalidCartItems) {
+        setSendToast(INVALID_CART_MESSAGE);
+        return { ok: false, availabilityError: true };
+      }
+
       const items = normalizeItemsForApi(cart);
 
       if (!items.length) {
@@ -710,7 +816,26 @@ export function useCashierDirectCartAndOrder({
         payload.kitchen_flow = requestedKitchenFlow;
       }
 
-      const res = await createCashierDirectOrder(payload);
+      let res;
+
+      try {
+        res = await createCashierDirectOrder(payload);
+      } catch (error) {
+        const apiError = extractApiErrorInfo(error);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        throw error;
+      }
 
       if (res?.ok) {
         const orderId = getOrderIdFromCreateResponse(res);
@@ -751,9 +876,8 @@ export function useCashierDirectCartAndOrder({
           data: res?.data,
         };
 
-        setSendToast(
-          `⚠️ ${buildAvailabilityErrorMessage(apiError)}`
-        );
+        markCartAvailabilityError(apiError);
+        setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
 
         return {
           ok: false,
@@ -780,12 +904,18 @@ export function useCashierDirectCartAndOrder({
       normalizedSelectedMenuId,
       loadExisting,
       navigate,
+      hasInvalidCartItems,
+      markCartAvailabilityError,
     ]
   );
 
-
   const appendToDirectOrder = useCallback(
     async (orderId, options = {}) => {
+      if (hasInvalidCartItems) {
+        setSendToast(INVALID_CART_MESSAGE);
+        return { ok: false, availabilityError: true };
+      }
+
       const shouldReturnToSaleDetail = options?.returnToSaleDetail !== false;
       const targetOrderId = Number(orderId || activeOrder?.id || 0);
       const items = normalizeItemsForApi(cart);
@@ -800,7 +930,26 @@ export function useCashierDirectCartAndOrder({
         return { ok: false };
       }
 
-      const res = await appendCashierDirectOrderItems(targetOrderId, { items });
+      let res;
+
+      try {
+        res = await appendCashierDirectOrderItems(targetOrderId, { items });
+      } catch (error) {
+        const apiError = extractApiErrorInfo(error);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+
+          return {
+            ok: false,
+            availabilityError: true,
+            data: apiError.data || null,
+          };
+        }
+
+        throw error;
+      }
 
       if (res?.ok) {
         setCart([]);
@@ -840,6 +989,7 @@ export function useCashierDirectCartAndOrder({
           data: res?.data,
         };
 
+        markCartAvailabilityError(apiError);
         setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
 
         return {
@@ -865,6 +1015,8 @@ export function useCashierDirectCartAndOrder({
       normalizedReturnSaleId,
       loadExisting,
       navigate,
+      hasInvalidCartItems,
+      markCartAvailabilityError,
     ]
   );
 
@@ -919,6 +1071,11 @@ export function useCashierDirectCartAndOrder({
   const validateAndGoToPayment = useCallback(
     async (options = {}) => {
       if (sending) return { ok: false };
+
+      if (hasInvalidCartItems) {
+        setSendToast(INVALID_CART_MESSAGE);
+        return { ok: false, availabilityError: true };
+      }
 
       const targetOrderId = Number(options?.orderId || activeOrder?.id || 0);
       const currentSaleId =
@@ -988,6 +1145,7 @@ export function useCashierDirectCartAndOrder({
         const apiError = extractApiErrorInfo(e);
 
         if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
           setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
 
           return {
@@ -1020,11 +1178,19 @@ export function useCashierDirectCartAndOrder({
       appendToDirectOrder,
       loadExisting,
       navigate,
+      hasInvalidCartItems,
+      markCartAvailabilityError,
     ]
   );
 
   async function submitOrderOrAppend() {
     if (sending) return { ok: false };
+
+    if (hasInvalidCartItems) {
+      setSendToast(INVALID_CART_MESSAGE);
+      setTimeout(() => setSendToast(""), 5000);
+      return { ok: false, availabilityError: true };
+    }
 
     if (cart.length <= 0) {
       setSendToast("⚠️ No hay productos seleccionados.");
@@ -1054,6 +1220,7 @@ export function useCashierDirectCartAndOrder({
       const apiError = extractApiErrorInfo(e);
 
       if (isAvailabilityErrorCode(apiError.code)) {
+        markCartAvailabilityError(apiError);
         setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
 
         return {
@@ -1105,6 +1272,9 @@ export function useCashierDirectCartAndOrder({
   return {
     cart,
     setCart,
+    reconcileCartAvailability,
+    hasInvalidCartItems,
+    invalidCartItemsCount,
     addToCartFromProduct,
     addToCartFromVariant,
     setCartComponents,

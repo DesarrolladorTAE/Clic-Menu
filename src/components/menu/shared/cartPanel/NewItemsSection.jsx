@@ -2,8 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../../../pages/public/publicMenu.ui";
 import {
   buildNewItemsPricingSummary,
+  formatAvailabilityCaption,
+  formatAvailabilityShortLabel,
+  getAvailabilityData,
   money,
 } from "../../../../hooks/public/publicMenu.utils";
+import {
+  isCartItemAvailabilityInvalid,
+} from "../../../../hooks/menu/menuAvailability.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
@@ -75,8 +81,39 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
     ? `${item.name} · ${item.variant_name}`
     : item.name;
 
+  const itemAvailability =
+    getAvailabilityData(item) ||
+    (item?.availability_status
+      ? {
+          status: item.availability_status,
+          reason: item.availability_reason,
+          is_available_now: item.is_available_now,
+        }
+      : null);
+
+  const invalidItem = isCartItemAvailabilityInvalid(item);
+  const invalidAvailabilityLabel =
+    formatAvailabilityShortLabel(itemAvailability) || "No disponible";
+
+  const invalidAvailabilityReason = String(
+    item?.availability_reason ||
+      formatAvailabilityCaption(itemAvailability) ||
+      "",
+  ).trim();
+
   return (
-    <div className="cm-new-card">
+    <div
+      className="cm-new-card"
+      aria-invalid={invalidItem ? "true" : undefined}
+      style={
+        invalidItem
+          ? {
+              borderColor: "rgba(211, 47, 47, 0.32)",
+              background: "rgba(211, 47, 47, 0.025)",
+            }
+          : undefined
+      }
+    >
       <div className="cm-new-card-top">
         <div className="cm-new-info">
           <div className="cm-new-title">{label}</div>
@@ -126,6 +163,32 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
           🗑️
         </button>
       </div>
+
+      {invalidItem ? (
+        <div
+          role="alert"
+          title={invalidAvailabilityReason || invalidAvailabilityLabel}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 9,
+            border: "1px solid rgba(211, 47, 47, 0.24)",
+            background: "rgba(211, 47, 47, 0.07)",
+            color: "#B42318",
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          <div style={{ fontWeight: 900, marginBottom: 4 }}>
+            {invalidAvailabilityLabel}
+          </div>
+
+          <div style={{ fontWeight: 700 }}>
+            Este producto dejó de estar disponible.
+            <br />
+            Quítalo para continuar.
+          </div>
+        </div>
+      ) : null}
 
       <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
       <CompositeDetailBlock details={item?.components_detail || []} />

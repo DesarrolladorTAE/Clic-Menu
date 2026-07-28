@@ -8,6 +8,7 @@ import {
 } from "../../../pages/public/publicMenu.ui";
 import {
   formatAvailabilityCaption,
+  formatAvailabilityShortLabel,
   getAvailabilityData,
   getAvailabilityTone,
   hasAnyModifierGroups,
@@ -22,31 +23,6 @@ function isValidColor(color) {
 
 function getCardThemeColor(themeColor) {
   return isValidColor(themeColor) ? themeColor : "#FF7A00";
-}
-
-function getAvailabilityLabel(availability) {
-  const status = String(availability?.status || "").toLowerCase();
-
-  if (
-    status.includes("available") ||
-    status.includes("ok") ||
-    status.includes("success") ||
-    status.includes("disponible")
-  ) {
-    return "Disponible";
-  }
-
-  if (
-    status.includes("sold") ||
-    status.includes("out") ||
-    status.includes("blocked") ||
-    status.includes("agotado") ||
-    status.includes("unavailable")
-  ) {
-    return "Agotado";
-  }
-
-  return isAvailabilityBlocked(availability) ? "Agotado" : "Disponible";
 }
 
 function getAvailabilityPalette(theme, tone) {
@@ -82,8 +58,11 @@ function AvailabilityPill({ availability }) {
 
   if (!a) return null;
 
+  const label = formatAvailabilityShortLabel(a);
   const tone = getAvailabilityTone(a?.status);
   const ui = getAvailabilityPalette(theme, tone);
+
+  if (!label) return null;
 
   return (
     <span
@@ -103,7 +82,7 @@ function AvailabilityPill({ availability }) {
         whiteSpace: "nowrap",
       }}
     >
-      {getAvailabilityLabel(a)}
+      {label}
     </span>
   );
 }
@@ -179,8 +158,9 @@ export default function MenuProductCard({
   const hasComposite = isComposite && compositeItems.length > 0;
   const hasExtras = hasAnyModifierGroups(product);
 
-  const productAvailability = getAvailabilityData(product?.availability);
-  const productBlocked = canSelect && isAvailabilityBlocked(productAvailability);
+  const productAvailability = getAvailabilityData(product);
+  const productBlocked = isAvailabilityBlocked(productAvailability);
+  const productAvailabilityLabel = formatAvailabilityShortLabel(productAvailability) || "No disponible";
 
   const canChooseMain =
     showSelectBtn &&
@@ -200,7 +180,7 @@ export default function MenuProductCard({
   };
 
   const handleOpenVariants = () => {
-    if (!hasVariants) return;
+    if (!hasVariants || !canSelect || productBlocked) return;
     onOpenVariants?.(product);
   };
 
@@ -466,7 +446,7 @@ export default function MenuProductCard({
               disabled={!canSelect || productBlocked}
             >
               {productBlocked
-                ? "No disponible"
+                ? productAvailabilityLabel
                 : isComposite && hasComposite
                 ? "Configurar"
                 : "＋ Seleccionar"}
@@ -485,8 +465,12 @@ export default function MenuProductCard({
               <PillButton
                 tone="default"
                 onClick={handleOpenVariants}
-                title="Ver variantes disponibles"
-                disabled={!onOpenVariants}
+                title={
+                  productBlocked
+                    ? formatAvailabilityCaption(productAvailability) || productAvailabilityLabel
+                    : "Ver variantes disponibles"
+                }
+                disabled={!onOpenVariants || !canSelect || productBlocked}
               >
                 Variantes ({variants.length})
               </PillButton>
@@ -495,8 +479,16 @@ export default function MenuProductCard({
             {hasExtras ? (
               <PillButton
                 tone="soft"
-                onClick={() => onOpenExtras?.(product)}
-                title="Ver extras disponibles de este producto"
+                onClick={() => {
+                  if (!canSelect || productBlocked) return;
+                  onOpenExtras?.(product);
+                }}
+                title={
+                  productBlocked
+                    ? formatAvailabilityCaption(productAvailability) || productAvailabilityLabel
+                    : "Ver extras disponibles de este producto"
+                }
+                disabled={!canSelect || productBlocked}
               >
                 Extras
               </PillButton>

@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { useTheme } from "@mui/material/styles";
 import { Badge, Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import {
+  AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE,
   formatAvailabilityCaption,
   formatAvailabilityShortLabel,
   getAvailabilityData,
@@ -19,6 +20,22 @@ function isValidColor(color) {
 
 function getSafeThemeColor(themeColor) {
   return isValidColor(themeColor) ? themeColor : "#FF7A00";
+}
+
+function resolveVariantAvailability(product, variant) {
+  const productAvailability = getAvailabilityData(product);
+  const variantAvailability = getAvailabilityData(variant);
+
+  const productStatus = String(productAvailability?.status || "").trim().toLowerCase();
+  const productSource = String(productAvailability?.source || "").trim().toLowerCase();
+
+  const productBlockedBySchedule =
+    productStatus === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE ||
+    (productSource === "schedule" && productAvailability?.is_available_now === false);
+
+  if (productBlockedBySchedule) return productAvailability;
+
+  return variantAvailability || productAvailability;
 }
 
 function getAvailabilityPalette(theme, tone) {
@@ -125,11 +142,10 @@ function VariantCard({
   const theme = useTheme();
   const safeThemeColor = getSafeThemeColor(themeColor);
 
-  const variantAvailability = getAvailabilityData(variant?.availability);
-  const variantBlocked = canSelect && isAvailabilityBlocked(variantAvailability);
+  const variantAvailability = resolveVariantAvailability(product, variant);
+  const variantBlocked = isAvailabilityBlocked(variantAvailability);
 
-  const variantName =
-  variant?.name || variant?.display_name || `Variante ${index + 1}`;
+  const variantName = variant?.name || variant?.display_name || `Variante ${index + 1}`;
 
   const variantPromotion = normalizePromotionPresentation(variant);
 
@@ -321,7 +337,9 @@ function VariantCard({
           }
           disabled={!canSelect || variantBlocked}
         >
-          {variantBlocked ? "🚫 No disponible" : "➕ Seleccionar variante"}
+          {variantBlocked
+            ? formatAvailabilityShortLabel(variantAvailability) || "No disponible"
+            : "➕ Seleccionar variante"}
         </PillButton>
       ) : null}
     </div>

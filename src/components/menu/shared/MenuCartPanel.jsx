@@ -261,6 +261,9 @@ export default function MenuCartPanel({
   sending = false,
   canAppend = false,
   canSubmit = false,
+  hasInvalidItems = false,
+  invalidItemsCount = 0,
+  submitBlockReason = "",
   showPaymentMessage = false,
 
   statusBadges = [],
@@ -316,13 +319,29 @@ export default function MenuCartPanel({
     ? toDisplayAmount(pricingSummary?.displayTotal, total)
     : toDisplayAmount(total, 0);
 
-  const resolvedSubmitTitle =
-    submitTitle ||
-    (canAppend ? "Agregar productos a la orden abierta" : "Enviar comanda");
+  const normalizedInvalidItemsCount = Math.max(
+    0,
+    Math.trunc(Number(invalidItemsCount) || 0),
+  );
+
+  const hasInvalidCartItems =
+    Boolean(hasInvalidItems) || normalizedInvalidItemsCount > 0;
+
+  const resolvedSubmitBlockReason = String(
+    submitBlockReason ||
+      "Hay productos que ya no están disponibles. Quítalos para continuar.",
+  ).trim();
+
+  const resolvedSubmitTitle = hasInvalidCartItems
+    ? resolvedSubmitBlockReason
+    : submitTitle ||
+      (canAppend ? "Agregar productos a la orden abierta" : "Enviar comanda");
 
   const resolvedSubmitLabel =
     submitLabel ||
     (sending ? "⏳ Enviando..." : canAppend ? "➕ Agregar" : "📤 Enviar");
+
+  const submitDisabled = !canSubmit || sending || hasInvalidCartItems;
 
   const openNoteModal = (item) => {
     setNoteItem(item);
@@ -338,6 +357,11 @@ export default function MenuCartPanel({
     if (!noteItem?.key) return;
     onNotesChange?.(noteItem.key, nextValue);
     closeNoteModal();
+  };
+
+  const handleSubmit = () => {
+    if (submitDisabled) return;
+    onSubmit?.();
   };
 
   if (!hasOld && !hasNew) return null;
@@ -380,9 +404,9 @@ export default function MenuCartPanel({
             </PillButton>
 
             <PillButton
-              tone="orange"
-              onClick={onSubmit}
-              disabled={!canSubmit || sending}
+              tone={hasInvalidCartItems ? "danger" : "orange"}
+              onClick={handleSubmit}
+              disabled={submitDisabled}
               title={resolvedSubmitTitle}
             >
               {sending ? "⏳ Enviando..." : resolvedSubmitLabel}
@@ -392,6 +416,34 @@ export default function MenuCartPanel({
           </div>
         </div>
       </div>
+
+      {hasInvalidCartItems ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 12,
+            border: "1px solid rgba(211, 47, 47, 0.26)",
+            background: "rgba(211, 47, 47, 0.07)",
+            color: "#B42318",
+            borderRadius: 16,
+            padding: 11,
+            fontSize: 13,
+            lineHeight: 1.45,
+          }}
+        >
+          <div style={{ fontWeight: 900 }}>
+            {normalizedInvalidItemsCount === 1
+              ? "Hay 1 producto no disponible."
+              : normalizedInvalidItemsCount > 1
+                ? `Hay ${normalizedInvalidItemsCount} productos no disponibles.`
+                : "Hay productos no disponibles."}
+          </div>
+
+          <div style={{ marginTop: 3, fontWeight: 750 }}>
+            {resolvedSubmitBlockReason}
+          </div>
+        </div>
+      ) : null}
 
       {isPaymentInProgress ? (
         <div

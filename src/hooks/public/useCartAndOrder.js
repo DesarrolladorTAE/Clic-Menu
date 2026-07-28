@@ -19,6 +19,13 @@ import {
   safeNum,
 } from "./publicMenu.utils";
 
+import {
+  countInvalidCartItems,
+  getCartLineProductId,
+  getCartLineVariantId,
+  reconcilePendingCartAvailability,
+} from "../menu/menuAvailability.utils";
+
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
@@ -193,6 +200,84 @@ function mergeConfirmedOrderTotals(
   return next;
 }
 
+function applyAvailabilityErrorToCart(items, apiError) {
+  const rows = Array.isArray(items) ? items : [];
+  const data = apiError?.data && typeof apiError.data === "object" ? apiError.data : {};
+  const sourceAvailability =
+    data?.availability && typeof data.availability === "object"
+      ? data.availability
+      : {};
+
+  const code = String(apiError?.code || "").trim().toUpperCase();
+  const fallbackStatus =
+    code === "INSUFFICIENT_PRODUCT_AVAILABILITY"
+      ? "insufficient_stock"
+      : code.endsWith("_BY_SCHEDULE")
+        ? "unavailable_by_schedule"
+        : "no_longer_sellable";
+
+  const status = String(sourceAvailability?.status || fallbackStatus)
+    .trim()
+    .toLowerCase();
+
+  const reason = String(
+    sourceAvailability?.reason ||
+      apiError?.message ||
+      "Este producto dejó de estar disponible.",
+  ).trim();
+
+  const availability = {
+    ...sourceAvailability,
+    status,
+    is_available_now: false,
+    reason,
+    source:
+      sourceAvailability?.source ||
+      (status === "unavailable_by_schedule"
+        ? "schedule"
+        : status === "insufficient_stock"
+          ? "inventory"
+          : "catalog"),
+  };
+
+  const hasRawItemIndex =
+    data?.item_index !== null &&
+    data?.item_index !== undefined &&
+    data?.item_index !== "";
+
+  const itemIndex = hasRawItemIndex ? Number(data.item_index) : -1;
+  const hasItemIndex =
+    Number.isInteger(itemIndex) && itemIndex >= 0 && itemIndex < rows.length;
+
+  const productId = Number(data?.product_id || 0);
+  const parsedVariantId = Number(data?.variant_id || 0);
+  const variantId = parsedVariantId > 0 ? parsedVariantId : null;
+
+  let marked = false;
+
+  return rows.map((item, index) => {
+    const sameIndex = hasItemIndex && index === itemIndex;
+    const sameIdentity =
+      !hasItemIndex &&
+      !marked &&
+      productId > 0 &&
+      getCartLineProductId(item) === productId &&
+      getCartLineVariantId(item) === variantId;
+
+    if (!sameIndex && !sameIdentity) return item;
+
+    marked = true;
+
+    return {
+      ...item,
+      availability_status: status,
+      availability_reason: reason,
+      is_available_now: false,
+      availability,
+    };
+  });
+}
+
 export function useCartAndOrder({
   token,
   canSelect,
@@ -231,8 +316,37 @@ export function useCartAndOrder({
   const lastOrderIdRef = useRef(null);
   const cartLineSequenceRef = useRef(0);
 
+  const invalidCartItemsCount = useMemo(() => countInvalidCartItems(cart), [cart]);
+  const hasInvalidCartItems = invalidCartItemsCount > 0;
+
+  const reconcileCartAvailability = useCallback(
+    (menuSource = activeMenuPayload) => {
+      if (!menuSource) return;
+
+      setCart((previous) =>
+        reconcilePendingCartAvailability(previous, menuSource),
+      );
+    },
+    [activeMenuPayload],
+  );
+
+  const markCartAvailabilityError = useCallback((apiError) => {
+    setCart((previous) => applyAvailabilityErrorToCart(previous, apiError));
+  }, []);
+
   const sendWhatsAppOrder = useCallback(async () => {
     try {
+      if (hasInvalidCartItems) {
+        setSendToast(
+          "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
+        );
+
+        return {
+          ok: false,
+          availabilityError: true,
+        };
+      }
+
       if (activeMenuType !== "web") {
         setSendToast(
           "Este menú no permite envío por WhatsApp.",
@@ -299,6 +413,19 @@ export function useCartAndOrder({
             : null,
       };
     } catch (error) {
+      const apiError = extractApiErrorInfo(error);
+
+      if (isAvailabilityErrorCode(apiError.code)) {
+        markCartAvailabilityError(apiError);
+        setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+
+        return {
+          ok: false,
+          availabilityError: true,
+          data: apiError.data || null,
+        };
+      }
+
       const responseData =
         error?.response?.data &&
         typeof error.response.data === "object"
@@ -343,6 +470,8 @@ export function useCartAndOrder({
     activeMenuType,
     cart,
     token,
+    hasInvalidCartItems,
+    markCartAvailabilityError,
   ]);
 
   const currentOrderId = useMemo(() => {
@@ -721,7 +850,7 @@ export function useCartAndOrder({
   window.location.pathname.startsWith("/menu");
 
   const allowBase =
-    (isWebMenu || isPublicWebMenu)
+    ((isWebMenu || isPublicWebMenu)
       ? selectableOk && hasItems && orderUiOk && payingOk
       : tableOk &&
         sessionOk &&
@@ -731,7 +860,8 @@ export function useCartAndOrder({
         unavailableOk &&
         hasItems &&
         orderUiOk &&
-        payingOk;
+        payingOk) &&
+    !hasInvalidCartItems;
 
   const allowSendNow =
     (isWebMenu || isPublicWebMenu)
@@ -774,6 +904,17 @@ export function useCartAndOrder({
 
   const createFirstOrder = useCallback(
     async (name, occupancyPayload) => {
+      if (hasInvalidCartItems) {
+        setSendToast(
+          "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
+        );
+
+        return {
+          ok: false,
+          availabilityError: true,
+        };
+      }
+
       const items = normalizeItemsForApi(cart);
 
       try {
@@ -856,7 +997,9 @@ export function useCartAndOrder({
         const apiError = extractApiErrorInfo(e);
 
         if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
           setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+
           return {
             ok: false,
             availabilityError: true,
@@ -885,15 +1028,25 @@ export function useCartAndOrder({
         return { ok: false };
       }
     },
-    [cart, token, refreshOrder],
+    [ cart, token, refreshOrder, hasInvalidCartItems, markCartAvailabilityError, ],
   );
 
   const appendToOpenOrder = useCallback(
     async (orderId) => {
+      if (hasInvalidCartItems) {
+        setSendToast(
+          "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
+        );
+
+        return {
+          ok: false,
+          availabilityError: true,
+        };
+      }
+
       const items = normalizeItemsForApi(cart);
 
       try {
-
         const res = await appendPublicOrderItems({
           orderId: Number(orderId),
           token: String(token || ""),
@@ -943,7 +1096,9 @@ export function useCartAndOrder({
         const apiError = extractApiErrorInfo(e);
 
         if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
           setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
+
           return {
             ok: false,
             availabilityError: true,
@@ -959,7 +1114,7 @@ export function useCartAndOrder({
         return { ok: false };
       }
     },
-    [cart, token, refreshOrder],
+    [cart, token, refreshOrder, hasInvalidCartItems, markCartAvailabilityError, ],
   );
 
   function buildBlockerMessage() {
@@ -972,6 +1127,7 @@ export function useCartAndOrder({
     if (!busyOk) reasons.push("mesa ocupada por otro dispositivo");
     if (!unavailableOk) reasons.push("sesión no disponible");
     if (!hasItems) reasons.push("sin productos");
+    if (hasInvalidCartItems) reasons.push("hay productos no disponibles");
     if (!orderUiOk) reasons.push("orden bloqueada para agregar");
     if (!payingOk) reasons.push("cuenta en proceso de pago");
 
@@ -985,6 +1141,14 @@ export function useCartAndOrder({
   // ==========================================
   async function submitOrderOrAppend() {
     if (sending) return;
+
+    if (hasInvalidCartItems) {
+      setSendToast(
+        "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
+      );
+      setTimeout(() => setSendToast(""), 5000);
+      return;
+    }
 
     // A. FLUJO WEB (WHATSAPP)
     if (activeMenuType === "web") {
@@ -1029,6 +1193,14 @@ export function useCartAndOrder({
   // ==========================================
   async function confirmAndCreateOrder() {
     if (sending) return;
+
+    if (hasInvalidCartItems) {
+      setSendToast(
+        "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
+      );
+      setTimeout(() => setSendToast(""), 5000);
+      return;
+    }
 
     const name = String(customerName || "").trim();
     if (!name) {
@@ -1377,6 +1549,10 @@ export function useCartAndOrder({
   return {
     cart,
     setCart,
+    reconcileCartAvailability,
+    hasInvalidCartItems,
+    invalidCartItemsCount,
+    addToCartFromProduct,
     addToCartFromProduct,
     addToCartFromVariant,
     setCartComponents,
