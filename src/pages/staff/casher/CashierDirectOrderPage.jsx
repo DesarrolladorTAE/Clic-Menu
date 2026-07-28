@@ -3,10 +3,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import echo from "../../../realtime/echo";
+
 import PageContainer from "../../../components/common/PageContainer";
 import PaginationFooter from "../../../components/common/PaginationFooter";
 import usePagination from "../../../hooks/usePagination";
 import useMenuSectionSelection from "../../../hooks/menu/useMenuSectionSelection";
+import useMenuAvailabilityRealtime from "../../../hooks/menu/useMenuAvailabilityRealtime";
 
 import { fetchCashierDirectMenu } from "../../../services/staff/casher/cashierDirectOrder.service";
 
@@ -217,6 +220,16 @@ export default function CashierDirectOrderPage() {
     setCategoryFilter("all");
   }, [selectedSectionId]);
 
+  useEffect(() => {
+    if (categoryFilter === "all") return;
+
+    const categoryStillExists = categoryOptions.some(
+      (option) => String(option?.value) === String(categoryFilter)
+    );
+
+    if (!categoryStillExists) setCategoryFilter("all");
+  }, [categoryFilter, categoryOptions]);
+
   const handleSectionChange = (nextSectionId) => {
     setCategoryFilter("all");
     selectSection(nextSectionId);
@@ -250,6 +263,11 @@ export default function CashierDirectOrderPage() {
 
   const canSelect = true;
   const canAppend = cartOrder.canAppend;
+  const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
+  const invalidItemsCount = Math.max(0, Number(cartOrder.invalidCartItemsCount || 0));
+  const submitBlockReason =
+    "Hay productos que ya no están disponibles. Quítalos para continuar.";
+
   const hasOld =
     Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0;
 
@@ -326,9 +344,8 @@ export default function CashierDirectOrderPage() {
         return null;
       }
 
-      setErrorMsg(String(msg));
-
       if (!silent) {
+        setErrorMsg(String(msg));
         setData(null);
       }
 
@@ -342,6 +359,47 @@ export default function CashierDirectOrderPage() {
     }
   };
 
+  const availabilityMenuId =
+    Number(
+      isEditingExistingDirectOrder
+        ? cartOrder.activeOrder?.menu_id
+        : selectedMenuId || data?.selected_menu?.id || defaultMenuId || 0
+    ) || null;
+
+  useMenuAvailabilityRealtime({
+    echo,
+    data,
+    enabled: Boolean(
+      availabilityMenuId &&
+        data?.realtime?.channel_type &&
+        data?.realtime?.channel &&
+        data?.realtime?.event
+    ),
+    onAvailabilityEvent: async (event) => {
+      const affectedMenuIds = (Array.isArray(event?.affected_menu_ids)
+        ? event.affected_menu_ids
+        : []
+      )
+        .map((menuId) => Number(menuId || 0))
+        .filter((menuId) => menuId > 0);
+
+      if (
+        affectedMenuIds.length > 0 &&
+        !affectedMenuIds.includes(availabilityMenuId)
+      ) {
+        return;
+      }
+
+      const refreshedPayload = await load({
+        silent: true,
+        menuId: availabilityMenuId,
+      });
+
+      if (!refreshedPayload) return;
+
+      cartOrder.reconcileCartAvailability?.(refreshedPayload);
+    },
+  });
   
   useEffect(() => {
     let mounted = true;
@@ -689,6 +747,11 @@ export default function CashierDirectOrderPage() {
   };
 
   const handleSubmitCart = () => {
+    if (hasInvalidItems) {
+      cartOrder.setSendToast(submitBlockReason);
+      return;
+    }
+
     if (isEditingExistingDirectOrder) {
       cartOrder.validateAndGoToPayment();
       return;
@@ -704,6 +767,11 @@ export default function CashierDirectOrderPage() {
   };
 
   const handleConfirmCreateOrder = async ({ customer_name, kitchen_flow }) => {
+    if (hasInvalidItems) {
+      cartOrder.setSendToast(submitBlockReason);
+      return { ok: false, availabilityError: true };
+    }
+
     const nextName = String(customer_name || "").trim();
 
     cartOrder.setCustomerName(nextName);
@@ -712,7 +780,7 @@ export default function CashierDirectOrderPage() {
       cartOrder.setKitchenFlow(kitchen_flow);
     }
 
-    await cartOrder.createFirstOrder({
+    return cartOrder.createFirstOrder({
       name: nextName,
       requestedKitchenFlow: kitchen_flow || "",
     });
@@ -1057,10 +1125,14 @@ export default function CashierDirectOrderPage() {
           sending={cartOrder.sending}
           canAppend={canAppend || isEditingExistingDirectOrder}
           canSubmit={
-            isEditingExistingDirectOrder
+            !hasInvalidItems &&
+            (isEditingExistingDirectOrder
               ? hasOld || cartOrder.cart.length > 0
-              : cartOrder.cart.length > 0
+              : cartOrder.cart.length > 0)
           }
+          hasInvalidItems={hasInvalidItems}
+          invalidItemsCount={invalidItemsCount}
+          submitBlockReason={submitBlockReason}
           submitLabel={isEditingExistingDirectOrder ? "Cobrar" : undefined}
           onEmpty={() => cartOrder.setCart([])}
           onSubmit={handleSubmitCart}

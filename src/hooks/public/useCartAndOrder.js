@@ -1553,7 +1553,6 @@ export function useCartAndOrder({
     hasInvalidCartItems,
     invalidCartItemsCount,
     addToCartFromProduct,
-    addToCartFromProduct,
     addToCartFromVariant,
     setCartComponents,
     removeCartItem,

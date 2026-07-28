@@ -28,6 +28,8 @@ import { useCartAndOrder } from "../../hooks/public/useCartAndOrder";
 import { useCompositeDrafts } from "../../hooks/public/useCompositeDrafts";
 
 import useMenuSectionSelection from "../../hooks/menu/useMenuSectionSelection";
+import useMenuAvailabilityRealtime from "../../hooks/menu/useMenuAvailabilityRealtime";
+
 import MenuCartFloatingButton from "../../components/menu/shared/MenuCartFloatingButton";
 import PublicMenuCategoryTabs from "../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 import MenuSectionTabs from "../../components/menu/shared/menuUi/MenuSectionTabs";
@@ -64,8 +66,7 @@ export default function PublicMenuEntryPage() {
   const [q, setQ] = useState("");
 
   const [compositeModalOpen, setCompositeModalOpen] = useState(false);
-  const [selectedCompositeProduct, setSelectedCompositeProduct] =
-    useState(null);
+  const [selectedCompositeProduct, setSelectedCompositeProduct] = useState(null);
 
   const [variantsModalOpen, setVariantsModalOpen] = useState(false);
   const [selectedVariantsProduct, setSelectedVariantsProduct] = useState(null);
@@ -207,6 +208,12 @@ export default function PublicMenuEntryPage() {
     activeMenuPayload,
     isWebMenu,
   });
+
+  useEffect(() => {
+    if (!activeMenuPayload) return;
+
+    cartOrder.reconcileCartAvailability?.(activeMenuPayload);
+  }, [activeMenuPayload, cartOrder.reconcileCartAvailability]);
 
   useEffect(() => {
     let mounted = true;
@@ -535,9 +542,23 @@ export default function PublicMenuEntryPage() {
     load,
   ]);
 
+  useMenuAvailabilityRealtime({
+    echo,
+    data,
+    enabled: Boolean(
+      data?.realtime?.channel_type &&
+      data?.realtime?.channel &&
+      data?.realtime?.event
+    ),
+    onAvailabilityEvent: async () => {
+      await load({ silent: true });
+    },
+  });
+
   const allowBaseSend =
     canSelect &&
     cartOrder.cart.length > 0 &&
+    !cartOrder.hasInvalidCartItems &&
     !qr.sessionBusy &&
     !qr.sessionUnavailable &&
     (
@@ -560,7 +581,17 @@ export default function PublicMenuEntryPage() {
       String(cartOrder.activeOrder?.status || "").toLowerCase(),
     );
 
-  const allowSendButton = allowBaseSend && (canAppend || !hasPending);
+  const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
+  const invalidItemsCount = Number(cartOrder.invalidCartItemsCount || 0);
+
+  const submitBlockReason = hasInvalidItems
+    ? "Hay productos que ya no están disponibles. Quítalos para continuar."
+    : "";
+
+  const allowSendButton =
+    allowBaseSend &&
+    (canAppend || !hasPending) &&
+    !hasInvalidItems;
 
   const billFlow = cartOrder.activeOrder?.bill_flow || null;
   const canRequestBill =
@@ -1145,6 +1176,9 @@ export default function PublicMenuEntryPage() {
           canAppend={canAppend}
           pending={pending}
           allowSendButton={allowSendButton}
+          hasInvalidItems={hasInvalidItems}
+          invalidItemsCount={invalidItemsCount}
+          submitBlockReason={submitBlockReason}
           billRequesting={billRequesting}
           billToast={billToast}
           canRequestBill={canRequestBill}

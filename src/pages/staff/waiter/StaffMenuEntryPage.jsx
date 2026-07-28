@@ -16,6 +16,7 @@ import PaginationFooter from "../../../components/common/PaginationFooter";
 
 import { useMenuProducts } from "../../../hooks/public/useMenuProducts";
 import useMenuSectionSelection from "../../../hooks/menu/useMenuSectionSelection";
+import useMenuAvailabilityRealtime from "../../../hooks/menu/useMenuAvailabilityRealtime";
 import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
 import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder";
 import {
@@ -270,13 +271,10 @@ export default function StaffMenuEntryPage() {
       const res =
         await fetchStaffWaiterMenu(menuContext);
 
-      const payload =
-        res?.data ||
-        res?.payload ||
-        res ||
-        null;
+      const payload = res?.data || res?.payload || res || null;
 
       setData(payload);
+      return payload;
     } catch (e) {
       const msg =
         e?.response?.data?.message ||
@@ -284,8 +282,12 @@ export default function StaffMenuEntryPage() {
         e?.message ||
         "No se pudo cargar el menú del mesero.";
 
-      setErrorMsg(String(msg));
-      setData(null);
+      if (!silent) {
+        setErrorMsg(String(msg));
+        setData(null);
+      }
+
+      return null;
     } finally {
       if (!silent) {
         setLoading(false);
@@ -350,6 +352,12 @@ export default function StaffMenuEntryPage() {
   ]);
 
   const branchId = Number(data?.branch?.id || data?.branch_id || 0);
+  const currentMenuId = Number(
+    data?.menu?.id ||
+      data?.data?.menu?.id ||
+      data?.menu_id ||
+      0,
+  );
 
   useEffect(() => {
     if (!branchId || !tableId) return;
@@ -426,12 +434,60 @@ export default function StaffMenuEntryPage() {
     };
   }, [branchId, tableId, cartOrder, effectiveOrderId]);
 
+  useMenuAvailabilityRealtime({
+    echo,
+    data,
+    enabled: Boolean(
+      data?.realtime?.channel_type &&
+        data?.realtime?.channel &&
+        data?.realtime?.event,
+    ),
+    onAvailabilityEvent: async (event) => {
+      const affectedMenuIds = (Array.isArray(event?.affected_menu_ids)
+        ? event.affected_menu_ids
+        : []
+      )
+        .map((menuId) => Number(menuId || 0))
+        .filter((menuId) => menuId > 0);
+
+      if (
+        currentMenuId > 0 &&
+        affectedMenuIds.length > 0 &&
+        !affectedMenuIds.includes(currentMenuId)
+      ) {
+        return;
+      }
+
+      const targetOrderId =
+        Number(
+          cartOrder?.activeOrder?.id ||
+            menuContextOrderId ||
+            0,
+        ) || null;
+
+      const refreshedPayload = await load({
+        silent: true,
+        orderIdOverride: targetOrderId,
+      });
+
+      if (!refreshedPayload) return;
+
+      cartOrder.reconcileCartAvailability?.(refreshedPayload);
+    },
+  });
+
   const canSelect = true;
   const canAppend = cartOrder.canAppend;
+  const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
+  const invalidItemsCount = Math.max(
+    0,
+    Number(cartOrder.invalidCartItemsCount || 0),
+  );
+  const submitBlockReason = "Hay productos que ya no están disponibles. Quítalos para continuar.";
+
   const hasOld = Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0;
 
-  const cartDrawerItemCount =
-    Number(cartOrder.cart?.length || 0) + Number(cartOrder.oldItems?.length || 0);
+  const cartDrawerItemCount = Number(cartOrder.cart?.length || 0) + Number(cartOrder.oldItems?.length || 0);
 
   const hasCartContent =
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
@@ -713,14 +769,21 @@ export default function StaffMenuEntryPage() {
             </PillButton>
 
             <PillButton
-              tone="orange"
+              tone={hasInvalidItems ? "danger" : "orange"}
               disabled={
                 cartOrder.sending ||
                 cartOrder.cart.length === 0 ||
+                hasInvalidItems ||
                 (!canAppend && !String(cartOrder.customerName || "").trim())
               }
               onClick={cartOrder.submitOrderOrAppend}
-              title={canAppend ? "Agregar items a la orden abierta" : "Crear orden con nombre"}
+              title={
+                hasInvalidItems
+                  ? submitBlockReason
+                  : canAppend
+                    ? "Agregar items a la orden abierta"
+                    : "Crear orden con nombre"
+              }
             >
               {cartOrder.sending ? "⏳ Enviando..." : canAppend ? "➕ Agregar" : "📨 Crear"}
             </PillButton>
@@ -754,6 +817,29 @@ export default function StaffMenuEntryPage() {
               Esta orden está abierta. Los items nuevos se agregarán.
             </div>
           )}
+
+          {hasInvalidItems ? (
+            <div
+              role="alert"
+              style={{
+                border: "1px solid rgba(211,47,47,0.24)",
+                borderRadius: 12,
+                padding: "10px 12px",
+                background: "rgba(211,47,47,0.07)",
+                color: "#B42318",
+                fontSize: 12,
+                fontWeight: 800,
+                lineHeight: 1.45,
+              }}
+            >
+              <div style={{ fontWeight: 950 }}>
+                {invalidItemsCount === 1
+                  ? "Hay 1 producto no disponible."
+                  : `Hay ${invalidItemsCount} productos no disponibles.`}
+              </div>
+              <div style={{ marginTop: 3 }}>{submitBlockReason}</div>
+            </div>
+          ) : null}
 
           <div
             style={{
@@ -890,7 +976,14 @@ export default function StaffMenuEntryPage() {
         customerName={cartOrder.customerName}
         selection={cartOrder.warehouseSelectionContext}
         onClose={cartOrder.closeWarehouseDialog}
-        onConfirm={cartOrder.confirmWarehouseSelection}
+        onConfirm={(warehouseId) => {
+          if (hasInvalidItems) {
+            cartOrder.setSendToast(submitBlockReason);
+            return;
+          }
+
+          return cartOrder.confirmWarehouseSelection(warehouseId);
+        }}
       />
 
       <CompositeProductModal
@@ -970,13 +1063,22 @@ export default function StaffMenuEntryPage() {
           sendToast={cartOrder.sendToast}
           sending={cartOrder.sending}
           canAppend={canAppend}
-          canSubmit={cartOrder.cart.length > 0}
+          canSubmit={cartOrder.cart.length > 0 && !hasInvalidItems}
+          hasInvalidItems={hasInvalidItems}
+          invalidItemsCount={invalidItemsCount}
+          submitBlockReason={submitBlockReason}
           onEmpty={() => cartOrder.setCart([])}
           onSubmit={() => {
+            if (hasInvalidItems) {
+              cartOrder.setSendToast(submitBlockReason);
+              return;
+            }
+
             if (canAppend) {
               cartOrder.submitOrderOrAppend();
               return;
             }
+
             cartOrder.setSendOpen(true);
           }}
           onQtyChange={cartOrder.setCartQty}
