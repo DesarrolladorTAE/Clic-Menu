@@ -81,6 +81,13 @@ export default function CashierHomePage() {
 
   const pickCode = (e) => e?.response?.data?.code;
 
+  const isMissingStaffContext = (e) => {
+    const status = Number(e?.response?.status || 0);
+    const message = String(e?.response?.data?.message || e?.message || "").toLowerCase();
+
+    return status === 409 && (message.includes("no hay un turno activo") || message.includes("selecciona sucursal"));
+  };
+
   const load = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
@@ -103,23 +110,22 @@ export default function CashierHomePage() {
         return;
       }
     } catch (e) {
-      const status = e?.response?.status;
+      const status = Number(e?.response?.status || 0);
 
-      if (status === 409) {
-        showAlert({
-          severity: "warning",
-          message:
-            e?.response?.data?.message ||
-            "Debes seleccionar tu contexto antes de operar caja.",
+      if (isMissingStaffContext(e)) {
+        nav("/staff/select-context", {
+          replace: true,
+          state: {
+            from: "/staff/cashier",
+            forceSelection: true,
+          },
         });
         return;
       }
 
       showAlert({
-        severity: "error",
-        message:
-          e?.response?.data?.message ||
-          "No se pudo cargar la información de caja.",
+        severity: status === 409 ? "warning" : "error",
+        message: e?.response?.data?.message || "No se pudo cargar la información de caja.",
       });
     } finally {
       if (!silent) setLoading(false);
@@ -254,9 +260,7 @@ export default function CashierHomePage() {
         showAlert({
           severity: "warning",
           title: "Ventas tomadas",
-          message:
-            e?.response?.data?.message ||
-            "Aún tienes ventas tomadas. Debes cobrarlas o liberarlas antes de cerrar la caja.",
+          message: "Tienes ventas tomadas. Debes cobrarlas o liberarlas desde “Mis ventas” antes de cerrar la caja.",
         });
         return;
       }
@@ -330,9 +334,7 @@ export default function CashierHomePage() {
             showAlert({
               severity: "warning",
               title: "Ventas tomadas",
-              message:
-                e?.response?.data?.message ||
-                "Aún tienes ventas tomadas. No puedes salir hasta cobrarlas o liberarlas.",
+              message: "Tienes ventas tomadas. Debes cobrarlas o liberarlas desde “Mis ventas” antes de salir.",
             });
             return;
           }
