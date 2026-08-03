@@ -1,3 +1,4 @@
+// src/components/staff/casher/ticket/CashierPostPaymentTicketModal.jsx
 import React from "react";
 import {
   Box, Dialog, DialogContent, IconButton, Stack, Typography,
@@ -11,7 +12,6 @@ import CashierTicketActionsBar from "./CashierTicketActionsBar";
 
 export default function CashierPostPaymentTicketModal({
   open,
-  onClose,
   onContinue,
   onViewTicket,
   onPrintTicket,
@@ -29,25 +29,56 @@ export default function CashierPostPaymentTicketModal({
   sale = null,
   order = null,
   table = null,
+  settlement = null,
   ticketWarning = false,
   ticketErrorCode = null,
   ticketErrorMessage = null,
 }) {
   const ticketAvailable = Boolean(ticket?.id);
 
+  const partiallyPaid = settlement?.partially_paid === true;
+  const completed = settlement?.completed === true;
+
+  const rawPendingChecksCount = Number(
+    settlement?.pending_checks_count ?? 0
+  );
+
+  const pendingChecksCount = Number.isFinite(rawPendingChecksCount)
+    ? Math.max(0, Math.trunc(rawPendingChecksCount))
+    : 0;
+
+  const paymentTitle = partiallyPaid
+    ? "Cuenta cobrada"
+    : completed
+    ? "Cobro finalizado"
+    : "Cobro realizado";
+
+  const paymentMessage = partiallyPaid
+    ? pendingChecksCount === 1
+      ? "El cobro de esta cuenta se realizó correctamente. Queda 1 cuenta pendiente en esta venta."
+      : `El cobro de esta cuenta se realizó correctamente. Quedan ${pendingChecksCount} cuentas pendientes en esta venta.`
+    : completed
+    ? "La última cuenta fue pagada y el paquete quedó concluido."
+    : "El cobro se realizó correctamente. Revisa el resumen y las acciones disponibles.";
+
   const thermalPrintEnabled =
-  Boolean(printConfig?.enabled) &&
-  Boolean(printConfig?.show_print_button);
+    Boolean(printConfig?.enabled) &&
+    Boolean(printConfig?.show_print_button);
 
   const thermalPrintAppName =
-    printConfig?.app_type?.name || "la aplicación de impresión térmica";
+    printConfig?.app_type?.name ||
+    "la aplicación de impresión térmica";
+
+  const handleExit = () => {
+    onContinue?.();
+  };
 
   return (
     <Dialog
       open={open}
       onClose={(_, reason) => {
         if (reason === "backdropClick") return;
-        onClose?.();
+        handleExit();
       }}
       fullWidth
       maxWidth="md"
@@ -78,7 +109,11 @@ export default function CashierPostPaymentTicketModal({
             alignItems="flex-start"
             justifyContent="space-between"
           >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+            >
               <Box
                 sx={{
                   width: 46,
@@ -103,7 +138,7 @@ export default function CashierPostPaymentTicketModal({
                     lineHeight: 1.1,
                   }}
                 >
-                  Cobro realizado
+                  {paymentTitle}
                 </Typography>
 
                 <Typography
@@ -114,15 +149,13 @@ export default function CashierPostPaymentTicketModal({
                     lineHeight: 1.5,
                   }}
                 >
-                  {ticketAvailable
-                    ? "La venta se cerró correctamente y el ticket ya quedó listo."
-                    : "La venta se cerró correctamente. Revisa el detalle del ticket en este resumen."}
+                  {paymentMessage}
                 </Typography>
               </Box>
             </Stack>
 
             <IconButton
-              onClick={onClose}
+              onClick={handleExit}
               sx={{
                 borderRadius: 2,
                 border: "1px solid",
@@ -141,6 +174,7 @@ export default function CashierPostPaymentTicketModal({
               sale={sale}
               order={order}
               table={table}
+              settlement={settlement}
               ticketWarning={ticketWarning}
               ticketErrorCode={ticketErrorCode}
               ticketErrorMessage={ticketErrorMessage}
@@ -192,7 +226,7 @@ export default function CashierPostPaymentTicketModal({
               onPrint={onPrintTicket}
               onThermalPrint={onThermalPrintTicket}
               onDownload={onDownloadTicket}
-              onContinue={onContinue}
+              onContinue={handleExit}
               loadingView={busyView}
               loadingPrint={busyPrint}
               loadingThermalPrint={busyThermalPrint}

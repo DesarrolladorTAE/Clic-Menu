@@ -1,4 +1,5 @@
-// Tarjetita Descuentos
+// src/components/staff/casher/saleDetailPage/CashierDiscountCard.jsx
+//Tarjetita de descuentos
 import React, { useMemo, useState } from "react";
 import {
   Box, Button, Card, CardContent, Chip, IconButton, MenuItem, Stack, TextField, Typography,
@@ -10,6 +11,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 
 export default function CashierDiscountCard({
   sale,
+  orderCheckId = null,
   itemsFlat = [],
   summary = null,
   globalForm,
@@ -32,53 +34,109 @@ export default function CashierDiscountCard({
     ? summary.item_discounts
     : [];
 
-  const hasGlobalDiscount = !!globalDiscount;
+  const hasGlobalDiscount = Boolean(globalDiscount);
   const hasItemDiscounts = itemDiscounts.length > 0;
 
-  const promotionDiscountTotal = Number(
+  const promotionDiscountTotal = toNumber(
     summary?.sale?.promotion_discount_total ??
-      sale?.promotion_discount_total ??
-      0
+      sale?.promotion_discount_total,
+    0
+  );
+
+  const currentOrderCheckId = normalizePositiveId(
+    orderCheckId ??
+      summary?.sale?.order_check_id ??
+      sale?.order_check_id
   );
 
   const normalizedItems = useMemo(() => {
     return (Array.isArray(itemsFlat) ? itemsFlat : [])
       .map((item) => {
-        const orderItemId = Number(
-          item?.id ?? item?.order_item_id ?? 0
+        const hasFinancialIdentity =
+          item?.order_check_item_id !== undefined ||
+          item?.order_check_id !== undefined;
+
+        const orderCheckItemId = normalizePositiveId(
+          item?.order_check_item_id ??
+            (hasFinancialIdentity ? item?.id : null)
         );
 
-        const qty = Number(
-          item?.quantity ?? item?.qty ?? 1
+        const orderItemId = normalizePositiveId(
+          item?.order_item_id ??
+            (!hasFinancialIdentity ? item?.id : null)
         );
 
-        const netTotal = Number(
+        const itemOrderCheckId = normalizePositiveId(
+          item?.order_check_id
+        );
+
+        const parentOrderItemId = normalizePositiveId(
+          item?.parent_order_item_id
+        );
+
+        const itemKind = String(item?.item_kind || "").trim();
+        const isChild =
+          parentOrderItemId !== null ||
+          itemKind === "composite_child";
+
+        const belongsToCurrentCheck =
+          currentOrderCheckId === null ||
+          itemOrderCheckId === null ||
+          itemOrderCheckId === currentOrderCheckId;
+
+        const qty = toNumber(item?.quantity ?? item?.qty, 1);
+        const baseLineTotal = toNumber(item?.base_line_total, 0);
+        const modifiersTotal = toNumber(item?.modifiers_total, 0);
+        const promotionDiscountTotal = toNumber(
+          item?.promotion_discount_total,
+          0
+        );
+        const manualDiscountTotal = toNumber(
+          item?.manual_discount_total,
+          0
+        );
+        const cancellationTotal = toNumber(
+          item?.cancellation_total,
+          0
+        );
+        const netTotal = toNumber(
           item?.net_line_total ??
             item?.line_total ??
-            item?.total ??
-            0
-        );
-
-        const manualDiscountTotal = Number(
-          item?.manual_discount_total ?? 0
+            item?.total,
+          0
         );
 
         return {
+          orderCheckItemId,
           orderItemId,
+          orderCheckId: itemOrderCheckId,
+          parentOrderItemId,
           qty,
-          netTotal,
+          baseLineTotal,
+          modifiersTotal,
+          promotionDiscountTotal,
           manualDiscountTotal,
+          cancellationTotal,
+          netTotal,
+          discountBaseAmount: resolveDiscountBaseAmount({
+            baseLineTotal,
+            modifiersTotal,
+            promotionDiscountTotal,
+            cancellationTotal,
+          }),
           name: resolveItemName(item),
-          itemKind:
-            item?.item_kind ||
-            (item?.parent_order_item_id
-              ? "composite_child"
-              : "order_item"),
-          isCompositeParent: !!item?.is_composite_parent,
+          itemKind,
+          isChild,
+          belongsToCurrentCheck,
+          isCompositeParent: Boolean(item?.is_composite_parent),
         };
       })
-      .filter((row) => row.orderItemId > 0);
-  }, [itemsFlat]);
+      .filter(
+        (row) =>
+          row.orderItemId !== null &&
+          row.belongsToCurrentCheck
+      );
+  }, [itemsFlat, currentOrderCheckId]);
 
   const itemsMap = useMemo(() => {
     const map = new Map();
@@ -94,7 +152,11 @@ export default function CashierDiscountCard({
     const map = new Map();
 
     itemDiscounts.forEach((row) => {
-      map.set(Number(row.order_item_id), row);
+      const orderItemId = normalizePositiveId(row?.order_item_id);
+
+      if (orderItemId !== null) {
+        map.set(orderItemId, row);
+      }
     });
 
     return map;
@@ -102,14 +164,18 @@ export default function CashierDiscountCard({
 
   const selectedDraftItemIds = useMemo(() => {
     return itemDiscountDrafts
-      .map((draft) => Number(draft?.orderItemId || 0))
-      .filter(Boolean);
+      .map((draft) => normalizePositiveId(draft?.orderItemId))
+      .filter((id) => id !== null);
   }, [itemDiscountDrafts]);
 
   const selectableItems = useMemo(() => {
-    return normalizedItems.filter(
-      (item) => !itemDiscountMap.has(Number(item.orderItemId))
-    );
+    return normalizedItems.filter((item) => {
+      if (item.isChild) return false;
+      if (!item.belongsToCurrentCheck) return false;
+      if (item.discountBaseAmount <= 0) return false;
+
+      return !itemDiscountMap.has(Number(item.orderItemId));
+    });
   }, [normalizedItems, itemDiscountMap]);
 
   return (
@@ -143,17 +209,15 @@ export default function CashierDiscountCard({
                 lineHeight: 1.5,
               }}
             >
-              Puedes aplicar un descuento manual total o por ítem, pero no ambos al
-              mismo tiempo.
+              Puedes aplicar un descuento manual a toda la cuenta o a productos
+              específicos, pero no ambos al mismo tiempo.
             </Typography>
           </Box>
 
           {promotionDiscountTotal > 0 ? (
             <HelperBox>
-              Esta venta ya cuenta con{" "}
-              <strong>
-                {formatCurrency(promotionDiscountTotal)}
-              </strong>{" "}
+              Esta cuenta ya tiene{" "}
+              <strong>{formatCurrency(promotionDiscountTotal)}</strong>{" "}
               en promociones aplicadas. Los descuentos manuales se aplican de
               forma adicional.
             </HelperBox>
@@ -176,10 +240,8 @@ export default function CashierDiscountCard({
               label="Descuento manual total"
               helper={
                 hasGlobalDiscount
-                  ? `Activo: ${formatCurrency(
-                      globalDiscount?.amount_applied || 0
-                    )}`
-                  : "Aplicar al total"
+                  ? `Activo: ${formatCurrency(globalDiscount?.amount_applied || 0)}`
+                  : "Aplicar a toda la cuenta"
               }
               onClick={() => setActiveSection("global")}
             />
@@ -210,6 +272,7 @@ export default function CashierDiscountCard({
               <Stack spacing={1.5}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <SellRoundedIcon color="primary" />
+
                   <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
                     Descuento manual total
                   </Typography>
@@ -234,10 +297,12 @@ export default function CashierDiscountCard({
                             : "Monto fijo"
                         }
                       />
+
                       <InfoRow
                         label="Valor"
                         value={String(globalDiscount.value)}
                       />
+
                       <InfoRow
                         label="Aplicado"
                         value={formatCurrency(globalDiscount.amount_applied)}
@@ -270,8 +335,8 @@ export default function CashierDiscountCard({
                             select
                             fullWidth
                             value={globalForm?.type || "fixed"}
-                            onChange={(e) =>
-                              onGlobalFormChange?.("type", e.target.value)
+                            onChange={(event) =>
+                              onGlobalFormChange?.("type", event.target.value)
                             }
                             disabled={busy || disabled || hasItemDiscounts}
                           >
@@ -289,8 +354,8 @@ export default function CashierDiscountCard({
                           <TextField
                             fullWidth
                             value={globalForm?.value || ""}
-                            onChange={(e) =>
-                              onGlobalFormChange?.("value", e.target.value)
+                            onChange={(event) =>
+                              onGlobalFormChange?.("value", event.target.value)
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder="0.00"
@@ -306,8 +371,8 @@ export default function CashierDiscountCard({
                         <TextField
                           fullWidth
                           value={globalForm?.reason || ""}
-                          onChange={(e) =>
-                            onGlobalFormChange?.("reason", e.target.value)
+                          onChange={(event) =>
+                            onGlobalFormChange?.("reason", event.target.value)
                           }
                           placeholder="Opcional"
                           disabled={busy || disabled || hasItemDiscounts}
@@ -333,8 +398,8 @@ export default function CashierDiscountCard({
 
                     {hasItemDiscounts ? (
                       <HelperBox>
-                        Ya existen descuentos por ítem en esta venta. Quita esos
-                        descuentos antes de aplicar uno global.
+                        Ya existen descuentos por producto en esta cuenta. Quita
+                        esos descuentos antes de aplicar uno global.
                       </HelperBox>
                     ) : null}
                   </Stack>
@@ -362,6 +427,7 @@ export default function CashierDiscountCard({
                 >
                   <Stack direction="row" spacing={1} alignItems="center">
                     <PercentRoundedIcon color="primary" />
+
                     <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
                       Descuento manual por ítem
                     </Typography>
@@ -407,21 +473,32 @@ export default function CashierDiscountCard({
                 {itemDiscounts.length > 0 ? (
                   <Stack spacing={1.25}>
                     {itemDiscounts.map((discount) => {
-                      const item = itemsMap.get(
-                        Number(discount.order_item_id)
+                      const orderItemId = normalizePositiveId(
+                        discount?.order_item_id
                       );
 
-                      const backendBase = Number(
+                      const item =
+                        orderItemId !== null
+                          ? itemsMap.get(orderItemId)
+                          : null;
+
+                      const backendBase = toNumber(
                         discount?.base_amount ??
-                          discount?.item_base_amount ??
-                          0
+                          discount?.item_base_amount,
+                        0
                       );
 
-                      const hasBackendBase = backendBase > 0;
+                      const discountBaseAmount =
+                        backendBase > 0
+                          ? backendBase
+                          : item?.discountBaseAmount ?? 0;
 
                       return (
                         <Box
-                          key={discount.id}
+                          key={
+                            discount?.id ||
+                            `discount-${orderItemId || "unknown"}`
+                          }
                           sx={{
                             border: "1px solid",
                             borderColor: "divider",
@@ -445,8 +522,8 @@ export default function CashierDiscountCard({
                                 }}
                               >
                                 {item
-                                  ? `${item.qty} × ${item.name}`
-                                  : `Ítem #${discount.order_item_id}`}
+                                  ? `${formatQuantity(item.qty)} × ${item.name}`
+                                  : `Ítem #${orderItemId || "—"}`}
                               </Typography>
 
                               <Typography
@@ -456,15 +533,8 @@ export default function CashierDiscountCard({
                                   color: "text.secondary",
                                 }}
                               >
-                                {hasBackendBase
-                                  ? "Base para descuento manual"
-                                  : "Neto actual del ítem"}
-                                :{" "}
-                                {formatCurrency(
-                                  hasBackendBase
-                                    ? backendBase
-                                    : item?.netTotal ?? 0
-                                )}
+                                Base para descuento manual:{" "}
+                                {formatCurrency(discountBaseAmount)}
                               </Typography>
 
                               <Typography
@@ -508,9 +578,15 @@ export default function CashierDiscountCard({
                                 variant="outlined"
                                 color="error"
                                 onClick={() =>
-                                  onRemoveItem?.(discount.order_item_id)
+                                  orderItemId !== null
+                                    ? onRemoveItem?.(orderItemId)
+                                    : undefined
                                 }
-                                disabled={busy || disabled}
+                                disabled={
+                                  busy ||
+                                  disabled ||
+                                  orderItemId === null
+                                }
                                 startIcon={<DeleteOutlineRoundedIcon />}
                                 sx={{
                                   minWidth: { xs: "100%", sm: 180 },
@@ -532,11 +608,14 @@ export default function CashierDiscountCard({
                 {itemDiscountDrafts.length > 0 ? (
                   <Stack spacing={1.25}>
                     {itemDiscountDrafts.map((draft, index) => {
-                      const selectedOrderItemId = Number(
-                        draft?.orderItemId || 0
+                      const selectedOrderItemId = normalizePositiveId(
+                        draft?.orderItemId
                       );
+
                       const selectedItem =
-                        itemsMap.get(selectedOrderItemId) || null;
+                        selectedOrderItemId !== null
+                          ? itemsMap.get(selectedOrderItemId) || null
+                          : null;
 
                       return (
                         <Box
@@ -597,11 +676,11 @@ export default function CashierDiscountCard({
                                   select
                                   fullWidth
                                   value={draft.orderItemId || ""}
-                                  onChange={(e) =>
+                                  onChange={(event) =>
                                     onItemDiscountDraftChange?.(
                                       draft.localId,
                                       "orderItemId",
-                                      e.target.value
+                                      event.target.value
                                     )
                                   }
                                   disabled={
@@ -622,11 +701,14 @@ export default function CashierDiscountCard({
 
                                     return (
                                       <MenuItem
-                                        key={item.orderItemId}
+                                        key={
+                                          item.orderCheckItemId ||
+                                          item.orderItemId
+                                        }
                                         value={String(item.orderItemId)}
                                         disabled={isUsedByOtherDraft}
                                       >
-                                        {item.qty} × {item.name}
+                                        {formatQuantity(item.qty)} × {item.name}
                                       </MenuItem>
                                     );
                                   })}
@@ -650,8 +732,10 @@ export default function CashierDiscountCard({
                                     color: "text.primary",
                                   }}
                                 >
-                                  Base disponible después de promociones:{" "}
-                                  {formatCurrency(selectedItem.netTotal)}
+                                  Base disponible para descuento manual:{" "}
+                                  {formatCurrency(
+                                    selectedItem.discountBaseAmount
+                                  )}
                                 </Typography>
                               </Box>
                             ) : null}
@@ -667,11 +751,11 @@ export default function CashierDiscountCard({
                                     select
                                     fullWidth
                                     value={draft.type || "fixed"}
-                                    onChange={(e) =>
+                                    onChange={(event) =>
                                       onItemDiscountDraftChange?.(
                                         draft.localId,
                                         "type",
-                                        e.target.value
+                                        event.target.value
                                       )
                                     }
                                     disabled={
@@ -694,11 +778,11 @@ export default function CashierDiscountCard({
                                   <TextField
                                     fullWidth
                                     value={draft.value || ""}
-                                    onChange={(e) =>
+                                    onChange={(event) =>
                                       onItemDiscountDraftChange?.(
                                         draft.localId,
                                         "value",
-                                        e.target.value
+                                        event.target.value
                                       )
                                     }
                                     inputProps={{ inputMode: "decimal" }}
@@ -717,11 +801,11 @@ export default function CashierDiscountCard({
                                 <TextField
                                   fullWidth
                                   value={draft.reason || ""}
-                                  onChange={(e) =>
+                                  onChange={(event) =>
                                     onItemDiscountDraftChange?.(
                                       draft.localId,
                                       "reason",
-                                      e.target.value
+                                      event.target.value
                                     )
                                   }
                                   placeholder="Opcional"
@@ -742,7 +826,12 @@ export default function CashierDiscountCard({
                                 onClick={() =>
                                   onApplyItemDraft?.(draft.localId)
                                 }
-                                disabled={busy || disabled || hasGlobalDiscount}
+                                disabled={
+                                  busy ||
+                                  disabled ||
+                                  hasGlobalDiscount ||
+                                  selectedOrderItemId === null
+                                }
                                 sx={{
                                   minWidth: { xs: "100%", sm: 220 },
                                   height: 40,
@@ -764,7 +853,8 @@ export default function CashierDiscountCard({
                 selectableItems.length === 0 &&
                 itemDiscounts.length === 0 ? (
                   <HelperBox>
-                    No se encontraron ítems disponibles para descuento.
+                    No se encontraron productos disponibles para descuento en
+                    esta cuenta.
                   </HelperBox>
                 ) : null}
               </Stack>
@@ -942,35 +1032,109 @@ function InfoRow({ label, value }) {
   return (
     <Stack direction="row" justifyContent="space-between" spacing={1}>
       <Typography
-        sx={{ fontSize: 14, color: "text.secondary", fontWeight: 700 }}
+        sx={{
+          fontSize: 14,
+          color: "text.secondary",
+          fontWeight: 700,
+        }}
       >
         {label}
       </Typography>
 
-      <Typography sx={{ fontSize: 14, color: "text.primary", fontWeight: 800 }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          color: "text.primary",
+          fontWeight: 800,
+          textAlign: "right",
+        }}
+      >
         {value}
       </Typography>
     </Stack>
   );
 }
 
+function resolveDiscountBaseAmount({
+  baseLineTotal,
+  modifiersTotal,
+  promotionDiscountTotal,
+  cancellationTotal,
+}) {
+  return Math.max(
+    toNumber(baseLineTotal, 0) +
+      toNumber(modifiersTotal, 0) -
+      toNumber(promotionDiscountTotal, 0) -
+      toNumber(cancellationTotal, 0),
+    0
+  );
+}
+
 function resolveItemName(item) {
   const displayName =
-    typeof item?.display_name === "string" ? item.display_name.trim() : "";
+    typeof item?.display_name === "string"
+      ? item.display_name.trim()
+      : "";
+
   const productName =
-    typeof item?.product_name === "string" ? item.product_name.trim() : "";
+    typeof item?.product_name === "string"
+      ? item.product_name.trim()
+      : "";
+
   const variantName =
-    typeof item?.variant_name === "string" ? item.variant_name.trim() : "";
+    typeof item?.variant_name === "string"
+      ? item.variant_name.trim()
+      : "";
+
+  const snapshotName =
+    typeof item?.name_snapshot === "string"
+      ? item.name_snapshot.trim()
+      : "";
 
   if (displayName) return displayName;
-  if (productName && variantName) return `${productName} · ${variantName}`;
+  if (productName && variantName) {
+    return `${productName} · ${variantName}`;
+  }
   if (productName) return productName;
   if (variantName) return variantName;
+  if (snapshotName) return snapshotName;
+
   return "Producto";
 }
 
+function normalizePositiveId(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = Number(value);
+
+  return Number.isInteger(normalized) && normalized > 0
+    ? normalized
+    : null;
+}
+
+function toNumber(value, fallback = 0) {
+  const normalized = Number(value);
+
+  return Number.isFinite(normalized)
+    ? normalized
+    : fallback;
+}
+
+function formatQuantity(value) {
+  const quantity = toNumber(value, 0);
+
+  return Number.isInteger(quantity)
+    ? String(quantity)
+    : quantity.toLocaleString("es-MX", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4,
+      });
+}
+
 function formatDiscountCurrency(value) {
-  const amount = Math.abs(Number(value || 0));
+  const amount = Math.abs(toNumber(value, 0));
 
   if (amount <= 0) {
     return formatCurrency(0);
@@ -980,7 +1144,7 @@ function formatDiscountCurrency(value) {
 }
 
 function formatCurrency(value) {
-  const safe = Number(value || 0);
+  const safe = toNumber(value, 0);
 
   try {
     return new Intl.NumberFormat("es-MX", {

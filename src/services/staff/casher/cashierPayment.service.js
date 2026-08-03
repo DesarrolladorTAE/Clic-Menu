@@ -59,3 +59,37 @@ export function extractTicketWarningFromPayResponse(response) {
     ticketErrorMessage: response?.data?.ticket_error_message ?? null,
   };
 }
+
+/**
+ * Helper para extraer el resultado financiero del paquete
+ * después de cobrar una cuenta.
+ *
+ * Devuelve null para ventas legacy o ventas directas que no
+ * pertenecen a un OrderCheck.
+ */
+export function extractCashierSettlementFromPayResponse(response) {
+  const settlement = response?.data?.settlement;
+
+  if (!settlement || typeof settlement !== "object") {
+    return null;
+  }
+
+  return {
+    completed: Boolean(settlement.completed),
+    partially_paid: Boolean(settlement.partially_paid),
+    billing_group_id: settlement.billing_group_id ?? null,
+    billing_group_status: settlement.billing_group_status ?? null,
+    order_check_id: settlement.order_check_id ?? null,
+    order_check_status: settlement.order_check_status ?? null,
+    pending_checks_count: Number(settlement.pending_checks_count ?? 0),
+    order_ids: Array.isArray(settlement.order_ids)
+      ? settlement.order_ids
+      : [],
+    table_ids: Array.isArray(settlement.table_ids)
+      ? settlement.table_ids
+      : [],
+    table_session_ids: Array.isArray(settlement.table_session_ids)
+      ? settlement.table_session_ids
+      : [],
+  };
+}

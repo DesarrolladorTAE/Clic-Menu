@@ -14,6 +14,9 @@ export default function CashierSaleOptionalActionsBar({
   customerSummary = null,
   discountSummary = null,
   disabled = false,
+  adjustmentsDisabled = false,
+  customerDisabled = false,
+  discountsDisabled = false,
   onOpenAdjustments,
   onOpenCustomer,
   onOpenDiscounts,
@@ -35,6 +38,10 @@ export default function CashierSaleOptionalActionsBar({
       discountSummary?.manual_discount_total ??
       0
   );
+
+  const adjustmentActionDisabled = disabled || adjustmentsDisabled;
+  const customerActionDisabled = disabled || customerDisabled;
+  const discountActionDisabled = disabled || discountsDisabled;
 
   return (
     <Paper
@@ -68,7 +75,7 @@ export default function CashierSaleOptionalActionsBar({
               lineHeight: 1.5,
             }}
           >
-            Usa estas opciones solo cuando necesites ajustar la venta antes de cobrar.
+            Usa estas opciones solo cuando necesites ajustar la cuenta antes de cobrar.
           </Typography>
         </Box>
 
@@ -91,7 +98,7 @@ export default function CashierSaleOptionalActionsBar({
                 : "Sin ajustes"
             }
             active={adjustmentsCount > 0}
-            disabled={disabled}
+            disabled={adjustmentActionDisabled}
             onClick={onOpenAdjustments}
           />
 
@@ -106,7 +113,7 @@ export default function CashierSaleOptionalActionsBar({
                 : "Sin cliente"
             }
             active={hasFormalCustomer || hasSimpleContact}
-            disabled={disabled}
+            disabled={customerActionDisabled}
             onClick={onOpenCustomer}
           />
 
@@ -119,7 +126,7 @@ export default function CashierSaleOptionalActionsBar({
                 : "Sin descuentos manuales"
             }
             active={manualDiscountTotal > 0}
-            disabled={disabled}
+            disabled={discountActionDisabled}
             onClick={onOpenDiscounts}
           />
         </Box>
