@@ -1,9 +1,7 @@
 // src/pages/staff/casher/CashierSaleDetailPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Box, CircularProgress, Stack, Typography,
-} from "@mui/material";
+import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import LocalOfferRoundedIcon from "@mui/icons-material/LocalOfferRounded";
@@ -13,8 +11,13 @@ import AppAlert from "../../../components/common/AppAlert";
 
 import {
   fetchCashierSaleDetail,
-  takeCashierSale,
 } from "../../../services/staff/casher/cashierQueue.service";
+
+import {
+  fetchCashierSaleCheckContext,
+  fetchCashierSaleCheckDetail,
+  prepareCashierSaleCheckPayment,
+} from "../../../services/staff/casher/cashierSaleCheck.service";
 
 import {
   fetchCashierPaymentMethods,
@@ -62,6 +65,10 @@ import {
   sendCashierThermalPrintPayload,
 } from "../../../services/staff/casher/cashierTicket.service";
 
+import {
+  fetchCashierOperationalAuthorizers,
+} from "../../../services/staff/casher/cashierOperationalAuthorizer.service";
+
 import CashierSaleDetailHeroCard from "../../../components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard";
 import CashierOrderItemsCard from "../../../components/staff/casher/saleDetailPage/CashierOrderItemsCard";
 import CashierSaleSummaryCard from "../../../components/staff/casher/saleDetailPage/CashierSaleSummaryCard";
@@ -73,17 +80,339 @@ import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage
 import CashierSaleOptionalActionsBar from "../../../components/staff/casher/saleDetailPage/CashierSaleOptionalActionsBar";
 import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
 import CashierDiscountAuthorizationDialog from "../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
+import CashierOperationalAuthorizationDialog from "../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
 import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
+
+const MY_SALES_PATH = "/staff/cashier/queue?tab=mine";
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function numberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function checkIdOf(check) {
+  return numberOrNull(check?.id ?? check?.order_check_id);
+}
+
+function checkSaleIdOf(check) {
+  return numberOrNull(
+    check?.sale_id ??
+      check?.sale?.sale_id ??
+      check?.sale?.id
+  );
+}
+
+function normalizeCheckItem(item) {
+  const productName =
+    item?.product_name ||
+    item?.product?.name ||
+    "Producto";
+
+  const variantName =
+    item?.variant_name ||
+    item?.variant?.name ||
+    null;
+
+  const checkItemId = numberOrNull(
+    item?.order_check_item_id ?? item?.id
+  );
+
+  const orderItemId = numberOrNull(item?.order_item_id);
+  const parentOrderItemId = numberOrNull(
+    item?.parent_order_item_id
+  );
+
+  return {
+    ...item,
+    id: checkItemId,
+    order_check_item_id: checkItemId,
+    order_item_id: orderItemId,
+    parent_order_item_id: parentOrderItemId,
+    product_name: productName,
+    variant_name: variantName,
+    name: productName,
+    quantity: Number(item?.quantity ?? 0),
+    unit_price: Number(item?.unit_price ?? 0),
+    base_line_total: Number(item?.base_line_total ?? 0),
+    modifiers_total: Number(item?.modifiers_total ?? 0),
+    promotion_discount_total: Number(
+      item?.promotion_discount_total ?? 0
+    ),
+    manual_discount_total: Number(
+      item?.manual_discount_total ?? 0
+    ),
+    discount_total: Number(item?.discount_total ?? 0),
+    cancellation_total: Number(
+      item?.cancellation_total ?? 0
+    ),
+    net_line_total: Number(item?.net_line_total ?? 0),
+    line_total: Number(
+      item?.net_line_total ??
+        item?.line_total ??
+        item?.base_line_total ??
+        0
+    ),
+    product:
+      item?.product ||
+      (numberOrNull(item?.product_id)
+        ? {
+            id: Number(item.product_id),
+            name: productName,
+          }
+        : null),
+    variant:
+      item?.variant ||
+      (numberOrNull(item?.variant_id)
+        ? {
+            id: Number(item.variant_id),
+            name: variantName,
+          }
+        : null),
+    children: [],
+  };
+}
+
+function buildCheckItemsTree(rawItems) {
+  const itemsFlat = toArray(rawItems).map(normalizeCheckItem);
+  const byOriginalOrderItemId = new Map();
+
+  itemsFlat.forEach((item) => {
+    if (item.order_item_id) {
+      byOriginalOrderItemId.set(item.order_item_id, item);
+    }
+  });
+
+  const roots = [];
+
+  itemsFlat.forEach((item) => {
+    const parent = item.parent_order_item_id
+      ? byOriginalOrderItemId.get(item.parent_order_item_id)
+      : null;
+
+    if (parent) {
+      parent.children.push(item);
+      return;
+    }
+
+    roots.push(item);
+  });
+
+  return {
+    itemsFlat,
+    itemsTree: roots,
+  };
+}
+
+function buildCheckItemsSummary(check, itemsFlat, itemsTree) {
+  const rootQuantity = itemsTree.reduce(
+    (sum, item) => sum + Number(item?.quantity ?? 0),
+    0
+  );
+
+  return {
+    items_count: itemsFlat.length,
+    total_items: itemsFlat.length,
+    root_items_count: itemsTree.length,
+    total_quantity: rootQuantity,
+    quantity_total: rootQuantity,
+    subtotal: Number(check?.subtotal ?? 0),
+    promotion_discount_total: Number(
+      check?.promotion_discount_total ?? 0
+    ),
+    manual_discount_total: Number(
+      check?.manual_discount_total ?? 0
+    ),
+    discount_total: Number(check?.discount_total ?? 0),
+    cancellation_total: Number(
+      check?.cancellation_total ?? 0
+    ),
+    taxable_amount: Number(check?.taxable_amount ?? 0),
+    tax_total: Number(check?.tax_total ?? 0),
+    tip: Number(check?.tip ?? 0),
+    total: Number(check?.total ?? 0),
+  };
+}
+
+function buildExactCheckDetail({
+  routeSaleId,
+  contextData,
+  prepareData,
+  checkDetailData,
+  contextCheck,
+}) {
+  const check =
+    checkDetailData?.check ||
+    prepareData?.check ||
+    contextCheck ||
+    null;
+
+  const checkId = checkIdOf(check);
+  const exactSaleId = Number(routeSaleId);
+
+  const currentCashSession =
+    checkDetailData?.cash_session ||
+    contextData?.cash_session ||
+    null;
+
+  const sourceSale =
+    prepareData?.sale ||
+    checkDetailData?.sale ||
+    check?.sale ||
+    contextCheck?.sale ||
+    {};
+
+  const orderId = numberOrNull(
+    sourceSale?.order_id ?? check?.primary_order_id
+  );
+
+  const tableId = numberOrNull(
+    sourceSale?.table_id ?? check?.primary_table_id
+  );
+
+  const order = {
+    ...(sourceSale?.order || {}),
+    ...(orderId ? { id: orderId } : {}),
+    ...(tableId ? { table_id: tableId } : {}),
+  };
+
+  const table = tableId
+    ? {
+        ...(sourceSale?.table || {}),
+        id: tableId,
+      }
+    : sourceSale?.table || null;
+
+  const subtotal = Number(
+    check?.subtotal ?? sourceSale?.subtotal ?? 0
+  );
+
+  const promotionDiscountTotal = Number(
+    check?.promotion_discount_total ??
+      sourceSale?.promotion_discount_total ??
+      0
+  );
+
+  const manualDiscountTotal = Number(
+    check?.manual_discount_total ??
+      sourceSale?.manual_discount_total ??
+      0
+  );
+
+  const discountTotal = Number(
+    check?.discount_total ?? sourceSale?.discount_total ?? 0
+  );
+
+  const taxableAmount = Number(
+    check?.taxable_amount ??
+      sourceSale?.taxable_amount ??
+      Math.max(0, subtotal - discountTotal)
+  );
+
+  const tip = Number(check?.tip ?? sourceSale?.tip ?? 0);
+  const total = Number(
+    check?.total ?? sourceSale?.total ?? taxableAmount + tip
+  );
+
+  const sale = {
+    ...sourceSale,
+    id: exactSaleId,
+    sale_id: exactSaleId,
+    order_id: orderId,
+    order_check_id: checkId,
+    order_billing_group_id: numberOrNull(
+      contextData?.order_billing_group_id ??
+        check?.order_billing_group_id ??
+        sourceSale?.order_billing_group_id
+    ),
+    cash_session: currentCashSession,
+    status: sourceSale?.status || "taken",
+    subtotal,
+    promotion_discount_total: promotionDiscountTotal,
+    manual_discount_total: manualDiscountTotal,
+    discount_total: discountTotal,
+    taxable_amount: taxableAmount,
+    net_total: taxableAmount,
+    tip,
+    total,
+    payable_total: total,
+    order,
+    table,
+  };
+
+  const { itemsFlat, itemsTree } = buildCheckItemsTree(
+    check?.items
+  );
+
+  return {
+    sale,
+    cash_session:
+      checkDetailData?.cash_session ||
+      contextData?.cash_session ||
+      null,
+    order_detail: {
+      items: itemsFlat,
+      items_tree: itemsTree,
+      items_flat: itemsFlat,
+      items_summary: buildCheckItemsSummary(
+        check,
+        itemsFlat,
+        itemsTree
+      ),
+    },
+    selected_check: check,
+    sale_check_context: contextData,
+    prepared_check: prepareData,
+  };
+}
+
+function adjustmentOrderRows(summary) {
+  const candidates =
+    summary?.orders ||
+    summary?.available_orders ||
+    summary?.adjustment_summary?.orders ||
+    summary?.data?.orders ||
+    [];
+
+  return toArray(candidates)
+    .map((row) => {
+      const id = numberOrNull(row?.id ?? row?.order_id);
+      if (!id) return null;
+
+      return {
+        ...row,
+        id,
+        order_id: id,
+        label:
+          row?.label ||
+          row?.name ||
+          `Orden #${id}`,
+      };
+    })
+    .filter(Boolean);
+}
 
 export default function CashierSaleDetailPage() {
   const nav = useNavigate();
   const { saleId } = useParams();
 
   const [loading, setLoading] = useState(true);
-  const [taking, setTaking] = useState(false);
   const [activeTool, setActiveTool] = useState(null);
 
   const [detailData, setDetailData] = useState(null);
+  const [saleCheckContext, setSaleCheckContext] = useState(null);
+  const [selectedCheck, setSelectedCheck] = useState(null);
+  const [selectedCheckId, setSelectedCheckId] = useState(null);
+  const [selectedSaleId, setSelectedSaleId] = useState(
+    numberOrNull(saleId)
+  );
+  const [preparedCheck, setPreparedCheck] = useState(null);
+  const [isLegacySale, setIsLegacySale] = useState(false);
+  const [settlement, setSettlement] = useState(null);
+
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [taxOptions, setTaxOptions] = useState([]);
   const [discountSummary, setDiscountSummary] = useState(null);
@@ -129,6 +458,7 @@ export default function CashierSaleDetailPage() {
   });
 
   const [cancelOrderReason, setCancelOrderReason] = useState("");
+  const [cancelOrderId, setCancelOrderId] = useState("");
 
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
@@ -157,13 +487,33 @@ export default function CashierSaleDetailPage() {
   const [discountAuthorizationError, setDiscountAuthorizationError] =
     useState("");
 
+  const [pendingAdjustmentAuthorization, setPendingAdjustmentAuthorization] =
+    useState(null);
+  const [operationalAuthorizationOpen, setOperationalAuthorizationOpen] =
+    useState(false);
+  const [operationalAuthorizers, setOperationalAuthorizers] = useState([]);
+  const [loadingOperationalAuthorizers, setLoadingOperationalAuthorizers] =
+    useState(false);
+  const [authorizingOperational, setAuthorizingOperational] = useState(false);
+  const [operationalAuthorizationError, setOperationalAuthorizationError] =
+    useState("");
+  const [operationalAuthorizationMessage, setOperationalAuthorizationMessage] =
+    useState("");
 
   const [postPaymentOpen, setPostPaymentOpen] = useState(false);
   const [postPaymentTicket, setPostPaymentTicket] = useState(null);
-  const [postPaymentTicketWarning, setPostPaymentTicketWarning] = useState(false);
-  const [postPaymentTicketErrorCode, setPostPaymentTicketErrorCode] = useState(null);
-  const [postPaymentTicketErrorMessage, setPostPaymentTicketErrorMessage] = useState(null);
+  const [postPaymentTicketWarning, setPostPaymentTicketWarning] =
+    useState(false);
+  const [postPaymentTicketErrorCode, setPostPaymentTicketErrorCode] =
+    useState(null);
+  const [postPaymentTicketErrorMessage, setPostPaymentTicketErrorMessage] =
+    useState(null);
   const [postPaymentPrintConfig, setPostPaymentPrintConfig] = useState(null);
+  const [postPaymentSale, setPostPaymentSale] = useState(null);
+  const [postPaymentOrder, setPostPaymentOrder] = useState(null);
+  const [postPaymentTable, setPostPaymentTable] = useState(null);
+  const [postPaymentPayments, setPostPaymentPayments] = useState([]);
+  const [postPaymentPoints, setPostPaymentPoints] = useState(null);
 
   const [ticketBusy, setTicketBusy] = useState({
     view: false,
@@ -210,24 +560,30 @@ export default function CashierSaleDetailPage() {
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
-  const sale = detailData?.sale || null;
-  const cashSession = detailData?.cash_session || null;
-  const orderDetail = detailData?.order_detail || null;
-
-  const itemsTree = Array.isArray(orderDetail?.items_tree)
-    ? orderDetail.items_tree
-    : [];
-  const itemsFlat = Array.isArray(orderDetail?.items_flat)
-    ? orderDetail.items_flat
-    : [];
-  const itemsSummary = orderDetail?.items_summary || null;
-
   const pickErr = (e, fallback) =>
-  e?.response?.data?.message || e?.message || fallback;
+    e?.response?.data?.message || e?.message || fallback;
 
   const pickCode = (e) => e?.response?.data?.code;
   const pickData = (e) => e?.response?.data?.data || null;
   const pickErrorPayload = (e) => e?.response?.data || {};
+
+  const sale = detailData?.sale || null;
+  const cashSession = detailData?.cash_session || null;
+  const orderDetail = detailData?.order_detail || null;
+
+  const itemsTree = toArray(orderDetail?.items_tree);
+  const itemsFlat = toArray(orderDetail?.items_flat);
+  const itemsSummary = orderDetail?.items_summary || null;
+
+  const adjustmentOrders = useMemo(
+    () => adjustmentOrderRows(adjustmentSummary),
+    [adjustmentSummary]
+  );
+
+  const handleReturnToMySales = () => {
+    setPostPaymentOpen(false);
+    nav(MY_SALES_PATH, { replace: true });
+  };
 
   const createEmptyPayment = (methodId = "") => ({
     localId: `p-${localIdRef.current++}`,
@@ -254,15 +610,12 @@ export default function CashierSaleDetailPage() {
 
   const formatPaymentAmountValue = (value) => {
     const amount = Number(value || 0);
-
     if (!Number.isFinite(amount)) return "";
-
     return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
   };
 
   const syncSinglePaymentAmountToSaleTotal = (nextTotal) => {
     const amount = Number(nextTotal || 0);
-
     if (!Number.isFinite(amount)) return;
 
     setPayments((prev) => {
@@ -277,7 +630,7 @@ export default function CashierSaleDetailPage() {
     });
   };
 
-  const deriveCanOperate = (loadedDetail) => {
+  const deriveLegacyCanOperate = (loadedDetail) => {
     const loadedSale = loadedDetail?.sale || null;
     const loadedSession = loadedDetail?.cash_session || null;
     const loadedOrder = loadedSale?.order || null;
@@ -290,42 +643,260 @@ export default function CashierSaleDetailPage() {
     );
   };
 
-  const deriveCanManageCustomer = (loadedDetail) => {
-    const loadedSale = loadedDetail?.sale || null;
-    const loadedSession = loadedDetail?.cash_session || null;
+  const exactCheckStatus = String(
+    selectedCheck?.status || ""
+  ).toLowerCase();
 
-    const status = String(loadedSale?.status || "");
+  const billingGroupStatus = String(
+    saleCheckContext?.billing_group_status ??
+      saleCheckContext?.billing_group?.status ??
+      ""
+  ).toLowerCase();
+
+  const billingGroupAllowsEditing =
+    !billingGroupStatus ||
+    billingGroupStatus === "open";
+
+  const hasExactCheckOwnership = useMemo(() => {
+    if (isLegacySale) {
+      return deriveLegacyCanOperate(detailData);
+    }
+
+    const exactSaleId = Number(selectedSaleId || 0);
+    const exactCheckId = Number(selectedCheckId || 0);
+    const saleIdInState = Number(sale?.sale_id || sale?.id || 0);
+    const saleCheckId = Number(sale?.order_check_id || 0);
+    const checkSaleId = Number(
+      selectedCheck?.sale_id ||
+        selectedCheck?.sale?.sale_id ||
+        selectedCheck?.sale?.id ||
+        0
+    );
+    const cashSessionId = Number(cashSession?.id || 0);
+
+    return Boolean(
+      exactSaleId > 0 &&
+        exactCheckId > 0 &&
+        saleIdInState === exactSaleId &&
+        checkSaleId === exactSaleId &&
+        saleCheckId === exactCheckId &&
+        String(sale?.status || "") === "taken" &&
+        String(cashSession?.status || "") === "open" &&
+        Number(sale?.cash_session_id || 0) === cashSessionId
+    );
+  }, [
+    cashSession,
+    detailData,
+    isLegacySale,
+    sale,
+    selectedCheck,
+    selectedCheckId,
+    selectedSaleId,
+  ]);
+
+  const canEditAccount = useMemo(() => {
+    if (isLegacySale) {
+      return deriveLegacyCanOperate(detailData);
+    }
+
+    return (
+      hasExactCheckOwnership &&
+      exactCheckStatus === "open" &&
+      billingGroupAllowsEditing
+    );
+  }, [
+    billingGroupAllowsEditing,
+    detailData,
+    exactCheckStatus,
+    hasExactCheckOwnership,
+    isLegacySale,
+  ]);
+
+  const canOperate = useMemo(() => {
+    if (isLegacySale) {
+      return deriveLegacyCanOperate(detailData);
+    }
+
+    return (
+      hasExactCheckOwnership &&
+      ["open", "paying"].includes(exactCheckStatus)
+    );
+  }, [
+    detailData,
+    exactCheckStatus,
+    hasExactCheckOwnership,
+    isLegacySale,
+  ]);
+
+  const selectedCheckPolicy = useMemo(() => {
+    if (isLegacySale) return null;
+
+    return (
+      toArray(saleCheckContext?.checks).find((check) => {
+        const policyCheckId = checkIdOf(check);
+        const policySaleId = checkSaleIdOf(check);
+
+        return (
+          (selectedCheckId &&
+            policyCheckId === Number(selectedCheckId)) ||
+          (selectedSaleId &&
+            policySaleId === Number(selectedSaleId))
+        );
+      }) || null
+    );
+  }, [
+    isLegacySale,
+    saleCheckContext,
+    selectedCheckId,
+    selectedSaleId,
+  ]);
+
+  const isEqualPartsAccount = useMemo(() => {
+    if (isLegacySale) return false;
+
+    const splitMode = String(
+      saleCheckContext?.split_mode ??
+        saleCheckContext?.structure?.split_mode ??
+        ""
+    ).toLowerCase();
+
+    const splitType = String(
+      selectedCheckPolicy?.split_type ??
+        selectedCheck?.split_type ??
+        ""
+    ).toLowerCase();
+
+    return (
+      splitMode === "equal_parts" ||
+      splitType === "equal_parts" ||
+      Boolean(selectedCheckPolicy?.flags?.is_equal_part)
+    );
+  }, [
+    isLegacySale,
+    saleCheckContext,
+    selectedCheck,
+    selectedCheckPolicy,
+  ]);
+
+  const canManageAdjustments = useMemo(() => {
+    if (isLegacySale) return canEditAccount;
+
+    const checkPermission =
+      selectedCheckPolicy?.permissions?.can_manage_adjustments;
+
+    const packagePermission =
+      saleCheckContext?.permissions?.can_manage_adjustments;
+
+    const backendAllows =
+      typeof checkPermission === "boolean"
+        ? checkPermission
+        : typeof packagePermission === "boolean"
+        ? packagePermission
+        : !isEqualPartsAccount;
+
+    return canEditAccount && backendAllows;
+  }, [
+    canEditAccount,
+    isEqualPartsAccount,
+    isLegacySale,
+    saleCheckContext,
+    selectedCheckPolicy,
+  ]);
+
+  const canManageDiscounts = useMemo(() => {
+    if (isLegacySale) return canEditAccount;
+
+    const checkPermission =
+      selectedCheckPolicy?.permissions?.can_manage_discounts;
+
+    const packagePermission =
+      saleCheckContext?.permissions?.can_manage_discounts;
+
+    const backendAllows =
+      typeof checkPermission === "boolean"
+        ? checkPermission
+        : typeof packagePermission === "boolean"
+        ? packagePermission
+        : !isEqualPartsAccount;
+
+    return canEditAccount && backendAllows;
+  }, [
+    canEditAccount,
+    isEqualPartsAccount,
+    isLegacySale,
+    saleCheckContext,
+    selectedCheckPolicy,
+  ]);
+
+  const canManageCustomer = useMemo(() => {
+    const status = String(sale?.status || "");
     const owned =
-      Number(loadedSale?.cash_session_id || 0) ===
-      Number(loadedSession?.id || 0);
+      Number(sale?.cash_session_id || 0) ===
+      Number(cashSession?.id || 0);
 
     return owned && ["taken", "paid"].includes(status);
-  };
+  }, [cashSession, sale]);
 
-  const canOperate = useMemo(() => deriveCanOperate(detailData), [detailData]);
-  const canManageCustomer = useMemo(
-    () => deriveCanManageCustomer(detailData),
-    [detailData]
-  );
+  useEffect(() => {
+    if (
+      activeTool === "adjustments" &&
+      !canManageAdjustments
+    ) {
+      setActiveTool(null);
+      return;
+    }
 
-  const canTake = useMemo(() => {
-    return String(sale?.status || "") === "pending" && !sale?.cash_session_id;
-  }, [sale]);
+    if (
+      activeTool === "discounts" &&
+      !canManageDiscounts
+    ) {
+      setActiveTool(null);
+    }
+  }, [
+    activeTool,
+    canManageAdjustments,
+    canManageDiscounts,
+  ]);
 
   const selectedTaxOption = useMemo(() => {
     return (
-      taxOptions.find((row) => String(row.code) === String(taxOptionCode)) ||
-      null
+      taxOptions.find(
+        (row) => String(row.code) === String(taxOptionCode)
+      ) || null
     );
   }, [taxOptions, taxOptionCode]);
 
-  const hasGlobalDiscount = useMemo(() => {
-    return !!discountSummary?.global_discount;
-  }, [discountSummary]);
+  const paymentInitialAmount = useMemo(() => {
+    const accountNetAmount = Number(
+      sale?.net_total ??
+        sale?.taxable_amount ??
+        sale?.payable_total ??
+        sale?.total
+    );
+
+    const liveTipAmount = Number(tip || 0);
+
+    if (
+      !Number.isFinite(accountNetAmount) ||
+      accountNetAmount < 0 ||
+      !Number.isFinite(liveTipAmount) ||
+      liveTipAmount < 0
+    ) {
+      return null;
+    }
+
+    return Math.round(
+      (accountNetAmount + liveTipAmount) * 100
+    ) / 100;
+  }, [sale, tip]);
+
+  const hasGlobalDiscount = useMemo(
+    () => Boolean(discountSummary?.global_discount),
+    [discountSummary]
+  );
 
   const buildDefaultTaxCode = (loadedSale, loadedTaxOptions) => {
-    const options = Array.isArray(loadedTaxOptions) ? loadedTaxOptions : [];
-
+    const options = toArray(loadedTaxOptions);
     const saleTaxKind = String(loadedSale?.tax_kind || "");
     const saleTaxRate = Number(loadedSale?.tax_rate ?? 0);
 
@@ -336,11 +907,11 @@ export default function CashierSaleDetailPage() {
       const rate = Number(row?.rate ?? 0);
 
       return (
-        code.includes("iva") && code.includes("16")
-      ) || (
-        name.includes("iva") && name.includes("16")
-      ) || (
-        kind === "iva" && (Math.abs(rate - 0.16) < 0.001 || Math.abs(rate - 16) < 0.001)
+        (code.includes("iva") && code.includes("16")) ||
+        (name.includes("iva") && name.includes("16")) ||
+        (kind === "iva" &&
+          (Math.abs(rate - 0.16) < 0.001 ||
+            Math.abs(rate - 16) < 0.001))
       );
     });
 
@@ -356,110 +927,13 @@ export default function CashierSaleDetailPage() {
         return rowKind === "exempt";
       }
 
-      return rowKind === saleTaxKind && Math.abs(rowRate - saleTaxRate) < 0.001;
+      return (
+        rowKind === saleTaxKind &&
+        Math.abs(rowRate - saleTaxRate) < 0.001
+      );
     });
 
     return matched?.code || defaultIva16?.code || options?.[0]?.code || "";
-  };
-
-  const syncSaleFromDiscountSummary = (summaryData) => {
-    const summarySale = summaryData?.sale || null;
-
-    if (!summarySale) return;
-
-    setDetailData((prev) => {
-      if (!prev?.sale) return prev;
-
-      return {
-        ...prev,
-        sale: {
-          ...prev.sale,
-
-          subtotal:
-            summarySale.subtotal ??
-            prev.sale.subtotal,
-
-          promotion_discount_total:
-            summarySale.promotion_discount_total ??
-            prev.sale.promotion_discount_total,
-
-          manual_discount_total:
-            summarySale.manual_discount_total ??
-            prev.sale.manual_discount_total,
-
-          discount_total:
-            summarySale.discount_total ??
-            prev.sale.discount_total,
-
-          net_total:
-            summarySale.net_total ??
-            prev.sale.net_total,
-
-          tip:
-            summarySale.tip ??
-            prev.sale.tip,
-
-          total:
-            summarySale.total ??
-            prev.sale.total,
-
-          payable_total:
-            summarySale.payable_total ??
-            summarySale.total ??
-            prev.sale.payable_total,
-
-          tax_kind:
-            summarySale.tax_kind ??
-            prev.sale.tax_kind,
-
-          tax_rate:
-            summarySale.tax_rate ??
-            prev.sale.tax_rate,
-
-          tax_base:
-            summarySale.tax_base ??
-            prev.sale.tax_base,
-
-          tax_total:
-            summarySale.tax_total ??
-            prev.sale.tax_total,
-        },
-      };
-    });
-  };
-
-  const syncSinglePaymentFromFinancialSale = (
-    financialSale,
-    liveTipValue = tip
-  ) => {
-    if (!financialSale) return;
-
-    const backendPayableTotal = Number(
-      financialSale?.payable_total ??
-        financialSale?.total ??
-        0
-    );
-
-    const backendTip = Number(financialSale?.tip ?? 0);
-    const currentLiveTip = Number(liveTipValue ?? backendTip);
-
-    const backendNetTotal = Number(
-      financialSale?.net_total ??
-        financialSale?.taxable_amount
-    );
-
-    const hasDifferentLiveTip =
-      Number.isFinite(currentLiveTip) &&
-      Math.abs(currentLiveTip - backendTip) > 0.009;
-
-    const nextPaymentTotal =
-      hasDifferentLiveTip && Number.isFinite(backendNetTotal)
-        ? backendNetTotal + currentLiveTip
-        : backendPayableTotal;
-
-    if (!Number.isFinite(nextPaymentTotal)) return;
-
-    syncSinglePaymentAmountToSaleTotal(nextPaymentTotal);
   };
 
   const initializePayments = (loadedSale, loadedMethods) => {
@@ -474,7 +948,6 @@ export default function CashierSaleDetailPage() {
       : "";
 
     setTip(String(Number(loadedSale?.tip || 0)));
-
     setPayments([
       {
         ...createEmptyPayment(firstMethodId),
@@ -486,33 +959,75 @@ export default function CashierSaleDetailPage() {
     ]);
   };
 
-  const refreshOrderItemsFromBackend = async () => {
-    try {
-      const res = await fetchCashierSaleDetail(saleId);
-      const latestDetail = res?.data || null;
+  const syncSaleFromDiscountSummary = (summaryData) => {
+    const summarySale = summaryData?.sale || null;
+    if (!summarySale) return;
 
-      if (!latestDetail?.order_detail) {
-        return false;
-      }
+    setDetailData((prev) => {
+      if (!prev?.sale) return prev;
 
-      setDetailData((prev) => {
-        if (!prev) return latestDetail;
+      return {
+        ...prev,
+        sale: {
+          ...prev.sale,
+          subtotal: summarySale.subtotal ?? prev.sale.subtotal,
+          promotion_discount_total:
+            summarySale.promotion_discount_total ??
+            prev.sale.promotion_discount_total,
+          manual_discount_total:
+            summarySale.manual_discount_total ??
+            prev.sale.manual_discount_total,
+          discount_total:
+            summarySale.discount_total ?? prev.sale.discount_total,
+          taxable_amount:
+            summarySale.taxable_amount ??
+            summarySale.net_total ??
+            prev.sale.taxable_amount,
+          net_total:
+            summarySale.net_total ??
+            summarySale.taxable_amount ??
+            prev.sale.net_total,
+          tip: summarySale.tip ?? prev.sale.tip,
+          total: summarySale.total ?? prev.sale.total,
+          payable_total:
+            summarySale.payable_total ??
+            summarySale.total ??
+            prev.sale.payable_total,
+          tax_kind: summarySale.tax_kind ?? prev.sale.tax_kind,
+          tax_rate: summarySale.tax_rate ?? prev.sale.tax_rate,
+          tax_base: summarySale.tax_base ?? prev.sale.tax_base,
+          tax_total: summarySale.tax_total ?? prev.sale.tax_total,
+        },
+      };
+    });
+  };
 
-        return {
-          ...prev,
-          order_detail: latestDetail.order_detail,
-        };
-      });
+  const syncSinglePaymentFromFinancialSale = (
+    financialSale,
+    liveTipValue = tip
+  ) => {
+    if (!financialSale) return;
 
-      return true;
-    } catch (error) {
-      console.error(
-        "No se pudo actualizar el detalle financiero de los productos.",
-        error
-      );
+    const backendTip = Number(financialSale?.tip ?? 0);
+    const currentLiveTip = Number(liveTipValue ?? backendTip);
+    const backendNetTotal = Number(
+      financialSale?.net_total ??
+        financialSale?.taxable_amount ??
+        financialSale?.payable_total ??
+        financialSale?.total ??
+        0
+    );
 
-      return false;
+    if (
+      !Number.isFinite(backendNetTotal) ||
+      !Number.isFinite(currentLiveTip)
+    ) {
+      return;
     }
+
+    syncSinglePaymentAmountToSaleTotal(
+      Math.max(0, backendNetTotal + currentLiveTip)
+    );
   };
 
   const syncCustomerFormsFromSummary = (summaryData) => {
@@ -539,47 +1054,60 @@ export default function CashierSaleDetailPage() {
     });
   };
 
-  const loadDiscountSummaryIfNeeded = async (loadedDetail) => {
-    const shouldLoad = deriveCanOperate(loadedDetail);
-
-    if (!shouldLoad) {
+  const loadDiscountSummaryIfNeeded = async (
+    targetSaleId,
+    allowOperation
+  ) => {
+    if (!allowOperation || !targetSaleId) {
       setDiscountSummary(null);
       return null;
     }
 
     try {
-      const res = await fetchCashierSaleDiscountSummary(
-        loadedDetail?.sale?.sale_id
-      );
-      setDiscountSummary(res?.data || null);
-      syncSaleFromDiscountSummary(res?.data || null);
-      return res?.data || null;
+      const res = await fetchCashierSaleDiscountSummary(targetSaleId);
+      const data = res?.data || null;
+      setDiscountSummary(data);
+      syncSaleFromDiscountSummary(data);
+      return data;
     } catch {
       setDiscountSummary(null);
       return null;
     }
   };
 
-  const loadAdjustmentSummaryIfNeeded = async (loadedDetail) => {
-    const shouldLoad = deriveCanOperate(loadedDetail);
-
-    if (!shouldLoad) {
+  const loadAdjustmentSummaryIfNeeded = async (
+    targetSaleId,
+    allowOperation
+  ) => {
+    if (!allowOperation || !targetSaleId) {
       setAdjustmentSummary(null);
       return null;
     }
 
     try {
-      const res = await fetchCashierSaleAdjustments(loadedDetail?.sale?.sale_id);
-      setAdjustmentSummary(res?.data || null);
-      return res?.data || null;
+      const res = await fetchCashierSaleAdjustments(targetSaleId);
+      const data = res?.data || null;
+      setAdjustmentSummary(data);
+      return data;
     } catch {
       setAdjustmentSummary(null);
       return null;
     }
   };
 
-  const loadCustomerSummaryIfNeeded = async (loadedDetail, resetForms = false) => {
-    const shouldLoad = deriveCanManageCustomer(loadedDetail);
+  const loadCustomerSummaryIfNeeded = async (
+    targetSaleId,
+    loadedDetail,
+    resetForms = false
+  ) => {
+    const loadedSale = loadedDetail?.sale || null;
+    const loadedSession = loadedDetail?.cash_session || null;
+    const status = String(loadedSale?.status || "");
+    const owned =
+      Number(loadedSale?.cash_session_id || 0) ===
+      Number(loadedSession?.id || 0);
+    const shouldLoad =
+      targetSaleId && owned && ["taken", "paid"].includes(status);
 
     if (!shouldLoad) {
       setCustomerSummary(null);
@@ -591,90 +1119,325 @@ export default function CashierSaleDetailPage() {
     }
 
     try {
-      const res = await fetchCashierSaleCustomerData(loadedDetail?.sale?.sale_id);
-      setCustomerSummary(res?.data || null);
+      const res = await fetchCashierSaleCustomerData(targetSaleId);
+      const data = res?.data || null;
+      setCustomerSummary(data);
 
       if (resetForms) {
-        syncCustomerFormsFromSummary(res?.data || null);
+        syncCustomerFormsFromSummary(data);
         setCustomerSearchResults([]);
       }
 
-      return res?.data || null;
+      return data;
     } catch {
       setCustomerSummary(null);
       return null;
     }
   };
 
-  const load = async ({ preserveForm = false } = {}) => {
-    try {
-      setLoading(true);
+  const resetEditableForms = () => {
+    setGlobalDiscountForm({
+      type: "fixed",
+      value: "",
+      reason: "",
+    });
+    setItemDiscountDrafts([]);
+    setPartialCancelForm({ reason: "" });
+    setPartialCancelDrafts([]);
+    setCancelOrderReason("");
+    setCancelOrderId("");
+    setPreview(null);
+  };
 
-      const [detailRes, methodsRes, taxesRes] = await Promise.all([
-        fetchCashierSaleDetail(saleId),
-        fetchCashierPaymentMethods(),
-        fetchCashierTaxOptions(),
-      ]);
+  const applyLoadedState = async ({
+    loadedDetail,
+    loadedMethods,
+    loadedTaxOptions,
+    targetSaleId,
+    allowOperation,
+    preserveForm,
+  }) => {
+    setDetailData(loadedDetail);
+    setPaymentMethods(loadedMethods);
+    setTaxOptions(loadedTaxOptions);
 
-      const loadedDetail = detailRes?.data || null;
-      const loadedMethods = Array.isArray(methodsRes?.data)
-        ? methodsRes.data
-        : [];
-      const loadedTaxOptions = Array.isArray(taxesRes?.data)
-        ? taxesRes.data
-        : [];
+    if (!preserveForm) {
+      initializePayments(loadedDetail?.sale || null, loadedMethods);
+      resetEditableForms();
+    }
 
-      setDetailData(loadedDetail);
-      setPaymentMethods(loadedMethods);
-      setTaxOptions(loadedTaxOptions);
+    const nextTaxCode = buildDefaultTaxCode(
+      loadedDetail?.sale || null,
+      loadedTaxOptions
+    );
 
-      if (!preserveForm) {
-        initializePayments(loadedDetail?.sale || null, loadedMethods);
-        setGlobalDiscountForm({
-          type: "fixed",
-          value: "",
-          reason: "",
-        });
-        setItemDiscountDrafts([]);
-        setPartialCancelForm({ reason: "" });
-        setPartialCancelDrafts([]);
-        setCancelOrderReason("");
-        setPreview(null);
-      }
+    setTaxOptionCode((prev) =>
+      preserveForm && prev ? prev : nextTaxCode
+    );
 
-      const nextTaxCode = buildDefaultTaxCode(
-        loadedDetail?.sale || null,
-        loadedTaxOptions
+    await loadDiscountSummaryIfNeeded(
+      targetSaleId,
+      allowOperation
+    );
+
+    const adjustmentData =
+      await loadAdjustmentSummaryIfNeeded(
+        targetSaleId,
+        allowOperation
       );
 
-      setTaxOptionCode((prev) => (preserveForm && prev ? prev : nextTaxCode));
+    await loadCustomerSummaryIfNeeded(
+      targetSaleId,
+      loadedDetail,
+      !preserveForm
+    );
 
-      await Promise.all([
-        loadDiscountSummaryIfNeeded(loadedDetail),
-        loadAdjustmentSummaryIfNeeded(loadedDetail),
-        loadCustomerSummaryIfNeeded(loadedDetail, !preserveForm),
-      ]);
-    } catch (e) {
-      const st = e?.response?.status;
-      const code = pickCode(e);
+    if (!preserveForm) {
+      const orders = adjustmentOrderRows(adjustmentData);
+      const fallbackOrderId = numberOrNull(
+        loadedDetail?.sale?.order_id ||
+          loadedDetail?.selected_check?.primary_order_id
+      );
 
-      if (
-        st === 409 &&
-        (code === "NO_OPEN_CASH_SESSION" ||
-          code === "SALE_NOT_OWNED_BY_SESSION")
-      ) {
-        nav("/staff/cashier/queue", { replace: true });
-        return;
+      setCancelOrderId(
+        orders.length === 1
+          ? String(orders[0].id)
+          : fallbackOrderId
+          ? String(fallbackOrderId)
+          : ""
+      );
+    }
+  };
+
+  const loadLegacySale = async ({
+    targetSaleId,
+    preserveForm,
+  }) => {
+    const [detailRes, methodsRes, taxesRes] = await Promise.all([
+      fetchCashierSaleDetail(targetSaleId),
+      fetchCashierPaymentMethods(),
+      fetchCashierTaxOptions(),
+    ]);
+
+    const loadedDetail = detailRes?.data || null;
+    const loadedMethods = toArray(methodsRes?.data);
+    const loadedTaxOptions = toArray(taxesRes?.data);
+
+    setIsLegacySale(true);
+    setSaleCheckContext(null);
+    setSelectedCheck(null);
+    setSelectedCheckId(null);
+    setPreparedCheck(null);
+    setSelectedSaleId(targetSaleId);
+
+    await applyLoadedState({
+      loadedDetail,
+      loadedMethods,
+      loadedTaxOptions,
+      targetSaleId,
+      allowOperation: deriveLegacyCanOperate(loadedDetail),
+      preserveForm,
+    });
+  };
+
+  const loadCheckSale = async ({
+    targetSaleId,
+    preserveForm,
+  }) => {
+    const contextRes = await fetchCashierSaleCheckContext(targetSaleId);
+    const contextData = contextRes?.data || null;
+    const contextChecks = toArray(contextData?.checks);
+
+    const exactContextCheck = contextChecks.find(
+      (check) => checkSaleIdOf(check) === Number(targetSaleId)
+    );
+
+    if (!exactContextCheck) {
+      const error = new Error(
+        "No se encontró la cuenta financiera vinculada a esta venta."
+      );
+      error.code = "SALE_CHECK_NOT_FOUND";
+      throw error;
+    }
+
+    const exactCheckId = checkIdOf(exactContextCheck);
+
+    if (!exactCheckId) {
+      const error = new Error(
+        "La cuenta encontrada no tiene un OrderCheck ID válido."
+      );
+      error.code = "ORDER_CHECK_ID_MISSING";
+      throw error;
+    }
+
+    const checkDetailRes = await fetchCashierSaleCheckDetail(
+      exactCheckId
+    );
+
+    const checkDetailData = checkDetailRes?.data || null;
+    const exactDetailedCheck = checkDetailData?.check || null;
+    const exactStatus = String(
+      exactDetailedCheck?.status || ""
+    ).toLowerCase();
+
+    const exactSplitMode = String(
+      contextData?.split_mode ??
+        contextData?.structure?.split_mode ??
+        ""
+    ).toLowerCase();
+
+    const exactSplitType = String(
+      exactContextCheck?.split_type ??
+        exactDetailedCheck?.split_type ??
+        ""
+    ).toLowerCase();
+
+    const isExactEqualPartsAccount =
+      exactSplitMode === "equal_parts" ||
+      exactSplitType === "equal_parts" ||
+      Boolean(exactContextCheck?.flags?.is_equal_part);
+
+    const exactBillingGroupStatus = String(
+      contextData?.billing_group_status ??
+        contextData?.billing_group?.status ??
+        ""
+    ).toLowerCase();
+
+    const exactBillingGroupAllowsEditing =
+      !exactBillingGroupStatus ||
+      exactBillingGroupStatus === "open";
+
+    if (
+      Number(checkDetailData?.sale_id || 0) !== Number(targetSaleId) ||
+      checkSaleIdOf(exactDetailedCheck) !== Number(targetSaleId)
+    ) {
+      const error = new Error(
+        "La cuenta consultada ya no está vinculada con la venta seleccionada."
+      );
+      error.code = "SALE_CHECK_RELATION_CHANGED";
+      throw error;
+    }
+
+    if (!["open", "paying"].includes(exactStatus)) {
+      const error = new Error(
+        "La cuenta ya no está disponible para continuar el cobro."
+      );
+      error.code = "CHECK_NOT_AVAILABLE_FOR_PAYMENT";
+      throw error;
+    }
+
+    const alreadyPrepared =
+      exactStatus === "paying"
+        ? {
+            already_prepared: true,
+            check: exactDetailedCheck,
+            sale_id: Number(targetSaleId),
+          }
+        : null;
+
+    const loadedDetail = buildExactCheckDetail({
+      routeSaleId: targetSaleId,
+      contextData,
+      prepareData: alreadyPrepared,
+      checkDetailData,
+      contextCheck: exactContextCheck,
+    });
+
+    const [methodsRes, taxesRes] = await Promise.all([
+      fetchCashierPaymentMethods(),
+      fetchCashierTaxOptions(),
+    ]);
+
+    const loadedMethods = toArray(methodsRes?.data);
+    const loadedTaxOptions = toArray(taxesRes?.data);
+
+    setIsLegacySale(false);
+    setSaleCheckContext(contextData);
+    setSelectedCheck(exactDetailedCheck);
+    setSelectedCheckId(exactCheckId);
+    setSelectedSaleId(targetSaleId);
+    setPreparedCheck(alreadyPrepared);
+
+    await applyLoadedState({
+      loadedDetail,
+      loadedMethods,
+      loadedTaxOptions,
+      targetSaleId,
+      allowOperation:
+        exactStatus === "open" &&
+        exactBillingGroupAllowsEditing &&
+        !isExactEqualPartsAccount,
+      preserveForm,
+    });
+  };
+
+  const load = async ({ preserveForm = false } = {}) => {
+    const targetSaleId = numberOrNull(saleId);
+
+    if (!targetSaleId) {
+      showAlert({
+        severity: "error",
+        message: "La cuenta indicada en la URL no es válida.",
+      });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setSelectedSaleId(targetSaleId);
+      setSettlement(null);
+
+      try {
+        await loadCheckSale({ targetSaleId, preserveForm });
+      } catch (checkError) {
+        const status = Number(checkError?.response?.status || 0);
+        const code =
+          checkError?.response?.data?.code || checkError?.code || "";
+
+        if (status === 409 && code === "SALE_WITHOUT_BILLING_GROUP") {
+          await loadLegacySale({ targetSaleId, preserveForm });
+          return;
+        }
+
+        throw checkError;
       }
+    } catch (e) {
+      const status = Number(e?.response?.status || 0);
+      const code = pickCode(e) || e?.code;
 
-      if (st === 403 || st === 404) {
-        nav("/staff/cashier/queue", { replace: true });
+      const mustReturnToQueue =
+        status === 403 ||
+        status === 404 ||
+        code === "NO_OPEN_CASH_SESSION" ||
+        code === "SALE_PACKAGE_NOT_TAKEN_BY_CURRENT_CASH_SESSION" ||
+        code === "CHECK_PACKAGE_NOT_TAKEN_BY_CURRENT_CASH_SESSION" ||
+        code === "CHECK_NOT_TAKEN_BY_CURRENT_CASH_SESSION" ||
+        code === "SALE_NOT_OWNED_BY_SESSION" ||
+        code === "SALE_CHECK_NOT_FOUND" ||
+        code === "SALE_CHECK_RELATION_CHANGED";
+
+      if (mustReturnToQueue) {
+        showAlert({
+          severity: "warning",
+          message: pickErr(
+            e,
+            "La cuenta ya no está disponible para esta caja."
+          ),
+        });
+
+        setTimeout(() => {
+          nav(MY_SALES_PATH, { replace: true });
+        }, 650);
         return;
       }
 
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo cargar el detalle de la venta."),
+        message: pickErr(
+          e,
+          "No se pudo cargar el detalle de la cuenta."
+        ),
       });
     } finally {
       setLoading(false);
@@ -686,28 +1449,58 @@ export default function CashierSaleDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saleId]);
 
-  const handleTakeSale = async () => {
-    if (!sale?.sale_id || taking) return;
-
+  const refreshSelectedCheckDetail = async () => {
     try {
-      setTaking(true);
+      if (isLegacySale) {
+        const res = await fetchCashierSaleDetail(selectedSaleId);
+        const latestDetail = res?.data || null;
+        if (!latestDetail) return false;
 
-      const res = await takeCashierSale(sale.sale_id);
+        setDetailData((prev) => ({
+          ...(prev || {}),
+          ...latestDetail,
+        }));
+        return true;
+      }
 
-      showAlert({
-        severity: "success",
-        message: res?.message || "Venta tomada correctamente.",
+      if (!selectedCheckId || !selectedSaleId) return false;
+
+      const res = await fetchCashierSaleCheckDetail(selectedCheckId);
+      const checkDetailData = res?.data || null;
+      const latestCheck = checkDetailData?.check || null;
+
+      if (
+        !latestCheck ||
+        checkSaleIdOf(latestCheck) !== Number(selectedSaleId)
+      ) {
+        return false;
+      }
+
+      const latestDetail = buildExactCheckDetail({
+        routeSaleId: selectedSaleId,
+        contextData: saleCheckContext,
+        prepareData: preparedCheck,
+        checkDetailData,
+        contextCheck: latestCheck,
       });
 
-      setPreview(null);
-      await load({ preserveForm: false });
-    } catch (e) {
-      showAlert({
-        severity: "warning",
-        message: pickErr(e, "No se pudo tomar la venta."),
-      });
-    } finally {
-      setTaking(false);
+      setSelectedCheck(latestCheck);
+      setDetailData((prev) => ({
+        ...(prev || {}),
+        ...latestDetail,
+        sale: {
+          ...(prev?.sale || {}),
+          ...(latestDetail?.sale || {}),
+        },
+      }));
+
+      return true;
+    } catch (error) {
+      console.error(
+        "No se pudo actualizar el detalle financiero de la cuenta.",
+        error
+      );
+      return false;
     }
   };
 
@@ -716,10 +1509,8 @@ export default function CashierSaleDetailPage() {
     setPreview(null);
 
     const nextTip = value === "" ? 0 : Number(value);
-
     const backendNetTotal = Number(
-      sale?.net_total ??
-        sale?.taxable_amount
+      sale?.net_total ?? sale?.taxable_amount
     );
 
     if (
@@ -739,7 +1530,7 @@ export default function CashierSaleDetailPage() {
     if (payments.length >= 3) {
       showAlert({
         severity: "warning",
-        message: "Solo se permiten máximo 3 métodos de pago por venta.",
+        message: "Solo se permiten máximo 3 métodos de pago por cuenta.",
       });
       return;
     }
@@ -748,7 +1539,10 @@ export default function CashierSaleDetailPage() {
       ? String(paymentMethods[0].id)
       : "";
 
-    setPayments((prev) => [...prev, createEmptyPayment(firstMethodId)]);
+    setPayments((prev) => [
+      ...prev,
+      createEmptyPayment(firstMethodId),
+    ]);
     setPreview(null);
   };
 
@@ -769,7 +1563,8 @@ export default function CashierSaleDetailPage() {
 
         if (field === "payment_method_id") {
           const method = paymentMethods.find(
-            (m) => Number(m.id) === Number(value || 0)
+            (candidate) =>
+              Number(candidate.id) === Number(value || 0)
           );
 
           if (!method?.requires_reference) nextRow.reference = "";
@@ -791,10 +1586,7 @@ export default function CashierSaleDetailPage() {
   };
 
   const handleGlobalFormChange = (field, value) => {
-    setGlobalDiscountForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setGlobalDiscountForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAddItemDiscountDraft = () => {
@@ -807,7 +1599,10 @@ export default function CashierSaleDetailPage() {
       return;
     }
 
-    setItemDiscountDrafts((prev) => [...prev, createEmptyItemDiscountDraft()]);
+    setItemDiscountDrafts((prev) => [
+      ...prev,
+      createEmptyItemDiscountDraft(),
+    ]);
   };
 
   const handleRemoveItemDiscountDraft = (localId) => {
@@ -818,25 +1613,23 @@ export default function CashierSaleDetailPage() {
 
   const handleItemDiscountDraftChange = (localId, field, value) => {
     setItemDiscountDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.localId !== localId) return draft;
-        return {
-          ...draft,
-          [field]: value,
-        };
-      })
+      prev.map((draft) =>
+        draft.localId === localId
+          ? { ...draft, [field]: value }
+          : draft
+      )
     );
   };
 
   const handlePartialFormChange = (field, value) => {
-    setPartialCancelForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setPartialCancelForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAddPartialDraft = () => {
-    setPartialCancelDrafts((prev) => [...prev, createEmptyPartialCancelDraft()]);
+    setPartialCancelDrafts((prev) => [
+      ...prev,
+      createEmptyPartialCancelDraft(),
+    ]);
   };
 
   const handleRemovePartialDraft = (localId) => {
@@ -847,61 +1640,69 @@ export default function CashierSaleDetailPage() {
 
   const handlePartialDraftChange = (localId, field, value) => {
     setPartialCancelDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.localId !== localId) return draft;
-        return {
-          ...draft,
-          [field]: value,
-        };
-      })
+      prev.map((draft) =>
+        draft.localId === localId
+          ? { ...draft, [field]: value }
+          : draft
+      )
     );
   };
 
   const handleContactFormChange = (field, value) => {
-    setContactForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setContactForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSearchCustomerFormChange = (field, value) => {
-    setSearchCustomerForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setSearchCustomerForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleCreateCustomerFormChange = (field, value) => {
-    setCreateCustomerForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setCreateCustomerForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const normalizedPayload = useMemo(() => {
     return {
       tax_option_code: taxOptionCode || null,
       tip: Number(tip || 0),
-      payments: payments.map((row) => ({
-        payment_method_id: Number(row.payment_method_id || 0),
-        amount: Number(row.amount || 0),
-        reference: row.reference?.trim() || null,
-        last4: row.last4?.trim() || null,
-        received:
-          row.received === "" ||
-          row.received === null ||
-          row.received === undefined
-            ? null
-            : Number(row.received),
-      })),
+      payments: payments.map((row) => {
+        const method = paymentMethods.find(
+          (candidate) =>
+            Number(candidate.id) ===
+            Number(row.payment_method_id || 0)
+        );
+
+        const payment = {
+          payment_method_id: Number(row.payment_method_id || 0),
+          amount: Number(row.amount || 0),
+        };
+
+        if (method?.requires_reference) {
+          payment.reference = row.reference?.trim() || null;
+        }
+
+        if (method?.requires_last4) {
+          payment.last4 = row.last4?.trim() || null;
+        }
+
+        if (method?.requires_received_amount) {
+          payment.received =
+            row.received === "" ||
+            row.received === null ||
+            row.received === undefined
+              ? null
+              : Number(row.received);
+        }
+
+        return payment;
+      }),
     };
-  }, [payments, taxOptionCode, tip]);
+  }, [paymentMethods, payments, taxOptionCode, tip]);
 
   const validateBeforePreview = () => {
-    if (!sale?.sale_id) {
+    if (!selectedSaleId) {
       showAlert({
         severity: "warning",
-        message: "No hay una venta válida para procesar.",
+        message: "No hay una cuenta válida para procesar.",
       });
       return false;
     }
@@ -910,10 +1711,11 @@ export default function CashierSaleDetailPage() {
       showAlert({
         severity: "warning",
         message:
-          "La venta debe estar tomada por tu caja y la orden en estado paying antes de cobrar.",
+          "La cuenta exacta ya no está disponible para generar la vista previa.",
       });
       return false;
     }
+
 
     if (!taxOptionCode) {
       showAlert({
@@ -923,30 +1725,13 @@ export default function CashierSaleDetailPage() {
       return false;
     }
 
-    if (!payments.length) {
+    if (!payments.length || payments.length > 3) {
       showAlert({
         severity: "warning",
-        message: "Debes agregar al menos un pago.",
-      });
-      return false;
-    }
-
-    if (payments.length > 3) {
-      showAlert({
-        severity: "warning",
-        message: "Solo se permiten máximo 3 métodos de pago por venta.",
-      });
-      return false;
-    }
-
-    const hasInvalidMethod = normalizedPayload.payments.some(
-      (row) => !row.payment_method_id
-    );
-
-    if (hasInvalidMethod) {
-      showAlert({
-        severity: "warning",
-        message: "Selecciona un método de pago en todos los renglones.",
+        message:
+          payments.length > 3
+            ? "Solo se permiten máximo 3 métodos de pago por cuenta."
+            : "Debes agregar al menos un pago.",
       });
       return false;
     }
@@ -954,12 +1739,105 @@ export default function CashierSaleDetailPage() {
     const ids = normalizedPayload.payments.map((row) =>
       Number(row.payment_method_id)
     );
-    const uniqueIds = Array.from(new Set(ids));
 
-    if (ids.length !== uniqueIds.length) {
+    if (ids.some((id) => !id)) {
       showAlert({
         severity: "warning",
-        message: "No puedes repetir el mismo método de pago en la misma venta.",
+        message: "Selecciona un método de pago en todos los renglones.",
+      });
+      return false;
+    }
+
+    if (ids.length !== new Set(ids).size) {
+      showAlert({
+        severity: "warning",
+        message: "No puedes repetir el mismo método de pago en la misma cuenta.",
+      });
+      return false;
+    }
+
+    for (let index = 0; index < payments.length; index += 1) {
+      const row = payments[index];
+      const method = paymentMethods.find(
+        (candidate) =>
+          Number(candidate.id) ===
+          Number(row.payment_method_id || 0)
+      );
+      const amount = Number(row.amount || 0);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showAlert({
+          severity: "warning",
+          message: `El monto del pago ${index + 1} debe ser mayor a 0.`,
+        });
+        return false;
+      }
+
+      const reference = String(row.reference || "").trim();
+      const last4 = String(row.last4 || "").trim();
+      const received =
+        row.received === "" ? null : Number(row.received);
+
+      if (method?.requires_reference && !reference) {
+        showAlert({
+          severity: "warning",
+          message: `${method?.name || "El método seleccionado"} requiere referencia.`,
+        });
+        return false;
+      }
+
+      if (reference.length > 100) {
+        showAlert({
+          severity: "warning",
+          message: "La referencia no puede exceder 100 caracteres.",
+        });
+        return false;
+      }
+
+      if (method?.requires_last4 && !/^\d{4}$/.test(last4)) {
+        showAlert({
+          severity: "warning",
+          message: `${method?.name || "El método seleccionado"} requiere exactamente los últimos 4 dígitos.`,
+        });
+        return false;
+      }
+
+      if (method?.requires_received_amount) {
+        if (!Number.isFinite(received)) {
+          showAlert({
+            severity: "warning",
+            message: `${method?.name || "El método seleccionado"} requiere monto recibido.`,
+          });
+          return false;
+        }
+
+        if (received < amount) {
+          showAlert({
+            severity: "warning",
+            message: "El monto recibido no puede ser menor al monto aplicado.",
+          });
+          return false;
+        }
+      }
+    }
+
+    const expectedTotal =
+      Number(sale?.net_total ?? sale?.taxable_amount ?? 0) +
+      Number(tip || 0);
+
+    const paymentsTotal = normalizedPayload.payments.reduce(
+      (sum, row) => sum + Number(row.amount || 0),
+      0
+    );
+
+    if (
+      Number.isFinite(expectedTotal) &&
+      Math.abs(paymentsTotal - expectedTotal) > 0.009
+    ) {
+      showAlert({
+        severity: "warning",
+        message:
+          "La suma de los pagos debe coincidir con el total actual de la cuenta.",
       });
       return false;
     }
@@ -972,9 +1850,8 @@ export default function CashierSaleDetailPage() {
 
     try {
       setPreviewing(true);
-
       const res = await previewCashierSalePayment(
-        sale.sale_id,
+        selectedSaleId,
         normalizedPayload
       );
       setPreview(res?.data?.preview || null);
@@ -986,7 +1863,10 @@ export default function CashierSaleDetailPage() {
     } catch (e) {
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo validar la vista previa del cobro."),
+        message: pickErr(
+          e,
+          "No se pudo validar la vista previa del cobro."
+        ),
       });
     } finally {
       setPreviewing(false);
@@ -994,14 +1874,7 @@ export default function CashierSaleDetailPage() {
   };
 
   const setTicketBusyKey = (key, value) => {
-    setTicketBusy((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  const handleClosePostPayment = () => {
-    setPostPaymentOpen(false);
+    setTicketBusy((prev) => ({ ...prev, [key]: value }));
   };
 
   const loadPostPaymentPrintConfig = async (targetSaleId) => {
@@ -1019,11 +1892,6 @@ export default function CashierSaleDetailPage() {
       setPostPaymentPrintConfig(null);
       return null;
     }
-  };
-
-  const handleContinueToQueue = () => {
-    setPostPaymentOpen(false);
-    nav("/staff/cashier/queue", { replace: true });
   };
 
   const ensureLatestTicket = async () => {
@@ -1052,12 +1920,13 @@ export default function CashierSaleDetailPage() {
       setTicketBusyKey("view", true);
       const latestTicket = await ensureLatestTicket();
       setPostPaymentTicket(latestTicket);
-      await openCashierTicketHtmlInNewTab(latestTicket.id, ticketWindow);
+      await openCashierTicketHtmlInNewTab(
+        latestTicket.id,
+        ticketWindow
+      );
     } catch (e) {
       try {
-        if (!ticketWindow.closed) {
-          ticketWindow.close();
-        }
+        if (!ticketWindow.closed) ticketWindow.close();
       } catch (error) {
         console.error(error);
       }
@@ -1089,9 +1958,7 @@ export default function CashierSaleDetailPage() {
       await printCashierTicketFromHtml(latestTicket.id, printWindow);
     } catch (e) {
       try {
-        if (!printWindow.closed) {
-          printWindow.close();
-        }
+        if (!printWindow.closed) printWindow.close();
       } catch (error) {
         console.error(error);
       }
@@ -1105,14 +1972,18 @@ export default function CashierSaleDetailPage() {
     }
   };
 
-
   const handleThermalPrintTicket = async () => {
-    const currentSaleId = Number(sale?.sale_id || sale?.id || saleId || 0);
+    const currentSaleId = Number(
+      postPaymentSale?.sale_id ||
+        postPaymentSale?.id ||
+        selectedSaleId ||
+        0
+    );
 
     if (!currentSaleId) {
       showAlert({
         severity: "warning",
-        message: "No hay una venta válida para imprimir.",
+        message: "No hay una cuenta válida para imprimir.",
       });
       return;
     }
@@ -1120,7 +1991,9 @@ export default function CashierSaleDetailPage() {
     try {
       setTicketBusyKey("thermalPrint", true);
 
-      const configRes = await fetchCashierSaleTicketPrintConfig(currentSaleId);
+      const configRes = await fetchCashierSaleTicketPrintConfig(
+        currentSaleId
+      );
       const config = configRes?.data || null;
 
       if (!config?.enabled || !config?.show_print_button) {
@@ -1135,7 +2008,9 @@ export default function CashierSaleDetailPage() {
 
       setPostPaymentPrintConfig(config);
 
-      const payloadRes = await fetchCashierSaleTicketPrintPayload(currentSaleId);
+      const payloadRes = await fetchCashierSaleTicketPrintPayload(
+        currentSaleId
+      );
       const payload = payloadRes?.payload || null;
 
       if (!payload) {
@@ -1182,10 +2057,17 @@ export default function CashierSaleDetailPage() {
     body,
     saveContact,
   }) => {
+    const targetSaleId = Number(
+      postPaymentSale?.sale_id ||
+        postPaymentSale?.id ||
+        selectedSaleId ||
+        0
+    );
+
     try {
       setTicketBusyKey("whatsapp", true);
 
-      await sendCashierSaleTicketWhatsapp(sale.sale_id, {
+      await sendCashierSaleTicketWhatsapp(targetSaleId, {
         phone,
         body,
         save_contact: saveContact,
@@ -1217,15 +2099,91 @@ export default function CashierSaleDetailPage() {
       return;
     }
 
+    if (!selectedSaleId) {
+      showAlert({
+        severity: "warning",
+        message: "No se encontró la cuenta exacta que debe cobrarse.",
+      });
+      return;
+    }
+
     try {
       setPaying(true);
 
-      const res = await payCashierSale(sale.sale_id, normalizedPayload);
+      if (!isLegacySale) {
+        if (!selectedCheckId) {
+          throw new Error(
+            "No se encontró el OrderCheck que debe prepararse."
+          );
+        }
+
+        const prepareRes =
+          await prepareCashierSaleCheckPayment(selectedCheckId);
+
+        const prepareData = prepareRes?.data || null;
+        const preparedPayload =
+          prepareData?.check || null;
+
+        const preparedCheckId = checkIdOf(preparedPayload);
+
+        const preparedSaleId = numberOrNull(
+          prepareData?.sale?.id ??
+            prepareData?.sale?.sale_id ??
+            prepareData?.sale_id ??
+            preparedPayload?.sale_id
+        );
+
+        if (
+          preparedCheckId !== Number(selectedCheckId) ||
+          preparedSaleId !== Number(selectedSaleId) ||
+          String(preparedPayload?.status || "").toLowerCase() !==
+            "paying"
+        ) {
+          const error = new Error(
+            "La cuenta no quedó preparada correctamente para el cobro."
+          );
+          error.code = "CHECK_NOT_PAYING_AFTER_PREPARE";
+          throw error;
+        }
+
+        setPreparedCheck(prepareData);
+
+        setSelectedCheck((prev) => ({
+          ...(prev || {}),
+          ...preparedPayload,
+        }));
+
+        setDetailData((prev) => ({
+          ...(prev || {}),
+          selected_check: {
+            ...(prev?.selected_check || {}),
+            ...preparedPayload,
+          },
+          prepared_check: prepareData,
+        }));
+      }
+
+      const res = await payCashierSale(
+        selectedSaleId,
+        normalizedPayload
+      );
+
       const paidSaleData = res?.data?.sale || null;
       const paidOrderData = res?.data?.order || null;
       const paidTableData = res?.data?.table || null;
+      const paidPayments = toArray(res?.data?.payments);
+      const paidSettlement = res?.data?.settlement || null;
+      const paidPoints = res?.data?.points || null;
       const ticketFromPay = extractTicketFromPayResponse(res);
-      const ticketWarningData = extractTicketWarningFromPayResponse(res);
+      const ticketWarningData =
+        extractTicketWarningFromPayResponse(res);
+
+      setSettlement(paidSettlement);
+      setPostPaymentSale(paidSaleData);
+      setPostPaymentOrder(paidOrderData);
+      setPostPaymentTable(paidTableData);
+      setPostPaymentPayments(paidPayments);
+      setPostPaymentPoints(paidPoints);
 
       if (paidSaleData) {
         setDetailData((prev) => {
@@ -1235,94 +2193,53 @@ export default function CashierSaleDetailPage() {
             ...prev,
             sale: {
               ...prev.sale,
-
-              status:
-                paidSaleData.status ??
-                prev.sale.status,
-
-              subtotal:
-                paidSaleData.subtotal ??
-                prev.sale.subtotal,
-
-              promotion_discount_total:
-                paidSaleData.promotion_discount_total ??
-                prev.sale.promotion_discount_total,
-
-              manual_discount_total:
-                paidSaleData.manual_discount_total ??
-                prev.sale.manual_discount_total,
-
-              discount_total:
-                paidSaleData.discount_total ??
-                prev.sale.discount_total,
-
-              taxable_amount:
-                paidSaleData.taxable_amount ??
-                prev.sale.taxable_amount,
-
+              ...paidSaleData,
+              id:
+                paidSaleData.id ||
+                paidSaleData.sale_id ||
+                prev.sale.id,
+              sale_id:
+                paidSaleData.sale_id ||
+                paidSaleData.id ||
+                prev.sale.sale_id,
               net_total:
                 paidSaleData.net_total ??
                 paidSaleData.taxable_amount ??
                 prev.sale.net_total,
-
-              tip:
-                paidSaleData.tip ??
-                prev.sale.tip,
-
-              total:
-                paidSaleData.total ??
-                prev.sale.total,
-
               payable_total:
                 paidSaleData.payable_total ??
                 paidSaleData.total ??
                 prev.sale.payable_total,
-
-              tax_kind:
-                paidSaleData.tax_kind ??
-                prev.sale.tax_kind,
-
-              tax_rate:
-                paidSaleData.tax_rate ??
-                prev.sale.tax_rate,
-
-              tax_base:
-                paidSaleData.tax_base ??
-                prev.sale.tax_base,
-
-              tax_total:
-                paidSaleData.tax_total ??
-                prev.sale.tax_total,
-
-              paid_at:
-                paidSaleData.paid_at ??
-                prev.sale.paid_at,
               order: {
                 ...(prev.sale.order || {}),
                 ...(paidOrderData || {}),
               },
-              table: {
-                ...(prev.sale.table || {}),
-                ...(paidTableData || {}),
-              },
+              table: paidTableData
+                ? {
+                    ...(prev.sale.table || {}),
+                    ...paidTableData,
+                  }
+                : prev.sale.table || null,
             },
-            cash_session: prev.cash_session,
           };
         });
       }
 
       setPostPaymentTicket(ticketFromPay || null);
-      setPostPaymentTicketWarning(ticketWarningData.ticketWarning);
-      setPostPaymentTicketErrorCode(ticketWarningData.ticketErrorCode);
-      setPostPaymentTicketErrorMessage(ticketWarningData.ticketErrorMessage);
+      setPostPaymentTicketWarning(
+        ticketWarningData.ticketWarning
+      );
+      setPostPaymentTicketErrorCode(
+        ticketWarningData.ticketErrorCode
+      );
+      setPostPaymentTicketErrorMessage(
+        ticketWarningData.ticketErrorMessage
+      );
 
       const currentSaleId = Number(
         paidSaleData?.id ||
           paidSaleData?.sale_id ||
-          sale?.sale_id ||
-          sale?.id ||
-          saleId ||
-          0
+          selectedSaleId
       );
 
       await loadPostPaymentPrintConfig(currentSaleId);
@@ -1331,47 +2248,34 @@ export default function CashierSaleDetailPage() {
 
       showAlert({
         severity: "success",
-        message: res?.message || "Venta cobrada correctamente.",
+        message:
+          res?.message ||
+          "La cuenta fue cobrada correctamente.",
       });
 
       setPostPaymentOpen(true);
     } catch (e) {
       const code = pickCode(e);
       const data = pickData(e);
-
-      const actionRequired = String(
-        data?.action_required || ""
-      );
+      const actionRequired = String(data?.action_required || "");
 
       const requiresStockReview =
         actionRequired === "REVIEW_DIRECT_ORDER_STOCK" ||
         code === "INSUFFICIENT_WAREHOUSE_STOCK_ON_PAYMENT";
 
       const requiresCashRegisterReconfiguration =
-        actionRequired ===
-          "RECONFIGURE_CASH_REGISTER_WAREHOUSE" ||
+        actionRequired === "RECONFIGURE_CASH_REGISTER_WAREHOUSE" ||
         code === "INVALID_CASH_REGISTER_WAREHOUSE" ||
         code === "DIRECT_ORDER_WAREHOUSE_MISMATCH";
 
       if (requiresStockReview) {
-        /*
-        * La vista previa ya no es válida porque las existencias
-        * cambiaron antes de realizar el cobro.
-        */
         setPreview(null);
 
         const orderId = Number(
           data?.order_id ||
             sale?.order?.id ||
             sale?.order_id ||
-            detailData?.sale?.order?.id ||
-            0
-        );
-
-        const currentSaleId = Number(
-          sale?.sale_id ||
-            sale?.id ||
-            saleId ||
+            selectedCheck?.primary_order_id ||
             0
         );
 
@@ -1384,10 +2288,10 @@ export default function CashierSaleDetailPage() {
           ),
         });
 
-        if (orderId && currentSaleId) {
+        if (orderId && selectedSaleId) {
           setTimeout(() => {
             nav(
-              `/staff/cashier/direct-order?order_id=${orderId}&return_sale_id=${currentSaleId}`,
+              `/staff/cashier/direct-order?order_id=${orderId}&return_sale_id=${selectedSaleId}`,
               { replace: true }
             );
           }, 700);
@@ -1397,7 +2301,6 @@ export default function CashierSaleDetailPage() {
       }
 
       if (requiresCashRegisterReconfiguration) {
-
         setPreview(null);
 
         showAlert({
@@ -1405,57 +2308,49 @@ export default function CashierSaleDetailPage() {
           title: "Caja pendiente de configuración",
           message: pickErr(
             e,
-            "No se puede cobrar esta venta porque la caja necesita que el propietario revise su almacén asignado."
+            "No se puede cobrar esta cuenta porque la caja necesita que el propietario revise su almacén asignado."
           ),
         });
-
         return;
       }
 
       if (
         code === "SALE_ALREADY_PAID" ||
         code === "SALE_NOT_OWNED_BY_SESSION" ||
-        code === "ORDER_NOT_IN_PAYING"
+        code === "ORDER_NOT_IN_PAYING" ||
+        code === "CHECK_SALE_NOT_PAYABLE"
       ) {
         showAlert({
           severity: "warning",
           message: pickErr(
             e,
-            "La venta ya no está disponible para cobrarse."
+            "La cuenta ya no está disponible para cobrarse."
           ),
         });
 
         setTimeout(() => {
-          nav("/staff/cashier/queue", { replace: true });
+          nav(MY_SALES_PATH, { replace: true });
         }, 600);
-
         return;
       }
 
       showAlert({
         severity: "error",
-        message: pickErr(
-          e,
-          "No se pudo cobrar la venta."
-        ),
+        message: pickErr(e, "No se pudo cobrar la cuenta."),
       });
     } finally {
       setPaying(false);
     }
   };
 
-  const syncDiscountResponseToState = (res) => {
+  const syncDiscountResponseToState = async (res) => {
     const summaryData = res?.data || null;
 
     setDiscountSummary(summaryData);
     syncSaleFromDiscountSummary(summaryData);
-
-    syncSinglePaymentFromFinancialSale(
-      summaryData?.sale,
-      tip
-    );
-
+    syncSinglePaymentFromFinancialSale(summaryData?.sale, tip);
     setPreview(null);
+    await refreshSelectedCheckDetail();
   };
 
   const resetDiscountAuthorizationState = () => {
@@ -1464,20 +2359,14 @@ export default function CashierSaleDetailPage() {
     setDiscountAuthorizationMessage("");
     setDiscountAuthorizationTarget(null);
     setDiscountAuthorizers([]);
-    setDiscountAuthorizationForm({
-      user_id: "",
-      pin: "",
-    });
+    setDiscountAuthorizationForm({ user_id: "", pin: "" });
     setLoadingDiscountAuthorizers(false);
     setAuthorizingDiscount(false);
     setDiscountAuthorizationError("");
   };
 
   const handleDiscountAuthorizationFormChange = (field, value) => {
-    setDiscountAuthorizationForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setDiscountAuthorizationForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const loadDiscountAuthorizersForAuthorization = async () => {
@@ -1486,7 +2375,7 @@ export default function CashierSaleDetailPage() {
       setDiscountAuthorizationError("");
 
       const res = await fetchCashierDiscountAuthorizers();
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      const rows = toArray(res?.data);
 
       setDiscountAuthorizers(rows);
 
@@ -1533,10 +2422,7 @@ export default function CashierSaleDetailPage() {
         fallbackMessage ||
         "Este descuento requiere autorización."
     );
-    setDiscountAuthorizationForm({
-      user_id: "",
-      pin: "",
-    });
+    setDiscountAuthorizationForm({ user_id: "", pin: "" });
     setDiscountAuthorizationError("");
     setDiscountAuthorizationOpen(true);
 
@@ -1579,7 +2465,7 @@ export default function CashierSaleDetailPage() {
   };
 
   const handleSubmitDiscountAuthorization = async () => {
-    if (!discountAuthorizationTarget) {
+    if (!discountAuthorizationTarget || !selectedSaleId) {
       setDiscountAuthorizationError(
         "No se encontró el descuento pendiente de autorización."
       );
@@ -1612,20 +2498,20 @@ export default function CashierSaleDetailPage() {
 
       if (discountAuthorizationTarget.scope === "global") {
         res = await applyCashierSaleGlobalDiscount(
-          sale.sale_id,
+          selectedSaleId,
           authorizedPayload
         );
       }
 
       if (discountAuthorizationTarget.scope === "item") {
         res = await applyCashierSaleItemDiscount(
-          sale.sale_id,
+          selectedSaleId,
           Number(discountAuthorizationTarget.orderItemId || 0),
           authorizedPayload
         );
       }
 
-      syncDiscountResponseToState(res);
+      await syncDiscountResponseToState(res);
 
       if (
         discountAuthorizationTarget.scope === "item" &&
@@ -1640,10 +2526,6 @@ export default function CashierSaleDetailPage() {
         );
       }
 
-      if (discountAuthorizationTarget.scope === "item") {
-        await refreshOrderItemsFromBackend();
-      }
-
       resetDiscountAuthorizationState();
 
       showAlert({
@@ -1656,14 +2538,17 @@ export default function CashierSaleDetailPage() {
       const code = pickCode(e);
 
       if (code === "DISCOUNT_AUTHORIZATION_INVALID") {
-        setDiscountAuthorizationError(buildAuthorizationErrorMessage(e));
+        setDiscountAuthorizationError(
+          buildAuthorizationErrorMessage(e)
+        );
         return;
       }
 
       if (code === "DISCOUNT_AUTHORIZATION_REQUIRED") {
         const payload = pickErrorPayload(e);
-
-        setDiscountAuthorizationPolicy(payload?.discount_policy || null);
+        setDiscountAuthorizationPolicy(
+          payload?.discount_policy || null
+        );
         setDiscountAuthorizationMessage(
           payload?.message ||
             "Este descuento requiere autorización."
@@ -1682,12 +2567,13 @@ export default function CashierSaleDetailPage() {
     }
   };
 
-
   const validateDiscountPayload = (type, value, scopeLabel) => {
-    if (!canOperate) {
+    if (!canManageDiscounts) {
       showAlert({
         severity: "warning",
-        message: "Solo puedes operar descuentos cuando la orden está en caja.",
+        message: isEqualPartsAccount
+          ? "Las cuentas divididas en partes iguales no permiten descuentos. Deshaz la división antes de ajustar el importe."
+          : "Los descuentos solo pueden modificarse mientras la cuenta está abierta.",
       });
       return false;
     }
@@ -1711,10 +2597,12 @@ export default function CashierSaleDetailPage() {
     return true;
   };
 
- const handleApplyGlobalDiscount = async () => {
+  const handleApplyGlobalDiscount = async () => {
     const { type, value, reason } = globalDiscountForm;
 
-    if (!validateDiscountPayload(type, value, "el descuento total")) return;
+    if (!validateDiscountPayload(type, value, "el descuento total")) {
+      return;
+    }
 
     const payload = {
       type,
@@ -1724,32 +2612,28 @@ export default function CashierSaleDetailPage() {
 
     try {
       setDiscountBusy(true);
-
       const res = await applyCashierSaleGlobalDiscount(
-        sale.sale_id,
+        selectedSaleId,
         payload
       );
 
-      syncDiscountResponseToState(res);
+      await syncDiscountResponseToState(res);
 
       showAlert({
         severity: "success",
         message: res?.message || "Descuento global aplicado correctamente.",
       });
     } catch (e) {
-
       const authorizationOpened =
         await maybeHandleDiscountAuthorizationRequired({
           error: e,
-          target: {
-            scope: "global",
-            payload,
-          },
+          target: { scope: "global", payload },
           fallbackMessage:
             "Este descuento global requiere autorización.",
         });
 
       if (authorizationOpened) return;
+
       const code = pickCode(e);
 
       if (
@@ -1758,7 +2642,10 @@ export default function CashierSaleDetailPage() {
       ) {
         showAlert({
           severity: "warning",
-          message: pickErr(e, "El descuento no puede aplicarse con los datos actuales."),
+          message: pickErr(
+            e,
+            "El descuento no puede aplicarse con los datos actuales."
+          ),
         });
         return;
       }
@@ -1775,12 +2662,11 @@ export default function CashierSaleDetailPage() {
   const handleRemoveGlobalDiscount = async () => {
     try {
       setDiscountBusy(true);
-
       const res = await removeCashierSaleGlobalDiscount(
-        sale.sale_id
+        selectedSaleId
       );
 
-      syncDiscountResponseToState(res);
+      await syncDiscountResponseToState(res);
 
       showAlert({
         severity: "success",
@@ -1791,10 +2677,7 @@ export default function CashierSaleDetailPage() {
     } catch (e) {
       showAlert({
         severity: "error",
-        message: pickErr(
-          e,
-          "No se pudo quitar el descuento global."
-        ),
+        message: pickErr(e, "No se pudo quitar el descuento global."),
       });
     } finally {
       setDiscountBusy(false);
@@ -1802,7 +2685,9 @@ export default function CashierSaleDetailPage() {
   };
 
   const handleApplyItemDraft = async (localId) => {
-    const draft = itemDiscountDrafts.find((row) => row.localId === localId);
+    const draft = itemDiscountDrafts.find(
+      (row) => row.localId === localId
+    );
 
     if (!draft) {
       showAlert({
@@ -1840,20 +2725,17 @@ export default function CashierSaleDetailPage() {
 
     try {
       setDiscountBusy(true);
-
       const res = await applyCashierSaleItemDiscount(
-        sale.sale_id,
+        selectedSaleId,
         orderItemId,
         payload
       );
 
-      syncDiscountResponseToState(res);
+      await syncDiscountResponseToState(res);
 
       setItemDiscountDrafts((prev) =>
         prev.filter((row) => row.localId !== localId)
       );
-
-      await refreshOrderItemsFromBackend();
 
       showAlert({
         severity: "success",
@@ -1875,25 +2757,31 @@ export default function CashierSaleDetailPage() {
             "Este descuento por ítem requiere autorización.",
         });
 
-        if (authorizationOpened) return;
+      if (authorizationOpened) return;
 
-        const code = pickCode(e);
+      const code = pickCode(e);
 
-        if (
-          code === "MOTIVO_DESCUENTO_REQUERIDO" ||
-          code === "DISCOUNT_BLOCKED"
-        ) {
-          showAlert({
-            severity: "warning",
-            message: pickErr(e, "El descuento no puede aplicarse con los datos actuales."),
-          });
-          return;
-        }
-
+      if (
+        code === "MOTIVO_DESCUENTO_REQUERIDO" ||
+        code === "DISCOUNT_BLOCKED"
+      ) {
         showAlert({
-          severity: "error",
-          message: pickErr(e, "No se pudo aplicar el descuento por ítem."),
+          severity: "warning",
+          message: pickErr(
+            e,
+            "El descuento no puede aplicarse con los datos actuales."
+          ),
         });
+        return;
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(
+          e,
+          "No se pudo aplicar el descuento por ítem."
+        ),
+      });
     } finally {
       setDiscountBusy(false);
     }
@@ -1902,34 +2790,231 @@ export default function CashierSaleDetailPage() {
   const handleRemoveItemDiscount = async (orderItemId) => {
     try {
       setDiscountBusy(true);
-
       const res = await removeCashierSaleItemDiscount(
-        sale.sale_id,
+        selectedSaleId,
         orderItemId
       );
 
-      syncDiscountResponseToState(res);
-      await refreshOrderItemsFromBackend();
+      await syncDiscountResponseToState(res);
 
       showAlert({
         severity: "success",
-        message: res?.message || "Descuento por ítem removido correctamente.",
+        message:
+          res?.message ||
+          "Descuento por ítem removido correctamente.",
       });
     } catch (e) {
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo quitar el descuento por ítem."),
+        message: pickErr(
+          e,
+          "No se pudo quitar el descuento por ítem."
+        ),
       });
     } finally {
       setDiscountBusy(false);
     }
   };
 
+  const isOperationalAuthorizationRequired = (error) => {
+    return (
+      Number(error?.response?.status || 0) === 422 &&
+      pickCode(error) === "OPERATIONAL_AUTHORIZATION_REQUIRED"
+    );
+  };
+
+  const resetOperationalAuthorizationState = () => {
+    setPendingAdjustmentAuthorization(null);
+    setOperationalAuthorizationOpen(false);
+    setOperationalAuthorizers([]);
+    setLoadingOperationalAuthorizers(false);
+    setAuthorizingOperational(false);
+    setOperationalAuthorizationError("");
+    setOperationalAuthorizationMessage("");
+  };
+
+  const loadOperationalAuthorizers = async () => {
+    try {
+      setLoadingOperationalAuthorizers(true);
+      setOperationalAuthorizationError("");
+
+      const res = await fetchCashierOperationalAuthorizers();
+      const rows = toArray(
+        res?.data?.authorizers || res?.data
+      );
+
+      setOperationalAuthorizers(rows);
+
+      if (!rows.length) {
+        setOperationalAuthorizationError(
+          res?.message ||
+            "No hay autorizadores operativos disponibles para esta sucursal."
+        );
+      }
+
+      return rows;
+    } catch (e) {
+      setOperationalAuthorizers([]);
+      setOperationalAuthorizationError(
+        pickErr(
+          e,
+          "No se pudieron cargar los autorizadores operativos."
+        )
+      );
+      return [];
+    } finally {
+      setLoadingOperationalAuthorizers(false);
+    }
+  };
+
+  const openOperationalAuthorization = async ({
+    error,
+    operation,
+  }) => {
+    setPendingAdjustmentAuthorization(operation);
+    setOperationalAuthorizationMessage(
+      pickErr(
+        error,
+        "Esta cancelación requiere autorización operativa para limpiar los descuentos manuales afectados."
+      )
+    );
+    setOperationalAuthorizationError("");
+    setOperationalAuthorizationOpen(true);
+    await loadOperationalAuthorizers();
+  };
+
+  const handleCloseOperationalAuthorization = () => {
+    if (authorizingOperational) return;
+    resetOperationalAuthorizationState();
+  };
+
+  const finishSuccessfulAdjustment = async ({
+    response,
+    operationType,
+  }) => {
+    setPreview(null);
+
+    showAlert({
+      severity: "success",
+      message:
+        response?.message ||
+        (operationType === "order"
+          ? "Orden cancelada correctamente."
+          : "Ajuste parcial aplicado correctamente."),
+    });
+
+    if (operationType === "order") {
+      setTimeout(() => {
+        nav(MY_SALES_PATH, { replace: true });
+      }, 500);
+      return;
+    }
+
+    setPartialCancelForm({ reason: "" });
+    setPartialCancelDrafts([]);
+    await load({ preserveForm: false });
+  };
+
+  const handleSubmitOperationalAuthorization = async (authorization) => {
+    const pending = pendingAdjustmentAuthorization;
+
+    if (!pending) {
+      setOperationalAuthorizationError(
+        "No se encontró la cancelación pendiente."
+      );
+      return;
+    }
+
+    const authorizationUserId = Number(
+      authorization?.authorization_user_id ??
+        authorization?.user_id ??
+        0
+    );
+
+    const authorizationPin = String(
+      authorization?.authorization_pin ??
+        authorization?.pin ??
+        ""
+    ).trim();
+
+    if (!authorizationUserId) {
+      setOperationalAuthorizationError("Selecciona un autorizador.");
+      return;
+    }
+
+    if (!authorizationPin) {
+      setOperationalAuthorizationError("Ingresa el PIN del autorizador.");
+      return;
+    }
+
+    const retryPayload = {
+      ...pending.payload,
+      clear_discounts_on_restructure: true,
+      authorization_user_id: authorizationUserId,
+      authorization_pin: authorizationPin,
+    };
+
+    try {
+      setAuthorizingOperational(true);
+      setOperationalAuthorizationError("");
+
+      const res =
+        pending.type === "order"
+          ? await cancelCashierSaleOrder(
+              pending.saleId,
+              retryPayload
+            )
+          : await cancelCashierSaleItems(
+              pending.saleId,
+              retryPayload
+            );
+
+      resetOperationalAuthorizationState();
+
+      await finishSuccessfulAdjustment({
+        response: res,
+        operationType: pending.type,
+      });
+    } catch (e) {
+      const status = Number(e?.response?.status || 0);
+      const code = pickCode(e);
+
+      if (
+        status === 422 &&
+        (code === "OPERATIONAL_AUTHORIZATION_INVALID" ||
+          code === "OPERATIONAL_AUTHORIZATION_REQUIRED")
+      ) {
+        setOperationalAuthorizationError(
+          pickErr(e, "La autorización operativa no es válida.")
+        );
+        return;
+      }
+
+      if (status === 409) {
+        const message = pickErr(
+          e,
+          "La cancelación ya no puede realizarse."
+        );
+        resetOperationalAuthorizationState();
+        showAlert({ severity: "warning", message });
+        return;
+      }
+
+      setOperationalAuthorizationError(
+        pickErr(e, "No se pudo completar la cancelación autorizada.")
+      );
+    } finally {
+      setAuthorizingOperational(false);
+    }
+  };
+
   const handleSubmitPartialCancel = async () => {
-    if (!canOperate) {
+    if (!canManageAdjustments) {
       showAlert({
         severity: "warning",
-        message: "La orden debe estar en caja antes de aplicar cancelaciones.",
+        message: isEqualPartsAccount
+          ? "Las cuentas divididas en partes iguales no permiten cancelaciones. Deshaz la división antes de modificar el consumo."
+          : "Las cancelaciones solo pueden aplicarse mientras la cuenta está abierta.",
       });
       return;
     }
@@ -1955,11 +3040,7 @@ export default function CashierSaleDetailPage() {
       quantity: Number(draft.quantity || 0),
     }));
 
-    const hasInvalidItem = items.some(
-      (row) => !row.order_item_id || !row.quantity
-    );
-
-    if (hasInvalidItem) {
+    if (items.some((row) => !row.order_item_id || !row.quantity)) {
       showAlert({
         severity: "warning",
         message: "Completa el ítem y la cantidad en todos los renglones.",
@@ -1967,42 +3048,59 @@ export default function CashierSaleDetailPage() {
       return;
     }
 
+    const payload = {
+      reason: partialCancelForm.reason.trim(),
+      items,
+    };
+
     try {
       setAdjustmentBusy(true);
+      const res = await cancelCashierSaleItems(
+        selectedSaleId,
+        payload
+      );
 
-      const res = await cancelCashierSaleItems(sale.sale_id, {
-        reason: partialCancelForm.reason.trim(),
-        items,
+      await finishSuccessfulAdjustment({
+        response: res,
+        operationType: "items",
       });
-
-      showAlert({
-        severity: "success",
-        message: res?.message || "Ajuste parcial aplicado correctamente.",
-      });
-
-      setPartialCancelForm({ reason: "" });
-      setPartialCancelDrafts([]);
-      setPreview(null);
-
-      await load({ preserveForm: false });
     } catch (e) {
       const code = pickCode(e);
+      const status = Number(e?.response?.status || 0);
+
+      if (isOperationalAuthorizationRequired(e)) {
+        await openOperationalAuthorization({
+          error: e,
+          operation: {
+            type: "items",
+            saleId: selectedSaleId,
+            orderId: numberOrNull(
+              sale?.order_id || selectedCheck?.primary_order_id
+            ),
+            payload,
+            items,
+          },
+        });
+        return;
+      }
 
       if (code === "PARTIAL_ADJUSTMENT_WOULD_ZERO_ORDER") {
         showAlert({
           severity: "warning",
-          message:
-            pickErr(
-              e,
-              "La cancelación parcial dejaría la orden en cero. Usa cancelación total."
-            ) || "",
+          message: pickErr(
+            e,
+            "La cancelación parcial dejaría la orden en cero. Usa cancelación total."
+          ),
         });
         return;
       }
 
       showAlert({
-        severity: "error",
-        message: pickErr(e, "No se pudo aplicar la cancelación parcial."),
+        severity: status === 409 ? "warning" : "error",
+        message: pickErr(
+          e,
+          "No se pudo aplicar la cancelación parcial."
+        ),
       });
     } finally {
       setAdjustmentBusy(false);
@@ -2010,10 +3108,12 @@ export default function CashierSaleDetailPage() {
   };
 
   const handleSubmitCancelOrder = async () => {
-    if (!canOperate) {
+    if (!canManageAdjustments) {
       showAlert({
         severity: "warning",
-        message: "La orden debe estar en caja antes de cancelarla.",
+        message: isEqualPartsAccount
+          ? "Las cuentas divididas en partes iguales no permiten cancelaciones. Deshaz la división antes de modificar el consumo."
+          : "La orden solo puede cancelarse mientras la cuenta está abierta.",
       });
       return;
     }
@@ -2026,24 +3126,54 @@ export default function CashierSaleDetailPage() {
       return;
     }
 
+    const resolvedOrderId = numberOrNull(
+      cancelOrderId ||
+        sale?.order_id ||
+        selectedCheck?.primary_order_id
+    );
+
+    if (adjustmentOrders.length > 1 && !resolvedOrderId) {
+      showAlert({
+        severity: "warning",
+        message: "Selecciona la orden que deseas cancelar.",
+      });
+      return;
+    }
+
+    const payload = {
+      reason: cancelOrderReason.trim(),
+      ...(resolvedOrderId ? { order_id: resolvedOrderId } : {}),
+    };
+
     try {
       setAdjustmentBusy(true);
+      const res = await cancelCashierSaleOrder(
+        selectedSaleId,
+        payload
+      );
 
-      const res = await cancelCashierSaleOrder(sale.sale_id, {
-        reason: cancelOrderReason.trim(),
+      await finishSuccessfulAdjustment({
+        response: res,
+        operationType: "order",
       });
-
-      showAlert({
-        severity: "success",
-        message: res?.message || "Orden cancelada correctamente.",
-      });
-
-      setTimeout(() => {
-        nav("/staff/cashier/queue", { replace: true });
-      }, 500);
     } catch (e) {
+      const status = Number(e?.response?.status || 0);
+
+      if (isOperationalAuthorizationRequired(e)) {
+        await openOperationalAuthorization({
+          error: e,
+          operation: {
+            type: "order",
+            saleId: selectedSaleId,
+            orderId: resolvedOrderId,
+            payload,
+          },
+        });
+        return;
+      }
+
       showAlert({
-        severity: "error",
+        severity: status === 409 ? "warning" : "error",
         message: pickErr(e, "No se pudo cancelar la orden."),
       });
     } finally {
@@ -2055,15 +3185,14 @@ export default function CashierSaleDetailPage() {
     if (!canManageCustomer) {
       showAlert({
         severity: "warning",
-        message: "La venta debe estar tomada por tu caja para operar datos de cliente.",
+        message: "La cuenta debe pertenecer a tu caja para operar datos de cliente.",
       });
       return;
     }
 
     try {
       setCustomerBusy(true);
-
-      const res = await saveCashierSaleContactData(sale.sale_id, {
+      const res = await saveCashierSaleContactData(selectedSaleId, {
         phone: contactForm.phone?.trim() || null,
         email: contactForm.email?.trim() || null,
       });
@@ -2088,8 +3217,7 @@ export default function CashierSaleDetailPage() {
   const handleRemoveContact = async () => {
     try {
       setCustomerBusy(true);
-
-      const res = await removeCashierSaleContactData(sale.sale_id);
+      const res = await removeCashierSaleContactData(selectedSaleId);
       setCustomerSummary(res?.data || null);
       syncCustomerFormsFromSummary(res?.data || null);
 
@@ -2121,26 +3249,19 @@ export default function CashierSaleDetailPage() {
 
     try {
       setSearchingCustomers(true);
-
       const res = await searchCashierCustomers({
         phone: phone || undefined,
         email: email || undefined,
       });
 
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      const rows = toArray(res?.data);
       setCustomerSearchResults(rows);
 
-      if (!rows.length) {
-        showAlert({
-          severity: "info",
-          message: "No se encontraron clientes con esos datos.",
-        });
-        return;
-      }
-
       showAlert({
-        severity: "success",
-        message: "Búsqueda de clientes completada.",
+        severity: rows.length ? "success" : "info",
+        message: rows.length
+          ? "Búsqueda de clientes completada."
+          : "No se encontraron clientes con esos datos.",
       });
     } catch (e) {
       showAlert({
@@ -2155,8 +3276,7 @@ export default function CashierSaleDetailPage() {
   const handleAttachCustomer = async (customerId) => {
     try {
       setCustomerBusy(true);
-
-      const res = await attachCashierSaleCustomer(sale.sale_id, {
+      const res = await attachCashierSaleCustomer(selectedSaleId, {
         customer_id: Number(customerId),
       });
 
@@ -2166,12 +3286,12 @@ export default function CashierSaleDetailPage() {
 
       showAlert({
         severity: "success",
-        message: res?.message || "Cliente asociado correctamente a la venta.",
+        message: res?.message || "Cliente asociado correctamente a la cuenta.",
       });
     } catch (e) {
       showAlert({
         severity: "error",
-        message: pickErr(e, "No se pudo asociar el cliente a la venta."),
+        message: pickErr(e, "No se pudo asociar el cliente a la cuenta."),
       });
     } finally {
       setCustomerBusy(false);
@@ -2181,8 +3301,7 @@ export default function CashierSaleDetailPage() {
   const handleDetachCustomer = async () => {
     try {
       setCustomerBusy(true);
-
-      const res = await detachCashierSaleCustomer(sale.sale_id);
+      const res = await detachCashierSaleCustomer(selectedSaleId);
       setCustomerSummary(res?.data || null);
       syncCustomerFormsFromSummary(res?.data || null);
 
@@ -2221,7 +3340,7 @@ export default function CashierSaleDetailPage() {
         throw new Error("No se obtuvo el id del cliente creado.");
       }
 
-      const attached = await attachCashierSaleCustomer(sale.sale_id, {
+      const attached = await attachCashierSaleCustomer(selectedSaleId, {
         customer_id: createdCustomerId,
       });
 
@@ -2231,17 +3350,21 @@ export default function CashierSaleDetailPage() {
 
       showAlert({
         severity: "success",
-        message: "Cliente creado y asociado correctamente a la venta.",
+        message: "Cliente creado y asociado correctamente a la cuenta.",
       });
     } catch (e) {
       const code = pickCode(e);
       const data = pickData(e);
 
-      if (code === "CUSTOMER_ALREADY_EXISTS" && Number(data?.customer_id || 0)) {
+      if (
+        code === "CUSTOMER_ALREADY_EXISTS" &&
+        Number(data?.customer_id || 0)
+      ) {
         try {
-          const attached = await attachCashierSaleCustomer(sale.sale_id, {
-            customer_id: Number(data.customer_id),
-          });
+          const attached = await attachCashierSaleCustomer(
+            selectedSaleId,
+            { customer_id: Number(data.customer_id) }
+          );
 
           setCustomerSummary(attached?.data || null);
           syncCustomerFormsFromSummary(attached?.data || null);
@@ -2250,7 +3373,7 @@ export default function CashierSaleDetailPage() {
           showAlert({
             severity: "success",
             message:
-              "El cliente ya existía y se asoció correctamente a la venta.",
+              "El cliente ya existía y se asoció correctamente a la cuenta.",
           });
           return;
         } catch (attachError) {
@@ -2258,7 +3381,7 @@ export default function CashierSaleDetailPage() {
             severity: "error",
             message: pickErr(
               attachError,
-              "El cliente ya existía, pero no se pudo asociar a la venta."
+              "El cliente ya existía, pero no se pudo asociar a la cuenta."
             ),
           });
           return;
@@ -2287,7 +3410,7 @@ export default function CashierSaleDetailPage() {
           <Box sx={{ textAlign: "center" }}>
             <CircularProgress />
             <Typography sx={{ mt: 2, color: "text.secondary", fontSize: 14 }}>
-              Cargando detalle de venta…
+              Cargando detalle de cuenta…
             </Typography>
           </Box>
         </Box>
@@ -2300,19 +3423,27 @@ export default function CashierSaleDetailPage() {
       <Stack spacing={3}>
         <CashierSaleDetailHeroCard
           sale={sale}
+          check={selectedCheck}
+          selectedCheck={selectedCheck}
+          saleCheckContext={saleCheckContext}
+          preparedCheck={preparedCheck}
           cashSession={cashSession}
           canOperate={canOperate}
-          canTake={canTake}
-          taking={taking}
-          onTake={handleTakeSale}
-          onBack={() => nav("/staff/cashier/queue")}
+          onBack={handleReturnToMySales}
         />
 
         <CashierSaleOptionalActionsBar
           adjustmentSummary={adjustmentSummary}
           customerSummary={customerSummary}
           discountSummary={discountSummary}
-          disabled={previewing || paying || postPaymentOpen}
+          disabled={
+            previewing ||
+            paying ||
+            postPaymentOpen
+          }
+          adjustmentsDisabled={!canManageAdjustments}
+          customerDisabled={!canManageCustomer}
+          discountsDisabled={!canManageDiscounts}
           onOpenAdjustments={() => setActiveTool("adjustments")}
           onOpenCustomer={() => setActiveTool("customer")}
           onOpenDiscounts={() => setActiveTool("discounts")}
@@ -2329,15 +3460,11 @@ export default function CashierSaleDetailPage() {
             alignItems: "stretch",
           }}
         >
-          <Box
-            sx={{
-              height: "100%",
-              minWidth: 0,
-            }}
-          >
+          <Box sx={{ height: "100%", minWidth: 0 }}>
             <CashierOrderItemsCard
               itemsTree={itemsTree}
               itemsSummary={itemsSummary}
+              selectedCheck={selectedCheck}
             />
           </Box>
 
@@ -2356,6 +3483,7 @@ export default function CashierSaleDetailPage() {
           >
             <CashierSaleSummaryCard
               sale={sale}
+              check={selectedCheck}
               liveTip={Number(tip || 0)}
               preview={preview}
               selectedTaxOption={selectedTaxOption}
@@ -2375,6 +3503,8 @@ export default function CashierSaleDetailPage() {
 
         <CashierPaymentFormCard
           methods={paymentMethods}
+          initialAmount={paymentInitialAmount}
+          preview={preview}
           tip={tip}
           onTipChange={handleTipChange}
           payments={payments}
@@ -2384,25 +3514,32 @@ export default function CashierSaleDetailPage() {
           onPreview={handlePreview}
           previewing={previewing}
           paying={paying}
-          hasPreview={!!preview}
+          hasPreview={Boolean(preview)}
           onPay={handlePay}
           disabled={!canOperate || postPaymentOpen}
         />
-
       </Stack>
 
       <CashierSaleToolDialog
-        open={activeTool === "adjustments"}
+        open={
+          activeTool === "adjustments" &&
+          canManageAdjustments
+        }
         onClose={() => setActiveTool(null)}
         title="Ajustes y cancelaciones"
-        subtitle="Cancela ítems o la orden completa únicamente cuando sea necesario antes del cobro."
+        subtitle="Cancela ítems o una orden del paquete únicamente cuando sea necesario antes del cobro."
         icon={<TuneRoundedIcon />}
         maxWidth="lg"
       >
         <CashierAdjustmentCard
           sale={sale}
+          selectedCheck={selectedCheck}
           itemsFlat={itemsFlat}
           summary={adjustmentSummary}
+          orders={adjustmentOrders}
+          orderOptions={adjustmentOrders}
+          selectedOrderId={cancelOrderId}
+          onSelectedOrderIdChange={setCancelOrderId}
           partialForm={partialCancelForm}
           onPartialFormChange={handlePartialFormChange}
           partialDrafts={partialCancelDrafts}
@@ -2414,7 +3551,12 @@ export default function CashierSaleDetailPage() {
           onCancelOrderReasonChange={setCancelOrderReason}
           onSubmitCancelOrder={handleSubmitCancelOrder}
           busy={adjustmentBusy}
-          disabled={!canOperate || previewing || paying || postPaymentOpen}
+          disabled={
+            !canManageAdjustments ||
+            previewing ||
+            paying ||
+            postPaymentOpen
+          }
         />
       </CashierSaleToolDialog>
 
@@ -2422,7 +3564,7 @@ export default function CashierSaleDetailPage() {
         open={activeTool === "customer"}
         onClose={() => setActiveTool(null)}
         title="Cliente"
-        subtitle="Guarda contacto simple o asocia un cliente formal a esta venta."
+        subtitle="Guarda contacto simple o asocia un cliente formal únicamente a esta cuenta."
         icon={<PersonRoundedIcon />}
         maxWidth="lg"
       >
@@ -2448,15 +3590,19 @@ export default function CashierSaleDetailPage() {
       </CashierSaleToolDialog>
 
       <CashierSaleToolDialog
-        open={activeTool === "discounts"}
+        open={
+          activeTool === "discounts" &&
+          canManageDiscounts
+        }
         onClose={() => setActiveTool(null)}
         title="Descuentos"
-        subtitle="Aplica descuentos globales o por ítem antes de validar la vista previa del cobro."
+        subtitle="Aplica descuentos globales o por ítem sobre esta cuenta antes de validar el cobro."
         icon={<LocalOfferRoundedIcon />}
         maxWidth="lg"
       >
         <CashierDiscountCard
           sale={sale}
+          selectedCheck={selectedCheck}
           itemsFlat={itemsFlat}
           summary={discountSummary}
           globalForm={globalDiscountForm}
@@ -2470,7 +3616,12 @@ export default function CashierSaleDetailPage() {
           onApplyItemDraft={handleApplyItemDraft}
           onRemoveItem={handleRemoveItemDiscount}
           busy={discountBusy}
-          disabled={!canOperate || previewing || paying || postPaymentOpen}
+          disabled={
+            !canManageDiscounts ||
+            previewing ||
+            paying ||
+            postPaymentOpen
+          }
         />
       </CashierSaleToolDialog>
 
@@ -2488,11 +3639,23 @@ export default function CashierSaleDetailPage() {
         policy={discountAuthorizationPolicy}
       />
 
-      <CashierPostPaymentTicketModal
+      <CashierOperationalAuthorizationDialog
+        open={operationalAuthorizationOpen}
+        onClose={handleCloseOperationalAuthorization}
+        onSubmit={handleSubmitOperationalAuthorization}
+        authorizers={operationalAuthorizers}
+        loading={loadingOperationalAuthorizers}
+        busy={authorizingOperational}
+        error={operationalAuthorizationError}
+        title="Autorizar cancelación"
+        message={operationalAuthorizationMessage}
+        submitLabel="Autorizar y continuar"
+      />
 
+      <CashierPostPaymentTicketModal
         open={postPaymentOpen}
-        onClose={handleClosePostPayment}
-        onContinue={handleContinueToQueue}
+        onClose={handleReturnToMySales}
+        onContinue={handleReturnToMySales}
         onViewTicket={handleViewTicket}
         onPrintTicket={handlePrintTicket}
         onThermalPrintTicket={handleThermalPrintTicket}
@@ -2506,9 +3669,12 @@ export default function CashierSaleDetailPage() {
         printConfig={postPaymentPrintConfig}
         customerSummary={customerSummary}
         ticket={postPaymentTicket}
-        sale={detailData?.sale || null}
-        order={detailData?.sale?.order || null}
-        table={detailData?.sale?.table || null}
+        sale={postPaymentSale || detailData?.sale || null}
+        order={postPaymentOrder || detailData?.sale?.order || null}
+        table={postPaymentTable || detailData?.sale?.table || null}
+        payments={postPaymentPayments}
+        points={postPaymentPoints}
+        settlement={settlement}
         ticketWarning={postPaymentTicketWarning}
         ticketErrorCode={postPaymentTicketErrorCode}
         ticketErrorMessage={postPaymentTicketErrorMessage}

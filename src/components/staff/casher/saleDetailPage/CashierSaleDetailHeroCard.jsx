@@ -3,28 +3,169 @@ import React from "react";
 import {
   Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
+
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import FormatListNumberedRoundedIcon from "@mui/icons-material/FormatListNumberedRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import AddTaskRoundedIcon from "@mui/icons-material/AddTaskRounded";
 
 export default function CashierSaleDetailHeroCard({
   sale,
-  cashSession,
+  selectedCheck = null,
+  preparedCheck = null,
+  saleCheckContext = null,
+  billingGroup = null,
+  relatedOrders = [],
+  relatedTables = [],
+  cashSession = null,
   onBack,
   canOperate = false,
-  canTake = false,
-  taking = false,
-  onTake,
+  preparing = false,
 }) {
-  const order = sale?.order || null;
-  const table = sale?.table || null;
+  const check =
+    preparedCheck?.check ||
+    selectedCheck ||
+    saleCheckContext?.check ||
+    null;
 
-  const saleStatusLabel = translateStatus(sale?.status, "sale");
-  const orderStatusLabel = translateStatus(order?.status, "order");
-  const tableStatusLabel = translateStatus(table?.status, "table");
-  const cashSessionStatusLabel = translateStatus(cashSession?.status, "cash");
+  const exactSale =
+    preparedCheck?.sale ||
+    check?.sale ||
+    sale ||
+    null;
+
+  const activeCashSession =
+    cashSession ||
+    saleCheckContext?.cash_session ||
+    null;
+
+  const packageData =
+    billingGroup ||
+    preparedCheck?.billing_group ||
+    preparedCheck?.summary?.billing_group ||
+    saleCheckContext?.billing_group ||
+    saleCheckContext?.operational?.billing_group ||
+    exactSale?.billing_group ||
+    null;
+
+  const checkItems = Array.isArray(check?.items) ? check.items : [];
+
+  const orderRows = mergeEntityRows(
+    relatedOrders,
+    saleCheckContext?.orders,
+    preparedCheck?.summary?.orders,
+    exactSale?.order ? [exactSale.order] : [],
+    sale?.order ? [sale.order] : [],
+    check?.primary_order_id ? [{ id: check.primary_order_id }] : [],
+    checkItems.map((item) => ({
+      id: item?.source_order_id,
+    }))
+  );
+
+  const tableRows = mergeEntityRows(
+    relatedTables,
+    saleCheckContext?.tables,
+    preparedCheck?.summary?.tables,
+    exactSale?.table ? [exactSale.table] : [],
+    sale?.table ? [sale.table] : [],
+    check?.primary_table_id ? [{ id: check.primary_table_id }] : [],
+    checkItems.map((item) => ({
+      id: item?.source_table_id,
+    }))
+  );
+
+  const saleId = positiveInt(
+    exactSale?.id ??
+      exactSale?.sale_id ??
+      saleCheckContext?.sale_id ??
+      check?.sale_id
+  );
+
+  const checkId = positiveInt(
+    check?.id ??
+      check?.order_check_id
+  );
+
+  const linkedSaleId = positiveInt(
+    check?.sale_id ??
+      check?.sale?.id ??
+      check?.sale?.sale_id
+  );
+
+  const billingGroupId = positiveInt(
+    packageData?.id ??
+      preparedCheck?.order_billing_group_id ??
+      saleCheckContext?.order_billing_group_id ??
+      exactSale?.order_billing_group_id
+  );
+
+  const checkStatus = normalizeStatus(check?.status);
+
+  const packageStatus = normalizeStatus(
+    packageData?.status ??
+      preparedCheck?.billing_group?.status ??
+      preparedCheck?.billing_group_status ??
+      preparedCheck?.summary?.billing_group?.status ??
+      preparedCheck?.summary?.billing_group_status ??
+      saleCheckContext?.operational?.billing_group_status ??
+      saleCheckContext?.structure?.billing_group_status ??
+      saleCheckContext?.billing_group_status ??
+      exactSale?.billing_group_status
+  );
+  const cashSessionStatus = normalizeStatus(activeCashSession?.status);
+
+  const exactSaleLinked =
+    saleId > 0 &&
+    linkedSaleId > 0 &&
+    saleId === linkedSaleId;
+
+  const validCashSession =
+    positiveInt(activeCashSession?.id) > 0 &&
+    ["open", "active"].includes(cashSessionStatus);
+
+  const availableForEditing =
+    checkStatus === "open" &&
+    exactSaleLinked &&
+    validCashSession;
+
+  const readyForPayment =
+    Boolean(canOperate) &&
+    checkStatus === "paying" &&
+    exactSaleLinked &&
+    validCashSession;
+
+  const readinessLabel = resolveReadinessLabel({
+    readyForPayment,
+    availableForEditing,
+    preparing,
+    check,
+    checkStatus,
+    exactSaleLinked,
+    validCashSession,
+  });
+
+  const readinessColors = readyForPayment
+    ? {
+        backgroundColor: "#E7F8EB",
+        color: "#0A7A2F",
+      }
+    : {
+        backgroundColor: "#FFF4D9",
+        color: "#8A6D3B",
+      };
+
+  const checkName =
+    cleanText(check?.name) ||
+    cleanText(check?.code) ||
+    "Cuenta seleccionada";
+
+  const ordersLabel = formatOrderRows(orderRows);
+  const tablesLabel = formatTableRows(tableRows);
+
+  const cashRegisterLabel = positiveInt(activeCashSession?.cash_register_id)
+    ? `Caja #${positiveInt(activeCashSession.cash_register_id)}`
+    : "Caja no identificada";
 
   return (
     <Card
@@ -53,7 +194,7 @@ export default function CashierSaleDetailHeroCard({
                   lineHeight: 1.06,
                 }}
               >
-                Cobrar venta
+                Cobrar cuenta
               </Typography>
 
               <Typography
@@ -65,69 +206,72 @@ export default function CashierSaleDetailHeroCard({
                   maxWidth: 820,
                 }}
               >
-                Revisa el detalle de la orden, aplica descuentos si corresponde,
-                selecciona impuestos, valida la vista previa y confirma el cobro.
+                Revisa los productos asignados a esta cuenta, aplica los ajustes
+                permitidos, valida la vista previa y confirma únicamente su
+                cobro.
               </Typography>
             </Box>
 
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.25}
-              sx={{ width: { xs: "100%", md: "auto" } }}
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={onBack}
+              startIcon={<ArrowBackRoundedIcon />}
+              sx={{
+                width: { xs: "100%", md: "auto" },
+                minWidth: { xs: "100%", md: 210 },
+                height: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+              }}
             >
-              {canTake ? (
-                <Button
-                  variant="contained"
-                  onClick={onTake}
-                  disabled={taking}
-                  startIcon={<AddTaskRoundedIcon />}
-                  sx={{
-                    minWidth: { xs: "100%", md: 180 },
-                    height: 44,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
-                >
-                  {taking ? "Tomando…" : "Tomar venta"}
-                </Button>
-              ) : null}
-
-              <Button
-                variant="outlined"
-                color="inherit"
-                onClick={onBack}
-                startIcon={<ArrowBackRoundedIcon />}
-                sx={{
-                  minWidth: { xs: "100%", md: 170 },
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                Volver al tablero
-              </Button>
-            </Stack>
+              Volver a Mis ventas
+            </Button>
           </Stack>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Chip
-              label={
-                canOperate
-                  ? "Lista para cobro"
-                  : canTake
-                  ? "Pendiente por tomar"
-                  : "No disponible para cobro"
-              }
+              label={readinessLabel}
               size="small"
               sx={{
                 fontWeight: 800,
-                bgcolor: canOperate ? "#E7F8EB" : "#FFF4D9",
-                color: canOperate ? "#0A7A2F" : "#8A6D3B",
+                bgcolor: readinessColors.backgroundColor,
+                color: readinessColors.color,
               }}
             />
 
-            <Chip label={`Estado venta: ${saleStatusLabel}`} size="small" />
-            <Chip label={`Estado orden: ${orderStatusLabel}`} size="small" />
+            <Chip
+              label={`Estado cuenta: ${translateStatus(
+                checkStatus,
+                "check"
+              )}`}
+              size="small"
+            />
+
+            {packageStatus ? (
+              <Chip
+                label={`Estado paquete: ${translateStatus(
+                  packageStatus,
+                  "billing"
+                )}`}
+                size="small"
+              />
+            ) : null}
+
+            <Chip
+              label={`${cashRegisterLabel} · ${translateStatus(
+                cashSessionStatus,
+                "cash"
+              )}`}
+              size="small"
+            />
+
+            {billingGroupId > 0 ? (
+              <Chip
+                label={`Paquete financiero #${billingGroupId}`}
+                size="small"
+              />
+            ) : null}
           </Stack>
 
           <Box
@@ -142,71 +286,87 @@ export default function CashierSaleDetailHeroCard({
             }}
           >
             <MetricCard
-              icon={<ReceiptLongRoundedIcon />}
-              label="Venta"
-              value={`#${sale?.sale_id || "—"}`}
-              helper={`Orden #${order?.id || "—"}`}
+              icon={<AccountBalanceWalletRoundedIcon />}
+              label="Cuenta"
+              value={checkName}
+              helper={
+                checkId > 0
+                  ? `Cuenta financiera #${checkId}`
+                  : "Cuenta financiera no identificada"
+              }
             />
 
             <MetricCard
-              icon={<PersonRoundedIcon />}
-              label="Cliente"
-              value={order?.customer_name?.trim() || "Cliente sin nombre"}
-              helper={orderStatusLabel}
+              icon={<ReceiptLongRoundedIcon />}
+              label="Venta vinculada"
+              value={saleId > 0 ? `Venta #${saleId}` : "Venta no identificada"}
+              helper={
+                exactSaleLinked
+                  ? "Venta exacta de esta cuenta"
+                  : "Vínculo pendiente de validar"
+              }
+            />
+
+            <MetricCard
+              icon={<FormatListNumberedRoundedIcon />}
+              label={
+                orderRows.length === 1
+                  ? "Orden relacionada"
+                  : "Órdenes relacionadas"
+              }
+              value={ordersLabel}
+              helper={
+                orderRows.length > 0
+                  ? `${orderRows.length} orden(es) identificada(s)`
+                  : "Sin órdenes identificadas"
+              }
             />
 
             <MetricCard
               icon={<TableRestaurantRoundedIcon />}
-              label="Mesa"
-              value={table?.name || "Sin mesa"}
-              helper={tableStatusLabel}
-            />
-
-            <MetricCard
-              icon={<ReceiptLongRoundedIcon />}
-              label="Caja activa"
-              value={
-                cashSession?.cash_register_id
-                  ? `#${cashSession.cash_register_id}`
-                  : "—"
+              label={
+                tableRows.length === 1
+                  ? "Mesa relacionada"
+                  : "Mesas relacionadas"
               }
-              helper={cashSessionStatusLabel}
+              value={tablesLabel}
+              helper={
+                tableRows.length > 0
+                  ? `${tableRows.length} mesa(s) identificada(s)`
+                  : "Cuenta sin mesa"
+              }
             />
           </Box>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Chip
-              label={`Subtotal ${formatCurrency(sale?.subtotal)}`}
+              label={`Subtotal ${formatCurrency(exactSale?.subtotal)}`}
               size="small"
             />
 
             <Chip
               label={`Promociones ${formatCurrency(
-                sale?.promotion_discount_total
+                exactSale?.promotion_discount_total
               )}`}
               size="small"
             />
 
             <Chip
               label={`Descuento manual ${formatCurrency(
-                sale?.manual_discount_total
+                exactSale?.manual_discount_total
               )}`}
               size="small"
             />
 
             <Chip
-              label={`Neto ${formatCurrency(sale?.net_total)}`}
+              label={`Propina ${formatCurrency(exactSale?.tip)}`}
               size="small"
             />
 
             <Chip
-              label={`Propina ${formatCurrency(sale?.tip)}`}
-              size="small"
-            />
-
-            <Chip
-              label={`Total ${formatCurrency(
-                sale?.payable_total ?? sale?.total
+              label={`Total sincronizado ${formatCurrency(
+                exactSale?.payable_total ??
+                  exactSale?.total
               )}`}
               size="small"
               sx={{
@@ -217,7 +377,7 @@ export default function CashierSaleDetailHeroCard({
             />
           </Stack>
 
-          {!canOperate ? (
+          {availableForEditing ? (
             <Box
               sx={{
                 border: "1px dashed",
@@ -233,8 +393,30 @@ export default function CashierSaleDetailHeroCard({
                   lineHeight: 1.55,
                 }}
               >
-                Esta venta aún no puede cobrarse desde esta pantalla. Debe estar
-                tomada por tu caja y la orden debe estar en proceso de cobro.
+                La cuenta está abierta. Puedes revisar sus productos, aplicar
+                descuentos o realizar ajustes antes de iniciar la vista previa
+                del cobro.
+              </Typography>
+            </Box>
+          ) : !readyForPayment ? (
+            <Box
+              sx={{
+                border: "1px dashed",
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 1.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  color: "text.secondary",
+                  lineHeight: 1.55,
+                }}
+              >
+                Esta cuenta no está disponible para cobrar. Verifica que siga
+                vinculada con la venta seleccionada y que la caja permanezca
+                abierta.
               </Typography>
             </Box>
           ) : null}
@@ -293,7 +475,7 @@ function MetricCard({ icon, label, value, helper }) {
             fontSize: 18,
             fontWeight: 800,
             color: "text.primary",
-            lineHeight: 1.15,
+            lineHeight: 1.25,
             wordBreak: "break-word",
           }}
         >
@@ -305,6 +487,8 @@ function MetricCard({ icon, label, value, helper }) {
             mt: 0.75,
             fontSize: 13,
             color: "text.secondary",
+            lineHeight: 1.35,
+            wordBreak: "break-word",
           }}
         >
           {helper || "—"}
@@ -314,17 +498,121 @@ function MetricCard({ icon, label, value, helper }) {
   );
 }
 
+function resolveReadinessLabel({
+  readyForPayment,
+  availableForEditing,
+  preparing,
+  check,
+  checkStatus,
+  exactSaleLinked,
+  validCashSession,
+}) {
+  if (preparing) return "Preparando cuenta para cobro";
+  if (readyForPayment) return "Cuenta preparada para cobro";
+  if (!check) return "Cuenta no localizada";
+  if (!exactSaleLinked) return "Venta de la cuenta no validada";
+  if (!validCashSession) return "Caja no disponible";
+  if (availableForEditing) return "Cuenta abierta para revisión";
+  if (checkStatus === "paying") return "Cuenta en proceso de cobro";
+  if (checkStatus === "paid") return "Cuenta pagada";
+  return "Cuenta no disponible para cobro";
+}
+
+function mergeEntityRows(...sources) {
+  const rows = [];
+  const map = new Map();
+
+  sources.forEach((source) => {
+    const entries = Array.isArray(source)
+      ? source
+      : source
+      ? [source]
+      : [];
+
+    entries.forEach((entry) => {
+      const normalized =
+        entry && typeof entry === "object"
+          ? entry
+          : { id: entry };
+
+      const id = positiveInt(
+        normalized?.id ??
+          normalized?.order_id ??
+          normalized?.table_id
+      );
+
+      if (id <= 0) return;
+
+      const previous = map.get(id) || {};
+      map.set(id, {
+        ...previous,
+        ...normalized,
+        id,
+      });
+    });
+  });
+
+  map.forEach((entry) => rows.push(entry));
+
+  return rows;
+}
+
+function formatOrderRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return "Sin órdenes";
+  }
+
+  return rows
+    .map((row) => {
+      const name = cleanText(row?.name);
+      const code = cleanText(row?.code);
+      const id = positiveInt(row?.id);
+
+      if (name) return name;
+      if (code) return code;
+      return id > 0 ? `Orden #${id}` : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatTableRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return "Sin mesa";
+  }
+
+  return rows
+    .map((row) => {
+      const name = cleanText(row?.name);
+      const code = cleanText(row?.code);
+      const id = positiveInt(row?.id);
+
+      if (name) return name;
+      if (code) return code;
+      return id > 0 ? `Mesa #${id}` : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function normalizeStatus(status) {
+  return String(status || "").trim().toLowerCase();
+}
+
 function translateStatus(status, context = "general") {
-  const key = String(status || "").trim().toLowerCase();
+  const key = normalizeStatus(status);
 
   const dictionary = {
     pending: "Pendiente",
     taken: "Tomada",
+    open: "Abierta",
+    locked: "Bloqueada",
     paying: "En cobro",
     paid: "Pagada",
+    partially_paid: "Pago parcial",
     cancelled: "Cancelada",
     canceled: "Cancelada",
-    open: "Abierta",
+    merged: "Fusionada",
     closed: "Cerrada",
     occupied: "Ocupada",
     available: "Disponible",
@@ -342,14 +630,30 @@ function translateStatus(status, context = "general") {
 
   if (dictionary[key]) return dictionary[key];
 
-  if (context === "table") return "Sin estado";
-  if (context === "cash") return "Activa";
+  if (context === "cash") return "No disponible";
+  if (context === "billing") return "No identificado";
+  if (context === "check") return "No identificado";
 
   return "—";
 }
 
+function cleanText(value) {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function positiveInt(value) {
+  const normalized = Number(value);
+
+  return Number.isInteger(normalized) && normalized > 0
+    ? normalized
+    : 0;
+}
+
 function formatCurrency(value) {
-  const safe = Number(value || 0);
+  const normalized = Number(value);
+  const safe = Number.isFinite(normalized) ? normalized : 0;
 
   try {
     return new Intl.NumberFormat("es-MX", {
