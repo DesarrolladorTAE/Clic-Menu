@@ -1,11 +1,7 @@
+// src/components/staff/casher/queuePage/CashierSaleAccountRow.jsx
 import React from "react";
-import {
-  Box,
-  Button,
-  Chip,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, Stack, Typography } from "@mui/material";
+
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 
@@ -16,10 +12,7 @@ export default function CashierSaleAccountRow({
   onOpen,
   onReopen,
 }) {
-  const status = String(
-    check?.status || check?.check_status || ""
-  ).toLowerCase();
-
+  const status = String(check?.status || check?.check_status || "").toLowerCase();
   const permissions = check?.permissions || {};
   const paid = status === "paid";
 
@@ -29,109 +22,99 @@ export default function CashierSaleAccountRow({
     permissions.can_open === true &&
     Number(check?.sale_id || 0) > 0;
 
-  const canReopen =
-    isMine &&
-    !paid &&
-    permissions.can_reopen === true;
+  const canReopen = isMine && !paid && permissions.can_reopen === true;
+  const chip = statusChip(status);
 
   return (
-    <Box
+    <Card
       sx={{
-        p: 1.25,
+        height: "100%",
+        minHeight: 138,
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
-        backgroundColor: "#FCFCFC",
+        boxShadow: "none",
+        backgroundColor: "background.paper",
       }}
     >
-      <Stack spacing={1}>
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={1}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
-                wordBreak: "break-word",
-              }}
-            >
-              {check?.name ||
-                check?.code ||
-                `Cuenta #${check?.order_check_id || check?.id || "—"}`}
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.25,
-                fontSize: 12,
-                color: "text.secondary",
-              }}
-            >
-              {formatCheckDescription(check)}
-            </Typography>
-          </Box>
-
+      <CardContent
+        sx={{
+          p: 1.5,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          "&:last-child": { pb: 1.5 },
+        }}
+      >
+        <Stack spacing={1.25} sx={{ height: "100%" }}>
           <Stack
-            direction="row"
-            spacing={0.75}
-            alignItems="center"
-            flexShrink={0}
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "stretch", sm: "flex-start" }}
+            spacing={1}
           >
-            <Chip
-              label={paid ? "Pagada" : statusLabel(status)}
-              size="small"
-              sx={statusChipSx(status)}
-            />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
+                {check?.name || check?.code || `Cuenta #${check?.order_check_id || check?.id || "—"}`}
+              </Typography>
 
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
-                whiteSpace: "nowrap",
-              }}
+              <Typography sx={{ mt: 0.3, fontSize: 12, lineHeight: 1.4, color: "text.secondary" }}>
+                {formatCheckDescription(check)}
+              </Typography>
+            </Box>
+
+            <Stack
+              direction="row"
+              justifyContent={{ xs: "space-between", sm: "flex-end" }}
+              alignItems="center"
+              spacing={1}
+              flexShrink={0}
             >
-              {formatCurrency(check?.total)}
-            </Typography>
+              <Chip label={chip.label} size="small" color={chip.color} variant={chip.variant} />
+
+              <Typography sx={{ fontSize: 15, fontWeight: 800, color: "text.primary", whiteSpace: "nowrap" }}>
+                {formatCurrency(check?.total)}
+              </Typography>
+            </Stack>
           </Stack>
+
+          <Box sx={{ flex: 1 }} />
+
+          {canOpen || canReopen ? (
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="flex-end" spacing={1}>
+              {canOpen ? (
+                <Button
+                  type="button"
+                  size="small"
+                  variant="contained"
+                  disabled={disabled}
+                  onClick={() => onOpen?.(check)}
+                  endIcon={<ArrowForwardRoundedIcon />}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
+                >
+                  Continuar
+                </Button>
+              ) : null}
+
+              {canReopen ? (
+                <Button
+                  type="button"
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  disabled={disabled}
+                  onClick={() => onReopen?.(check)}
+                  startIcon={<LockOpenRoundedIcon />}
+                  sx={{ width: { xs: "100%", sm: "auto" } }}
+                >
+                  Reabrir
+                </Button>
+              ) : null}
+            </Stack>
+          ) : null}
         </Stack>
-
-        {canOpen || canReopen ? (
-          <Stack direction="row" spacing={1} justifyContent="flex-end">
-            {canOpen ? (
-              <Button
-                size="small"
-                variant="contained"
-                disabled={disabled}
-                onClick={() => onOpen?.(check)}
-                endIcon={<ArrowForwardRoundedIcon />}
-                sx={{ borderRadius: 2, fontWeight: 800 }}
-              >
-                Continuar
-              </Button>
-            ) : null}
-
-            {canReopen ? (
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={disabled}
-                onClick={() => onReopen?.(check)}
-                startIcon={<LockOpenRoundedIcon />}
-                sx={{ borderRadius: 2, fontWeight: 800 }}
-              >
-                Reabrir
-              </Button>
-            ) : null}
-          </Stack>
-        ) : null}
-      </Stack>
-    </Box>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -140,51 +123,29 @@ function formatCheckDescription(check) {
   const partIndex = Number(check?.part_index || 0);
   const partsTotal = Number(check?.parts_total || 0);
 
-  if (partIndex > 0 && partsTotal > 0) {
-    return `Parte ${partIndex} de ${partsTotal}`;
-  }
+  if (partIndex > 0 && partsTotal > 0) return `Parte ${partIndex} de ${partsTotal}`;
+  if (splitType && splitType !== "normal") return splitType.replaceAll("_", " ");
 
-  if (splitType && splitType !== "normal") {
-    return splitType.replaceAll("_", " ");
-  }
-
-  return check?.sale_id
-    ? `Venta #${check.sale_id}`
-    : "Cuenta financiera";
+  return check?.sale_id ? `Venta #${check.sale_id}` : "Cuenta financiera";
 }
 
-function statusLabel(status) {
-  const labels = {
-    open: "Abierta",
-    locked: "Bloqueada",
-    paying: "En pago",
-    paid: "Pagada",
-  };
-
-  return labels[status] || status || "Sin estado";
-}
-
-function statusChipSx(status) {
+function statusChip(status) {
   if (status === "paid") {
-    return {
-      fontWeight: 800,
-      bgcolor: "#E7F8EB",
-      color: "#0A7A2F",
-    };
+    return { label: "Pagada", color: "success", variant: "outlined" };
   }
 
-  if (status === "locked" || status === "paying") {
-    return {
-      fontWeight: 800,
-      bgcolor: "#FFF4D9",
-      color: "#8A6D3B",
-    };
+  if (status === "locked") {
+    return { label: "Bloqueada", color: "warning", variant: "outlined" };
+  }
+
+  if (status === "paying") {
+    return { label: "En pago", color: "warning", variant: "outlined" };
   }
 
   return {
-    fontWeight: 800,
-    bgcolor: "#EEF3FF",
-    color: "#3156A3",
+    label: status === "open" ? "Abierta" : status || "Sin estado",
+    color: "secondary",
+    variant: "outlined",
   };
 }
 

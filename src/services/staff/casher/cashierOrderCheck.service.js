@@ -7,18 +7,15 @@ const NO_CACHE_HEADERS = {
 };
 
 export async function fetchCashierSaleChecks(saleId) {
-  const res = await staffApi.get(
-    `/staff/cashier/sales/${saleId}/checks`,
-    {
-      params: { _t: Date.now() },
-      headers: NO_CACHE_HEADERS,
-    }
-  );
+  const res = await staffApi.get(`/staff/cashier/sales/${saleId}/checks`, {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
 
   return res?.data;
 }
 
-export async function createCashierCheck(checkId, payload = {}) {
+export async function splitCashierCheckByProducts(checkId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/checks/${checkId}/split`,
     payload,
@@ -28,10 +25,7 @@ export async function createCashierCheck(checkId, payload = {}) {
   return res?.data;
 }
 
-export async function splitCashierCheckEqualParts(
-  checkId,
-  payload = {}
-) {
+export async function splitCashierCheckEqualParts(checkId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/checks/${checkId}/split-equal-parts`,
     payload,
@@ -41,11 +35,17 @@ export async function splitCashierCheckEqualParts(
   return res?.data;
 }
 
-export async function moveCashierCheckItem(
-  checkId,
-  itemId,
-  payload = {}
-) {
+export async function undoCashierCheckEqualParts(groupId, payload = {}) {
+  const res = await staffApi.post(
+    `/staff/cashier/billing-groups/${groupId}/undo-equal-parts`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+export async function moveCashierCheckItem(checkId, itemId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/checks/${checkId}/items/${itemId}/move`,
     payload,
@@ -55,11 +55,7 @@ export async function moveCashierCheckItem(
   return res?.data;
 }
 
-export async function moveCashierCheckItemQuantity(
-  checkId,
-  itemId,
-  payload = {}
-) {
+export async function moveCashierCheckItemQuantity(checkId, itemId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/checks/${checkId}/items/${itemId}/move-quantity`,
     payload,
@@ -69,11 +65,7 @@ export async function moveCashierCheckItemQuantity(
   return res?.data;
 }
 
-export async function mergeCashierChecks(
-  sourceCheckId,
-  targetCheckId,
-  payload = {}
-) {
+export async function mergeCashierChecks(sourceCheckId, targetCheckId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/checks/${sourceCheckId}/merge-into/${targetCheckId}`,
     payload,
@@ -83,11 +75,7 @@ export async function mergeCashierChecks(
   return res?.data;
 }
 
-export async function mergeCashierTables(
-  sourceTableId,
-  targetTableId,
-  payload = {}
-) {
+export async function mergeCashierTables(sourceTableId, targetTableId, payload = {}) {
   const res = await staffApi.post(
     `/staff/cashier/tables/${sourceTableId}/merge-into/${targetTableId}`,
     payload,

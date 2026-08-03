@@ -11,6 +11,7 @@ export async function fetchCashierSaleQueue() {
     params: { _t: Date.now() },
     headers: NO_CACHE_HEADERS,
   });
+
   return res?.data;
 }
 
@@ -20,14 +21,25 @@ export async function takeCashierSale(saleId) {
     {},
     { headers: NO_CACHE_HEADERS }
   );
+
   return res?.data;
 }
 
+export async function releaseCashierBillingGroup(groupId) {
+  const res = await staffApi.post(
+    `/staff/cashier/billing-groups/${groupId}/release`,
+    undefined,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
 
 export async function fetchCashierSaleDetail(saleId) {
   const res = await staffApi.get(`/staff/cashier/sales/${saleId}`, {
     params: { _t: Date.now() },
     headers: NO_CACHE_HEADERS,
   });
+
   return res?.data;
 }

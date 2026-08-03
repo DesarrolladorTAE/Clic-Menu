@@ -1,22 +1,11 @@
+// src/components/staff/casher/authorization/CashierOperationalAuthorizationDialog.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, CircularProgress, MenuItem, Stack, TextField, Typography } from "@mui/material";
+
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
+
+import AppAlert from "../../../common/AppAlert";
+import CashierDialogShell from "../shared/CashierDialogShell";
 
 export default function CashierOperationalAuthorizationDialog({
   open,
@@ -31,7 +20,9 @@ export default function CashierOperationalAuthorizationDialog({
   const [authorizationUserId, setAuthorizationUserId] = useState("");
   const [authorizationPin, setAuthorizationPin] = useState("");
   const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
+  const [alertState, setAlertState] = useState({ open: false, severity: "error", title: "", message: "" });
+
+  const safeAuthorizers = useMemo(() => (Array.isArray(authorizers) ? authorizers : []), [authorizers]);
 
   useEffect(() => {
     if (!open) return;
@@ -39,30 +30,36 @@ export default function CashierOperationalAuthorizationDialog({
     setAuthorizationUserId("");
     setAuthorizationPin("");
     setReason("");
-    setError("");
+    setAlertState((previous) => ({ ...previous, open: false }));
   }, [open]);
-
-  const safeAuthorizers = useMemo(
-    () => (Array.isArray(authorizers) ? authorizers : []),
-    [authorizers]
-  );
 
   const canSubmit =
     Number(authorizationUserId) > 0 &&
     authorizationPin.trim() !== "" &&
     reason.trim() !== "" &&
+    safeAuthorizers.length > 0 &&
     !loadingAuthorizers &&
     !submitting;
 
+  const showAlert = ({ severity = "error", title: alertTitle = "Error", message }) => {
+    if (!message) return;
+    setAlertState({ open: true, severity, title: alertTitle, message });
+  };
+
+  const closeAlert = (_, closeReason) => {
+    if (closeReason === "clickaway") return;
+    setAlertState((previous) => ({ ...previous, open: false }));
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) {
-      setError(
-        "Selecciona un autorizador, ingresa su PIN y escribe el motivo."
-      );
+      showAlert({
+        severity: "warning",
+        title: "Datos incompletos",
+        message: "Selecciona un autorizador, ingresa su PIN y escribe el motivo.",
+      });
       return;
     }
-
-    setError("");
 
     try {
       await onSubmit?.({
@@ -70,202 +67,172 @@ export default function CashierOperationalAuthorizationDialog({
         authorization_pin: authorizationPin.trim(),
         reason: reason.trim(),
       });
-    } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo procesar la autorización."
-      );
+    } catch (error) {
+      showAlert({
+        severity: "error",
+        title: "Autorización rechazada",
+        message: error?.response?.data?.message || error?.message || "No se pudo procesar la autorización.",
+      });
     }
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={submitting ? undefined : onClose}
-      fullWidth
-      maxWidth="sm"
-    >
-      <DialogTitle sx={{ pb: 1.25 }}>
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: 1,
-              display: "grid",
-              placeItems: "center",
-              bgcolor: "rgba(255, 152, 0, 0.12)",
-              color: "primary.main",
-              flexShrink: 0,
-            }}
-          >
-            <AdminPanelSettingsRoundedIcon />
-          </Box>
-
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                fontSize: 21,
-                fontWeight: 800,
-                color: "text.primary",
-                lineHeight: 1.2,
-              }}
-            >
-              {title}
-            </Typography>
-
-            <Typography
-              sx={{
-                mt: 0.35,
-                fontSize: 13,
-                color: "text.secondary",
-                lineHeight: 1.45,
-              }}
-            >
-              {description}
-            </Typography>
-          </Box>
-        </Stack>
-      </DialogTitle>
-
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          {error ? <Alert severity="error">{error}</Alert> : null}
-
-          {loadingAuthorizers ? (
-            <Box
-              sx={{
-                minHeight: 110,
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              <Stack alignItems="center" spacing={1}>
-                <CircularProgress size={28} />
-                <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                  Cargando autorizadores…
-                </Typography>
-              </Stack>
-            </Box>
-          ) : (
-            <>
-              <FormControl fullWidth>
-                <InputLabel id="cashier-operational-authorizer-label">
-                  Autorizador
-                </InputLabel>
-
-                <Select
-                  labelId="cashier-operational-authorizer-label"
-                  label="Autorizador"
-                  value={authorizationUserId}
-                  onChange={(event) => {
-                    setAuthorizationUserId(event.target.value);
-                    setError("");
-                  }}
-                  disabled={submitting}
-                >
-                  {safeAuthorizers.map((authorizer) => (
-                    <MenuItem
-                      key={authorizer.user_id}
-                      value={authorizer.user_id}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-                            fontWeight: 800,
-                            color: "text.primary",
-                          }}
-                        >
-                          {authorizer.name || `Usuario #${authorizer.user_id}`}
-                        </Typography>
-
-                        {authorizer.email ? (
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              color: "text.secondary",
-                            }}
-                          >
-                            {authorizer.email}
-                          </Typography>
-                        ) : null}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {safeAuthorizers.length === 0 ? (
-                <Alert severity="warning">
-                  No hay autorizadores operativos activos para esta sucursal.
-                </Alert>
-              ) : null}
-
-              <TextField
-                label="PIN"
-                type="password"
-                value={authorizationPin}
-                onChange={(event) => {
-                  setAuthorizationPin(event.target.value.slice(0, 20));
-                  setError("");
-                }}
-                inputProps={{ maxLength: 20 }}
-                autoComplete="off"
-                disabled={submitting}
-                fullWidth
-              />
-
-              <TextField
-                label="Motivo"
-                value={reason}
-                onChange={(event) => {
-                  setReason(event.target.value.slice(0, 255));
-                  setError("");
-                }}
-                inputProps={{ maxLength: 255 }}
-                helperText={`${reason.length}/255`}
-                minRows={3}
-                multiline
-                disabled={submitting}
-                fullWidth
-              />
-            </>
-          )}
-        </Stack>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button
-          color="inherit"
-          onClick={onClose}
-          disabled={submitting}
-          sx={{ fontWeight: 800 }}
-        >
-          Cancelar
-        </Button>
-
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          startIcon={
-            submitting ? (
-              <CircularProgress size={17} color="inherit" />
+    <>
+      <CashierDialogShell
+        open={open}
+        title={title}
+        description={description}
+        icon={<AdminPanelSettingsRoundedIcon />}
+        busy={submitting}
+        maxWidth="sm"
+        onClose={onClose}
+      >
+        <Card sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, boxShadow: "none" }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 }, "&:last-child": { pb: { xs: 2, sm: 3 } } }}>
+            {loadingAuthorizers ? (
+              <Box sx={{ minHeight: 260, display: "grid", placeItems: "center" }}>
+                <Stack alignItems="center" spacing={1.25}>
+                  <CircularProgress size={30} />
+                  <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Cargando autorizadores…</Typography>
+                </Stack>
+              </Box>
             ) : (
-              <AdminPanelSettingsRoundedIcon />
-            )
-          }
-          sx={{
-            minWidth: 140,
-            fontWeight: 800,
-            borderRadius: 2,
-          }}
-        >
-          {submitting ? "Validando…" : "Autorizar"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+              <Stack spacing={2.5}>
+                <Box>
+                  <Typography sx={{ fontSize: { xs: 18, sm: 20 }, fontWeight: 800, color: "text.primary" }}>
+                    Datos del autorizador
+                  </Typography>
+
+                  <Typography sx={{ mt: 0.5, fontSize: 13, lineHeight: 1.5, color: "text.secondary" }}>
+                    El PIN se valida exclusivamente en el servidor y no se almacena en esta pantalla.
+                  </Typography>
+                </Box>
+
+                {safeAuthorizers.length === 0 ? (
+                  <Alert severity="warning" variant="outlined" sx={{ minWidth: 0 }}>
+                    No hay autorizadores operativos activos para esta sucursal.
+                  </Alert>
+                ) : null}
+
+                <FieldBlock
+                  label="Autorizador *"
+                  input={
+                    <TextField
+                      select
+                      value={authorizationUserId}
+                      onChange={(event) => setAuthorizationUserId(event.target.value)}
+                      disabled={submitting || safeAuthorizers.length === 0}
+                    >
+                      {safeAuthorizers.map((authorizer) => (
+                        <MenuItem key={authorizer.user_id} value={authorizer.user_id}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+                              {authorizer.name || `Usuario #${authorizer.user_id}`}
+                            </Typography>
+
+                            {authorizer.email ? (
+                              <Typography sx={{ mt: 0.2, fontSize: 12, color: "text.secondary" }}>
+                                {authorizer.email}
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  }
+                />
+
+                <FieldBlock
+                  label="PIN *"
+                  input={
+                    <TextField
+                      type="password"
+                      value={authorizationPin}
+                      onChange={(event) => setAuthorizationPin(event.target.value.slice(0, 20))}
+                      inputProps={{ maxLength: 20 }}
+                      autoComplete="off"
+                      disabled={submitting}
+                      placeholder="Ingresa el PIN del autorizador"
+                    />
+                  }
+                />
+
+                <FieldBlock
+                  label="Motivo *"
+                  help={`${reason.length}/255`}
+                  input={
+                    <TextField
+                      value={reason}
+                      onChange={(event) => setReason(event.target.value.slice(0, 255))}
+                      inputProps={{ maxLength: 255 }}
+                      multiline
+                      minRows={3}
+                      disabled={submitting}
+                      placeholder="Describe por qué se requiere esta operación"
+                    />
+                  }
+                />
+
+                <Stack
+                  direction={{ xs: "column-reverse", sm: "row" }}
+                  justifyContent="flex-end"
+                  spacing={1.5}
+                  pt={0.5}
+                >
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    onClick={onClose}
+                    disabled={submitting}
+                    sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 140 } }}
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="contained"
+                    onClick={handleSubmit}
+                    disabled={!canSubmit}
+                    startIcon={
+                      submitting
+                        ? <CircularProgress size={17} color="inherit" />
+                        : <AdminPanelSettingsRoundedIcon />
+                    }
+                    sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 170 } }}
+                  >
+                    {submitting ? "Validando…" : "Autorizar"}
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      </CashierDialogShell>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={3000}
+      />
+    </>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ width: "100%" }}>
+      <Typography sx={{ mb: 1, fontSize: 14, fontWeight: 800, color: "text.primary" }}>{label}</Typography>
+      {input}
+
+      {help ? (
+        <Typography sx={{ mt: 0.75, fontSize: 12, lineHeight: 1.45, color: "text.secondary" }}>
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }
