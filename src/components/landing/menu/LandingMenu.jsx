@@ -23,6 +23,7 @@ const menuItems = [
     path: "/terminos-y-condiciones",
     enabled: true,
   },
+  { label: "Blog", path: "/blog", enabled: true },
 ];
 
 const authItems = [
