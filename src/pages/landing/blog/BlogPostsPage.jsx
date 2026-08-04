@@ -15,11 +15,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import CalendarMonthRoundedIcon from "@mui/icons-material/CalendarMonthRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
+
 import { useNavigate } from "react-router-dom";
 
 import LandingMenu from "../../../components/landing/menu/LandingMenu";
@@ -40,11 +42,15 @@ import {
 const POSTS_PER_PAGE = 9;
 
 function formatPublishedDate(value) {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
 
   return new Intl.DateTimeFormat("es-MX", {
     day: "2-digit",
@@ -53,22 +59,18 @@ function formatPublishedDate(value) {
   }).format(date);
 }
 
-function PostCover({ post, featured = false }) {
-  const height = featured
-    ? { xs: 240, sm: 320, md: 440 }
-    : { xs: 220, sm: 210, md: 225 };
-
+function PostCover({ post }) {
   if (post?.cover?.url) {
     return (
       <Box
         component="img"
         src={post.cover.url}
         alt={post.cover.alt_text || post.title}
-        loading={featured ? "eager" : "lazy"}
+        loading="lazy"
         sx={{
           display: "block",
           width: "100%",
-          height,
+          height: "100%",
           objectFit: "cover",
           transition: "transform 0.35s ease",
         }}
@@ -81,7 +83,7 @@ function PostCover({ post, featured = false }) {
       sx={{
         position: "relative",
         width: "100%",
-        height,
+        height: "100%",
         overflow: "hidden",
         display: "grid",
         placeItems: "center",
@@ -92,10 +94,10 @@ function PostCover({ post, featured = false }) {
       <Box
         sx={{
           position: "absolute",
-          top: -70,
+          top: -75,
           right: -55,
-          width: featured ? 260 : 190,
-          height: featured ? 260 : 190,
+          width: 190,
+          height: 190,
           borderRadius: "50%",
           bgcolor: "rgba(255,255,255,0.15)",
         }}
@@ -104,10 +106,10 @@ function PostCover({ post, featured = false }) {
       <Box
         sx={{
           position: "absolute",
-          bottom: -80,
-          left: -60,
-          width: featured ? 220 : 170,
-          height: featured ? 220 : 170,
+          bottom: -75,
+          left: -55,
+          width: 170,
+          height: 170,
           borderRadius: "50%",
           bgcolor: "rgba(15,23,42,0.14)",
         }}
@@ -124,13 +126,13 @@ function PostCover({ post, featured = false }) {
       >
         <RestaurantRoundedIcon
           sx={{
-            fontSize: featured ? 74 : 56,
+            fontSize: 58,
           }}
         />
 
         <Typography
           sx={{
-            fontSize: featured ? 22 : 18,
+            fontSize: 18,
             fontWeight: 950,
           }}
         >
@@ -165,7 +167,9 @@ export default function BlogPostsPage() {
       try {
         const result = await getClicMenuBlog();
 
-        if (active) setBlog(result);
+        if (active) {
+          setBlog(result);
+        }
       } catch (requestError) {
         if (active) {
           setError(
@@ -174,7 +178,9 @@ export default function BlogPostsPage() {
           );
         }
       } finally {
-        if (active) setLoadingBlog(false);
+        if (active) {
+          setLoadingBlog(false);
+        }
       }
     }
 
@@ -200,21 +206,33 @@ export default function BlogPostsPage() {
           order: "latest",
         });
 
-        if (!active) return;
+        if (!active) {
+          return;
+        }
 
-        setPosts(Array.isArray(result?.data) ? result.data : []);
+        setPosts(
+          Array.isArray(result?.data)
+            ? result.data
+            : []
+        );
+
         setMeta(result?.meta ?? null);
       } catch (requestError) {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
 
         setPosts([]);
         setMeta(null);
+
         setError(
           requestError?.response?.data?.message ||
             "No fue posible cargar las publicaciones."
         );
       } finally {
-        if (active) setLoadingPosts(false);
+        if (active) {
+          setLoadingPosts(false);
+        }
       }
     }
 
@@ -231,27 +249,21 @@ export default function BlogPostsPage() {
       : "";
   }, [blog]);
 
-  const featuredPost = useMemo(() => {
-    if (search || page !== 1 || posts.length === 0) return null;
-
-    return posts.find((post) => post.is_featured) || posts[0];
-  }, [page, posts, search]);
-
-  const regularPosts = useMemo(() => {
-    if (!featuredPost) return posts;
-
-    return posts.filter((post) => post.slug !== featuredPost.slug);
-  }, [featuredPost, posts]);
-
-  const title = blog?.seo?.title || blog?.name || "Blog Clic Menu";
+  const title =
+    blog?.seo?.title ||
+    blog?.name ||
+    "Blogs Clic Menu";
 
   const description =
     blog?.seo?.description ||
     blog?.description ||
     "Ideas, estrategias y tecnología para administrar mejor tu restaurante.";
 
+  const totalPosts = Number(meta?.total || 0);
+
   const handleSearch = (event) => {
     event.preventDefault();
+
     setPage(1);
     setSearch(searchInput.trim());
   };
@@ -281,7 +293,10 @@ export default function BlogPostsPage() {
         title={title}
         description={description}
         keywords={seoKeywords}
-        url={blog?.seo?.canonical_url || "https://clicmenu.com.mx/blog"}
+        url={
+          blog?.seo?.canonical_url ||
+          "https://clicmenu.com.mx/blog"
+        }
       />
 
       <Box
@@ -300,9 +315,18 @@ export default function BlogPostsPage() {
             position: "relative",
             overflow: "hidden",
             bgcolor: "#f5f8fb",
-            borderBottom: "1px solid rgba(15,23,42,0.06)",
-            pt: { xs: 6, sm: 7, md: 8 },
-            pb: { xs: 12, sm: 13, md: 14 },
+            borderBottom:
+              "1px solid rgba(15,23,42,0.06)",
+            pt: {
+              xs: 6,
+              sm: 7,
+              md: 8,
+            },
+            pb: {
+              xs: 12,
+              sm: 13,
+              md: 14,
+            },
           }}
         >
           <Box
@@ -310,8 +334,14 @@ export default function BlogPostsPage() {
               position: "absolute",
               top: -180,
               right: -100,
-              width: { xs: 280, md: 470 },
-              height: { xs: 280, md: 470 },
+              width: {
+                xs: 280,
+                md: 470,
+              },
+              height: {
+                xs: 280,
+                md: 470,
+              },
               borderRadius: "50%",
               bgcolor: "#fde8c5",
               pointerEvents: "none",
@@ -323,8 +353,14 @@ export default function BlogPostsPage() {
               position: "absolute",
               left: -120,
               bottom: -180,
-              width: { xs: 270, md: 440 },
-              height: { xs: 270, md: 440 },
+              width: {
+                xs: 270,
+                md: 440,
+              },
+              height: {
+                xs: 270,
+                md: 440,
+              },
               borderRadius: "50%",
               bgcolor: "#f1e5e2",
               pointerEvents: "none",
@@ -340,6 +376,7 @@ export default function BlogPostsPage() {
               height: 18,
               borderRadius: "50%",
               bgcolor: "rgba(211,92,58,0.24)",
+              pointerEvents: "none",
             }}
           />
 
@@ -360,14 +397,15 @@ export default function BlogPostsPage() {
             >
               <Chip
                 icon={<AutoStoriesRoundedIcon />}
-                label="Blog Clic Menu"
+                label="Blogs Clic Menu"
                 sx={{
                   height: 36,
                   px: 0.8,
                   borderRadius: 999,
                   bgcolor: "#fff6f1",
                   color: landingColors.primary,
-                  border: "1px solid rgba(211,92,58,0.24)",
+                  border:
+                    "1px solid rgba(211,92,58,0.24)",
                   fontSize: 12,
                   fontWeight: 900,
                 }}
@@ -395,11 +433,16 @@ export default function BlogPostsPage() {
                 sx={{
                   maxWidth: 760,
                   color: "#334155",
-                  fontSize: { xs: 16, md: 19 },
+                  fontSize: {
+                    xs: 16,
+                    md: 19,
+                  },
                   lineHeight: 1.65,
                 }}
               >
-                {loadingBlog ? "Contenido para restaurantes." : description}
+                {loadingBlog
+                  ? "Contenido para restaurantes."
+                  : description}
               </Typography>
             </Stack>
           </Container>
@@ -409,7 +452,10 @@ export default function BlogPostsPage() {
           sx={{
             position: "relative",
             zIndex: 2,
-            mt: { xs: -6, sm: -6.5 },
+            mt: {
+              xs: -6,
+              sm: -6.5,
+            },
           }}
         >
           <Box
@@ -418,21 +464,34 @@ export default function BlogPostsPage() {
             sx={{
               maxWidth: 920,
               mx: "auto",
-              p: { xs: 1.5, sm: 1.8 },
+              p: {
+                xs: 1.5,
+                sm: 1.8,
+              },
               bgcolor: "#ffffff",
-              borderRadius: { xs: 3, md: 4 },
-              border: "1px solid rgba(15,23,42,0.08)",
-              boxShadow: "0 24px 55px rgba(15,23,42,0.14)",
+              borderRadius: {
+                xs: 3,
+                md: 4,
+              },
+              border:
+                "1px solid rgba(15,23,42,0.08)",
+              boxShadow:
+                "0 24px 55px rgba(15,23,42,0.14)",
             }}
           >
             <Stack
-              direction={{ xs: "column", sm: "row" }}
+              direction={{
+                xs: "column",
+                sm: "row",
+              }}
               spacing={1.2}
             >
               <TextField
                 fullWidth
                 value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
+                onChange={(event) =>
+                  setSearchInput(event.target.value)
+                }
                 placeholder="Buscar artículos, consejos o estrategias"
                 inputProps={{
                   maxLength: 150,
@@ -441,7 +500,11 @@ export default function BlogPostsPage() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchRoundedIcon sx={{ color: "#94a3b8" }} />
+                      <SearchRoundedIcon
+                        sx={{
+                          color: "#94a3b8",
+                        }}
+                      />
                     </InputAdornment>
                   ),
                 }}
@@ -450,14 +513,19 @@ export default function BlogPostsPage() {
                     minHeight: 54,
                     borderRadius: 2.5,
                     bgcolor: "#f8fafc",
+
                     "& fieldset": {
                       borderColor: "transparent",
                     },
+
                     "&:hover fieldset": {
-                      borderColor: "rgba(211,92,58,0.25)",
+                      borderColor:
+                        "rgba(211,92,58,0.25)",
                     },
+
                     "&.Mui-focused fieldset": {
-                      borderColor: landingColors.primary,
+                      borderColor:
+                        landingColors.primary,
                     },
                   },
                 }}
@@ -469,7 +537,10 @@ export default function BlogPostsPage() {
                 startIcon={<SearchRoundedIcon />}
                 sx={{
                   ...landingButtonSx.primary,
-                  minWidth: { xs: "100%", sm: 150 },
+                  minWidth: {
+                    xs: "100%",
+                    sm: 150,
+                  },
                   minHeight: 54,
                   borderRadius: 2.5,
                   fontWeight: 950,
@@ -484,11 +555,15 @@ export default function BlogPostsPage() {
                   variant="outlined"
                   onClick={handleClearSearch}
                   sx={{
-                    minWidth: { xs: "100%", sm: 105 },
+                    minWidth: {
+                      xs: "100%",
+                      sm: 105,
+                    },
                     minHeight: 54,
                     borderRadius: 2.5,
                     color: "#334155",
-                    borderColor: "rgba(15,23,42,0.16)",
+                    borderColor:
+                      "rgba(15,23,42,0.16)",
                     fontWeight: 850,
                     textTransform: "none",
                   }}
@@ -503,13 +578,25 @@ export default function BlogPostsPage() {
         <Box
           component="section"
           sx={{
-            pt: { xs: 6, md: 8 },
-            pb: { xs: 8, md: 11 },
+            pt: {
+              xs: 6,
+              md: 8,
+            },
+            pb: {
+              xs: 8,
+              md: 11,
+            },
           }}
         >
           <Container>
             {error && (
-              <Alert severity="error" sx={{ mb: 4, borderRadius: 2.5 }}>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: 4,
+                  borderRadius: 2.5,
+                }}
+              >
                 {error}
               </Alert>
             )}
@@ -519,10 +606,18 @@ export default function BlogPostsPage() {
                 spacing={2}
                 alignItems="center"
                 justifyContent="center"
-                sx={{ minHeight: 360 }}
+                sx={{
+                  minHeight: 360,
+                }}
               >
                 <CircularProgress />
-                <Typography sx={{ color: "#64748b", fontWeight: 700 }}>
+
+                <Typography
+                  sx={{
+                    color: "#64748b",
+                    fontWeight: 700,
+                  }}
+                >
                   Cargando publicaciones...
                 </Typography>
               </Stack>
@@ -536,7 +631,8 @@ export default function BlogPostsPage() {
                   textAlign: "center",
                   bgcolor: "#ffffff",
                   borderRadius: 4,
-                  border: "1px solid rgba(15,23,42,0.08)",
+                  border:
+                    "1px solid rgba(15,23,42,0.08)",
                 }}
               >
                 <AutoStoriesRoundedIcon
@@ -551,7 +647,10 @@ export default function BlogPostsPage() {
                   component="h2"
                   sx={{
                     color: "#15191f",
-                    fontSize: { xs: 25, md: 31 },
+                    fontSize: {
+                      xs: 25,
+                      md: 31,
+                    },
                     fontWeight: 950,
                   }}
                 >
@@ -571,9 +670,13 @@ export default function BlogPostsPage() {
 
                 {search && (
                   <Button
+                    type="button"
                     variant="contained"
                     onClick={handleClearSearch}
-                    sx={{ ...landingButtonSx.primary, mt: 3 }}
+                    sx={{
+                      ...landingButtonSx.primary,
+                      mt: 3,
+                    }}
                   >
                     Ver todas
                   </Button>
@@ -581,8 +684,25 @@ export default function BlogPostsPage() {
               </Box>
             ) : (
               <>
-                {featuredPost && (
-                  <Box sx={{ mb: { xs: 6, md: 9 } }}>
+                <Stack
+                  direction={{
+                    xs: "column",
+                    sm: "row",
+                  }}
+                  spacing={1}
+                  justifyContent="space-between"
+                  alignItems={{
+                    xs: "flex-start",
+                    sm: "flex-end",
+                  }}
+                  sx={{
+                    mb: {
+                      xs: 3,
+                      md: 4,
+                    },
+                  }}
+                >
+                  <Box>
                     <Typography
                       sx={{
                         color: landingColors.primary,
@@ -592,86 +712,229 @@ export default function BlogPostsPage() {
                         textTransform: "uppercase",
                       }}
                     >
-                      Publicación destacada
+                      Contenido para restaurantes
                     </Typography>
 
                     <Typography
                       component="h2"
                       sx={{
                         mt: 0.5,
-                        mb: 3,
                         color: "#15191f",
-                        fontSize: { xs: 28, md: 36 },
+                        fontSize: {
+                          xs: 28,
+                          md: 36,
+                        },
                         fontWeight: 950,
                         letterSpacing: "-0.04em",
                       }}
                     >
-                      Recomendado para ti
+                      {search
+                        ? `Resultados para “${search}”`
+                        : "Últimas publicaciones"}
                     </Typography>
+                  </Box>
 
+                  {totalPosts > 0 && (
+                    <Typography
+                      sx={{
+                        color: "#64748b",
+                        fontSize: 13,
+                        fontWeight: 750,
+                      }}
+                    >
+                      {totalPosts}{" "}
+                      {totalPosts === 1
+                        ? "publicación"
+                        : "publicaciones"}
+                    </Typography>
+                  )}
+                </Stack>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      sm: "repeat(2, minmax(0, 1fr))",
+                      lg: "repeat(3, minmax(0, 1fr))",
+                    },
+                    gap: {
+                      xs: 2.5,
+                      md: 3.5,
+                    },
+                    alignItems: "stretch",
+                  }}
+                >
+                  {posts.map((post) => (
                     <Card
+                      key={post.slug}
                       variant="outlined"
                       sx={{
+                        minWidth: 0,
+                        height: "100%",
                         overflow: "hidden",
-                        borderRadius: { xs: 3, md: 4 },
+                        borderRadius: {
+                          xs: 3,
+                          md: 4,
+                        },
                         bgcolor: "#ffffff",
-                        borderColor: "rgba(15,23,42,0.08)",
-                        boxShadow: "0 25px 65px rgba(15,23,42,0.11)",
+                        borderColor:
+                          "rgba(15,23,42,0.10)",
+                        boxShadow:
+                          "0 8px 24px rgba(15,23,42,0.06)",
+                        transition:
+                          "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+
+                        "&:hover": {
+                          transform:
+                            "translateY(-7px)",
+                          borderColor:
+                            "rgba(211,92,58,0.28)",
+                          boxShadow:
+                            "0 20px 45px rgba(15,23,42,0.14)",
+                        },
+
+                        "&:hover img": {
+                          transform: "scale(1.04)",
+                        },
                       }}
                     >
                       <CardActionArea
-                        onClick={() => openPost(featuredPost.slug)}
+                        onClick={() =>
+                          openPost(post.slug)
+                        }
                         sx={{
-                          display: "grid",
-                          gridTemplateColumns: {
-                            xs: "1fr",
-                            md: "minmax(0,1.1fr) minmax(0,0.9fr)",
-                          },
-                          "&:hover img": {
-                            transform: "scale(1.035)",
-                          },
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "stretch",
                         }}
                       >
-                        <Box sx={{ minWidth: 0, overflow: "hidden" }}>
-                          <PostCover post={featuredPost} featured />
+                        <Box
+                          sx={{
+                            width: "100%",
+                            height: {
+                              xs: 230,
+                              sm: 245,
+                              md: 250,
+                            },
+                            overflow: "hidden",
+                            bgcolor: "#e9eef5",
+                          }}
+                        >
+                          <PostCover post={post} />
                         </Box>
 
                         <CardContent
                           sx={{
-                            p: { xs: 3, sm: 4, md: 5 },
+                            width: "100%",
+                            minWidth: 0,
+                            flex: 1,
                             display: "flex",
                             flexDirection: "column",
-                            justifyContent: "center",
+                            alignItems: "flex-start",
+                            p: {
+                              xs: 2.5,
+                              md: 3,
+                            },
+
+                            "&:last-child": {
+                              pb: {
+                                xs: 2.5,
+                                md: 3,
+                              },
+                            },
                           }}
                         >
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            useFlexGap
-                            flexWrap="wrap"
-                            alignItems="center"
-                            sx={{ mb: 2 }}
-                          >
-                            {featuredPost.category?.name && (
-                              <Chip
-                                label={featuredPost.category.name}
-                                size="small"
-                                sx={{
-                                  bgcolor: "rgba(211,92,58,0.10)",
-                                  color: landingColors.primary,
-                                  fontWeight: 900,
-                                }}
-                              />
-                            )}
+                          {post.category?.name && (
+                            <Chip
+                              label={
+                                post.category.name
+                              }
+                              size="small"
+                              sx={{
+                                mb: 2.2,
+                                height: 28,
+                                maxWidth: "100%",
+                                borderRadius: 1.2,
+                                bgcolor:
+                                  landingColors.primary,
+                                color: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 900,
 
-                            {featuredPost.published_at && (
+                                "& .MuiChip-label": {
+                                  px: 1.4,
+                                  overflow: "hidden",
+                                  textOverflow:
+                                    "ellipsis",
+                                },
+                              }}
+                            />
+                          )}
+
+                          <Typography
+                            component="h3"
+                            sx={{
+                              width: "100%",
+                              color: "#10203a",
+                              fontSize: {
+                                xs: 21,
+                                md: 23,
+                              },
+                              fontWeight: 950,
+                              lineHeight: 1.22,
+                              letterSpacing: "-0.025em",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient:
+                                "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {post.title}
+                          </Typography>
+
+                          {post.excerpt && (
+                            <Typography
+                              sx={{
+                                mt: 1.5,
+                                width: "100%",
+                                color: "#64748b",
+                                fontSize: 14,
+                                lineHeight: 1.65,
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient:
+                                  "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {post.excerpt}
+                            </Typography>
+                          )}
+
+                          <Box
+                            sx={{
+                              mt: "auto",
+                              width: "100%",
+                              pt: 2.5,
+                            }}
+                          >
+                            {post.published_at && (
                               <Stack
                                 direction="row"
-                                spacing={0.6}
+                                spacing={0.7}
                                 alignItems="center"
+                                sx={{
+                                  mb: 1.4,
+                                }}
                               >
                                 <CalendarMonthRoundedIcon
-                                  sx={{ fontSize: 16, color: "#94a3b8" }}
+                                  sx={{
+                                    fontSize: 16,
+                                    color: "#94a3b8",
+                                  }}
                                 />
 
                                 <Typography
@@ -682,283 +945,70 @@ export default function BlogPostsPage() {
                                   }}
                                 >
                                   {formatPublishedDate(
-                                    featuredPost.published_at
+                                    post.published_at
                                   )}
                                 </Typography>
                               </Stack>
                             )}
-                          </Stack>
 
-                          <Typography
-                            component="h2"
-                            sx={{
-                              color: "#15191f",
-                              fontSize: { xs: 28, sm: 33, md: 38 },
-                              fontWeight: 950,
-                              lineHeight: 1.08,
-                              letterSpacing: "-0.045em",
-                            }}
-                          >
-                            {featuredPost.title}
-                          </Typography>
+                            <Stack
+                              direction="row"
+                              spacing={0.6}
+                              alignItems="center"
+                              sx={{
+                                color:
+                                  landingColors.primary,
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize: 14,
+                                  fontWeight: 950,
+                                }}
+                              >
+                                Leer publicación
+                              </Typography>
 
-                          <Typography
-                            sx={{
-                              mt: 2,
-                              color: "#64748b",
-                              fontSize: { xs: 15, md: 16 },
-                              lineHeight: 1.75,
-                              display: "-webkit-box",
-                              WebkitLineClamp: 4,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {featuredPost.excerpt ||
-                              "Consulta esta publicación del blog de Clic Menu."}
-                          </Typography>
-
-                          <Stack
-                            direction="row"
-                            spacing={0.7}
-                            alignItems="center"
-                            sx={{ mt: 3, color: landingColors.primary }}
-                          >
-                            <Typography sx={{ fontSize: 14, fontWeight: 950 }}>
-                              Leer publicación
-                            </Typography>
-
-                            <ArrowForwardRoundedIcon sx={{ fontSize: 20 }} />
-                          </Stack>
+                              <ArrowForwardRoundedIcon
+                                sx={{
+                                  fontSize: 19,
+                                }}
+                              />
+                            </Stack>
+                          </Box>
                         </CardContent>
                       </CardActionArea>
                     </Card>
-                  </Box>
-                )}
-
-                {regularPosts.length > 0 && (
-                  <>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1}
-                      justifyContent="space-between"
-                      alignItems={{ xs: "flex-start", sm: "flex-end" }}
-                      sx={{ mb: 3 }}
-                    >
-                      <Box>
-                        <Typography
-                          sx={{
-                            color: landingColors.primary,
-                            fontSize: 11,
-                            fontWeight: 950,
-                            letterSpacing: "0.13em",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          Contenido reciente
-                        </Typography>
-
-                        <Typography
-                          component="h2"
-                          sx={{
-                            mt: 0.5,
-                            color: "#15191f",
-                            fontSize: { xs: 28, md: 36 },
-                            fontWeight: 950,
-                            letterSpacing: "-0.04em",
-                          }}
-                        >
-                          {search
-                            ? `Resultados para “${search}”`
-                            : "Últimas publicaciones"}
-                        </Typography>
-                      </Box>
-
-                      {Number(meta?.total || 0) > 0 && (
-                        <Typography
-                          sx={{
-                            color: "#64748b",
-                            fontSize: 13,
-                            fontWeight: 750,
-                          }}
-                        >
-                          {meta.total} publicaciones
-                        </Typography>
-                      )}
-                    </Stack>
-
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: {
-                          xs: "1fr",
-                          sm: "repeat(2, minmax(0,1fr))",
-                          lg: "repeat(3, minmax(0,1fr))",
-                        },
-                        gap: { xs: 2.5, md: 3 },
-                      }}
-                    >
-                      {regularPosts.map((post) => (
-                        <Card
-                          key={post.slug}
-                          variant="outlined"
-                          sx={{
-                            minWidth: 0,
-                            height: "100%",
-                            overflow: "hidden",
-                            borderRadius: 3,
-                            bgcolor: "#ffffff",
-                            borderColor: "rgba(15,23,42,0.08)",
-                            boxShadow: "0 8px 25px rgba(15,23,42,0.05)",
-                            transition:
-                              "transform .25s ease, box-shadow .25s ease, border-color .25s ease",
-                            "&:hover": {
-                              transform: "translateY(-6px)",
-                              borderColor: "rgba(211,92,58,0.24)",
-                              boxShadow: "0 22px 42px rgba(15,23,42,0.12)",
-                            },
-                            "&:hover img": {
-                              transform: "scale(1.045)",
-                            },
-                          }}
-                        >
-                          <CardActionArea
-                            onClick={() => openPost(post.slug)}
-                            sx={{
-                              height: "100%",
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "stretch",
-                            }}
-                          >
-                            <Box sx={{ overflow: "hidden" }}>
-                              <PostCover post={post} />
-                            </Box>
-
-                            <CardContent
-                              sx={{
-                                width: "100%",
-                                flex: 1,
-                                display: "flex",
-                                flexDirection: "column",
-                                p: { xs: 2.4, md: 2.7 },
-                              }}
-                            >
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                useFlexGap
-                                flexWrap="wrap"
-                                alignItems="center"
-                                sx={{ minHeight: 24, mb: 1.4 }}
-                              >
-                                {post.category?.name && (
-                                  <Typography
-                                    component="span"
-                                    sx={{
-                                      px: 1,
-                                      py: 0.45,
-                                      borderRadius: 999,
-                                      bgcolor: "rgba(211,92,58,0.09)",
-                                      color: landingColors.primary,
-                                      fontSize: 11,
-                                      fontWeight: 900,
-                                    }}
-                                  >
-                                    {post.category.name}
-                                  </Typography>
-                                )}
-
-                                {post.published_at && (
-                                  <Typography
-                                    component="span"
-                                    sx={{
-                                      color: "#94a3b8",
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    {formatPublishedDate(post.published_at)}
-                                  </Typography>
-                                )}
-                              </Stack>
-
-                              <Typography
-                                component="h3"
-                                sx={{
-                                  color: "#15191f",
-                                  fontSize: { xs: 20, md: 21 },
-                                  fontWeight: 950,
-                                  lineHeight: 1.25,
-                                  letterSpacing: "-0.025em",
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                {post.title}
-                              </Typography>
-
-                              <Typography
-                                sx={{
-                                  mt: 1.2,
-                                  color: "#64748b",
-                                  fontSize: 14,
-                                  lineHeight: 1.65,
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 3,
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                {post.excerpt ||
-                                  "Consulta esta publicación del blog de Clic Menu."}
-                              </Typography>
-
-                              <Stack
-                                direction="row"
-                                spacing={0.6}
-                                alignItems="center"
-                                sx={{
-                                  mt: "auto",
-                                  pt: 2.5,
-                                  color: landingColors.primary,
-                                }}
-                              >
-                                <Typography sx={{ fontSize: 13, fontWeight: 950 }}>
-                                  Leer más
-                                </Typography>
-
-                                <ArrowForwardRoundedIcon sx={{ fontSize: 18 }} />
-                              </Stack>
-                            </CardContent>
-                          </CardActionArea>
-                        </Card>
-                      ))}
-                    </Box>
-                  </>
-                )}
+                  ))}
+                </Box>
 
                 {Number(meta?.last_page || 1) > 1 && (
                   <Box
                     sx={{
                       display: "flex",
                       justifyContent: "center",
-                      mt: { xs: 6, md: 8 },
+                      mt: {
+                        xs: 6,
+                        md: 8,
+                      },
                     }}
                   >
                     <Pagination
-                      page={Number(meta?.current_page || page)}
-                      count={Number(meta?.last_page || 1)}
+                      page={Number(
+                        meta?.current_page || page
+                      )}
+                      count={Number(
+                        meta?.last_page || 1
+                      )}
                       onChange={handlePageChange}
                       color="primary"
                       shape="rounded"
                       size="large"
                       sx={{
-                        "& .MuiPaginationItem-root": {
-                          fontWeight: 850,
-                        },
+                        "& .MuiPaginationItem-root":
+                          {
+                            fontWeight: 850,
+                          },
                       }}
                     />
                   </Box>
@@ -971,19 +1021,35 @@ export default function BlogPostsPage() {
         <Box
           component="section"
           sx={{
-            px: { xs: 2, sm: 3 },
-            pb: { xs: 8, md: 11 },
+            px: {
+              xs: 2,
+              sm: 3,
+            },
+            pb: {
+              xs: 8,
+              md: 11,
+            },
           }}
         >
           <Container
             sx={{
               position: "relative",
               overflow: "hidden",
-              borderRadius: { xs: 3, md: 4 },
+              borderRadius: {
+                xs: 3,
+                md: 4,
+              },
               bgcolor: "#151d27",
               color: "#ffffff",
-              px: { xs: 3, sm: 5, md: 7 },
-              py: { xs: 5, md: 6 },
+              px: {
+                xs: 3,
+                sm: 5,
+                md: 7,
+              },
+              py: {
+                xs: 5,
+                md: 6,
+              },
             }}
           >
             <Box
@@ -999,17 +1065,33 @@ export default function BlogPostsPage() {
             />
 
             <Stack
-              direction={{ xs: "column", md: "row" }}
+              direction={{
+                xs: "column",
+                md: "row",
+              }}
               spacing={3}
-              alignItems={{ xs: "flex-start", md: "center" }}
+              alignItems={{
+                xs: "flex-start",
+                md: "center",
+              }}
               justifyContent="space-between"
-              sx={{ position: "relative", zIndex: 1 }}
+              sx={{
+                position: "relative",
+                zIndex: 1,
+              }}
             >
-              <Box sx={{ maxWidth: 680 }}>
+              <Box
+                sx={{
+                  maxWidth: 680,
+                }}
+              >
                 <Typography
                   component="h2"
                   sx={{
-                    fontSize: { xs: 29, md: 39 },
+                    fontSize: {
+                      xs: 29,
+                      md: 39,
+                    },
                     fontWeight: 950,
                     lineHeight: 1.1,
                     letterSpacing: "-0.04em",
@@ -1021,8 +1103,12 @@ export default function BlogPostsPage() {
                 <Typography
                   sx={{
                     mt: 1.4,
-                    color: "rgba(255,255,255,0.75)",
-                    fontSize: { xs: 15, md: 16 },
+                    color:
+                      "rgba(255,255,255,0.75)",
+                    fontSize: {
+                      xs: 15,
+                      md: 16,
+                    },
                     lineHeight: 1.65,
                   }}
                 >
@@ -1034,10 +1120,15 @@ export default function BlogPostsPage() {
               <Button
                 type="button"
                 variant="contained"
-                onClick={() => navigate("/auth/register")}
+                onClick={() =>
+                  navigate("/auth/register")
+                }
                 sx={{
                   ...landingButtonSx.primary,
-                  minWidth: { xs: "100%", sm: 220 },
+                  minWidth: {
+                    xs: "100%",
+                    sm: 220,
+                  },
                   minHeight: 48,
                   flexShrink: 0,
                 }}

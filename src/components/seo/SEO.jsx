@@ -9,6 +9,17 @@ export default function SEO({
   image = "https://clicmenu.com.mx/images/seo/clic-menu-preview.png",
   url = "https://clicmenu.com.mx",
   robots = "index, follow",
+
+  /*
+   * Propiedades opcionales para publicaciones del blog.
+   * Las páginas existentes conservan el comportamiento actual.
+   */
+  ogType = "website",
+  structuredData = null,
+  publishedTime = null,
+  modifiedTime = null,
+  section = null,
+  tags = [],
 }) {
   const fullTitle = title.includes("Clic Menu")
     ? title
@@ -27,12 +38,44 @@ export default function SEO({
       <link rel="canonical" href={url} />
 
       {/* Open Graph (Facebook / WhatsApp) */}
-      <meta property="og:type" content="website" />
+      <meta property="og:type" content={ogType} />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={image} />
       <meta property="og:url" content={url} />
       <meta property="og:site_name" content="Clic Menu" />
+
+      {/* Metadatos exclusivos para publicaciones del blog */}
+      {ogType === "article" && publishedTime && (
+        <meta
+          property="article:published_time"
+          content={publishedTime}
+        />
+      )}
+
+      {ogType === "article" && modifiedTime && (
+        <meta
+          property="article:modified_time"
+          content={modifiedTime}
+        />
+      )}
+
+      {ogType === "article" && section && (
+        <meta
+          property="article:section"
+          content={section}
+        />
+      )}
+
+      {ogType === "article" &&
+        Array.isArray(tags) &&
+        tags.map((tag, index) => (
+          <meta
+            key={`${tag}-${index}`}
+            property="article:tag"
+            content={tag}
+          />
+        ))}
 
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -46,6 +89,13 @@ export default function SEO({
 
       {/* Idioma */}
       <html lang="es-MX" />
+
+      {/* Datos estructurados enviados por la API del blog */}
+      {structuredData && (
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      )}
     </Helmet>
   );
 }
