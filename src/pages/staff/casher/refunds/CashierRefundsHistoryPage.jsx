@@ -112,19 +112,29 @@ export default function CashierRefundsHistoryPage() {
         row?.order?.customer_name?.trim?.() ||
         row?.customer_name?.trim?.() ||
         "Cliente sin nombre";
+      const status = String(row?.status || "").toLowerCase();
       const total = Number(row?.total || 0);
       const refundedTotal = Number(row?.refunded_total || 0);
-      const availableToRefund = Math.max(total - refundedTotal, 0);
+
+      const backendAvailable = Number(row?.available_to_refund);
+      const availableToRefund = Number.isFinite(backendAvailable)
+        ? Math.max(backendAvailable, 0)
+        : Math.max(total - refundedTotal, 0);
+
+      const canRefund =
+        ["paid", "partially_refunded"].includes(status) &&
+        availableToRefund > 0;
 
       return {
         sale_id: saleId,
         order_id: orderId || null,
         ticket_folio: ticketFolio,
         customer_name: customerName,
-        status: String(row?.status || ""),
+        status,
         total,
         refunded_total: refundedTotal,
         available_to_refund: availableToRefund,
+        can_refund: canRefund,
         paid_at: row?.paid_at || null,
 
         ticket: row?.ticket || null,
@@ -186,9 +196,11 @@ export default function CashierRefundsHistoryPage() {
     const status = String(filters?.status || "all");
 
     return rows.filter((row) => {
-      const rowStatus = String(row?.status || "");
+      const rowStatus = String(row?.status || "").toLowerCase();
 
-      if (!["paid", "refunded"].includes(rowStatus)) return false;
+      if (!["paid", "partially_refunded", "refunded"].includes(rowStatus)) {
+        return false;
+      }
 
       if (status !== "all" && rowStatus !== status) return false;
 
@@ -208,6 +220,8 @@ export default function CashierRefundsHistoryPage() {
       return haystack.includes(query);
     });
   }, [rows, filters]);
+
+  const selectedCanRefund = canRefundSummary(selectedSummary);
 
   const {
     page,
@@ -279,6 +293,18 @@ export default function CashierRefundsHistoryPage() {
 
     if (!data) return;
 
+    if (!canRefundSummary(data)) {
+      showAlert({
+        severity: "warning",
+        title: "Devolución no disponible",
+        message:
+          Number(data?.sale?.available_to_refund || 0) <= 0
+            ? "Esta venta ya no tiene saldo disponible para devolución."
+            : "Esta venta no se encuentra en un estado válido para devolución.",
+      });
+      return;
+    }
+
     setCancelReason("");
     setCancelOpen(true);
   };
@@ -312,6 +338,18 @@ export default function CashierRefundsHistoryPage() {
         severity: "warning",
         title: "Motivo requerido",
         message: "Debes escribir el motivo de la cancelación/devolución.",
+      });
+      return;
+    }
+
+    if (!selectedCanRefund) {
+      showAlert({
+        severity: "warning",
+        title: "Devolución no disponible",
+        message:
+          Number(selectedSummary?.sale?.available_to_refund || 0) <= 0
+            ? "Esta venta ya no tiene saldo disponible para devolución."
+            : "Esta venta ya no se encuentra disponible para devolución.",
       });
       return;
     }
@@ -565,7 +603,7 @@ export default function CashierRefundsHistoryPage() {
         onReasonChange={setCancelReason}
         onSubmit={handleSubmitFullCancel}
         busy={cancelBusy}
-        disabled={!selectedSummary?.refund_permissions?.can_refund}
+        disabled={!selectedCanRefund}
       />
       
       <AppAlert
@@ -577,5 +615,18 @@ export default function CashierRefundsHistoryPage() {
         autoHideDuration={4200}
       />
     </PageContainer>
+  );
+}
+
+function canRefundSummary(summary) {
+  const status = String(summary?.sale?.status || "").toLowerCase();
+  const available = Number(summary?.sale?.available_to_refund || 0);
+  const backendPermission =
+    summary?.refund_permissions?.can_refund === true;
+
+  return (
+    backendPermission &&
+    ["paid", "partially_refunded"].includes(status) &&
+    available > 0
   );
 }

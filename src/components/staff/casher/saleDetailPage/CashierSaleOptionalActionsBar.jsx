@@ -135,7 +135,14 @@ export default function CashierSaleOptionalActionsBar({
   );
 }
 
-function ActionButton({ icon, title, status, active = false, disabled = false, onClick }) {
+function ActionButton({
+  icon,
+  title,
+  status,
+  active = false,
+  disabled = false,
+  onClick,
+}) {
   return (
     <Button
       type="button"
@@ -150,28 +157,59 @@ function ActionButton({ icon, title, status, active = false, disabled = false, o
         px: 2,
         py: 1.5,
         borderRadius: 1,
-        borderColor: active ? ORANGE : "divider",
-        color: "text.primary",
-        backgroundColor: active ? "rgba(255, 152, 0, 0.06)" : "#fff",
+        borderColor: disabled
+          ? "#D1D5DB"
+          : active
+          ? ORANGE
+          : "divider",
+        color: disabled ? "text.disabled" : "text.primary",
+        backgroundColor: disabled
+          ? "#F3F4F6"
+          : active
+          ? "rgba(255, 152, 0, 0.06)"
+          : "#fff",
         textTransform: "none",
         boxShadow: "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.8 : 1,
+
         "&:hover": {
-          borderColor: ORANGE,
-          backgroundColor: "rgba(255, 152, 0, 0.08)",
+          borderColor: disabled ? "#D1D5DB" : ORANGE,
+          backgroundColor: disabled
+            ? "#F3F4F6"
+            : "rgba(255, 152, 0, 0.08)",
+          boxShadow: "none",
         },
+
+        "&.Mui-disabled": {
+          color: "text.disabled",
+          borderColor: "#D1D5DB",
+          backgroundColor: "#F3F4F6",
+          opacity: 0.8,
+          pointerEvents: "auto",
+          cursor: "not-allowed",
+        },
+
         "& .MuiButton-endIcon": {
-          color: ORANGE,
+          color: disabled ? "#9CA3AF" : ORANGE,
         },
       }}
     >
-      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+      <Stack
+        direction="row"
+        spacing={1.25}
+        alignItems="center"
+        sx={{ minWidth: 0 }}
+      >
         <Box
           sx={{
             width: 42,
             height: 42,
             borderRadius: 1,
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: ORANGE,
+            bgcolor: disabled
+              ? "#E5E7EB"
+              : "rgba(255, 152, 0, 0.12)",
+            color: disabled ? "#9CA3AF" : ORANGE,
             display: "grid",
             placeItems: "center",
             flexShrink: 0,
@@ -185,7 +223,7 @@ function ActionButton({ icon, title, status, active = false, disabled = false, o
             sx={{
               fontSize: 14,
               fontWeight: 800,
-              color: "text.primary",
+              color: disabled ? "text.disabled" : "text.primary",
               lineHeight: 1.2,
               wordBreak: "break-word",
             }}
@@ -202,8 +240,16 @@ function ActionButton({ icon, title, status, active = false, disabled = false, o
               maxWidth: "100%",
               fontSize: 12,
               fontWeight: 800,
-              bgcolor: active ? "#FFF3E0" : "#F1F1F1",
-              color: active ? "#A75A00" : "text.secondary",
+              bgcolor: disabled
+                ? "#E5E7EB"
+                : active
+                ? "#FFF3E0"
+                : "#F1F1F1",
+              color: disabled
+                ? "#6B7280"
+                : active
+                ? "#A75A00"
+                : "text.secondary",
               "& .MuiChip-label": {
                 px: 1,
                 overflow: "hidden",

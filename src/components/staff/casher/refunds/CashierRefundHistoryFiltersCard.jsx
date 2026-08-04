@@ -70,6 +70,7 @@ export default function CashierRefundHistoryFiltersCard({
                 >
                   <MenuItem value="all">Todos</MenuItem>
                   <MenuItem value="paid">Pagada</MenuItem>
+                  <MenuItem value="partially_refunded">Parcialmente devuelta</MenuItem>
                   <MenuItem value="refunded">Devuelta/cancelada</MenuItem>
                 </TextField>
               }
