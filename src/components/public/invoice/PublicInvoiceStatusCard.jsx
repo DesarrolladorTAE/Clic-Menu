@@ -20,6 +20,9 @@ function statusTitle(status) {
     invoice_setting_disabled: "Auto-facturación desactivada",
     not_available: "Ticket no disponible",
     invoice_inconsistent: "Revisión requerida",
+    equal_parts_global_mode_required: "Modo global requerido",
+    equal_parts_global_configuration_incomplete: "Configuración global incompleta",
+    invoice_mode_invalid: "Configuración de facturación inválida",
   };
 
   return titles[status] || "No es posible facturar este ticket";
@@ -39,6 +42,9 @@ function statusLabel(status) {
     invoice_setting_disabled: "Facturación desactivada",
     not_available: "No disponible",
     invoice_inconsistent: "Revisión requerida",
+    equal_parts_global_mode_required: "Modo global requerido",
+    equal_parts_global_configuration_incomplete: "Configuración incompleta",
+    invoice_mode_invalid: "Configuración inválida",
   };
 
   return labels[status] || "No disponible";
