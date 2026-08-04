@@ -202,11 +202,17 @@ export default function CashierRefundSalesPanel({
                             </span>
                           </Tooltip>
 
-                          <Tooltip title="Cancelaciones/devoluciones">
+                          <Tooltip
+                            title={
+                              canRefundSale(sale)
+                                ? "Aplicar devolución total"
+                                : "Esta venta no tiene saldo disponible para devolución"
+                            }
+                          >
                             <span>
                               <IconButton
                                 onClick={() => onOpenCancel?.(sale)}
-                                disabled={String(sale?.status || "") === "refunded"}
+                                disabled={!canRefundSale(sale)}
                                 sx={{
                                   ...actionIconButtonSx,
                                   color: "error.main",
@@ -284,11 +290,23 @@ function getRefundStatusLabel(status) {
   switch (String(status || "").toLowerCase()) {
     case "paid":
       return "Pagada";
+    case "partially_refunded":
+      return "Parcialmente devuelta";
     case "refunded":
       return "Devuelta / cancelada";
     default:
       return status || "—";
   }
+}
+
+function canRefundSale(sale) {
+  const status = String(sale?.status || "").trim().toLowerCase();
+  const available = Number(sale?.available_to_refund || 0);
+
+  return (
+    ["paid", "partially_refunded"].includes(status) &&
+    available > 0
+  );
 }
 
 function formatCurrency(value) {

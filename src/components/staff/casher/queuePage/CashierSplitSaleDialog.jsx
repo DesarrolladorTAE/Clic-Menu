@@ -161,17 +161,27 @@ export default function CashierSplitSaleDialog({
     [activeChecks]
   );
 
-  const productChecks = useMemo(
+  const productSourceChecks = useMemo(
     () =>
       activeChecks.filter(
         (check) =>
-          check?.flags?.can_move_items === true &&
+          check?.permissions?.can_give_products === true &&
           check?.flags?.is_equal_part !== true
       ),
     [activeChecks]
   );
 
-  const sourceCandidates = splitMode === "products" ? productChecks : normalSourceChecks;
+  const productTargetChecks = useMemo(
+    () =>
+      activeChecks.filter(
+        (check) =>
+          check?.permissions?.can_receive_products === true &&
+          check?.flags?.is_equal_part !== true
+      ),
+    [activeChecks]
+  );
+
+  const sourceCandidates = splitMode === "products" ? productSourceChecks : normalSourceChecks;
 
   useEffect(() => {
     if (!open || !summary) return;
@@ -221,17 +231,23 @@ export default function CashierSplitSaleDialog({
     if (splitMode !== "products") return;
 
     const sourceId = Number(sourceCheckId || 0);
-    const targetCandidates = productChecks.filter((check) => getCheckId(check) !== sourceId);
+    const availableTargets = productTargetChecks.filter(
+      (check) => getCheckId(check) !== sourceId
+    );
 
     setTargetCheckId((current) => {
       const currentId = Number(current || 0);
-      const currentExists = targetCandidates.some((check) => getCheckId(check) === currentId);
+      const currentExists = availableTargets.some(
+        (check) => getCheckId(check) === currentId
+      );
 
       if (currentExists) return current;
 
-      return targetCandidates.length > 0 ? String(getCheckId(targetCandidates[0])) : "";
+      return availableTargets.length > 0
+        ? String(getCheckId(availableTargets[0]))
+        : "";
     });
-  }, [productChecks, sourceCheckId, splitMode]);
+  }, [productTargetChecks, sourceCheckId, splitMode]);
 
   const sourceCheck = useMemo(
     () =>
@@ -248,8 +264,11 @@ export default function CashierSplitSaleDialog({
   );
 
   const targetCandidates = useMemo(
-    () => productChecks.filter((check) => getCheckId(check) !== Number(sourceCheckId || 0)),
-    [productChecks, sourceCheckId]
+    () =>
+      productTargetChecks.filter(
+        (check) => getCheckId(check) !== Number(sourceCheckId || 0)
+      ),
+    [productTargetChecks, sourceCheckId]
   );
 
   const sourceItems = useMemo(
@@ -718,8 +737,8 @@ export default function CashierSplitSaleDialog({
                 ) : null}
 
                 {splitMode === "products" ? (
-                  <ProductManagementContent
-                    sourceChecks={productChecks}
+                 <ProductManagementContent
+                    sourceChecks={productSourceChecks}
                     targetChecks={targetCandidates}
                     sourceCheckId={sourceCheckId}
                     targetCheckId={targetCheckId}

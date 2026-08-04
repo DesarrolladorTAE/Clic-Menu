@@ -137,7 +137,7 @@ function isKnownOption(options, value) {
   return options.some((option) => option.value === cleanValue);
 }
 
-function validate(form, invoiceMode) {
+function validate(form, needsBillingMode) {
   const errors = {};
 
   const clienteRFC = clean(form.clienteRFC).toUpperCase();
@@ -190,12 +190,9 @@ function validate(form, invoiceMode) {
     errors.clienteCorreo = "El correo no puede exceder 190 caracteres.";
   }
 
-  if (invoiceMode === "both" && !billingMode) {
+  if (needsBillingMode && !billingMode) {
     errors.billing_mode = "Debes seleccionar el modo de facturación.";
-  } else if (
-    invoiceMode === "both" &&
-    !isKnownOption(BILLING_MODE_OPTIONS, billingMode)
-  ) {
+  } else if (needsBillingMode && !isKnownOption(BILLING_MODE_OPTIONS, billingMode)) {
     errors.billing_mode = "El modo de facturación seleccionado no es válido.";
   }
 
@@ -204,6 +201,9 @@ function validate(form, invoiceMode) {
 
 export default function PublicInvoiceForm({
   invoiceMode,
+  effectiveInvoiceMode,
+  modeLocked = false,
+  isEqualParts = false,
   onSubmit,
   submitting = false,
   apiErrors = {},
@@ -212,7 +212,11 @@ export default function PublicInvoiceForm({
   const [form, setForm] = useState(DEFAULT_FORM);
   const [localErrors, setLocalErrors] = useState({});
 
-  const needsBillingMode = invoiceMode === "both";
+  const needsBillingMode = invoiceMode === "both" && !modeLocked;
+  const isGlobalEqualParts =
+    isEqualParts &&
+    modeLocked &&
+    effectiveInvoiceMode === "global";
 
   const mergedErrors = useMemo(() => {
     return {
@@ -224,10 +228,11 @@ export default function PublicInvoiceForm({
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
-      billing_mode: invoiceMode === "both" ? prev.billing_mode : "",
+      billing_mode: needsBillingMode ? prev.billing_mode : "",
     }));
     setLocalErrors({});
-  }, [invoiceMode]);
+  }, [needsBillingMode]);
+
 
   const setField = (field, value) => {
     setForm((prev) => ({
@@ -244,7 +249,7 @@ export default function PublicInvoiceForm({
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const errors = validate(form, invoiceMode);
+    const errors = validate(form, needsBillingMode);
     setLocalErrors(errors);
 
     if (Object.keys(errors).length > 0) return;
@@ -342,6 +347,21 @@ export default function PublicInvoiceForm({
                 }}
               >
                 <Typography variant="body2">{generalError}</Typography>
+              </Alert>
+            ) : null}
+
+            {isGlobalEqualParts ? (
+              <Alert
+                severity="info"
+                sx={{
+                  borderRadius: 1,
+                  alignItems: "flex-start",
+                }}
+              >
+                <Typography variant="body2">
+                  Esta cuenta fue dividida en partes iguales y únicamente puede facturarse
+                  en modalidad global. La factura se generará con un solo concepto global.
+                </Typography>
               </Alert>
             ) : null}
 

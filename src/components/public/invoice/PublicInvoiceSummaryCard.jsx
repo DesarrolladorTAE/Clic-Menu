@@ -58,6 +58,9 @@ function statusLabel(value) {
     taeconta_tax_profile_missing: "Perfil fiscal faltante",
     invoice_setting_disabled: "Facturación desactivada",
     not_available: "No disponible",
+    equal_parts_global_mode_required: "Modo global requerido",
+    equal_parts_global_configuration_incomplete: "Configuración global incompleta",
+    invoice_mode_invalid: "Configuración inválida",
     stamped: "Timbrado",
   };
 
@@ -81,6 +84,10 @@ function statusColor(status, canInvoice) {
 export default function PublicInvoiceSummaryCard({ data }) {
   const status = data?.status || "";
   const canInvoice = !!data?.can_invoice;
+  const isEqualParts = data?.is_equal_parts === true;
+  const resolvedInvoiceMode =
+    data?.effective_invoice_mode ||
+    data?.invoice_mode;
 
   const invoiceableTotal =
     data?.invoiceable_total ??
@@ -213,7 +220,12 @@ export default function PublicInvoiceSummaryCard({ data }) {
           <SummaryItem
             icon={<SettingsOutlinedIcon fontSize="small" />}
             label="Modo de facturación"
-            value={invoiceModeLabel(data?.invoice_mode)}
+            value={invoiceModeLabel(resolvedInvoiceMode)}
+            secondary={
+              isEqualParts
+                ? "Cuenta dividida en partes iguales"
+                : null
+            }
           />
         </Box>
       </Box>

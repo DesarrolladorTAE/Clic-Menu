@@ -11,9 +11,20 @@ export default function CashierRefundsHeroCard({
   syncing = false,
   rows = [],
 }) {
-  const paidCount = rows.filter((row) => String(row?.status) === "paid").length;
-  const refundedCount = rows.filter(
-    (row) => String(row?.status) === "refunded"
+  const refundableCount = rows.filter((row) => {
+    const status = String(row?.status || "").trim().toLowerCase();
+    const available = Number(row?.available_to_refund || 0);
+
+    return (
+      ["paid", "partially_refunded"].includes(status) &&
+      available > 0
+    );
+  }).length;
+
+  const fullyRefundedCount = rows.filter(
+    (row) =>
+      String(row?.status || "").toLowerCase() === "refunded" ||
+      Number(row?.available_to_refund || 0) <= 0
   ).length;
 
   return (
@@ -83,16 +94,16 @@ export default function CashierRefundsHeroCard({
           >
             <MetricCard
               icon={<ReceiptLongRoundedIcon />}
-              label="Ventas pagadas"
-              value={String(paidCount)}
-              helper="Disponibles para cancelación total"
+              label="Disponibles para devolución"
+              value={String(refundableCount)}
+              helper="Pagadas o parcialmente devueltas con saldo"
             />
 
             <MetricCard
               icon={<CheckCircleRoundedIcon />}
-              label="Canceladas / devueltas"
-              value={String(refundedCount)}
-              helper="Solo consulta histórica"
+              label="Completamente devueltas"
+              value={String(fullyRefundedCount)}
+              helper="Sin saldo disponible para devolución"
             />
           </Box>
         </Stack>

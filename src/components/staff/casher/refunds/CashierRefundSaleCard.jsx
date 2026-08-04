@@ -15,8 +15,12 @@ export default function CashierRefundSaleCard({
   onOpenTicketActions,
   thermalPrintSaleId = null,
 }) {
-  const status = String(sale?.status || "");
-  
+  const status = String(sale?.status || "").trim().toLowerCase();
+  const availableToRefund = Number(sale?.available_to_refund || 0);
+
+  const canRefund =
+    ["paid", "partially_refunded"].includes(status) &&
+    availableToRefund > 0;
 
   return (
     <Card
@@ -141,11 +145,17 @@ export default function CashierRefundSaleCard({
               </span>
             </Tooltip>
 
-            <Tooltip title="Cancelaciones/devoluciones">
+            <Tooltip
+              title={
+                canRefund
+                  ? "Aplicar devolución total"
+                  : "Esta venta no tiene saldo disponible para devolución"
+              }
+            >
               <span>
                 <IconButton
                   onClick={() => onOpenCancel?.(sale)}
-                  disabled={String(sale?.status || "") === "refunded"}
+                  disabled={!canRefund}
                   sx={{
                     ...actionIconButtonSx,
                     color: "error.main",

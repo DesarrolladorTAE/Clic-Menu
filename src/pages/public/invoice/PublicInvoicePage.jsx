@@ -224,6 +224,9 @@ function buildFallbackPayload(
       cover_image_url: null,
       expires_at: null,
       invoice_mode: null,
+      is_equal_parts: false,
+      effective_invoice_mode: null,
+      mode_locked: false,
       can_invoice: false,
       status: "network_error",
       message:
@@ -1262,22 +1265,14 @@ export default function PublicInvoicePage() {
               />
             ) : canInvoice ? (
               <PublicInvoiceForm
-                invoiceMode={
-                  invoiceData
-                    ?.invoice_mode
-                }
-                submitting={
-                  submitting
-                }
-                apiErrors={
-                  fieldErrors
-                }
-                generalError={
-                  submitError
-                }
-                onSubmit={
-                  handleStamp
-                }
+                invoiceMode={invoiceData?.invoice_mode}
+                effectiveInvoiceMode={invoiceData?.effective_invoice_mode}
+                modeLocked={invoiceData?.mode_locked === true}
+                isEqualParts={invoiceData?.is_equal_parts === true}
+                submitting={submitting}
+                apiErrors={fieldErrors}
+                generalError={submitError}
+                onSubmit={handleStamp}
               />
             ) : (
               <PublicInvoiceStatusCard
