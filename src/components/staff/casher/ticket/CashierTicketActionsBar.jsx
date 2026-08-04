@@ -1,5 +1,7 @@
+// src/components/staff/casher/ticket/CashierTicketActionsBar.jsx
 import React from "react";
 import { Button, Stack } from "@mui/material";
+
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
@@ -21,8 +23,11 @@ export default function CashierTicketActionsBar({
   thermalPrintEnabled = false,
 }) {
   const ticketDisabled = disabled || !ticketAvailable;
+
   const thermalPrintDisabled =
-    ticketDisabled || !thermalPrintEnabled || loadingThermalPrint;
+    ticketDisabled ||
+    !thermalPrintEnabled ||
+    loadingThermalPrint;
 
   return (
     <Stack spacing={1.5}>
@@ -73,9 +78,10 @@ export default function CashierTicketActionsBar({
             fontWeight: 800,
           }}
         >
-          {loadingThermalPrint ? "Enviando…" : "Imprimir térmico"}
+          {loadingThermalPrint
+            ? "Enviando…"
+            : "Imprimir térmico"}
         </Button>
-
       </Stack>
 
       <Stack
@@ -95,7 +101,9 @@ export default function CashierTicketActionsBar({
             fontWeight: 800,
           }}
         >
-          {loadingDownload ? "Descargando…" : "Descargar PDF"}
+          {loadingDownload
+            ? "Descargando…"
+            : "Descargar PDF"}
         </Button>
 
         <Button
@@ -110,7 +118,7 @@ export default function CashierTicketActionsBar({
             fontWeight: 800,
           }}
         >
-          Volver a la cola
+          Volver a Mis ventas
         </Button>
       </Stack>
     </Stack>

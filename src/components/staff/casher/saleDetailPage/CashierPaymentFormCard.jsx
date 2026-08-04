@@ -1,16 +1,10 @@
-// Tarjetita Pagos
+// src/components/staff/casher/saleDetailPage/CashierPaymentFormCard.jsx
+//Tarjetita pagos
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
+  Box, Button, Card, CardContent, IconButton, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
+
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
@@ -18,6 +12,8 @@ import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 
 export default function CashierPaymentFormCard({
   methods = [],
+  initialAmount = null,
+  preview = null,
   tip,
   onTipChange,
   payments = [],
@@ -32,6 +28,49 @@ export default function CashierPaymentFormCard({
   disabled = false,
 }) {
   const hasMaxPayments = payments.length >= 3;
+
+  const hasRawInitialAmount =
+    initialAmount !== null &&
+    initialAmount !== undefined &&
+    initialAmount !== "";
+
+  const normalizedInitialAmount = hasRawInitialAmount
+    ? Number(initialAmount)
+    : Number.NaN;
+
+  const hasInitialAmount =
+    Number.isFinite(normalizedInitialAmount) &&
+    normalizedInitialAmount > 0;
+
+  const validatedPreview =
+    preview?.preview ??
+    preview ??
+    null;
+
+  const validatedFinalTotal = Number(
+    validatedPreview?.final_total
+  );
+
+  const hasValidatedFinalTotal =
+    Boolean(hasPreview) &&
+    Number.isFinite(validatedFinalTotal) &&
+    validatedFinalTotal > 0;
+
+  const displayedAmount = hasValidatedFinalTotal
+    ? validatedFinalTotal
+    : normalizedInitialAmount;
+
+  const hasDisplayedAmount =
+    Number.isFinite(displayedAmount) &&
+    displayedAmount > 0;
+
+  const validatedChange = Number(
+    validatedPreview?.total_change ?? 0
+  );
+
+  const hasValidatedChange =
+    Boolean(hasPreview) &&
+    validatedPreview !== null;
 
   return (
     <Card
@@ -59,7 +98,7 @@ export default function CashierPaymentFormCard({
                   color: "text.primary",
                 }}
               >
-                Pagos
+                Pagos de la cuenta
               </Typography>
 
               <Typography
@@ -67,9 +106,11 @@ export default function CashierPaymentFormCard({
                   mt: 0.5,
                   fontSize: 14,
                   color: "text.secondary",
+                  lineHeight: 1.5,
                 }}
               >
-                Puedes dividir el cobro en varios métodos si lo necesitas.
+                Captura uno, dos o hasta tres métodos para cobrar únicamente la
+                cuenta seleccionada.
               </Typography>
             </Box>
 
@@ -89,12 +130,70 @@ export default function CashierPaymentFormCard({
             </Button>
           </Stack>
 
+          <Box
+            sx={{
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              backgroundColor: "#FCFCFC",
+              p: 1.5,
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              spacing={0.75}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  {hasValidatedFinalTotal
+                    ? "Total validado de la cuenta"
+                    : "Importe actual de la cuenta"}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize: 12,
+                    color: "text.secondary",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {hasValidatedFinalTotal
+                    ? "Importe confirmado por la vista previa del cobro."
+                    : "Incluye el neto sincronizado de la cuenta y la propina capturada. La vista previa validará el total definitivo."}
+                </Typography>
+              </Box>
+
+              <Typography
+                sx={{
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {hasDisplayedAmount
+                  ? formatCurrency(displayedAmount)
+                  : "Pendiente"}
+              </Typography>
+            </Stack>
+          </Box>
+
           <Box>
             <Typography sx={fieldLabelSx}>Propina</Typography>
+
             <TextField
               fullWidth
               value={tip}
-              onChange={(e) => onTipChange(e.target.value)}
+              onChange={(event) => onTipChange?.(event.target.value)}
               inputProps={{ inputMode: "decimal" }}
               placeholder="0.00"
               disabled={disabled || previewing || paying}
@@ -107,13 +206,18 @@ export default function CashierPaymentFormCard({
               gap: 2,
               gridTemplateColumns: {
                 xs: "1fr",
-                md: payments.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                md:
+                  payments.length === 1
+                    ? "1fr"
+                    : "repeat(2, minmax(0, 1fr))",
               },
             }}
           >
             {payments.map((payment, index) => {
               const method = methods.find(
-                (m) => Number(m.id) === Number(payment.payment_method_id)
+                (row) =>
+                  Number(row.id) ===
+                  Number(payment.payment_method_id)
               );
 
               const usedMethodIds = payments
@@ -156,9 +260,14 @@ export default function CashierPaymentFormCard({
                       </Typography>
 
                       <IconButton
-                        onClick={() => onRemovePayment(payment.localId)}
+                        onClick={() =>
+                          onRemovePayment?.(payment.localId)
+                        }
                         disabled={
-                          payments.length <= 1 || disabled || previewing || paying
+                          payments.length <= 1 ||
+                          disabled ||
+                          previewing ||
+                          paying
                         }
                         sx={{
                           width: 40,
@@ -179,7 +288,10 @@ export default function CashierPaymentFormCard({
                       </IconButton>
                     </Stack>
 
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={2}
+                    >
                       <FieldBlock
                         label="Método de pago *"
                         input={
@@ -187,21 +299,24 @@ export default function CashierPaymentFormCard({
                             select
                             fullWidth
                             value={payment.payment_method_id}
-                            onChange={(e) =>
-                              onPaymentChange(
+                            onChange={(event) =>
+                              onPaymentChange?.(
                                 payment.localId,
                                 "payment_method_id",
-                                e.target.value
+                                event.target.value
                               )
                             }
                             disabled={disabled || previewing || paying}
                           >
-                            <MenuItem value="">Selecciona un método</MenuItem>
+                            <MenuItem value="">
+                              Selecciona un método
+                            </MenuItem>
 
                             {methods.map((methodRow) => {
                               const isUsedByOther = usedMethodIds.includes(
                                 Number(methodRow.id)
                               );
+
                               const isSelected =
                                 Number(payment.payment_method_id) ===
                                 Number(methodRow.id);
@@ -226,11 +341,11 @@ export default function CashierPaymentFormCard({
                           <TextField
                             fullWidth
                             value={payment.amount}
-                            onChange={(e) =>
-                              onPaymentChange(
+                            onChange={(event) =>
+                              onPaymentChange?.(
                                 payment.localId,
                                 "amount",
-                                e.target.value
+                                event.target.value
                               )
                             }
                             inputProps={{ inputMode: "decimal" }}
@@ -241,7 +356,10 @@ export default function CashierPaymentFormCard({
                       />
                     </Stack>
 
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={2}
+                    >
                       <FieldBlock
                         label={`Referencia${
                           method?.requires_reference ? " *" : ""
@@ -250,15 +368,17 @@ export default function CashierPaymentFormCard({
                           <TextField
                             fullWidth
                             value={payment.reference}
-                            onChange={(e) =>
-                              onPaymentChange(
+                            onChange={(event) =>
+                              onPaymentChange?.(
                                 payment.localId,
                                 "reference",
-                                e.target.value
+                                event.target.value
                               )
                             }
                             placeholder={
-                              method?.requires_reference ? "Requerida" : "No aplica"
+                              method?.requires_reference
+                                ? "Requerida"
+                                : "No aplica"
                             }
                             disabled={
                               disabled ||
@@ -278,17 +398,24 @@ export default function CashierPaymentFormCard({
                           <TextField
                             fullWidth
                             value={payment.last4}
-                            onChange={(e) =>
-                              onPaymentChange(
+                            onChange={(event) =>
+                              onPaymentChange?.(
                                 payment.localId,
                                 "last4",
-                                String(e.target.value || "")
+                                String(event.target.value || "")
                                   .replace(/\D/g, "")
                                   .slice(0, 4)
                               )
                             }
-                            inputProps={{ inputMode: "numeric", maxLength: 4 }}
-                            placeholder={method?.requires_last4 ? "0000" : "No aplica"}
+                            inputProps={{
+                              inputMode: "numeric",
+                              maxLength: 4,
+                            }}
+                            placeholder={
+                              method?.requires_last4
+                                ? "0000"
+                                : "No aplica"
+                            }
                             disabled={
                               disabled ||
                               previewing ||
@@ -300,7 +427,10 @@ export default function CashierPaymentFormCard({
                       />
                     </Stack>
 
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={2}
+                    >
                       <FieldBlock
                         label={`Recibido${
                           method?.requires_received_amount ? " *" : ""
@@ -309,16 +439,18 @@ export default function CashierPaymentFormCard({
                           <TextField
                             fullWidth
                             value={payment.received}
-                            onChange={(e) =>
-                              onPaymentChange(
+                            onChange={(event) =>
+                              onPaymentChange?.(
                                 payment.localId,
                                 "received",
-                                e.target.value
+                                event.target.value
                               )
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder={
-                              method?.requires_received_amount ? "0.00" : "No aplica"
+                              method?.requires_received_amount
+                                ? "0.00"
+                                : "No aplica"
                             }
                             disabled={
                               disabled ||
@@ -336,7 +468,10 @@ export default function CashierPaymentFormCard({
                           <TextField
                             fullWidth
                             value={formatCurrency(
-                              calculateEstimatedChange(payment, method)
+                              calculateEstimatedChange(
+                                payment,
+                                method
+                              )
                             )}
                             disabled
                           />
@@ -348,6 +483,58 @@ export default function CashierPaymentFormCard({
               );
             })}
           </Box>
+
+          {hasValidatedChange ? (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                backgroundColor: "#FCFCFC",
+                p: 1.5,
+              }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                spacing={1}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Cambio validado
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 12,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Importe calculado por la vista previa del cobro.
+                  </Typography>
+                </Box>
+
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: "text.primary",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {formatCurrency(validatedChange)}
+                </Typography>
+              </Stack>
+            </Box>
+          ) : null}
 
           <Box
             sx={{
@@ -364,7 +551,7 @@ export default function CashierPaymentFormCard({
                 lineHeight: 1.55,
               }}
             >
-              Máximo 3 métodos de pago por venta. No se puede repetir el mismo
+              Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo
               método en la misma operación.
             </Typography>
           </Box>
@@ -386,13 +573,20 @@ export default function CashierPaymentFormCard({
                 fontWeight: 800,
               }}
             >
-              {previewing ? "Validando…" : "Generar vista previa"}
+              {previewing
+                ? "Validando…"
+                : "Generar vista previa"}
             </Button>
 
             <Button
               variant="contained"
               onClick={onPay}
-              disabled={disabled || !hasPreview || previewing || paying}
+              disabled={
+                disabled ||
+                !hasPreview ||
+                previewing ||
+                paying
+              }
               startIcon={<PaymentsRoundedIcon />}
               sx={{
                 minWidth: { xs: "100%", sm: 180 },
@@ -401,7 +595,7 @@ export default function CashierPaymentFormCard({
                 fontWeight: 800,
               }}
             >
-              {paying ? "Cobrando…" : "Cobrar venta"}
+              {paying ? "Cobrando…" : "Cobrar cuenta"}
             </Button>
           </Stack>
         </Stack>
@@ -419,25 +613,27 @@ function FieldBlock({ label, input }) {
   );
 }
 
-const fieldLabelSx = {
-  fontSize: 14,
-  fontWeight: 800,
-  color: "text.primary",
-  mb: 1,
-};
-
 function calculateEstimatedChange(payment, method) {
   if (!method?.requires_received_amount) return 0;
 
   const amount = Number(payment?.amount || 0);
   const received = Number(payment?.received || 0);
 
-  if (!Number.isFinite(amount) || !Number.isFinite(received)) return 0;
+  if (
+    !Number.isFinite(amount) ||
+    !Number.isFinite(received)
+  ) {
+    return 0;
+  }
+
   return Math.max(0, received - amount);
 }
 
 function formatCurrency(value) {
-  const safe = Number(value || 0);
+  const normalized = Number(value);
+  const safe = Number.isFinite(normalized)
+    ? normalized
+    : 0;
 
   try {
     return new Intl.NumberFormat("es-MX", {
@@ -449,3 +645,10 @@ function formatCurrency(value) {
     return `$${safe.toFixed(2)}`;
   }
 }
+
+const fieldLabelSx = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "text.primary",
+  mb: 1,
+};

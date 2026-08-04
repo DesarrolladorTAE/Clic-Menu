@@ -1,4 +1,4 @@
-// Tarjeta detalles del producto
+// src/components/staff/casher/saleDetailPage/CashierOrderItemsCard.jsx
 import React, { useMemo } from "react";
 import {
   Box, Card, CardContent, Chip, Divider, Stack, Typography,
@@ -11,11 +11,14 @@ const PAGE_SIZE = 5;
 
 export default function CashierOrderItemsCard({
   itemsTree = [],
-  itemsSummary = null,
 }) {
   const normalizedItems = useMemo(() => {
-    return Array.isArray(itemsTree) ? itemsTree : [];
+    return normalizeCheckItems(itemsTree);
   }, [itemsTree]);
+
+  const itemsSummary = useMemo(() => {
+    return buildItemsSummary(normalizedItems);
+  }, [normalizedItems]);
 
   const {
     page,
@@ -76,36 +79,31 @@ export default function CashierOrderItemsCard({
                 color: "text.secondary",
               }}
             >
-              Revisión visual de la orden antes del cobro.
+              Productos asignados exclusivamente a la cuenta seleccionada.
             </Typography>
           </Box>
 
-          {itemsSummary ? (
+          {hasItems ? (
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              {typeof itemsSummary?.items_count === "number" ? (
-                <Chip label={`${itemsSummary.items_count} ítems`} size="small" />
-              ) : null}
+              <Chip
+                label={`${itemsSummary.items_count} ítems`}
+                size="small"
+              />
 
-              {typeof itemsSummary?.parent_items_count === "number" ? (
-                <Chip
-                  label={`${itemsSummary.parent_items_count} principales`}
-                  size="small"
-                />
-              ) : null}
+              <Chip
+                label={`${itemsSummary.parent_items_count} principales`}
+                size="small"
+              />
 
-              {typeof itemsSummary?.children_items_count === "number" ? (
-                <Chip
-                  label={`${itemsSummary.children_items_count} componentes`}
-                  size="small"
-                />
-              ) : null}
+              <Chip
+                label={`${itemsSummary.children_items_count} componentes`}
+                size="small"
+              />
 
-              {typeof itemsSummary?.modifiers_count === "number" ? (
-                <Chip
-                  label={`${itemsSummary.modifiers_count} modificadores`}
-                  size="small"
-                />
-              ) : null}
+              <Chip
+                label={`${itemsSummary.modifiers_count} modificadores`}
+                size="small"
+              />
             </Stack>
           ) : null}
 
@@ -129,7 +127,13 @@ export default function CashierOrderItemsCard({
               >
                 <Stack spacing={1.5}>
                   {paginatedItems.map((item, index) => (
-                    <Box key={item?.id || index}>
+                    <Box
+                      key={
+                        item?.order_check_item_id ||
+                        item?.id ||
+                        `${item?.order_item_id || "item"}-${index}`
+                      }
+                    >
                       <OrderItemBlock item={item} />
 
                       {index < paginatedItems.length - 1 ? <Divider /> : null}
@@ -167,7 +171,7 @@ export default function CashierOrderItemsCard({
                   color: "text.secondary",
                 }}
               >
-                El detalle de la orden no devolvió productos visibles.
+                La cuenta seleccionada no tiene productos asignados.
               </Typography>
             </Box>
           )}
@@ -198,36 +202,41 @@ function OrderItemBlock({ item, level = 0 }) {
     ? item.modifier_groups_display
     : [];
   const rawModifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
-
-  const quantity = Number(item?.quantity ?? item?.qty ?? 1);
-  const unitPrice = Number(item?.unit_price ?? item?.price ?? 0);
-
-  const grossLineTotal = Number(
-    item?.gross_line_total ??
-      item?.line_total ??
-      item?.total ??
-      0
-  );
-
-  const promotionDiscountTotal = Number(
-    item?.promotion_discount_total ?? 0
-  );
-
-  const manualDiscountTotal = Number(
-    item?.manual_discount_total ?? 0
-  );
-
-  const netLineTotal = Number(
-    item?.net_line_total ??
-      item?.gross_line_total ??
-      item?.line_total ??
-      item?.total ??
-      0
-  );
-
   const appliedPromotions = Array.isArray(item?.applied_promotions)
     ? item.applied_promotions
     : [];
+
+  const quantity = toNumber(item?.quantity ?? item?.qty, 1);
+  const unitPrice = toNumber(item?.unit_price ?? item?.price, 0);
+
+  const baseLineTotal = toNumber(
+    item?.base_line_total ??
+      item?.gross_line_total ??
+      item?.line_total ??
+      item?.total,
+    0
+  );
+
+  const modifiersTotal = toNumber(item?.modifiers_total, 0);
+  const promotionDiscountTotal = toNumber(
+    item?.promotion_discount_total,
+    0
+  );
+  const manualDiscountTotal = toNumber(
+    item?.manual_discount_total,
+    0
+  );
+  const cancellationTotal = toNumber(
+    item?.cancellation_total,
+    0
+  );
+
+  const netLineTotal = toNumber(
+    item?.net_line_total ??
+      item?.total ??
+      item?.line_total,
+    0
+  );
 
   const itemName = resolveItemName(item);
   const itemTypeLabel = resolveItemTypeLabel(item, level);
@@ -257,7 +266,7 @@ function OrderItemBlock({ item, level = 0 }) {
                   wordBreak: "break-word",
                 }}
               >
-                {quantity} × {itemName}
+                {formatQuantity(quantity)} × {itemName}
               </Typography>
 
               {itemTypeLabel ? (
@@ -277,7 +286,7 @@ function OrderItemBlock({ item, level = 0 }) {
               ) : null}
             </Stack>
 
-            {quantity > 1 ? (
+            {quantity > 1 && unitPrice > 0 ? (
               <Typography
                 sx={{
                   mt: 0.25,
@@ -305,33 +314,44 @@ function OrderItemBlock({ item, level = 0 }) {
 
           <Box
             sx={{
-              width: { xs: "100%", sm: 220 },
+              width: { xs: "100%", sm: 230 },
               flexShrink: 0,
             }}
           >
             <Stack spacing={0.35}>
               <ItemAmountRow
-                label={quantity > 1 ? "Precio bruto" : "Precio"}
-                value={formatCurrency(grossLineTotal)}
+                label="Base del producto"
+                value={formatCurrency(baseLineTotal)}
               />
+
+              {modifiersTotal > 0 ? (
+                <ItemAmountRow
+                  label="Modificadores"
+                  value={formatCurrency(modifiersTotal)}
+                />
+              ) : null}
 
               {promotionDiscountTotal > 0 ? (
                 <ItemAmountRow
                   label="Promoción automática"
-                  value={formatDiscountCurrency(
-                    promotionDiscountTotal
-                  )}
-                  discount
+                  value={formatDiscountCurrency(promotionDiscountTotal)}
+                  negative
                 />
               ) : null}
 
               {manualDiscountTotal > 0 ? (
                 <ItemAmountRow
                   label="Descuento manual"
-                  value={formatDiscountCurrency(
-                    manualDiscountTotal
-                  )}
-                  discount
+                  value={formatDiscountCurrency(manualDiscountTotal)}
+                  negative
+                />
+              ) : null}
+
+              {cancellationTotal > 0 ? (
+                <ItemAmountRow
+                  label="Cancelaciones"
+                  value={formatDiscountCurrency(cancellationTotal)}
+                  negative
                 />
               ) : null}
 
@@ -344,7 +364,6 @@ function OrderItemBlock({ item, level = 0 }) {
               />
             </Stack>
           </Box>
-
         </Stack>
 
         {appliedPromotions.length > 0 ? (
@@ -353,25 +372,37 @@ function OrderItemBlock({ item, level = 0 }) {
 
         {modifierGroups.length > 0 ? (
           <Stack spacing={0.75}>
-            {modifierGroups.map((group, idx) => (
+            {modifierGroups.map((group, index) => (
               <ModifierGroupBlock
-                key={`${group?.group_name || "grupo"}-${idx}`}
+                key={`${group?.group_name || "grupo"}-${index}`}
                 group={group}
               />
             ))}
           </Stack>
         ) : rawModifiers.length > 0 ? (
           <Stack spacing={0.5}>
-            {rawModifiers.map((mod, idx) => {
-              const modQty = Number(mod?.quantity ?? 1);
-              const modPrice = Number(
-                mod?.total_price ?? mod?.price ?? mod?.unit_price ?? 0
+            {rawModifiers.map((modifier, index) => {
+              const modifierQuantity = toNumber(modifier?.quantity, 1);
+
+              const modifierTotal = toNumber(
+                modifier?.total_price ??
+                  modifier?.line_total ??
+                  modifier?.amount ??
+                  modifier?.price,
+                0
               );
-              const modName = mod?.name_snapshot || mod?.name || "Modificador";
+
+              const modifierName =
+                modifier?.name_snapshot ||
+                modifier?.name ||
+                "Modificador";
 
               return (
                 <Box
-                  key={mod?.id || `${modName}-${idx}`}
+                  key={
+                    modifier?.id ||
+                    `${modifierName}-${index}`
+                  }
                   sx={{
                     borderRadius: 1,
                     px: 1.25,
@@ -386,8 +417,10 @@ function OrderItemBlock({ item, level = 0 }) {
                       wordBreak: "break-word",
                     }}
                   >
-                    + {modQty} × {modName}{" "}
-                    {modPrice ? `(${formatCurrency(modPrice)})` : ""}
+                    + {formatQuantity(modifierQuantity)} × {modifierName}
+                    {modifierTotal > 0
+                      ? ` (${formatCurrency(modifierTotal)})`
+                      : ""}
                   </Typography>
                 </Box>
               );
@@ -397,9 +430,13 @@ function OrderItemBlock({ item, level = 0 }) {
 
         {children.length > 0 ? (
           <Stack spacing={0.5}>
-            {children.map((child, idx) => (
+            {children.map((child, index) => (
               <OrderItemBlock
-                key={child?.id || `${resolveItemName(child)}-${idx}`}
+                key={
+                  child?.order_check_item_id ||
+                  child?.id ||
+                  `${child?.order_item_id || resolveItemName(child)}-${index}`
+                }
                 item={child}
                 level={level + 1}
               />
@@ -411,12 +448,246 @@ function OrderItemBlock({ item, level = 0 }) {
   );
 }
 
+function normalizeCheckItems(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  const normalized = items.map((item) => normalizeCheckItem(item));
+  const alreadyNested = normalized.some(
+    (item) => Array.isArray(item.children) && item.children.length > 0
+  );
+
+  return alreadyNested
+    ? normalized
+    : buildCheckItemsTree(normalized);
+}
+
+function normalizeCheckItem(item) {
+  const safeItem = item && typeof item === "object" ? item : {};
+  const meta = resolveMeta(safeItem.meta_json);
+
+  const children = resolveFirstArray(
+    safeItem.children,
+    meta.children
+  ).map((child) => normalizeCheckItem(child));
+
+  const modifierGroups = resolveFirstArray(
+    safeItem.modifier_groups_display,
+    meta.modifier_groups_display
+  );
+
+  const modifiers = resolveFirstArray(
+    safeItem.modifiers,
+    meta.modifiers
+  );
+
+  const appliedPromotions = resolveFirstArray(
+    safeItem.applied_promotions,
+    meta.applied_promotions
+  );
+
+  const orderCheckItemId = normalizeNullableId(
+    safeItem.order_check_item_id ??
+      safeItem.id ??
+      meta.order_check_item_id
+  );
+
+  const orderItemId = normalizeNullableId(
+    safeItem.order_item_id ??
+      meta.order_item_id
+  );
+
+  const parentOrderItemId = normalizeNullableId(
+    safeItem.parent_order_item_id ??
+      meta.parent_order_item_id
+  );
+
+  return {
+    ...meta,
+    ...safeItem,
+    id: orderCheckItemId ?? safeItem.id ?? null,
+    order_check_item_id: orderCheckItemId,
+    order_item_id: orderItemId,
+    parent_order_item_id: parentOrderItemId,
+    display_name:
+      safeItem.display_name ??
+      meta.display_name ??
+      null,
+    product_name:
+      safeItem.product_name ??
+      meta.product_name ??
+      null,
+    variant_name:
+      safeItem.variant_name ??
+      meta.variant_name ??
+      null,
+    notes:
+      safeItem.notes ??
+      meta.notes ??
+      null,
+    item_kind:
+      safeItem.item_kind ??
+      meta.item_kind ??
+      null,
+    is_composite_parent: Boolean(
+      safeItem.is_composite_parent ??
+        meta.is_composite_parent ??
+        children.length > 0
+    ),
+    modifier_groups_display: modifierGroups,
+    modifiers,
+    applied_promotions: appliedPromotions,
+    children,
+  };
+}
+
+function buildCheckItemsTree(items) {
+  const nodes = items.map((item) => ({
+    ...item,
+    children: [],
+  }));
+
+  const byOrderItemId = new Map();
+
+  nodes.forEach((item) => {
+    if (
+      item.order_item_id &&
+      !byOrderItemId.has(item.order_item_id)
+    ) {
+      byOrderItemId.set(item.order_item_id, item);
+    }
+  });
+
+  const roots = [];
+
+  nodes.forEach((item) => {
+    const parentOrderItemId = item.parent_order_item_id;
+
+    if (
+      parentOrderItemId &&
+      parentOrderItemId !== item.order_item_id
+    ) {
+      const parent = byOrderItemId.get(parentOrderItemId);
+
+      if (parent) {
+        parent.children.push(item);
+        parent.is_composite_parent = true;
+        return;
+      }
+    }
+
+    roots.push(item);
+  });
+
+  return roots;
+}
+
+function buildItemsSummary(items) {
+  const summary = {
+    items_count: 0,
+    parent_items_count: Array.isArray(items) ? items.length : 0,
+    children_items_count: 0,
+    modifiers_count: 0,
+  };
+
+  const walk = (rows, level = 0) => {
+    if (!Array.isArray(rows)) return;
+
+    rows.forEach((item) => {
+      summary.items_count += 1;
+
+      if (level > 0) {
+        summary.children_items_count += 1;
+      }
+
+      const modifierGroups = Array.isArray(
+        item?.modifier_groups_display
+      )
+        ? item.modifier_groups_display
+        : [];
+
+      const rawModifiers = Array.isArray(item?.modifiers)
+        ? item.modifiers
+        : [];
+
+      const groupedModifiersCount = modifierGroups.reduce(
+        (count, group) => {
+          const options = Array.isArray(group?.options)
+            ? group.options
+            : [];
+
+          return count + options.length;
+        },
+        0
+      );
+
+      summary.modifiers_count +=
+        groupedModifiersCount > 0
+          ? groupedModifiersCount
+          : rawModifiers.length;
+
+      walk(item?.children, level + 1);
+    });
+  };
+
+  walk(items);
+
+  return summary;
+}
+
+function resolveMeta(metaJson) {
+  if (!metaJson) {
+    return {};
+  }
+
+  if (
+    typeof metaJson === "object" &&
+    !Array.isArray(metaJson)
+  ) {
+    return metaJson;
+  }
+
+  if (typeof metaJson === "string") {
+    try {
+      const parsed = JSON.parse(metaJson);
+
+      return parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+        ? parsed
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function resolveFirstArray(...values) {
+  const found = values.find((value) => Array.isArray(value));
+  return found || [];
+}
+
+function normalizeNullableId(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = Number(value);
+
+  return Number.isInteger(normalized) && normalized > 0
+    ? normalized
+    : null;
+}
+
 function ItemAmountRow({
   label,
   value,
   strong = false,
   muted = false,
-  discount = false,
+  negative = false,
 }) {
   return (
     <Stack
@@ -439,7 +710,7 @@ function ItemAmountRow({
         sx={{
           fontSize: strong ? 14 : 12,
           fontWeight: strong ? 900 : 800,
-          color: discount ? "error.main" : "text.primary",
+          color: negative ? "error.main" : "text.primary",
           textAlign: "right",
           whiteSpace: "nowrap",
         }}
@@ -481,11 +752,15 @@ function PromotionApplicationsBlock({ promotions = [] }) {
       <Stack spacing={0.3} sx={{ mt: 0.35 }}>
         {rows.map((promotion, index) => {
           const name =
-            promotion?.promotion_name?.trim() ||
-            "Promoción automática";
+            String(
+              promotion?.promotion_name ||
+                promotion?.name ||
+                ""
+            ).trim() || "Promoción automática";
 
           const typeLabel = resolvePromotionTypeLabel(
-            promotion?.promotion_type
+            promotion?.promotion_type ??
+              promotion?.type
           );
 
           return (
@@ -524,7 +799,10 @@ function PromotionApplicationsBlock({ promotions = [] }) {
 }
 
 function ModifierGroupBlock({ group }) {
-  const options = Array.isArray(group?.options) ? group.options : [];
+  const options = Array.isArray(group?.options)
+    ? group.options
+    : [];
+
   const contextLabel = group?.context_label;
   const groupName = group?.group_name || "Extras";
 
@@ -552,22 +830,34 @@ function ModifierGroupBlock({ group }) {
       </Typography>
 
       <Stack spacing={0.35} sx={{ mt: 0.6 }}>
-        {options.map((option, idx) => {
-          const qty = Number(option?.quantity ?? 1);
-          const totalPrice = Number(option?.total_price ?? 0);
-          const name = option?.name || "Modificador";
+        {options.map((option, index) => {
+          const quantity = toNumber(option?.quantity, 1);
+
+          const totalPrice = toNumber(
+            option?.total_price ??
+              option?.line_total ??
+              option?.amount,
+            0
+          );
+
+          const name =
+            option?.name ||
+            option?.name_snapshot ||
+            "Modificador";
 
           return (
             <Typography
-              key={option?.id || `${name}-${idx}`}
+              key={option?.id || `${name}-${index}`}
               sx={{
                 fontSize: 13,
                 color: "text.primary",
                 wordBreak: "break-word",
               }}
             >
-              + {qty} × {name}{" "}
-              {totalPrice ? `(${formatCurrency(totalPrice)})` : ""}
+              + {formatQuantity(quantity)} × {name}
+              {totalPrice > 0
+                ? ` (${formatCurrency(totalPrice)})`
+                : ""}
             </Typography>
           );
         })}
@@ -578,39 +868,80 @@ function ModifierGroupBlock({ group }) {
 
 function resolveItemName(item) {
   const displayName =
-    typeof item?.display_name === "string" ? item.display_name.trim() : "";
+    typeof item?.display_name === "string"
+      ? item.display_name.trim()
+      : "";
+
   const productName =
-    typeof item?.product_name === "string" ? item.product_name.trim() : "";
+    typeof item?.product_name === "string"
+      ? item.product_name.trim()
+      : "";
+
   const variantName =
-    typeof item?.variant_name === "string" ? item.variant_name.trim() : "";
+    typeof item?.variant_name === "string"
+      ? item.variant_name.trim()
+      : "";
+
+  const snapshotName =
+    typeof item?.name_snapshot === "string"
+      ? item.name_snapshot.trim()
+      : "";
 
   if (displayName) return displayName;
-  if (productName && variantName) return `${productName} · ${variantName}`;
+  if (productName && variantName) {
+    return `${productName} · ${variantName}`;
+  }
   if (productName) return productName;
   if (variantName) return variantName;
+  if (snapshotName) return snapshotName;
+
   return "Producto";
 }
 
 function resolveItemTypeLabel(item, level) {
-  if (item?.is_composite_parent) return "Compuesto";
-  if (item?.item_kind === "composite_child") return "Componente";
-  if (level > 0) return "Componente";
-  if (item?.variant_name) return "Variante";
+  const children = Array.isArray(item?.children)
+    ? item.children
+    : [];
+
+  if (item?.is_composite_parent || children.length > 0) {
+    return "Compuesto";
+  }
+
+  if (
+    item?.item_kind === "composite_child" ||
+    item?.parent_order_item_id ||
+    level > 0
+  ) {
+    return "Componente";
+  }
+
+  if (item?.variant_name) {
+    return "Variante";
+  }
+
   return null;
 }
 
 function formatNotes(notes) {
   if (!notes) return "";
 
-  if (typeof notes === "string") return notes.trim();
+  if (typeof notes === "string") {
+    return notes.trim();
+  }
 
   if (Array.isArray(notes)) {
     return notes
       .map((entry) => {
-        if (typeof entry === "string") return entry.trim();
-        if (entry && typeof entry === "object") {
-          return Object.values(entry).filter(Boolean).join(" ");
+        if (typeof entry === "string") {
+          return entry.trim();
         }
+
+        if (entry && typeof entry === "object") {
+          return Object.values(entry)
+            .filter(Boolean)
+            .join(" ");
+        }
+
         return "";
       })
       .filter(Boolean)
@@ -620,8 +951,18 @@ function formatNotes(notes) {
   if (typeof notes === "object") {
     return Object.entries(notes)
       .map(([key, value]) => {
-        if (value === null || value === undefined || value === "") return null;
-        if (typeof value === "object") return `${key}: ${JSON.stringify(value)}`;
+        if (
+          value === null ||
+          value === undefined ||
+          value === ""
+        ) {
+          return null;
+        }
+
+        if (typeof value === "object") {
+          return `${key}: ${JSON.stringify(value)}`;
+        }
+
         return `${key}: ${value}`;
       })
       .filter(Boolean)
@@ -643,14 +984,33 @@ function resolvePromotionTypeLabel(type) {
   return labels[key] || "Promoción automática";
 }
 
+function toNumber(value, fallback = 0) {
+  const normalized = Number(value);
+
+  return Number.isFinite(normalized)
+    ? normalized
+    : fallback;
+}
+
+function formatQuantity(value) {
+  const quantity = toNumber(value, 0);
+
+  return Number.isInteger(quantity)
+    ? String(quantity)
+    : quantity.toLocaleString("es-MX", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 4,
+      });
+}
+
 function formatDiscountCurrency(value) {
-  const amount = Math.abs(Number(value || 0));
+  const amount = Math.abs(toNumber(value, 0));
 
   return `-${formatCurrency(amount)}`;
 }
 
 function formatCurrency(value) {
-  const safe = Number(value || 0);
+  const safe = toNumber(value, 0);
 
   try {
     return new Intl.NumberFormat("es-MX", {

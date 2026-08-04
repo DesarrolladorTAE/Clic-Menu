@@ -137,8 +137,11 @@ import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 import PublicInvoicePage from "../pages/public/invoice/PublicInvoicePage";
 
+//BLOGS
 import TestEventPage from "../realtime/TestEventPage";
-
+import BlogPostsPage from "../pages/landing/blog/BlogPostsPage";
+import BlogPostDetailPage from "../pages/landing/blog/BlogPostDetailPage";
+import BlogFilteredPostsPage from "../pages/landing/blog/BlogFilteredPostsPage";
 
 export default function AppRoutes() {
   return (
@@ -154,6 +157,14 @@ export default function AppRoutes() {
       <Route path="/test-mui" element={<TestMui />} />
 
       <Route path="/test-event" element={<TestEventPage />} />
+
+         {/* BLOGS */}
+         <Route path="/blog" element={<BlogPostsPage />} />
+        <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
+        <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}
+/>
+<Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}
+/>
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />
