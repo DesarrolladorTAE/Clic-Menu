@@ -1008,8 +1008,19 @@ export default function BlogPostDetailPage() {
     const keywords =
       post?.seo?.keywords;
 
-    return Array.isArray(keywords)
-      ? keywords.join(", ")
+    if (Array.isArray(keywords)) {
+      return keywords
+        .filter(
+          (keyword) =>
+            typeof keyword === "string" &&
+            keyword.trim() !== ""
+        )
+        .map((keyword) => keyword.trim())
+        .join(", ");
+    }
+
+    return typeof keywords === "string"
+      ? keywords.trim()
       : "";
   }, [post]);
 
@@ -1077,6 +1088,7 @@ export default function BlogPostDetailPage() {
     <>
       {post && (
         <SEO
+          replaceDefaultSeo
           title={
             post.seo?.title ||
             post.title ||
@@ -1110,6 +1122,14 @@ export default function BlogPostDetailPage() {
           ogType={
             post.open_graph?.type ||
             "article"
+          }
+          ogTitle={
+            post.open_graph?.title ||
+            null
+          }
+          ogDescription={
+            post.open_graph?.description ||
+            null
           }
           structuredData={
             structuredData

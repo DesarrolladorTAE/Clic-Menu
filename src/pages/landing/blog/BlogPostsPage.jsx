@@ -244,8 +244,22 @@ export default function BlogPostsPage() {
   }, [page, search]);
 
   const seoKeywords = useMemo(() => {
-    return Array.isArray(blog?.seo?.keywords)
-      ? blog.seo.keywords.join(", ")
+    const keywords =
+      blog?.seo?.keywords;
+
+    if (Array.isArray(keywords)) {
+      return keywords
+        .filter(
+          (keyword) =>
+            typeof keyword === "string" &&
+            keyword.trim() !== ""
+        )
+        .map((keyword) => keyword.trim())
+        .join(", ");
+    }
+
+    return typeof keywords === "string"
+      ? keywords.trim()
       : "";
   }, [blog]);
 
@@ -258,6 +272,28 @@ export default function BlogPostsPage() {
     blog?.seo?.description ||
     blog?.description ||
     "Ideas, estrategias y tecnología para administrar mejor tu restaurante.";
+
+  const seoImage =
+    blog?.open_graph?.image?.url ||
+    blog?.cover?.url ||
+    undefined;
+
+  const seoUrl =
+    blog?.seo?.canonical_url ||
+    blog?.open_graph?.url ||
+    "https://clicmenu.com.mx/blog";
+
+  const seoRobots = [
+    blog?.seo?.robots_index === false
+      ? "noindex"
+      : "index",
+    blog?.seo?.robots_follow === false
+      ? "nofollow"
+      : "follow",
+  ].join(", ");
+
+  const structuredData =
+    blog?.structured_data ?? null;
 
   const totalPosts = Number(meta?.total || 0);
 
@@ -290,12 +326,27 @@ export default function BlogPostsPage() {
   return (
     <>
       <SEO
+        replaceDefaultSeo
         title={title}
         description={description}
         keywords={seoKeywords}
-        url={
-          blog?.seo?.canonical_url ||
-          "https://clicmenu.com.mx/blog"
+        image={seoImage}
+        url={seoUrl}
+        robots={seoRobots}
+        ogType={
+          blog?.open_graph?.type ||
+          "website"
+        }
+        ogTitle={
+          blog?.open_graph?.title ||
+          null
+        }
+        ogDescription={
+          blog?.open_graph?.description ||
+          null
+        }
+        structuredData={
+          structuredData
         }
       />
 

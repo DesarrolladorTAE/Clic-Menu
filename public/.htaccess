@@ -1,0 +1,19 @@
+DirectoryIndex index.html
+
+RewriteEngine On
+
+# Servir internamente el HTML prerenderizado de una ruta limpia.
+# Ejemplo:
+# /blog/mi-publicacion
+# -> /blog/mi-publicacion/index.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}/index.html -f
+RewriteRule ^(.+?)/?$ $1/index.html [L]
+
+# Respetar archivos y directorios físicos existentes.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Fallback de React para las rutas que no tienen HTML físico.
+RewriteRule ^ index.html [L]
