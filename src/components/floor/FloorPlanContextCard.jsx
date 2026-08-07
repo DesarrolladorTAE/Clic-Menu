@@ -81,13 +81,17 @@ export default function FloorPlanContextCard({
 
           <ContextMiniCard
             icon={<QrCode2OutlinedIcon fontSize="small" />}
-            title={isDirectAttentionMode ? "QR de menú" : "QR para mesas"}
+            title={isDirectAttentionMode ? "QR de menú" : "Administración de QRs"}
             value={
-              isDirectAttentionMode
-                ? settingsSummary?.qrLabel || "Sin configuración"
-                : settingsSummary?.qrLabel || "Sin configuración"
+              contextData?.canManageQr
+                ? "Administración individual de códigos QR disponible."
+                : "Primero configura la operación de la sucursal."
             }
-            chipLabel={contextData?.canManageQr ? "Disponible" : "Bloqueado"}
+            chipLabel={
+              contextData?.canManageQr
+                ? "Disponible"
+                : "Requiere configuración"
+            }
             chipColor={contextData?.canManageQr ? "success" : "default"}
           />
         </Stack>

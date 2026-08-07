@@ -34,10 +34,10 @@ export default function SalesChannelsAlerts({
         >
           <Box>
             <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
-              Canal limitado por plan
+              Canales adicionales limitados por plan
             </Typography>
             <Typography variant="body2">
-              Tu plan actual permite trabajar con los canales base SALÓN y WHATSAPP. Los canales adicionales se conservan, pero quedan inactivos hasta contratar un plan compatible.
+              Tu plan actual permite trabajar con los canales fijos SALÓN, WHATSAPP y PEDIDOS EN LÍNEA. Los canales adicionales se conservan, pero quedan inactivos hasta contratar un plan compatible.
             </Typography>
           </Box>
         </Alert>

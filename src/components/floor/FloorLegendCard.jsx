@@ -3,7 +3,6 @@ import { Box, Paper, Stack, Typography } from "@mui/material";
 export default function FloorLegendCard({
   statusMeta = [],
   canManageQr = false,
-  manageQrBlockReason = null,
 }) {
   return (
     <Paper
@@ -91,8 +90,7 @@ export default function FloorLegendCard({
                 lineHeight: 1.45,
               }}
             >
-              {manageQrBlockReason ||
-                "QR desactivado: primero actívalo en Configuración Operativa para administrar códigos QR en esta sucursal."}
+              Primero crea la configuración operativa de esta sucursal para poder administrar sus códigos QR.
             </Typography>
           </Box>
         ) : null}

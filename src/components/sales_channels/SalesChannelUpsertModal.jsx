@@ -21,7 +21,9 @@ function normalizeCode(v) {
 
 function isSystemChannel(it) {
   const code = normalizeCode(it?.code);
-  return code === "SALON" || code === "WHATSAPP";
+  return (
+    code === "SALON" || code === "WHATSAPP" || code === "ONLINE_ORDER"
+  );
 }
 
 export default function SalesChannelUpsertModal({

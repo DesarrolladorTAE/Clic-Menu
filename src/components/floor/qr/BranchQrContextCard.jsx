@@ -4,6 +4,11 @@ import TableRestaurantOutlinedIcon from "@mui/icons-material/TableRestaurantOutl
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import SettingsSuggestOutlinedIcon from "@mui/icons-material/SettingsSuggestOutlined";
 
+const ORDERING_MODE_LABELS = {
+  waiter_only: "Solo mesero",
+  customer_assisted: "Cliente asistido",
+};
+
 export default function BranchQrContextCard({
   selectedBranch,
   contextData,
@@ -36,11 +41,13 @@ export default function BranchQrContextCard({
       };
 
   const channelContext = {
-    value: `${contextData?.totalChannels || 0} canal(es)`,
+    value: readonlyByChannelAllowed
+      ? `${contextData?.totalSpecificChannels || 0} canal(es) disponible(s)`
+      : "No disponible con el plan actual",
     chipLabel: readonlyByChannelAllowed
-      ? "Web WhatsApp + Delivery"
-      : "Web WhatsApp permitido",
-    chipColor: "success",
+      ? "Canal específico"
+      : "Limitado por plan",
+    chipColor: readonlyByChannelAllowed ? "success" : "warning",
   };
 
   return (
@@ -89,7 +96,7 @@ export default function BranchQrContextCard({
 
           <ContextMiniCard
             icon={<CampaignOutlinedIcon fontSize="small" />}
-            title="Canales"
+            title="Canales específicos"
             value={channelContext.value}
             chipLabel={channelContext.chipLabel}
             chipColor={channelContext.chipColor}
@@ -97,11 +104,16 @@ export default function BranchQrContextCard({
 
           <ContextMiniCard
             icon={<SettingsSuggestOutlinedIcon fontSize="small" />}
-            title="QR habilitado"
-            value={contextData?.enabledLabel || "Sin config"}
-            chipLabel={contextData?.orderingMode || "Sin definir"}
-            chipColor="primary"
+            title="Administración QR"
+            value="Activación individual por código"
+            chipLabel={
+              isDirectAttentionMode
+                ? "Modo directo"
+                : ORDERING_MODE_LABELS[contextData?.orderingMode] || "Configurado"
+            }
+            chipColor={isDirectAttentionMode ? "warning" : "primary"}
           />
+
         </Stack>
 
         <Typography
@@ -113,7 +125,7 @@ export default function BranchQrContextCard({
         >
           {selectedBranch?.name
             ? isDirectAttentionMode
-              ? `La administración de QRs se aplicará únicamente a ${selectedBranch.name}. En modo directo solo se permite QR físico general, sin mesa vinculada.`
+              ? `La administración de QRs se aplicará únicamente a ${selectedBranch.name}. En modo directo no se permite crear ni activar QRs ligados a una mesa.`
               : `La configuración y administración de códigos QR se aplicará únicamente a ${selectedBranch.name}.`
             : "Selecciona una sucursal para continuar."}
         </Typography>
@@ -127,7 +139,7 @@ export default function BranchQrContextCard({
               fontWeight: 700,
             }}
           >
-            Web para pedidos por WhatsApp está disponible. Delivery no está disponible para este plan.{" "}
+            Pedidos por WhatsApp sigue disponible. La opción Canal específico no está disponible con el plan actual.{" "}
             {readonlyByChannelBlockedReason}
           </Typography>
         ) : null}

@@ -7,7 +7,7 @@ import {
 } from "../../services/floor/operationalSettings.service";
 
 import {
-  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField, Typography,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField, Typography,
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
@@ -101,63 +101,6 @@ function SectionTitle({ title }) {
   );
 }
 
-function SwitchInfoCard({ title, description, checked, children }) {
-  return (
-    <Box
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
-        p: 1.75,
-        backgroundColor: "background.default",
-      }}
-    >
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "flex-start", sm: "center" }}
-        spacing={1.5}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            sx={{
-              fontSize: 14,
-              fontWeight: 800,
-              color: "text.primary",
-            }}
-          >
-            {title}
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.5,
-              fontSize: 12,
-              color: "text.secondary",
-              lineHeight: 1.45,
-            }}
-          >
-            {description}
-          </Typography>
-        </Box>
-
-        {children || (
-          <Typography
-            sx={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "text.primary",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {checked ? "Sí" : "No"}
-          </Typography>
-        )}
-      </Stack>
-    </Box>
-  );
-}
-
 export default function OperationalSettingsModal({
   open,
   mode = "create",
@@ -202,13 +145,6 @@ export default function OperationalSettingsModal({
     return initialUi.qr_ordering_allowed !== false;
   }, [initialUi]);
 
-  const orderingModeBlockedReason = useMemo(() => {
-    return (
-      initialUi?.ordering_mode_blocked_reason ||
-      "Disponible desde Plan Total"
-    );
-  }, [initialUi]);
-
   const orderingModeOptionsFromServer = useMemo(() => {
     const raw = initialUi?.ordering_mode_options;
 
@@ -242,7 +178,6 @@ export default function OperationalSettingsModal({
     () => ({
       ordering_mode: initial?.ordering_mode ?? "waiter_only",
       table_service_mode: initial?.table_service_mode ?? "free_for_all",
-      is_qr_enabled: !!initial?.is_qr_enabled,
       assignment_strategy: initial?.assignment_strategy ?? "table_only",
       cashier_direct_mode: initial?.cashier_direct_mode ?? "disabled",
       min_seats:
@@ -267,21 +202,14 @@ export default function OperationalSettingsModal({
   const tableServiceMode = watch("table_service_mode");
   const assignmentStrategy = watch("assignment_strategy");
   const cashierDirectMode = watch("cashier_direct_mode");
-  const isQrEnabled = watch("is_qr_enabled");
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
 
   const orderingModeOptions = useMemo(() => {
-    let options = orderingModeOptionsFromServer;
-
-    // REGLA FRONT QR:
-    // Si el QR está apagado, no se muestra Cliente asistido aunque el plan lo permita.
-    if (!isQrEnabled) {
-      options = options.filter((item) => item.value !== "customer_assisted");
-    }
+    let options = [...orderingModeOptionsFromServer];
 
     // REGLA FRONT PLAN:
-    // Si el plan no permite pedidos por QR, solo dejamos Solo mesero.
+    // Si el plan no permite Cliente asistido, solo dejamos Solo mesero.
     if (!qrOrderingAllowed) {
       options = options.filter((item) => item.value !== "customer_assisted");
     }
@@ -294,7 +222,7 @@ export default function OperationalSettingsModal({
     }
 
     return options;
-  }, [orderingModeOptionsFromServer, isQrEnabled, qrOrderingAllowed]);
+  }, [orderingModeOptionsFromServer, qrOrderingAllowed]);
 
   useEffect(() => {
     if (!open) return;
@@ -302,16 +230,6 @@ export default function OperationalSettingsModal({
       setValue("assignment_strategy", "table_only");
     }
   }, [open, tableServiceMode, setValue]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    // REGLA FRONT QR:
-    // Si QR está apagado, no debe quedar seleccionado Cliente asistido.
-    if (!isQrEnabled && String(orderingMode) === "customer_assisted") {
-      setValue("ordering_mode", "waiter_only");
-    }
-  }, [open, isQrEnabled, orderingMode, setValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -372,34 +290,28 @@ export default function OperationalSettingsModal({
     try {
       const effectiveTableServiceMode = form.table_service_mode || null;
 
-      // REGLA FRONT DE SEGURIDAD:
-      // Aunque el select ya lo impide, evitamos mandar customer_assisted si:
-      // - QR está apagado
-      // - el plan no permite pedidos QR
+      // Protección frontend por plan.
+      // El backend sigue siendo la autoridad final para Cliente asistido.
       const safeOrderingMode =
-        !form.is_qr_enabled ||
-        !qrOrderingAllowed ||
-        form.ordering_mode !== "customer_assisted"
-          ? "waiter_only"
-          : "customer_assisted";
+        qrOrderingAllowed && form.ordering_mode === "customer_assisted"
+          ? "customer_assisted"
+          : "waiter_only";
 
       const payload = isDirectAttentionMode
-      ? {
-          is_qr_enabled: !!form.is_qr_enabled,
-          cashier_direct_mode: form.cashier_direct_mode || "disabled",
-        }
-      : {
-          ordering_mode: safeOrderingMode,
-          table_service_mode: effectiveTableServiceMode,
-          is_qr_enabled: !!form.is_qr_enabled,
-          assignment_strategy:
-            String(effectiveTableServiceMode) === "assigned_waiter"
-              ? form.assignment_strategy || "table_only"
-              : null,
-          cashier_direct_mode: form.cashier_direct_mode || "disabled",
-          min_seats: Number(form.min_seats),
-          max_seats: Number(form.max_seats),
-        };
+        ? {
+            cashier_direct_mode: form.cashier_direct_mode || "disabled",
+          }
+        : {
+            ordering_mode: safeOrderingMode,
+            table_service_mode: effectiveTableServiceMode,
+            assignment_strategy:
+              String(effectiveTableServiceMode) === "assigned_waiter"
+                ? form.assignment_strategy || "table_only"
+                : null,
+            cashier_direct_mode: form.cashier_direct_mode || "disabled",
+            min_seats: Number(form.min_seats),
+            max_seats: Number(form.max_seats),
+          };
 
       const saved =
         mode === "create"
@@ -637,7 +549,7 @@ export default function OperationalSettingsModal({
                 ) : null}
 
 
-               {!isDirectAttentionMode ? (
+                {!isDirectAttentionMode ? (
                   <>
                     <SectionTitle title="Operación de pedidos" />
 
@@ -666,11 +578,7 @@ export default function OperationalSettingsModal({
                           )}
                         />
                       }
-                      help={
-                        !isQrEnabled
-                          ? "Cliente asistido no está disponible si el QR está desactivado."
-                          : orderingHelper
-                      }
+                      help={orderingHelper}
                       error={errors?.ordering_mode?.message}
                     />
 
@@ -733,37 +641,6 @@ export default function OperationalSettingsModal({
                   </>
                 ) : null}
                 
-
-                <SectionTitle title="Acceso por QR" />
-                <SwitchInfoCard
-                  title="Habilitar QR"
-                  description="Si está desactivado, no se debe permitir crear, administrar ni resolver códigos QR."
-                  checked={isQrEnabled}
-                >
-                  <FormControlLabel
-                    sx={{ m: 0 }}
-                    control={
-                      <Switch
-                        checked={!!isQrEnabled}
-                        onChange={(e) =>
-                          setValue("is_qr_enabled", e.target.checked)
-                        }
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: "text.primary",
-                        }}
-                      >
-                        {isQrEnabled ? "Sí" : "No"}
-                      </Typography>
-                    }
-                  />
-                </SwitchInfoCard>
 
                 <SectionTitle title="Venta directa desde caja" />
                 <FieldBlock

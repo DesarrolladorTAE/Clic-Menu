@@ -28,9 +28,10 @@ const STATUS_OPTIONS = [
 const PAGE_SIZE = 5;
 const SALON_CODE = "SALON";
 const WHATSAPP_CODE = "WHATSAPP";
+const ONLINE_ORDER_CODE = "ONLINE_ORDER";
 
 const PLAN_CHANNEL_MESSAGE =
-  "Tu plan actual permite trabajar con los canales base SALÓN y WHATSAPP. Para crear o activar canales adicionales, cambia al Plan Gestión o Plan Total.";
+  "Tu plan actual permite trabajar con los canales fijos SALÓN, WHATSAPP y PEDIDOS EN LÍNEA. Para crear o activar canales adicionales, cambia al Plan Gestión o Plan Total.";
 
 function normalizeCode(v) {
   return (v || "")
@@ -43,14 +44,18 @@ function normalizeCode(v) {
 
 function isSystemChannel(it) {
   const code = normalizeCode(it?.code);
-  return code === SALON_CODE || code === WHATSAPP_CODE;
+
+  return (
+    code === SALON_CODE || code === WHATSAPP_CODE || code === ONLINE_ORDER_CODE
+  );
 }
 
 function getSystemChannelLabel(it) {
   const code = normalizeCode(it?.code);
 
-  if (code === WHATSAPP_CODE) return "WhatsApp";
   if (code === SALON_CODE) return "Salón";
+  if (code === WHATSAPP_CODE) return "WhatsApp";
+  if (code === ONLINE_ORDER_CODE) return "Pedidos en línea";
 
   return "Este canal";
 }
@@ -199,7 +204,7 @@ export default function SalesChannelsPage() {
       return;
     }
 
-    if (!editing?.id && (payload.code === SALON_CODE || payload.code === WHATSAPP_CODE)) {
+    if (!editing?.id && (payload.code === SALON_CODE || payload.code === WHATSAPP_CODE || payload.code === ONLINE_ORDER_CODE)) {
       setModalErr(`El code "${payload.code}" está reservado y se crea automáticamente.`);
       return;
     }

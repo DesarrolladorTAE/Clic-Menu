@@ -65,21 +65,6 @@ const CASHIER_DIRECT_MODE_ES = {
   without_kitchen: "Sin cocina",
 };
 
-function toBool(v) {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v === 1;
-  if (typeof v === "string") {
-    const s = v.trim().toLowerCase();
-    if (["1", "true", "yes", "y", "on", "si", "sí"].includes(s)) return true;
-    if (["0", "false", "no", "n", "off"].includes(s)) return false;
-  }
-  return !!v;
-}
-
-function boolES(v) {
-  return v ? "Verdadero" : "Falso";
-}
-
 function formatWaiterFromTable(t) {
   const w =
     t?.assigned_waiter ||
@@ -228,26 +213,11 @@ export default function BranchFloorPlanPage() {
       orderingLabel,
       tableServiceLabel,
       strategyLabel,
-      qrLabel: boolES(toBool(settings.is_qr_enabled)),
       cashierDirectLabel,
     };
   }, [settings]);
 
-  const canManageQr = useMemo(() => {
-    if (
-      settingsPayload?.ui &&
-      typeof settingsPayload.ui.can_manage_qr !== "undefined"
-    ) {
-      return !!settingsPayload.ui.can_manage_qr;
-    }
-
-    if (!settings) return false;
-    return toBool(settings.is_qr_enabled);
-  }, [settingsPayload, settings]);
-
-  const manageQrBlockReason = useMemo(() => {
-    return settingsPayload?.ui?.manage_qr_block_reason || null;
-  }, [settingsPayload]);
+  const canManageQr = !!settings;
 
   const isZoneAssignmentEnabled = useMemo(() => {
     return (
@@ -647,22 +617,10 @@ export default function BranchFloorPlanPage() {
       showAlert({
         severity: "warning",
         title: "Nota",
-        message:
-          "Primero crea la configuración operativa en esta sucursal.",
+        message: "Primero crea la configuración operativa en esta sucursal.",
       });
       setSettingsModalMode("create");
       setSettingsModalOpen(true);
-      return;
-    }
-
-    if (!canManageQr) {
-      showAlert({
-        severity: "warning",
-        title: "Nota",
-        message:
-          manageQrBlockReason ||
-          "QR desactivado: actívalo en Configuración Operativa para administrar QRs.",
-      });
       return;
     }
 
@@ -761,14 +719,12 @@ export default function BranchFloorPlanPage() {
       tablesCount: tables.length,
       noticesCount: settingsPayload?.notices?.length || 0,
       canManageQr,
-      manageQrBlockReason,
     };
   }, [
     zones.length,
     tables.length,
     settingsPayload,
     canManageQr,
-    manageQrBlockReason,
   ]);
 
   if (loading) {
@@ -871,7 +827,6 @@ export default function BranchFloorPlanPage() {
         <FloorLegendCard
           statusMeta={STATUS_META}
           canManageQr={canManageQr}
-          manageQrBlockReason={manageQrBlockReason}
         />
       </Stack>
 

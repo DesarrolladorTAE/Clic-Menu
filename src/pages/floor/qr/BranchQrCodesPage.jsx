@@ -31,6 +31,17 @@ const TYPE_LABEL = {
   delivery: "Delivery",
 };
 
+const SYSTEM_CHANNEL_CODES = ["SALON", "WHATSAPP", "ONLINE_ORDER"];
+
+function isSystemChannelOption(channel) {
+  if (typeof channel?.is_system_channel === "boolean") {
+    return channel.is_system_channel;
+  }
+
+  const code = String(channel?.code || "").trim().toUpperCase();
+  return SYSTEM_CHANNEL_CODES.includes(code);
+}
+
 function isSalonChannel(channel) {
   const name = String(channel?.name || "").trim().toLowerCase();
   const code = String(channel?.code || "").trim().toUpperCase();
@@ -157,25 +168,20 @@ export default function BranchQrCodesPage() {
   const uiMeta = settingsRes?.ui ?? null;
   const notices = Array.isArray(settingsRes?.notices) ? settingsRes.notices : [];
 
-  const canManageQr = useMemo(() => {
-    if (uiMeta && typeof uiMeta.can_manage_qr === "boolean") {
-      return uiMeta.can_manage_qr;
-    }
-    return !!settings?.is_qr_enabled;
-  }, [uiMeta, settings]);
+  const isDirectAttentionMode =
+    (qrUiMeta?.attention_mode || uiMeta?.attention_mode) === "direct";
 
-  const manageQrBlockReason = uiMeta?.manage_qr_block_reason || null;
-
-  const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
-
-  const canCreateQr = !!selectedBranchId && !!settingsLoaded && !!settingsRes && !!settings && canManageQr;
+  const canCreateQr =
+    !!selectedBranchId &&
+    !!settingsLoaded &&
+    !!settings;
 
   const createQrBlockReason = !selectedBranchId
     ? "No se recibió la sucursal. Regresa a la página de mesas y vuelve a entrar."
-    : !settingsLoaded || !settingsRes || !settings
-    ? "No puedes administrar QRs sin Configuración Operativa en esta sucursal."
-    : !canManageQr
-    ? manageQrBlockReason || "No tienes la opción de QR habilitada."
+    : !settingsLoaded
+    ? "La configuración de la sucursal todavía se está cargando."
+    : !settings
+    ? "Primero crea la Configuración Operativa de esta sucursal para administrar códigos QR."
     : null;
 
   const sortedItems = useMemo(() => {
@@ -223,17 +229,30 @@ export default function BranchQrCodesPage() {
       return;
     }
 
+    setSettingsLoaded(false);
+    setSettingsRes(null);
+    setItems([]);
+    setTables([]);
+    setChannels([]);
+    setQrUiMeta(null);
+
     try {
-      let settingsResponse = null;
+      let settingsResponse;
 
       try {
-        settingsResponse = await getOperationalSettings(restaurantId, targetBranchId);
-      } catch {
-        settingsResponse = null;
+        settingsResponse = await getOperationalSettings(
+          restaurantId,
+          targetBranchId
+        );
+      } catch (e) {
+        if (e?.response?.status === 404) {
+          return;
+        }
+
+        throw e;
       }
 
       setSettingsRes(settingsResponse);
-      setSettingsLoaded(true);
 
       const [qrResponse, t, ch] = await Promise.all([
         getBranchQrCodes(restaurantId, targetBranchId),
@@ -249,12 +268,17 @@ export default function BranchQrCodesPage() {
       setChannels(Array.isArray(ch) ? ch : []);
     } catch (e) {
       const msg =
-        e?.response?.data?.message || e?.message || "No se pudo cargar QRs";
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo cargar la administración de QRs.";
+
       showAlert({
         severity: "error",
         title: "Error",
         message: msg,
       });
+    } finally {
+      setSettingsLoaded(true);
     }
   };
 
@@ -295,6 +319,9 @@ export default function BranchQrCodesPage() {
     return (channels || [])
       .map((row) => {
         const sc = row?.salesChannel || row?.sales_channel || row;
+        const branchMeta =
+          row?.branch && typeof row.branch === "object" ? row.branch : {};
+
         const id = row?.sales_channel_id ?? sc?.id ?? row?.id;
         const name = sc?.name ?? row?.name ?? null;
         const code = sc?.code ?? row?.code ?? null;
@@ -302,15 +329,43 @@ export default function BranchQrCodesPage() {
 
         if (!id || !name) return null;
 
+        const isSystemChannel =
+          typeof sc?.is_system_channel === "boolean"
+            ? sc.is_system_channel
+            : typeof row?.is_system_channel === "boolean"
+            ? row.is_system_channel
+            : undefined;
+
         return {
           id: Number(id),
           name: String(name),
           code: code ? String(code) : "",
           status: status ? String(status) : "",
+          is_system_channel: isSystemChannel,
+          branch_is_active: branchMeta?.is_active ?? null,
+          effective_is_active: branchMeta?.effective_is_active ?? null,
+          blocked_by_plan: !!branchMeta?.blocked_by_plan,
+          blocked_by_channel_status: !!branchMeta?.blocked_by_channel_status,
+          blocked_reason: branchMeta?.blocked_reason || null,
         };
       })
       .filter(Boolean);
   }, [channels]);
+
+  const specificChannelOptions = useMemo(() => {
+    return channelOptionsRaw.filter((channel) => {
+      const effectiveActive =
+        channel.effective_is_active ?? channel.branch_is_active;
+
+      return (
+        !isSystemChannelOption(channel) &&
+        String(channel.status || "").toLowerCase() === "active" &&
+        effectiveActive === true &&
+        !channel.blocked_by_plan &&
+        !channel.blocked_by_channel_status
+      );
+    });
+  }, [channelOptionsRaw]);
 
   const salonChannel = useMemo(() => {
     return channelOptionsRaw.find((c) => isSalonChannel(c)) || null;
@@ -342,15 +397,6 @@ export default function BranchQrCodesPage() {
   };
 
   const onToggleActive = async (qr) => {
-    if (!canManageQr) {
-      showAlert({
-        severity: "warning",
-        title: "Nota",
-        message: manageQrBlockReason || "QR no habilitado para esta sucursal.",
-      });
-      return;
-    }
-
     const nextActive = !qr?.is_active;
     const blockedByPlan = !!qr?.blocked_by_plan;
     const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
@@ -467,62 +513,146 @@ export default function BranchQrCodesPage() {
   };
 
   const submitCreate = async (formValues) => {
-    if (!canManageQr) {
+    if (!canCreateQr) {
       showAlert({
         severity: "warning",
         title: "Nota",
-        message: manageQrBlockReason || "No tienes la opción de QR habilitada.",
+        message: createQrBlockReason || "No puedes crear códigos QR en este momento.",
+      });
+      return;
+    }
+
+    const qrPurpose = String(formValues.qrPurpose || "");
+    const name = String(formValues.name || "").trim();
+
+    if (!name) {
+      showAlert({
+        severity: "warning",
+        title: "Nombre requerido",
+        message: "Escribe un nombre para identificar este QR.",
+      });
+      return;
+    }
+
+    const payload = {
+      name,
+      type: "",
+      sales_channel_id: null,
+      table_id: null,
+      is_active: !!formValues.is_active,
+      intended_ordering_mode: null,
+    };
+
+    if (qrPurpose === "general") {
+      if (!salonChannel?.id) {
+        showAlert({
+          severity: "error",
+          title: "Canal SALÓN no encontrado",
+          message: "No se encontró el canal SALÓN para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
+        });
+        return;
+      }
+
+      payload.type = "physical";
+      payload.sales_channel_id = Number(salonChannel.id);
+    } else if (qrPurpose === "table") {
+      if (
+        isDirectAttentionMode ||
+        qrUiMeta?.physical_table_qr_allowed === false
+      ) {
+        showAlert({
+          severity: "warning",
+          title: "QR de mesa no disponible",
+          message: "El modo de atención actual no permite crear un QR físico ligado a una mesa.",
+        });
+        return;
+      }
+
+      if (!salonChannel?.id) {
+        showAlert({
+          severity: "error",
+          title: "Canal SALÓN no encontrado",
+          message: "No se encontró el canal SALÓN para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
+        });
+        return;
+      }
+
+      const tableId = Number(formValues.table_id);
+
+      if (!tableId) {
+        showAlert({
+          severity: "warning",
+          title: "Mesa requerida",
+          message: "Selecciona la mesa para la que deseas crear el QR.",
+        });
+        return;
+      }
+
+      payload.type = "physical";
+      payload.sales_channel_id = Number(salonChannel.id);
+      payload.table_id = tableId;
+      payload.intended_ordering_mode = String(
+        settings?.ordering_mode || "waiter_only"
+      );
+    } else if (qrPurpose === "whatsapp") {
+      if (qrUiMeta?.qr_web_whatsapp_allowed === false) {
+        showAlert({
+          severity: "warning",
+          title: "Pedidos por WhatsApp no disponibles",
+          message: qrUiMeta?.qr_web_whatsapp_blocked_reason || "Esta modalidad de QR no está disponible actualmente.",
+        });
+        return;
+      }
+
+      if (!whatsappChannel?.id) {
+        showAlert({
+          severity: "error",
+          title: "Canal WHATSAPP no encontrado",
+          message: "No se encontró el canal WHATSAPP activo para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
+        });
+        return;
+      }
+
+      payload.type = "web";
+      payload.sales_channel_id = Number(whatsappChannel.id);
+    } else if (qrPurpose === "channel") {
+      if (!qrUiMeta?.qr_readonly_by_channel_allowed) {
+        showAlert({
+          severity: "warning",
+          title: "Canal específico no disponible",
+          message: qrUiMeta?.qr_readonly_by_channel_blocked_reason || "Tu plan actual no permite crear QRs para canales específicos.",
+        });
+        return;
+      }
+
+      const selectedChannel = specificChannelOptions.find(
+        (channel) =>
+          Number(channel.id) === Number(formValues.sales_channel_id)
+      );
+
+      if (!selectedChannel) {
+        showAlert({
+          severity: "warning",
+          title: "Canal requerido",
+          message: "Selecciona un canal de venta disponible para este QR.",
+        });
+        return;
+      }
+
+      payload.type = "delivery";
+      payload.sales_channel_id = Number(selectedChannel.id);
+    } else {
+      showAlert({
+        severity: "warning",
+        title: "Selecciona un tipo de QR",
+        message: "Selecciona qué deseas hacer con este código QR.",
       });
       return;
     }
 
     setBusy(true);
+
     try {
-      const payload = {
-        name: String(formValues.name).trim(),
-        type: formValues.type,
-        sales_channel_id: Number(formValues.sales_channel_id),
-        table_id: formValues.table_id ? Number(formValues.table_id) : null,
-        is_active: !!formValues.is_active,
-        intended_ordering_mode: null,
-      };
-
-      if (payload.type === "web") {
-        if (!whatsappChannel?.id) {
-          showAlert({
-            severity: "error",
-            title: "Canal WHATSAPP no encontrado",
-            message:
-              "No se encontró el canal WHATSAPP activo para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
-          });
-
-          setBusy(false);
-          return;
-        }
-
-        payload.sales_channel_id = Number(whatsappChannel.id);
-        payload.table_id = null;
-        payload.intended_ordering_mode = null;
-      }
-
-      if (payload.type === "delivery") {
-        payload.table_id = null;
-        payload.intended_ordering_mode = null;
-      }
-
-      if (payload.type === "physical") {
-        if (isDirectAttentionMode) {
-          payload.table_id = null;
-          payload.intended_ordering_mode = null;
-        } else if (payload.table_id) {
-          payload.intended_ordering_mode = String(
-            settings?.ordering_mode || "waiter_only"
-          );
-        } else {
-          payload.intended_ordering_mode = null;
-        }
-      }
-
       const res = await createBranchQrCode(
         restaurantId,
         selectedBranchId,
@@ -532,11 +662,10 @@ export default function BranchQrCodesPage() {
       const created = unwrapMutationPayload(res);
 
       const selectedChannel =
-        payload.type === "web"
-          ? whatsappChannel
-          : channelOptionsRaw.find(
-              (channel) => Number(channel.id) === Number(payload.sales_channel_id)
-            ) || null;
+        channelOptionsRaw.find(
+          (channel) =>
+            Number(channel.id) === Number(payload.sales_channel_id)
+        ) || null;
 
       const createdWithRelations = {
         ...created,
@@ -544,7 +673,10 @@ export default function BranchQrCodesPage() {
         table:
           created?.table ||
           (payload.table_id
-            ? tableOptions.find((table) => Number(table.id) === Number(payload.table_id)) || null
+            ? tableOptions.find(
+                (table) =>
+                  Number(table.id) === Number(payload.table_id)
+              ) || null
             : null),
       };
 
@@ -558,7 +690,10 @@ export default function BranchQrCodesPage() {
       });
     } catch (e) {
       const msg =
-        e?.response?.data?.message || e?.message || "No se pudo crear el QR";
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo crear el QR";
+
       showAlert({
         severity: "error",
         title: "Error",
@@ -586,18 +721,7 @@ export default function BranchQrCodesPage() {
         tone: "warning",
         title: "Configuración Operativa faltante",
         body:
-          "No puedes administrar QRs sin crear la Configuración Operativa de la sucursal. Crea la configuración y activa QR si deseas generar códigos.",
-      };
-    }
-
-    if (!canManageQr) {
-      return {
-        tone: "warning",
-        title: "QR desactivado",
-        body:
-          (manageQrBlockReason ? `${manageQrBlockReason}\n\n` : "") +
-          "• No se pueden crear códigos QR en esta sucursal.\n" +
-          "• Si ya existían QRs, quedan deshabilitados hasta que el usuario los reactive manualmente.",
+          "Primero crea la Configuración Operativa de esta sucursal para poder administrar y generar códigos QR.",
       };
     }
 
@@ -607,7 +731,10 @@ export default function BranchQrCodesPage() {
         title: "Modo de atención directa",
         body:
           "• En este modo no se permite crear ni activar QR físico ligado a mesa.\n" +
-          "• Puedes usar QR físico general para mostrar el menú del salón.\n" +
+          "• Vista general y Pedidos por WhatsApp siguen disponibles.\n" +
+          (qrUiMeta?.qr_readonly_by_channel_allowed
+            ? "• También puedes crear un QR de Canal específico para canales externos permitidos.\n"
+            : "") +
           "• Los QRs de mesa existentes pueden aparecer bloqueados y no podrán reactivarse mientras siga activo este modo.",
       };
     }
@@ -626,31 +753,33 @@ export default function BranchQrCodesPage() {
     settingsLoaded,
     settingsRes,
     settings,
-    canManageQr,
-    manageQrBlockReason,
     notices,
     isDirectAttentionMode,
+    qrUiMeta,
   ]);
 
   const contextData = useMemo(() => {
     return {
       totalQrs: items.length,
       totalTables: tables.length,
-      totalChannels: channelOptionsRaw.length,
-      enabledLabel: settings ? (canManageQr ? "Sí" : "No") : "Sin config",
+      totalSpecificChannels: specificChannelOptions.length,
+      hasOperationalSettings: !!settings,
       orderingMode: settings?.ordering_mode || "Sin definir",
-      attentionMode: qrUiMeta?.attention_mode || uiMeta?.attention_mode || "fixed",
+      attentionMode:
+        qrUiMeta?.attention_mode ||
+        uiMeta?.attention_mode ||
+        "fixed",
       isDirectAttentionMode,
-      qrReadonlyByChannelAllowed: !!qrUiMeta?.qr_readonly_by_channel_allowed,
+      qrReadonlyByChannelAllowed:
+        !!qrUiMeta?.qr_readonly_by_channel_allowed,
       qrReadonlyByChannelBlockedReason:
         qrUiMeta?.qr_readonly_by_channel_blocked_reason || null,
     };
   }, [
     items.length,
     tables.length,
-    channelOptionsRaw.length,
+    specificChannelOptions.length,
     settings,
-    canManageQr,
     qrUiMeta,
     uiMeta,
     isDirectAttentionMode,
@@ -728,13 +857,10 @@ export default function BranchQrCodesPage() {
           onToggleActive={onToggleActive}
           onDelete={onDelete}
           onOpen={(url) => window.open(url, "_blank")}
-          onExport={openExport} 
+          onExport={openExport}
           typeLabelMap={TYPE_LABEL}
           busy={busy}
-          canManageQr={canManageQr}
-          manageQrBlockReason={manageQrBlockReason}
           selectedBranchId={selectedBranchId}
-          qrUiMeta={qrUiMeta}
         />
       </Stack>
 
@@ -747,7 +873,7 @@ export default function BranchQrCodesPage() {
         settings={settings}
         salonChannel={salonChannel}
         whatsappChannel={whatsappChannel}
-        channelOptionsRaw={channelOptionsRaw}
+        specificChannelOptions={specificChannelOptions}
         tableOptions={tableOptions}
         qrUiMeta={qrUiMeta}
       />

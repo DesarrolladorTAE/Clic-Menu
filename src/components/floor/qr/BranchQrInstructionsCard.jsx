@@ -35,8 +35,8 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           step="2"
           text={
             isDirectAttentionMode
-              ? "En modo directo solo puedes crear QR físico general, sin mesa vinculada."
-              : "Los QRs físicos pueden ser generales o ligarse a una mesa. Los QR Web y Delivery siempre se generan sin mesa."
+              ? "En modo directo puedes crear una Vista general, Pedidos por WhatsApp y, si tu plan lo permite, un QR para Canal específico. El QR de mesa no está disponible en este modo."
+              : "Puedes crear una Vista general o un QR de mesa. Al elegir QR de mesa, solo tendrás que seleccionar la mesa correspondiente."
           }
         />
 
@@ -44,17 +44,17 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           step="3"
           text={
             readonlyByChannelAllowed
-              ? "Web se usa para pedidos por WhatsApp. Delivery se usa como QR de solo lectura para canales externos permitidos por el plan."
-              : "Web se usa para pedidos por WhatsApp. Delivery puede no estar disponible si el plan actual no permite QRs de solo lectura por canal."
-        }
+              ? "Pedidos por WhatsApp está disponible sin seleccionar mesa. También puedes crear un QR de Canal específico para los canales externos disponibles en esta sucursal."
+              : "Pedidos por WhatsApp está disponible sin seleccionar mesa. La opción Canal específico no está disponible con el plan actual."
+          }
         />
 
         <InstructionRow
           step="4"
           text={
             isDirectAttentionMode
-              ? "Los QRs físicos ligados a mesa que ya existan pueden aparecer bloqueados y no podrán reactivarse mientras siga activo el modo directo."
-              : "Si la Configuración Operativa no existe o el QR está desactivado en la sucursal, no podrás crear nuevos códigos."
+              ? "Los QRs de mesa que ya existan pueden aparecer bloqueados y no podrán reactivarse mientras la sucursal continúe en modo directo."
+              : "La sucursal debe tener Configuración Operativa antes de poder crear y administrar sus códigos QR."
           }
         />
       </Stack>

@@ -26,7 +26,7 @@ import AppAlert from "../../components/common/AppAlert";
 
 const PAGE_SIZE = 5;
 
-const SYSTEM_CHANNEL_CODES = ["SALON", "WHATSAPP"];
+const SYSTEM_CHANNEL_CODES = ["SALON", "WHATSAPP", "ONLINE_ORDER"];
 
 function normalizeCode(value) {
   return (value || "").toString().trim().toUpperCase();
@@ -42,8 +42,9 @@ function isSystemChannel(row) {
 function getSystemChannelLabel(row) {
   const code = normalizeCode(row?.sales_channel?.code || row?.code);
 
-  if (code === "WHATSAPP") return "WHATSAPP";
   if (code === "SALON") return "SALON";
+  if (code === "WHATSAPP") return "WHATSAPP";
+  if (code === "ONLINE_ORDER") return "PEDIDOS EN LÍNEA";
 
   return "CANAL";
 }

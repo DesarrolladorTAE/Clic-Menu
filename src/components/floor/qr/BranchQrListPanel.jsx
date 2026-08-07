@@ -36,9 +36,47 @@ function getQrBlockTitle(qr) {
   return "";
 }
 
-function shouldDisableQrToggle({ qr, busy, canManageQr }) {
+function getQrPurposeMeta(qr, typeLabelMap = {}) {
+  if (qr?.type === "physical" && qr?.table_id) {
+    return {
+      title: "QR de mesa",
+      description: qr?.table?.name
+        ? `Código para ${qr.table.name}`
+        : "Código para una mesa específica",
+    };
+  }
+
+  if (qr?.type === "physical") {
+    return {
+      title: "Vista general",
+      description: "Menú general del salón",
+    };
+  }
+
+  if (qr?.type === "web") {
+    return {
+      title: "Pedidos por WhatsApp",
+      description: "El cliente selecciona y envía su pedido por WhatsApp",
+    };
+  }
+
+  if (qr?.type === "delivery") {
+    return {
+      title: "Canal específico",
+      description: qr?.sales_channel?.name
+        ? `Menú de solo lectura para ${qr.sales_channel.name}`
+        : "Menú de solo lectura para otro canal de venta",
+    };
+  }
+
+  return {
+    title: typeLabelMap[qr?.type] || qr?.type || "QR",
+    description: "Código QR configurado para esta sucursal",
+  };
+}
+
+function shouldDisableQrToggle({ qr, busy }) {
   if (busy) return true;
-  if (!canManageQr) return true;
 
   const nextActive = !qr?.is_active;
 
@@ -68,11 +106,9 @@ export default function BranchQrListPanel({
   onToggleActive,
   onDelete,
   onOpen,
-  onExport, // 🔥 NUEVO
+  onExport,
   typeLabelMap = {},
   busy = false,
-  canManageQr = false,
-  manageQrBlockReason = null,
   selectedBranchId = "",
 }) {
   return (
@@ -211,21 +247,14 @@ export default function BranchQrListPanel({
             {items.map((qr) => {
               const channelName = qr?.sales_channel?.name || "—";
               const tableName = qr?.table?.name || "General";
-              const typeLabel = typeLabelMap[qr.type] || qr.type;
-
-              const typeDescription =
-                qr.type === "web"
-                  ? "Pedido por WhatsApp"
-                  : qr.type === "delivery"
-                  ? "Menú solo lectura"
-                  : "Menú físico";
+              const purposeMeta = getQrPurposeMeta(qr, typeLabelMap);
 
               const blockedByPlan = !!qr?.blocked_by_plan;
               const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
               const isBlocked = blockedByPlan || blockedByAttentionMode;
               const blockReason = getQrBlockReason(qr);
               const blockTitle = getQrBlockTitle(qr);
-              const toggleDisabled = shouldDisableQrToggle({ qr, busy, canManageQr });
+              const toggleDisabled = shouldDisableQrToggle({ qr, busy });
 
               return (
                 <Card
@@ -265,11 +294,23 @@ export default function BranchQrListPanel({
                             sx={{
                               mt: 0.5,
                               fontSize: 13,
-                              color: "text.secondary",
-                              fontWeight: 700,
+                              color: "primary.main",
+                              fontWeight: 900,
                             }}
                           >
-                            {typeLabel} · {typeDescription}
+                            {purposeMeta.title}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.25,
+                              fontSize: 12.5,
+                              color: "text.secondary",
+                              fontWeight: 600,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {purposeMeta.description}
                           </Typography>
                         </Box>
 
@@ -338,9 +379,9 @@ export default function BranchQrListPanel({
                       <Tooltip
                         title={
                           toggleDisabled
-                            ? blockReason ||
-                              manageQrBlockReason ||
-                              "QR desactivado para esta sucursal."
+                            ? busy
+                              ? "Espera a que termine la operación actual."
+                              : blockReason
                             : ""
                         }
                       >
@@ -369,19 +410,6 @@ export default function BranchQrListPanel({
                           />
                         </Box>
                       </Tooltip>
-
-                      {!canManageQr ? (
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            color: "#8A5A00",
-                            fontWeight: 800,
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {manageQrBlockReason || "QR desactivado para esta sucursal."}
-                        </Typography>
-                      ) : null}
 
                       {isBlocked ? (
                         <Typography

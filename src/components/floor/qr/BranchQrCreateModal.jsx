@@ -1,71 +1,63 @@
 import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch,
-  TextField, Typography, useMediaQuery,
+  Box, Button, ButtonBase, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack,
+  Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 
 import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
+import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
+import HubRoundedIcon from "@mui/icons-material/HubRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 
-const DEFAULT_QR_TYPE_OPTIONS = [
-  {
-    value: "physical",
-    label: "Físico",
-    description: "QR físico para mesa o menú general del salón.",
-  },
-];
-
-function isSalonChannel(channel) {
-  const name = String(channel?.name || "").trim().toLowerCase();
-  const code = String(channel?.code || "").trim().toUpperCase();
-
-  return code === "SALON" || name === "salón" || name === "salon";
-}
-
-function isWhatsappChannel(channel) {
-  const name = String(channel?.name || "").trim().toLowerCase();
-  const code = String(channel?.code || "").trim().toUpperCase();
-
-  return (
-    code === "WHATSAPP" ||
-    name === "whatsapp" ||
-    name === "whats app" ||
-    name === "whatssapp"
-  );
-}
+const TERRACOTTA = "#B86149";
 
 function getQrNoticeForCreate({
-  type,
+  qrPurpose,
   tableId,
+  salesChannelId,
+  tableOptions,
+  specificChannelOptions,
   orderingMode,
-  isDirectAttentionMode,
 }) {
-  const hasTable = !!tableId;
-
-  if (type === "delivery") {
-    return "Menú por canal Delivery, solo lectura y sin mesa.";
+  if (qrPurpose === "general") {
+    return "Se creará una Vista general con el menú del salón, sin mesa vinculada.";
   }
 
-  if (type === "web") {
-    return "Menú web para que el cliente seleccione productos y envíe el pedido por WhatsApp. No usa mesa ni comanda interna.";
+  if (qrPurpose === "table") {
+    const table = tableOptions.find(
+      (item) => Number(item.id) === Number(tableId)
+    );
+
+    if (!table) {
+      return "Selecciona la mesa que utilizará este código QR.";
+    }
+
+    return String(orderingMode) === "customer_assisted"
+      ? `Se creará un QR para ${table.name}, vinculado al modo Cliente asistido.`
+      : `Se creará un QR para ${table.name}, vinculado al modo Solo mesero.`;
   }
 
-  if (type === "physical" && isDirectAttentionMode) {
-    return "Modo directo: este QR será físico general, sin mesa, para mostrar el menú del salón.";
+  if (qrPurpose === "whatsapp") {
+    return "Se creará un QR para que el cliente consulte el menú, seleccione productos y envíe su pedido por WhatsApp.";
   }
 
-  if (!hasTable) {
-    return "Menú completo del salón, solo lectura y sin mesa.";
+  if (qrPurpose === "channel") {
+    const channel = specificChannelOptions.find(
+      (item) => Number(item.id) === Number(salesChannelId)
+    );
+
+    return channel
+      ? `Se creará un menú de solo lectura para el canal ${channel.name}.`
+      : "Selecciona el canal de venta para el que deseas crear este QR.";
   }
 
-  if (String(orderingMode) === "customer_assisted") {
-    return "QR físico ligado a mesa para pedidos del cliente.";
-  }
-
-  return "QR físico ligado a mesa para pedidos del mesero.";
+  return "Selecciona una de las opciones para definir qué función tendrá este código QR.";
 }
 
 function FieldBlock({ label, input, help }) {
@@ -100,6 +92,136 @@ function FieldBlock({ label, input, help }) {
   );
 }
 
+function QrPurposeCard({
+  value,
+  selected,
+  disabled = false,
+  icon,
+  title,
+  description,
+  disabledReason = "",
+  onSelect,
+}) {
+  const theme = useTheme();
+
+  return (
+    <ButtonBase
+      onClick={() => onSelect(value)}
+      disabled={disabled}
+      sx={{
+        width: "100%",
+        height: "100%",
+        textAlign: "left",
+        justifyContent: "stretch",
+        borderRadius: 2,
+        overflow: "hidden",
+        opacity: disabled ? 0.58 : 1,
+      }}
+    >
+      <Box
+        sx={{
+          width: "100%",
+          minHeight: 152,
+          p: 2,
+          borderRadius: 2,
+          border: "2px solid",
+          borderColor: selected
+            ? TERRACOTTA
+            : disabled
+            ? "divider"
+            : "divider",
+          bgcolor: selected
+            ? alpha(theme.palette.primary.main, 0.06)
+            : "background.paper",
+          boxShadow: selected
+            ? `0 0 0 3px ${alpha(TERRACOTTA, 0.12)}`
+            : "none",
+          transition: "border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease",
+          position: "relative",
+          "&:hover": disabled
+            ? {}
+            : {
+                borderColor: selected
+                  ? TERRACOTTA
+                  : theme.palette.primary.main,
+                bgcolor: selected
+                  ? alpha(theme.palette.primary.main, 0.08)
+                  : alpha(theme.palette.primary.main, 0.025),
+              },
+        }}
+      >
+        {selected ? (
+          <CheckCircleRoundedIcon
+            sx={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              fontSize: 22,
+              color: TERRACOTTA,
+            }}
+          />
+        ) : null}
+
+        <Stack spacing={1.25}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: 1.5,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: selected
+                ? TERRACOTTA
+                : alpha(theme.palette.primary.main, 0.09),
+              color: selected ? "#fff" : "primary.main",
+              transition: "background-color 150ms ease, color 150ms ease",
+            }}
+          >
+            {icon}
+          </Box>
+
+          <Box sx={{ pr: selected ? 3 : 0 }}>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 900,
+                color: selected ? "primary.main" : "text.primary",
+                lineHeight: 1.3,
+              }}
+            >
+              {title}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.6,
+                fontSize: 12.5,
+                color: "text.secondary",
+                lineHeight: 1.45,
+              }}
+            >
+              {description}
+            </Typography>
+          </Box>
+
+          {disabled && disabledReason ? (
+            <Typography
+              sx={{
+                fontSize: 11.5,
+                fontWeight: 800,
+                color: "text.secondary",
+                lineHeight: 1.4,
+              }}
+            >
+              {disabledReason}
+            </Typography>
+          ) : null}
+        </Stack>
+      </Box>
+    </ButtonBase>
+  );
+}
+
 export default function BranchQrCreateModal({
   open,
   onClose,
@@ -109,7 +231,7 @@ export default function BranchQrCreateModal({
   settings,
   salonChannel,
   whatsappChannel,
-  channelOptionsRaw = [],
+  specificChannelOptions = [],
   tableOptions = [],
   qrUiMeta = null,
 }) {
@@ -118,46 +240,51 @@ export default function BranchQrCreateModal({
 
   const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
 
-  const tableSelectorVisible = qrUiMeta?.table_selector_visible !== false;
-  const physicalTableQrAllowed = qrUiMeta?.physical_table_qr_allowed !== false;
-
-  const shouldDisableTableSelector =
-    isDirectAttentionMode || !tableSelectorVisible || !physicalTableQrAllowed;
-
-  const qrTypeOptions = useMemo(() => {
+  const availableQrTypes = useMemo(() => {
     const options = Array.isArray(qrUiMeta?.qr_type_options)
       ? qrUiMeta.qr_type_options
-      : DEFAULT_QR_TYPE_OPTIONS;
+      : [{ value: "physical" }];
 
-    const clean = options
-      .filter((item) => item?.value)
-      .map((item) => ({
-        value: String(item.value),
-        label: item.label || String(item.value),
-        description: item.description || "",
-      }));
-
-    return clean.length > 0 ? clean : DEFAULT_QR_TYPE_OPTIONS;
+    return new Set(
+      options
+        .map((item) => String(item?.value || ""))
+        .filter(Boolean)
+    );
   }, [qrUiMeta]);
 
-  const defaultType = useMemo(() => {
-    return qrTypeOptions[0]?.value || "physical";
-  }, [qrTypeOptions]);
+  const generalAvailable =
+    availableQrTypes.has("physical") &&
+    qrUiMeta?.physical_general_qr_allowed !== false &&
+    !!salonChannel?.id;
 
-  const defaultValues = useMemo(() => {
-    const defaultChannelId =
-      defaultType === "web"
-        ? whatsappChannel?.id
-        : salonChannel?.id;
+  const tableAvailable =
+    availableQrTypes.has("physical") &&
+    !isDirectAttentionMode &&
+    qrUiMeta?.table_selector_visible !== false &&
+    qrUiMeta?.physical_table_qr_allowed !== false &&
+    !!salonChannel?.id &&
+    tableOptions.length > 0;
 
-    return {
+  const whatsappAvailable =
+    availableQrTypes.has("web") &&
+    qrUiMeta?.qr_web_whatsapp_allowed !== false &&
+    !!whatsappChannel?.id;
+
+  const specificChannelAvailable =
+    availableQrTypes.has("delivery") &&
+    !!qrUiMeta?.qr_readonly_by_channel_allowed &&
+    specificChannelOptions.length > 0;
+
+  const defaultValues = useMemo(
+    () => ({
       name: "",
-      type: defaultType,
-      sales_channel_id: defaultChannelId ? String(defaultChannelId) : "",
+      qrPurpose: "",
       table_id: "",
+      sales_channel_id: "",
       is_active: true,
-    };
-  }, [defaultType, salonChannel, whatsappChannel]);
+    }),
+    []
+  );
 
   const { control, watch, reset, setValue, handleSubmit } = useForm({
     defaultValues,
@@ -165,64 +292,122 @@ export default function BranchQrCreateModal({
   });
 
   const nameValue = watch("name");
-  const type = watch("type");
+  const qrPurpose = watch("qrPurpose");
   const tableId = watch("table_id");
   const salesChannelId = watch("sales_channel_id");
 
-  const selectedTypeMeta = useMemo(() => {
-    return qrTypeOptions.find((item) => item.value === type) || null;
-  }, [qrTypeOptions, type]);
-
-  const filteredChannelOptions = useMemo(() => {
-    if (!type) return [];
-
-    if (type === "physical") {
-      return salonChannel ? [salonChannel] : [];
-    }
-
-    if (type === "web") {
-      return whatsappChannel ? [whatsappChannel] : [];
-    }
-
-    if (type === "delivery") {
-      return (channelOptionsRaw || []).filter(
-        (c) => !isSalonChannel(c) && !isWhatsappChannel(c)
-      );
-    }
-
-    return channelOptionsRaw || [];
-  }, [type, channelOptionsRaw, salonChannel, whatsappChannel]);
-
-  const filteredTableOptions = useMemo(() => {
-    if (type !== "physical") return [];
-    if (shouldDisableTableSelector) return [];
-    return tableOptions;
-  }, [type, tableOptions, shouldDisableTableSelector]);
+  const purposeOptions = [
+    {
+      value: "general",
+      title: "Vista general",
+      description: "Menú general del salón, sin mesa vinculada.",
+      icon: <QrCode2RoundedIcon />,
+      available: generalAvailable,
+      disabledReason: !salonChannel?.id
+        ? "No se encontró el canal SALÓN."
+        : "No disponible con la configuración actual.",
+    },
+    {
+      value: "table",
+      title: "QR de mesa",
+      description: "Código QR para una mesa específica.",
+      icon: <TableRestaurantRoundedIcon />,
+      available: tableAvailable,
+      disabledReason: isDirectAttentionMode
+        ? "No disponible en modo de atención directa."
+        : tableOptions.length === 0
+        ? "No hay mesas disponibles en esta sucursal."
+        : qrUiMeta?.physical_table_qr_allowed === false
+        ? "La configuración actual no permite QRs ligados a mesa."
+        : "No disponible con la configuración actual.",
+    },
+    {
+      value: "whatsapp",
+      title: "Pedidos por WhatsApp",
+      description: "El cliente selecciona productos y envía su pedido por WhatsApp.",
+      icon: <ChatRoundedIcon />,
+      available: whatsappAvailable,
+      disabledReason: !whatsappChannel?.id
+        ? "No se encontró el canal WHATSAPP."
+        : qrUiMeta?.qr_web_whatsapp_blocked_reason ||
+          "No disponible con la configuración actual.",
+    },
+    {
+      value: "channel",
+      title: "Canal específico",
+      description: "Menú de solo lectura para otro canal de venta.",
+      icon: <HubRoundedIcon />,
+      available: specificChannelAvailable,
+      disabledReason: !qrUiMeta?.qr_readonly_by_channel_allowed
+        ? qrUiMeta?.qr_readonly_by_channel_blocked_reason ||
+          "No disponible con el plan actual."
+        : specificChannelOptions.length === 0
+        ? "No hay canales adicionales disponibles en esta sucursal."
+        : "No disponible con la configuración actual.",
+    },
+  ];
 
   const canSubmit = useMemo(() => {
     const hasName = String(nameValue || "").trim().length > 0;
-    const hasType = String(type || "").length > 0;
-    const hasChannel = String(salesChannelId || "").length > 0;
-    const typeAllowed = qrTypeOptions.some((item) => item.value === type);
 
-    const invalidPhysicalTable =
-      type === "physical" && !!tableId && !physicalTableQrAllowed;
+    if (!hasName || !qrPurpose) {
+      return false;
+    }
 
-    return (
-      hasName &&
-      hasType &&
-      hasChannel &&
-      typeAllowed &&
-      !invalidPhysicalTable
-    );
+    if (qrPurpose === "general") {
+      return generalAvailable;
+    }
+
+    if (qrPurpose === "table") {
+      return tableAvailable && !!tableId;
+    }
+
+    if (qrPurpose === "whatsapp") {
+      return whatsappAvailable;
+    }
+
+    if (qrPurpose === "channel") {
+      return specificChannelAvailable && !!salesChannelId;
+    }
+
+    return false;
   }, [
     nameValue,
-    type,
-    salesChannelId,
+    qrPurpose,
     tableId,
-    qrTypeOptions,
-    physicalTableQrAllowed,
+    salesChannelId,
+    generalAvailable,
+    tableAvailable,
+    whatsappAvailable,
+    specificChannelAvailable,
   ]);
+
+  const selectPurpose = (purpose) => {
+    const option = purposeOptions.find((item) => item.value === purpose);
+
+    if (!option?.available) {
+      return;
+    }
+
+    setValue("qrPurpose", purpose, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+    if (purpose !== "table") {
+      setValue("table_id", "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+
+    if (purpose !== "channel") {
+      setValue("sales_channel_id", "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -230,88 +415,25 @@ export default function BranchQrCreateModal({
   }, [open, reset, defaultValues]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !qrPurpose) return;
 
-    const typeAllowed = qrTypeOptions.some((item) => item.value === type);
+    const selectedOption = purposeOptions.find(
+      (item) => item.value === qrPurpose
+    );
 
-    if (!typeAllowed) {
-      setValue("type", defaultType);
+    if (!selectedOption?.available) {
+      setValue("qrPurpose", "");
       setValue("table_id", "");
-      return;
-    }
-
-    if (type !== "physical" || shouldDisableTableSelector) {
-      if (tableId) {
-        setValue("table_id", "");
-      }
-    }
-
-    const currentChannelId = salesChannelId ? Number(salesChannelId) : null;
-
-    if (type === "physical") {
-      const wanted = salonChannel?.id ? String(salonChannel.id) : "";
-
-      if (wanted && salesChannelId !== wanted) {
-        setValue("sales_channel_id", wanted);
-      }
-
-      if (!wanted && salesChannelId) {
-        setValue("sales_channel_id", "");
-      }
-
-      return;
-    }
-
-    if (type === "web") {
-      const wanted = whatsappChannel?.id ? String(whatsappChannel.id) : "";
-
-      if (wanted && salesChannelId !== wanted) {
-        setValue("sales_channel_id", wanted);
-      }
-
-      if (!wanted && salesChannelId) {
-        setValue("sales_channel_id", "");
-      }
-
-      return;
-    }
-
-    if (type === "delivery") {
-      if (
-        currentChannelId &&
-        salonChannel?.id &&
-        currentChannelId === Number(salonChannel.id)
-      ) {
-        setValue("sales_channel_id", "");
-        return;
-      }
-
-      if (!salesChannelId && filteredChannelOptions.length > 0) {
-        setValue("sales_channel_id", String(filteredChannelOptions[0].id));
-      }
-
-      if (salesChannelId && filteredChannelOptions.length > 0) {
-        const exists = filteredChannelOptions.some(
-          (item) => Number(item.id) === Number(salesChannelId)
-        );
-
-        if (!exists) {
-          setValue("sales_channel_id", String(filteredChannelOptions[0].id));
-        }
-      }
+      setValue("sales_channel_id", "");
     }
   }, [
     open,
-    type,
-    tableId,
-    salesChannelId,
-    salonChannel,
-    whatsappChannel,
-    filteredChannelOptions,
-    qrTypeOptions,
-    defaultType,
+    qrPurpose,
+    generalAvailable,
+    tableAvailable,
+    whatsappAvailable,
+    specificChannelAvailable,
     setValue,
-    shouldDisableTableSelector,
   ]);
 
   return (
@@ -411,106 +533,80 @@ export default function BranchQrCreateModal({
                   Datos del QR
                 </Typography>
 
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                  <FieldBlock
-                    label="Nombre"
-                    input={
-                      <Controller
-                        name="name"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            fullWidth
-                            value={field.value ?? ""}
-                            onChange={field.onChange}
-                            placeholder='Ej. "QR Comedor" o "Mesa 4"'
-                          />
-                        )}
-                      />
-                    }
-                  />
+                <FieldBlock
+                  label="Nombre"
+                  input={
+                    <Controller
+                      name="name"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          fullWidth
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          placeholder='Ej. "Menú general", "Mesa 4" o "Pedidos WhatsApp"'
+                        />
+                      )}
+                    />
+                  }
+                  help="Usa un nombre corto que te permita identificar fácilmente este código QR."
+                />
 
-                  <FieldBlock
-                    label="Tipo"
-                    input={
-                      <Controller
-                        name="type"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            select
-                            fullWidth
-                            value={field.value ?? ""}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              setValue("table_id", "");
-                            }}
-                            SelectProps={{
-                              IconComponent: KeyboardArrowDownIcon,
-                            }}
-                          >
-                            {qrTypeOptions.map((option) => (
-                              <MenuItem key={option.value} value={option.value}>
-                                {option.label}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        )}
-                      />
-                    }
-                    help={
-                      isDirectAttentionMode
-                        ? "Modo directo: solo aplica QR físico general, sin mesa."
-                        : selectedTypeMeta?.description
-                        ? selectedTypeMeta.description
-                        : type === "web" || type === "delivery"
-                        ? `${type === "web" ? "Web" : "Delivery"}: se fuerza “General (sin mesa)”.`
-                        : null
-                    }
-                  />
-                </Stack>
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 16,
+                      fontWeight: 900,
+                      color: "text.primary",
+                    }}
+                  >
+                    ¿Qué QR deseas crear?
+                  </Typography>
 
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                  <FieldBlock
-                    label="Canal de venta"
-                    input={
-                      <Controller
-                        name="sales_channel_id"
-                        control={control}
-                        render={({ field }) => (
-                          <TextField
-                            select
-                            fullWidth
-                            value={field.value ?? ""}
-                            onChange={field.onChange}
-                            disabled={type === "physical" || type === "web"}
-                            SelectProps={{
-                              IconComponent: KeyboardArrowDownIcon,
-                            }}
-                          >
-                            <MenuItem value="">
-                              {filteredChannelOptions.length
-                                ? "Selecciona..."
-                                : "Sin canales disponibles"}
-                            </MenuItem>
-                            {filteredChannelOptions.map((c) => (
-                              <MenuItem key={c.id} value={String(c.id)}>
-                                {c.name}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        )}
-                      />
-                    }
-                    help={
-                      type === "physical"
-                        ? "Físico: solo permite Salón."
-                        : type === "delivery"
-                        ? "Delivery: permite canales externos. No permite Salón ni WhatsApp."
-                        : "Web: solo permite WhatsApp."
-                    }
-                  />
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 13,
+                      color: "text.secondary",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Selecciona una opción. El tipo y el canal correspondiente se configurarán automáticamente.
+                  </Typography>
+                </Box>
 
+                <Controller
+                  name="qrPurpose"
+                  control={control}
+                  render={() => (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                        },
+                        gap: 1.5,
+                      }}
+                    >
+                      {purposeOptions.map((option) => (
+                        <QrPurposeCard
+                          key={option.value}
+                          value={option.value}
+                          selected={qrPurpose === option.value}
+                          disabled={!option.available}
+                          icon={option.icon}
+                          title={option.title}
+                          description={option.description}
+                          disabledReason={option.disabledReason}
+                          onSelect={selectPurpose}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                />
+
+                {qrPurpose === "table" ? (
                   <FieldBlock
                     label="Mesa"
                     input={
@@ -523,47 +619,71 @@ export default function BranchQrCreateModal({
                             fullWidth
                             value={field.value ?? ""}
                             onChange={field.onChange}
-                            disabled={type !== "physical" || shouldDisableTableSelector}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
                           >
-                            <MenuItem value="">General (sin mesa)</MenuItem>
-                            {filteredTableOptions.map((t) => (
-                              <MenuItem key={t.id} value={String(t.id)}>
-                                {t.name}
+                            <MenuItem value="">Selecciona una mesa...</MenuItem>
+
+                            {tableOptions.map((table) => (
+                              <MenuItem key={table.id} value={String(table.id)}>
+                                {table.name}
                               </MenuItem>
                             ))}
                           </TextField>
                         )}
                       />
                     }
-                    help={
-                      isDirectAttentionMode
-                        ? "Modo directo: no se permite ligar QR físico a una mesa."
-                        : type !== "physical"
-                        ? "Solo los QRs físicos pueden ligarse a una mesa."
-                        : !physicalTableQrAllowed
-                        ? "No está permitido crear QRs físicos ligados a mesa."
-                        : "Opcional. Si no eliges mesa, será un QR general."
-                    }
+                    help="Este QR quedará ligado únicamente a la mesa seleccionada."
                   />
-                </Stack>
+                ) : null}
+
+                {qrPurpose === "channel" ? (
+                  <FieldBlock
+                    label="Canal de venta"
+                    input={
+                      <Controller
+                        name="sales_channel_id"
+                        control={control}
+                        render={({ field }) => (
+                          <TextField
+                            select
+                            fullWidth
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            SelectProps={{
+                              IconComponent: KeyboardArrowDownIcon,
+                            }}
+                          >
+                            <MenuItem value="">Selecciona un canal...</MenuItem>
+
+                            {specificChannelOptions.map((channel) => (
+                              <MenuItem key={channel.id} value={String(channel.id)}>
+                                {channel.name}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        )}
+                      />
+                    }
+                    help="Solo aparecen canales adicionales activos y disponibles para esta sucursal."
+                  />
+                ) : null}
 
                 <Box
                   sx={{
                     p: 1.75,
-                    borderRadius: 1,
+                    borderRadius: 2,
                     border: "1px solid",
-                    borderColor: "divider",
-                    backgroundColor: "#EEF2FF",
+                    borderColor: alpha(theme.palette.primary.main, 0.2),
+                    bgcolor: alpha(theme.palette.primary.main, 0.055),
                   }}
                 >
                   <Typography
                     sx={{
                       fontSize: 13,
                       fontWeight: 900,
-                      color: "#2D2D7A",
+                      color: "primary.main"
                     }}
                   >
                     ¿Qué crea este QR?
@@ -573,16 +693,18 @@ export default function BranchQrCreateModal({
                     sx={{
                       mt: 0.75,
                       fontSize: 13,
-                      color: "#2D2D7A",
+                      color: "text.primary",
                       lineHeight: 1.45,
                       fontWeight: 700,
                     }}
                   >
                     {getQrNoticeForCreate({
-                      type,
+                      qrPurpose,
                       tableId,
+                      salesChannelId,
+                      tableOptions,
+                      specificChannelOptions,
                       orderingMode: settings?.ordering_mode,
-                      isDirectAttentionMode,
                     })}
                   </Typography>
                 </Box>
