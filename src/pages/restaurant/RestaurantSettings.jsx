@@ -24,6 +24,32 @@ const ATTENTION_MODES = [
   { value: "direct", label: "Atención directa" },
 ];
 
+const DEFAULT_UI_META = {
+  can_edit_modes: false,
+  selectors_disabled: true,
+  save_disabled: true,
+  locked_by_plan: true,
+  locked_reason: "",
+  attention_mode: {
+    can_change: false,
+    selector_disabled: true,
+    locked_by_plan: true,
+    locked_by_active_operations: false,
+    locked_reason: "",
+    operation_state: {
+      locked: false,
+      protected_tables_count: 0,
+      protected_table_ids: [],
+      active_orders_count: 0,
+      active_order_ids: [],
+      active_occupancies_count: 0,
+      active_occupancy_ids: [],
+      active_sessions_count: 0,
+      active_session_ids: [],
+    },
+  },
+};
+
 const inventoryModeLabel = (value) =>
   value === "branch"
     ? "Por sucursal"
@@ -40,13 +66,7 @@ export default function RestaurantSettings() {
   const [warn, setWarn] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const [uiMeta, setUiMeta] = useState({
-    can_edit_modes: false,
-    selectors_disabled: true,
-    save_disabled: true,
-    locked_by_plan: true,
-    locked_reason: "",
-  });
+  const [uiMeta, setUiMeta] = useState(DEFAULT_UI_META);
 
   const [planAccess, setPlanAccess] = useState(null);
 
@@ -73,9 +93,27 @@ export default function RestaurantSettings() {
     planAccess?.features?.restaurant_settings_page
   );
 
-  const attentionDisabled = !canUseRestaurantSettingsPage;
+  const attentionMeta = uiMeta?.attention_mode ?? DEFAULT_UI_META.attention_mode;
+  const attentionOperationState = attentionMeta?.operation_state ?? DEFAULT_UI_META.attention_mode.operation_state;
+
+  const attentionLockedByOperations = Boolean(attentionMeta?.locked_by_active_operations);
+  const attentionDisabled = Boolean(
+    !canUseRestaurantSettingsPage ||
+    attentionMeta?.selector_disabled
+  );
+
+  const attentionLockMessage = attentionDisabled
+    ? attentionMeta?.locked_reason ||
+      (!canUseRestaurantSettingsPage
+        ? "Tu plan actual no permite modificar la configuración del restaurante."
+        : "El modo de atención no puede modificarse en este momento.")
+    : "";
+
+  const protectedTablesCount = Number(attentionOperationState?.protected_tables_count || 0);
+  const activeOrdersCount = Number(attentionOperationState?.active_orders_count || 0);
+
   const saveDisabled = Boolean(
-    saving || (!canEditModes && !canUseRestaurantSettingsPage)
+    saving || uiMeta?.save_disabled || !canUseRestaurantSettingsPage
   );
 
   const load = async () => {
@@ -87,14 +125,7 @@ export default function RestaurantSettings() {
     try {
       const st = await getRestaurantSettings(restaurantId);
 
-      const nextUi = st?._meta?.ui ?? {
-        can_edit_modes: false,
-        selectors_disabled: true,
-        save_disabled: true,
-        locked_by_plan: true,
-        locked_reason: "",
-      };
-
+      const nextUi = st?._meta?.ui ?? DEFAULT_UI_META;
       setUiMeta(nextUi);
       setPlanAccess(st?._meta?.plan_access ?? null);
 
@@ -261,10 +292,13 @@ export default function RestaurantSettings() {
         e?.response?.data?.message ||
         "No se pudo guardar la configuración";
 
-      if (
-        code ===
-        "INVENTORY_MODE_CHANGE_HAS_OPEN_CASH_SESSIONS"
-      ) {
+      if (code === "INVENTORY_MODE_CHANGE_HAS_OPEN_CASH_SESSIONS") {
+        await load();
+        setErr(message);
+        return;
+      }
+
+      if (code === "ATTENTION_MODE_CHANGE_BLOCKED_BY_ACTIVE_TABLE_OPERATIONS") {
         await load();
         setErr(message);
         return;
@@ -603,12 +637,45 @@ export default function RestaurantSettings() {
                   onChange={onAttentionModeChange}
                   options={ATTENTION_MODES}
                   disabled={attentionDisabled}
-                  lockMessage={
-                    attentionDisabled
-                      ? "Bloqueado: tu plan actual no permite modificar la configuración del restaurante."
-                      : ""
-                  }
+                  lockMessage={attentionLockMessage}
                 />
+
+                {attentionLockedByOperations && (
+                  <Alert
+                    severity="warning"
+                    sx={{
+                      borderRadius: 1,
+                      bgcolor: "#F3F5FA",
+                      color: "#30385F",
+                      border: "1px solid #D8DDEA",
+                      "& .MuiAlert-icon": {
+                        color: "#59658F",
+                      },
+                      "& .MuiAlert-message": {
+                        width: "100%",
+                      },
+                    }}
+                  >
+                    <Box>
+                      <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.5, color: "#30385F" }}>
+                        Modo de atención bloqueado temporalmente
+                      </Typography>
+
+                      <Typography sx={{ fontSize: 13, lineHeight: 1.6, color: "#4F5875" }}>
+                        No puedes cambiar entre atención con mesas y atención directa mientras existan operaciones en curso.
+                      </Typography>
+
+                      {(protectedTablesCount > 0 || activeOrdersCount > 0) && (
+                        <Typography sx={{ mt: 0.75, fontSize: 12, color: "#6A728B", fontWeight: 700 }}>
+                          {protectedTablesCount} {protectedTablesCount === 1 ? "mesa protegida" : "mesas protegidas"}
+                          {activeOrdersCount > 0
+                            ? ` · ${activeOrdersCount} ${activeOrdersCount === 1 ? "orden activa" : "órdenes activas"}`
+                            : ""}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Alert>
+                )}
 
                 {form.attention_mode === "direct" ? (
                   <Alert severity="info" sx={{ borderRadius: 1 }}>

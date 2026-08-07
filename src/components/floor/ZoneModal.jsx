@@ -77,6 +77,7 @@ export default function ZoneModal({
   initialData = null,
   onClose,
   onSaved,
+  onConflictRefresh,
   showToast,
 }) {
   const theme = useTheme();
@@ -150,8 +151,13 @@ export default function ZoneModal({
     };
   }, [open, restaurantId, branchId]);
 
-  const menuChangeBlocked = mode === "edit" && initialData?.menu_change?.can_change_menu === false;
-  const menuChangeMessage = menuChangeBlocked ? initialData?.menu_change?.message || "El menú no puede cambiarse mientras la zona tenga actividad en curso." : "";
+  const zoneEditBlocked =
+    mode === "edit" &&
+    initialData?.protection?.can_edit === false;
+
+  const zoneEditBlockedMessage =
+    initialData?.protection?.reason ||
+    "La zona tiene mesas con operaciones en curso y no puede modificarse en este momento.";
 
   const menuOptions = [...salonMenus];
 
@@ -164,15 +170,14 @@ export default function ZoneModal({
   const title = mode === "create" ? "Nueva zona" : "Editar zona";
 
   const onSubmit = async (form) => {
-    setSaving(true);
-    try {
-      const menuId = menuChangeBlocked
-        ? Number(initialData?.menu_id)
-        : Number(form.menu_id);
+    if (zoneEditBlocked) return;
 
+    setSaving(true);
+
+    try {
       const payload = {
         name: (form.name || "").trim(),
-        menu_id: menuId,
+        menu_id: Number(form.menu_id),
       };
 
       const saved =
@@ -190,14 +195,34 @@ export default function ZoneModal({
       if (onSaved) onSaved(saved);
       onClose();
     } catch (e) {
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo guardar";
+
+      if (code === "ZONE_UPDATE_BLOCKED_BY_ACTIVE_OPERATION") {
+        if (showToast) {
+          showToast(message, "warning");
+        } else {
+          alert(message);
+        }
+
+        if (onConflictRefresh) {
+          await onConflictRefresh();
+        }
+
+        onClose();
+        return;
+      }
+
       const handled = handleFormApiError(e, setError, {
         onMessage: (msg) => (showToast ? showToast(msg, "error") : alert(msg)),
       });
 
       if (!handled) {
-        const msg = e?.response?.data?.message || e?.message || "No se pudo guardar";
-        if (showToast) showToast(msg, "error");
-        else alert(msg);
+        if (showToast) showToast(message, "error");
+        else alert(message);
       }
     } finally {
       setSaving(false);
@@ -300,6 +325,10 @@ export default function ZoneModal({
                   Datos de la zona
                 </Typography>
 
+                {zoneEditBlocked ? (
+                  <HelperNote>{zoneEditBlockedMessage}</HelperNote>
+                ) : null}
+
                 <FieldBlock
                   label="Nombre de la zona"
                   input={
@@ -307,6 +336,7 @@ export default function ZoneModal({
                       fullWidth
                       {...register("name")}
                       placeholder='Ej. "Terraza"'
+                      disabled={saving || zoneEditBlocked}
                     />
                   }
                   help="No se permiten nombres duplicados dentro de la misma sucursal."
@@ -334,7 +364,7 @@ export default function ZoneModal({
                             saving ||
                             menusLoading ||
                             menuOptions.length === 0 ||
-                            menuChangeBlocked
+                            zoneEditBlocked
                           }
                           SelectProps={{
                             MenuProps: {
@@ -361,9 +391,7 @@ export default function ZoneModal({
                     />
                   }
                   help={
-                    menuChangeBlocked
-                      ? menuChangeMessage
-                      : menusLoading
+                    menusLoading
                       ? "Cargando menús SALON…"
                       : menusLoadError || null
                   }
@@ -392,7 +420,7 @@ export default function ZoneModal({
 
                   <Button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || zoneEditBlocked}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{

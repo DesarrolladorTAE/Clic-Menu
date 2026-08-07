@@ -125,13 +125,19 @@ export default function BranchFloorPlanPage() {
   const [settingsPayload, setSettingsPayload] = useState(null);
   const settings = settingsPayload?.data || null;
 
-  const uiVisibility = settingsPayload?.ui?.ui_visibility || {};
-  const uiAttentionMode = settingsPayload?.ui?.attention_mode;
+  const operationalUi = settingsPayload?.ui || null;
+  const uiVisibility = operationalUi?.visibility || {};
+  const uiAttentionMode = operationalUi?.attention_mode;
 
   const isDirectAttentionMode =
+    operationalUi?.is_direct_attention_mode === true ||
     uiAttentionMode === "direct" ||
     settings?.attention_mode === "direct" ||
-    uiVisibility?.table_modules === false;
+    (
+      uiVisibility?.ordering_mode === false &&
+      uiVisibility?.table_service_mode === false &&
+      uiVisibility?.seat_capacity === false
+    );
 
   const [zones, setZones] = useState([]);
   const [tables, setTables] = useState([]);
@@ -217,7 +223,11 @@ export default function BranchFloorPlanPage() {
     };
   }, [settings]);
 
-  const canManageQr = !!settings;
+  const canManageQr = Boolean(
+    settings && (operationalUi?.can_manage_qr ?? true)
+  );
+
+  const manageQrBlockReason = operationalUi?.manage_qr_block_reason || null;
 
   const isZoneAssignmentEnabled = useMemo(() => {
     return (
@@ -310,7 +320,10 @@ export default function BranchFloorPlanPage() {
     setZoneFilter("all");
   };
 
-  const loadSettings = async (targetBranchId) => {
+  const loadSettings = async (
+    targetBranchId,
+    { closeSettingsModal = true } = {}
+  ) => {
     if (!targetBranchId) {
       setSettingsPayload(null);
       return;
@@ -319,8 +332,12 @@ export default function BranchFloorPlanPage() {
     try {
       const res = await getOperationalSettings(restaurantId, targetBranchId);
       const payload = unwrapSettingsPayload(res);
+
       setSettingsPayload(payload);
-      setSettingsModalOpen(false);
+
+      if (closeSettingsModal) {
+        setSettingsModalOpen(false);
+      }
     } catch (e) {
       const st = e?.response?.status;
 
@@ -389,12 +406,23 @@ export default function BranchFloorPlanPage() {
     }
   };
 
-  const loadBranchData = async (targetBranchId) => {
+  const loadBranchData = async (
+    targetBranchId,
+    { closeSettingsModal = true } = {}
+  ) => {
     await Promise.all([
-      loadSettings(targetBranchId),
+      loadSettings(targetBranchId, { closeSettingsModal }),
       loadZones(targetBranchId),
       loadTables(targetBranchId),
     ]);
+  };
+
+  const refreshOperationalContext = async () => {
+    if (!selectedBranchId) return;
+
+    await loadBranchData(selectedBranchId, {
+      closeSettingsModal: false,
+    });
   };
 
   const loadAll = async () => {
@@ -500,6 +528,17 @@ export default function BranchFloorPlanPage() {
   };
 
   const openEditZone = (zone) => {
+    if (zone?.protection?.can_edit === false) {
+      showAlert({
+        severity: "warning",
+        title: "Zona en operación",
+        message:
+          zone?.protection?.reason ||
+          "No puedes editar esta zona mientras alguna de sus mesas tenga una operación en curso.",
+      });
+      return;
+    }
+
     setZoneModalMode("edit");
     setZoneModalInitial(zone);
     setZoneModalOpen(true);
@@ -511,6 +550,17 @@ export default function BranchFloorPlanPage() {
   };
 
   const onDeleteZone = async (zone) => {
+    if (zone?.protection?.can_delete === false) {
+      showAlert({
+        severity: "warning",
+        title: "Zona en operación",
+        message:
+          zone?.protection?.reason ||
+          "No puedes eliminar esta zona mientras alguna de sus mesas tenga una operación en curso.",
+      });
+      return;
+    }
+
     const ok = window.confirm("¿De verdad deseas eliminar esta zona?");
     if (!ok) return;
 
@@ -532,16 +582,31 @@ export default function BranchFloorPlanPage() {
         message: "Zona eliminada correctamente.",
       });
     } catch (e) {
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo eliminar la zona.";
+
+      if (code === "ZONE_DELETE_BLOCKED_BY_ACTIVE_OPERATION") {
+        showAlert({
+          severity: "warning",
+          title: "Zona en operación",
+          message,
+        });
+
+        await refreshOperationalContext();
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo eliminar la zona.",
+        message,
       });
     }
   };
+
 
   const openCreateTable = () => {
     if (!selectedBranchId) {
@@ -624,6 +689,17 @@ export default function BranchFloorPlanPage() {
       return;
     }
 
+    if (!canManageQr) {
+      showAlert({
+        severity: "warning",
+        title: "QR no disponible",
+        message:
+          manageQrBlockReason ||
+          "La administración de códigos QR no está disponible en este momento.",
+      });
+      return;
+    }
+
     navigate(`/owner/restaurants/${restaurantId}/operation/tables/qr-codes`, {
       state: {
         branchId: selectedBranchId,
@@ -634,6 +710,17 @@ export default function BranchFloorPlanPage() {
 
   const openAssignWaiter = async (zone) => {
     if (!isZoneAssignmentEnabled || !selectedBranchId) return;
+
+    if (zone?.protection?.can_change_waiter === false) {
+      showAlert({
+        severity: "warning",
+        title: "Mesero protegido por operación",
+        message:
+          zone?.protection?.reason ||
+          "No puedes cambiar libremente el mesero de esta zona mientras tenga mesas con operaciones en curso.",
+      });
+      return;
+    }
 
     setAssignZone(zone);
     setAssignSelectedWaiterId("");
@@ -673,6 +760,7 @@ export default function BranchFloorPlanPage() {
     if (!assignZone) return;
 
     const waiterId = Number(assignSelectedWaiterId);
+
     if (!waiterId) {
       showAlert({
         severity: "warning",
@@ -683,6 +771,7 @@ export default function BranchFloorPlanPage() {
     }
 
     setAssignSaving(true);
+
     try {
       await assignZoneWaiter(
         restaurantId,
@@ -701,14 +790,30 @@ export default function BranchFloorPlanPage() {
       await loadZones(selectedBranchId);
       await loadTables(selectedBranchId);
     } catch (e) {
+      const status = e?.response?.status;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo asignar el mesero a la zona.";
+
+      if (status === 409) {
+        showAlert({
+          severity: "warning",
+          title: "No se puede cambiar el mesero",
+          message,
+        });
+
+        closeAssignModal();
+        await refreshOperationalContext();
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo asignar el mesero a la zona.",
+        message,
       });
+
       setAssignSaving(false);
     }
   };
@@ -839,6 +944,7 @@ export default function BranchFloorPlanPage() {
         isDirectAttentionMode={isDirectAttentionMode}
         onClose={() => setSettingsModalOpen(false)}
         onSaved={onSettingsSaved}
+        onConflictRefresh={refreshOperationalContext}
         showToast={(message, type = "info") => {
           showAlert({
             severity:
@@ -863,14 +969,15 @@ export default function BranchFloorPlanPage() {
       />
 
       <ZoneModal
-        open={zoneModalOpen}
-        mode={zoneModalMode}
-        restaurantId={restaurantId}
-        branchId={selectedBranchId}
-        initialData={zoneModalMode === "edit" ? zoneModalInitial : null}
-        onClose={() => setZoneModalOpen(false)}
-        onSaved={onZoneSaved}
-        showToast={(message, type = "info") => {
+      open={zoneModalOpen}
+      mode={zoneModalMode}
+      restaurantId={restaurantId}
+      branchId={selectedBranchId}
+      initialData={zoneModalMode === "edit" ? zoneModalInitial : null}
+      onClose={() => setZoneModalOpen(false)}
+      onSaved={onZoneSaved}
+      onConflictRefresh={refreshOperationalContext}
+      showToast={(message, type = "info") => {
           showAlert({
             severity:
               type === "success"

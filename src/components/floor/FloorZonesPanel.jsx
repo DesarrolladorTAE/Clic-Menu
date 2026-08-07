@@ -105,6 +105,25 @@ export default function FloorZonesPanel({
               const hasMenuProblem = menuConfiguration?.is_valid === false;
               const menuWarningLabel = menuConfiguration?.status === "missing_menu" ? "Menú sin configurar" : menuConfiguration?.status_label || "Menú con problema";
 
+              const protection = zone?.protection || {};
+              const zoneProtected = protection?.locked === true;
+
+              const canEditZone =
+                !isDirectAttentionMode &&
+                protection?.can_edit !== false;
+
+              const canDeleteZone =
+                !isDirectAttentionMode &&
+                protection?.can_delete !== false;
+
+              const canChangeZoneWaiter =
+                !isDirectAttentionMode &&
+                protection?.can_change_waiter !== false;
+
+              const protectionReason =
+                protection?.reason ||
+                "La zona tiene mesas con operaciones en curso.";
+
               return (
                 <Card
                   key={zone.id}
@@ -178,7 +197,18 @@ export default function FloorZonesPanel({
                           )}
                         </Box>
 
-                        {missingZoneWaiter ? (
+                        {zoneProtected ? (
+                          <Chip
+                            label="En operación"
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              bgcolor: "#EEF2F7",
+                              color: "#334155",
+                              border: "1px solid #CBD5E1",
+                            }}
+                          />
+                        ) : missingZoneWaiter ? (
                           <Chip
                             label="Sin mesero"
                             size="small"
@@ -208,8 +238,8 @@ export default function FloorZonesPanel({
                         {isDirectAttentionMode
                           ? "Modo atención directa: esta zona queda disponible solo como historial/consulta."
                           : isZoneAssignmentEnabled
-                          ? "Puedes asignar un mesero a esta zona para distribuir la atención."
-                          : "Esta zona ya puede utilizarse para organizar las mesas del salón."}
+                          ? "La asignación por zona permite distribuir la atención entre sus mesas."
+                          : "Esta zona organiza las mesas correspondientes a esta área del salón."}
                       </Typography>
 
                       <Stack
@@ -222,10 +252,12 @@ export default function FloorZonesPanel({
                         {isZoneAssignmentEnabled ? (
                           <Button
                             onClick={() => onAssignWaiter(zone)}
-                            disabled={isDirectAttentionMode}
+                            disabled={!canChangeZoneWaiter}
                             title={
                               isDirectAttentionMode
                                 ? "Atención directa no permite asignar meseros por zona."
+                                : !canChangeZoneWaiter
+                                ? protectionReason
                                 : ""
                             }
                             variant="outlined"
@@ -244,10 +276,12 @@ export default function FloorZonesPanel({
 
                         <Button
                           onClick={() => onEditZone(zone)}
-                          disabled={isDirectAttentionMode}
+                          disabled={!canEditZone}
                           title={
                             isDirectAttentionMode
                               ? "Atención directa no permite editar zonas."
+                              : !canEditZone
+                              ? protectionReason
                               : ""
                           }
                           variant="outlined"
@@ -265,10 +299,12 @@ export default function FloorZonesPanel({
 
                         <Button
                           onClick={() => onDeleteZone(zone)}
-                          disabled={isDirectAttentionMode}
+                          disabled={!canDeleteZone}
                           title={
                             isDirectAttentionMode
                               ? "Atención directa no permite eliminar zonas."
+                              : !canDeleteZone
+                              ? protectionReason
                               : ""
                           }
                           variant="outlined"

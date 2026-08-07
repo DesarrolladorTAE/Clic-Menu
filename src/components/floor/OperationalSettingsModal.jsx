@@ -22,10 +22,14 @@ const ORDERING_MODE_OPTIONS_DEFAULT = [
   {
     value: "waiter_only",
     label: "Solo mesero",
+    enabled: true,
+    blocked_reason: null,
   },
   {
     value: "customer_assisted",
     label: "Cliente asistido",
+    enabled: true,
+    blocked_reason: null,
   },
 ];
 
@@ -110,6 +114,7 @@ export default function OperationalSettingsModal({
   isDirectAttentionMode = false,
   onClose,
   onSaved,
+  onConflictRefresh,
   showToast,
 }) {
   const theme = useTheme();
@@ -140,10 +145,45 @@ export default function OperationalSettingsModal({
     return [];
   }, [initialData]);
 
+  const effectiveDirectAttentionMode = useMemo(() => {
+    if (initialUi?.is_direct_attention_mode !== undefined) {
+      return Boolean(initialUi.is_direct_attention_mode);
+    }
+
+    if (initialUi?.attention_mode) {
+      return String(initialUi.attention_mode) === "direct";
+    }
+
+    return Boolean(isDirectAttentionMode);
+  }, [initialUi, isDirectAttentionMode]);
+
+  const visibility = initialUi?.visibility || {};
+
+  const showOrderingMode =
+    visibility?.ordering_mode ?? !effectiveDirectAttentionMode;
+
+  const showTableServiceMode =
+    visibility?.table_service_mode ?? !effectiveDirectAttentionMode;
+
+  const showAssignmentStrategy =
+    visibility?.assignment_strategy ?? !effectiveDirectAttentionMode;
+
+  const showSeatCapacity =
+    visibility?.seat_capacity ?? !effectiveDirectAttentionMode;
+
+  const showCashierDirectMode =
+    visibility?.cashier_direct_mode ?? true;
+
+  const orderingModeChange = initialUi?.ordering_mode_change || null;
+
   const qrOrderingAllowed = useMemo(() => {
     if (!initialUi) return true;
     return initialUi.qr_ordering_allowed !== false;
   }, [initialUi]);
+
+  const orderingModeCanChange = orderingModeChange
+    ? orderingModeChange?.can_change !== false
+    : qrOrderingAllowed;
 
   const orderingModeOptionsFromServer = useMemo(() => {
     const raw = initialUi?.ordering_mode_options;
@@ -161,12 +201,16 @@ export default function OperationalSettingsModal({
               item === "customer_assisted"
                 ? "Cliente asistido"
                 : "Solo mesero",
+            enabled: true,
+            blocked_reason: null,
           };
         }
 
         return {
           value: item?.value,
           label: item?.label,
+          enabled: item?.enabled !== false,
+          blocked_reason: item?.blocked_reason ?? null,
         };
       })
       .filter((item) => item.value && item.label);
@@ -205,24 +249,7 @@ export default function OperationalSettingsModal({
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
 
-  const orderingModeOptions = useMemo(() => {
-    let options = [...orderingModeOptionsFromServer];
-
-    // REGLA FRONT PLAN:
-    // Si el plan no permite Cliente asistido, solo dejamos Solo mesero.
-    if (!qrOrderingAllowed) {
-      options = options.filter((item) => item.value !== "customer_assisted");
-    }
-
-    if (!options.some((item) => item.value === "waiter_only")) {
-      options.unshift({
-        value: "waiter_only",
-        label: "Solo mesero",
-      });
-    }
-
-    return options;
-  }, [orderingModeOptionsFromServer, qrOrderingAllowed]);
+  const orderingModeOptions = orderingModeOptionsFromServer;
 
   useEffect(() => {
     if (!open) return;
@@ -230,16 +257,6 @@ export default function OperationalSettingsModal({
       setValue("assignment_strategy", "table_only");
     }
   }, [open, tableServiceMode, setValue]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    // REGLA FRONT PLAN:
-    // Digital/Gestión no pueden quedarse visualmente en Cliente asistido.
-    if (!qrOrderingAllowed && String(orderingMode) === "customer_assisted") {
-      setValue("ordering_mode", "waiter_only");
-    }
-  }, [open, qrOrderingAllowed, orderingMode, setValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -290,19 +307,12 @@ export default function OperationalSettingsModal({
     try {
       const effectiveTableServiceMode = form.table_service_mode || null;
 
-      // Protección frontend por plan.
-      // El backend sigue siendo la autoridad final para Cliente asistido.
-      const safeOrderingMode =
-        qrOrderingAllowed && form.ordering_mode === "customer_assisted"
-          ? "customer_assisted"
-          : "waiter_only";
-
-      const payload = isDirectAttentionMode
+      const payload = effectiveDirectAttentionMode
         ? {
             cashier_direct_mode: form.cashier_direct_mode || "disabled",
           }
         : {
-            ordering_mode: safeOrderingMode,
+            ordering_mode: form.ordering_mode || "waiter_only",
             table_service_mode: effectiveTableServiceMode,
             assignment_strategy:
               String(effectiveTableServiceMode) === "assigned_waiter"
@@ -328,15 +338,37 @@ export default function OperationalSettingsModal({
 
       onClose();
     } catch (e) {
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo guardar";
+
+      const isOperationalConflict =
+        code === "ORDERING_MODE_CHANGE_BLOCKED_BY_ACTIVE_OPERATIONS" ||
+        code === "ZONE_STRATEGY_CHANGE_BLOCKED_BY_ACTIVE_OPERATIONS";
+
+      if (isOperationalConflict) {
+        if (showToast) {
+          showToast(message, "warning");
+        } else {
+          alert(message);
+        }
+
+        if (onConflictRefresh) {
+          await onConflictRefresh();
+        }
+
+        return;
+      }
+
       const handled = handleFormApiError(e, setError, {
         onMessage: (msg) => (showToast ? showToast(msg, "error") : alert(msg)),
       });
 
       if (!handled) {
-        const msg =
-          e?.response?.data?.message || e?.message || "No se pudo guardar";
-        if (showToast) showToast(msg, "error");
-        else alert(msg);
+        if (showToast) showToast(message, "error");
+        else alert(message);
       }
     } finally {
       setSaving(false);
@@ -395,7 +427,7 @@ export default function OperationalSettingsModal({
                 color: "rgba(255,255,255,0.82)",
               }}
             >
-              {isDirectAttentionMode
+              {effectiveDirectAttentionMode
                 ? "Esta sucursal opera con atención directa. Solo puedes configurar la venta desde caja."
                 : "Define cómo se operará la sucursal antes de usar zonas, mesas y QR."}
             </Typography>
@@ -476,40 +508,6 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
-               {!isDirectAttentionMode && !qrOrderingAllowed ? (
-                  <Box
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 1,
-                      border: "1px solid",
-                      borderColor: "#B8D7F0",
-                      backgroundColor: "#EEF7FF",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        color: "#0B4A75",
-                        mb: 0.5,
-                      }}
-                    >
-                      Pedidos por QR limitados por plan
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        color: "#0B4A75",
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      En este plan el QR funciona
-                      como menú visual.
-                    </Typography>
-                  </Box>
-                ) : null}
-
                 {serverNotices.length > 0 ? (
                   <Box
                     sx={{
@@ -549,68 +547,79 @@ export default function OperationalSettingsModal({
                 ) : null}
 
 
-                {!isDirectAttentionMode ? (
+                {showOrderingMode || showTableServiceMode || showAssignmentStrategy ? (
                   <>
                     <SectionTitle title="Operación de pedidos" />
 
-                    <FieldBlock
-                      label="Modo de toma de pedidos"
-                      input={
-                        <Controller
-                          name="ordering_mode"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              select
-                              fullWidth
-                              value={field.value ?? ""}
-                              onChange={field.onChange}
-                              SelectProps={{
-                                IconComponent: KeyboardArrowDownIcon,
-                              }}
-                            >
-                              {orderingModeOptions.map((option) => (
-                                <MenuItem key={option.value} value={option.value}>
-                                  {option.label}
+                    {showOrderingMode ? (
+                      <FieldBlock
+                        label="Modo de toma de pedidos"
+                        input={
+                          <Controller
+                            name="ordering_mode"
+                            control={control}
+                            render={({ field }) => (
+                              <TextField
+                                select
+                                fullWidth
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                disabled={!orderingModeCanChange}
+                                SelectProps={{
+                                  IconComponent: KeyboardArrowDownIcon,
+                                }}
+                              >
+                                {orderingModeOptions.map((option) => (
+                                  <MenuItem
+                                    key={option.value}
+                                    value={option.value}
+                                    disabled={option.enabled === false}
+                                    title={option.blocked_reason || ""}
+                                  >
+                                    {option.label}
+                                    {option.enabled === false ? " (no disponible)" : ""}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
+                            )}
+                          />
+                        }
+                        help={orderingHelper}
+                        error={errors?.ordering_mode?.message}
+                      />
+                    ) : null}
+
+                    {showTableServiceMode ? (
+                      <FieldBlock
+                        label="Modo de asignación de personal"
+                        input={
+                          <Controller
+                            name="table_service_mode"
+                            control={control}
+                            render={({ field }) => (
+                              <TextField
+                                select
+                                fullWidth
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                SelectProps={{
+                                  IconComponent: KeyboardArrowDownIcon,
+                                }}
+                              >
+                                <MenuItem value="free_for_all">Libre</MenuItem>
+                                <MenuItem value="assigned_waiter">
+                                  Mesero asignado
                                 </MenuItem>
-                              ))}
-                            </TextField>
-                          )}
-                        />
-                      }
-                      help={orderingHelper}
-                      error={errors?.ordering_mode?.message}
-                    />
+                              </TextField>
+                            )}
+                          />
+                        }
+                        help={tableServiceHelper}
+                        error={errors?.table_service_mode?.message}
+                      />
+                    ) : null}
 
-                    <FieldBlock
-                      label="Modo de asignación de personal"
-                      input={
-                        <Controller
-                          name="table_service_mode"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              select
-                              fullWidth
-                              value={field.value ?? ""}
-                              onChange={field.onChange}
-                              SelectProps={{
-                                IconComponent: KeyboardArrowDownIcon,
-                              }}
-                            >
-                              <MenuItem value="free_for_all">Libre</MenuItem>
-                              <MenuItem value="assigned_waiter">
-                                Mesero asignado
-                              </MenuItem>
-                            </TextField>
-                          )}
-                        />
-                      }
-                      help={tableServiceHelper}
-                      error={errors?.table_service_mode?.message}
-                    />
-
-                    {showStrategy ? (
+                    {showAssignmentStrategy && showStrategy ? (
                       <FieldBlock
                         label="Estrategia de asignación"
                         input={
@@ -642,40 +651,45 @@ export default function OperationalSettingsModal({
                 ) : null}
                 
 
-                <SectionTitle title="Venta directa desde caja" />
-                <FieldBlock
-                  label="Modo de venta directa"
-                  input={
-                    <Controller
-                      name="cashier_direct_mode"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          select
-                          fullWidth
-                          value={field.value ?? "disabled"}
-                          onChange={field.onChange}
-                          SelectProps={{
-                            IconComponent: KeyboardArrowDownIcon,
-                          }}
-                        >
-                          <MenuItem value="disabled">Desactivada</MenuItem>
-                          <MenuItem value="with_kitchen">
-                            Activada con cocina
-                          </MenuItem>
-                          <MenuItem value="without_kitchen">
-                            Activada sin cocina
-                          </MenuItem>
-                        </TextField>
-                      )}
+                {showCashierDirectMode ? (
+                  <>
+                    <SectionTitle title="Venta directa desde caja" />
+
+                    <FieldBlock
+                      label="Modo de venta directa"
+                      input={
+                        <Controller
+                          name="cashier_direct_mode"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              select
+                              fullWidth
+                              value={field.value ?? "disabled"}
+                              onChange={field.onChange}
+                              SelectProps={{
+                                IconComponent: KeyboardArrowDownIcon,
+                              }}
+                            >
+                              <MenuItem value="disabled">Desactivada</MenuItem>
+                              <MenuItem value="with_kitchen">
+                                Activada con cocina
+                              </MenuItem>
+                              <MenuItem value="without_kitchen">
+                                Activada sin cocina
+                              </MenuItem>
+                            </TextField>
+                          )}
+                        />
+                      }
+                      help={cashierDirectHelper}
+                      error={errors?.cashier_direct_mode?.message}
                     />
-                  }
-                  help={cashierDirectHelper}
-                  error={errors?.cashier_direct_mode?.message}
-                />
+                  </>
+                ) : null}
 
 
-                {!isDirectAttentionMode ? (
+                {showSeatCapacity ? (
                   <>
                     <SectionTitle title="Capacidad de mesas" />
 

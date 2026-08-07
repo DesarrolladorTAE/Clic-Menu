@@ -1,14 +1,5 @@
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  IconButton,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
+  Button, Dialog, DialogContent, DialogTitle, FormControl, IconButton, MenuItem, Select, Stack, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -141,8 +132,8 @@ export default function AssignZoneWaiterModal({
                 lineHeight: 1.45,
               }}
             >
-              Esta acción también asigna el mesero automáticamente a las mesas
-              de esta zona.
+              El mesero se asignará a la zona y a las mesas sin operaciones en curso.
+              Las mesas con una operación activa conservarán su asignación actual.
             </Typography>
           </div>
 
