@@ -30,6 +30,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
   const [remainingSec, setRemainingSec] = useState(0);
 
   const [sessionUnavailable, setSessionUnavailable] = useState(null);
+  const [sessionPlanBlocked, setSessionPlanBlocked] = useState(null);
 
   const tickRef = useRef(null);
   const heartbeatRef = useRef(null);
@@ -52,6 +53,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
     setSessionLoading(true);
     setSessionBusy(null);
     setSessionUnavailable(null);
+    setSessionPlanBlocked(null);
     setCallToast("");
     setTakeover(null);
     setJoinReq(null);
@@ -74,14 +76,15 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
 
       if (status === 409 && code === "TABLE_BUSY") {
         const s = e?.response?.data?.data || {};
-        const hasDevice = !!s?.has_device || !!s?.device_identifier;
+        const hasDevice = s?.has_device === true;
+        const orderId = s?.order_id ? Number(s.order_id) : null;
 
-        if (!hasDevice && (s?.order_id || s?.active_order_id)) {
+        if (!hasDevice && orderId) {
           setTakeover({
             available: true,
             table_id: Number(tableId),
             session_id: s?.session_id ? Number(s.session_id) : null,
-            order_id: s?.order_id ? Number(s.order_id) : Number(s.active_order_id),
+            order_id: orderId,
             message:
               "Esta mesa tiene una cuenta abierta, pero no hay un dispositivo vinculado.\n¿Deseas retomar la cuenta?",
           });
@@ -93,8 +96,31 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
 
         setSessionBusy({
           session_id: s?.session_id ? Number(s.session_id) : null,
+          order_id: orderId,
           status: String(s?.status || "active"),
+          has_device: hasDevice,
         });
+        setSession(null);
+        setRemainingSec(0);
+        return;
+      }
+
+      if (status === 403 && code === "QR_ORDERING_NOT_ALLOWED_BY_PLAN") {
+        const data = e?.response?.data?.data || {};
+        const message =
+          e?.response?.data?.message ||
+          "Esta sucursal ya no permite iniciar nuevos pedidos desde QR.";
+
+        setSessionPlanBlocked({
+          code,
+          message,
+          table_id: data?.table_id ? Number(data.table_id) : Number(tableId),
+          session_id: data?.session_id ? Number(data.session_id) : null,
+          order_id: data?.order_id ? Number(data.order_id) : null,
+        });
+
+        setSessionBusy(null);
+        setSessionUnavailable(null);
         setSession(null);
         setRemainingSec(0);
         return;
@@ -235,19 +261,69 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
           });
           stopJoinPoll();
         } catch (e) {
+          const responseData = e?.response?.data || {};
+          const responseStatus = String(responseData?.data?.status || "").toLowerCase();
+          const httpStatus = Number(e?.response?.status || 0);
           const msg =
-            e?.response?.data?.message ||
+            responseData?.message ||
             e?.message ||
             "Error consultando aprobación.";
-          const code = String(e?.response?.data?.code || "").toUpperCase();
-          const st = e?.response?.status;
 
-          if (
-            st === 409 &&
-            (code.includes("REJECT") ||
-              String(msg).toLowerCase().includes("no fuiste aprobado"))
-          ) {
-            setJoinReq({ status: "rejected", message: msg });
+          if (httpStatus === 409 && responseStatus === "rejected") {
+            setJoinReq({
+              status: "rejected",
+              message: msg || "No fuiste aprobado para retomar la cuenta.",
+            });
+            stopJoinPoll();
+            return;
+          }
+
+          if (httpStatus === 409 && responseStatus === "unavailable") {
+            setJoinReq({
+              status: "unavailable",
+              message: msg || "No disponible.",
+            });
+            stopJoinPoll();
+            return;
+          }
+
+          if (responseStatus === "closed") {
+            setJoinReq({
+              status: "closed",
+              message: msg || "La sesión ya fue cerrada.",
+            });
+            stopJoinPoll();
+            return;
+          }
+
+          if (responseStatus === "approved") {
+            setJoinReq({
+              status: "approved",
+              message: msg || "Solicitud aprobada.",
+            });
+            stopJoinPoll();
+
+            setTimeout(() => {
+              startScanSession();
+            }, 250);
+
+            return;
+          }
+
+          if (responseStatus === "pending") {
+            setJoinReq((prev) => ({
+              ...(prev || {}),
+              status: "pending",
+              message: msg || prev?.message,
+            }));
+            return;
+          }
+
+          if (httpStatus >= 400 && httpStatus < 500) {
+            setJoinReq({
+              status: "unavailable",
+              message: msg,
+            });
             stopJoinPoll();
           }
         }
@@ -366,6 +442,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
       remainingSec,
       sessionUnavailable,
       setSessionUnavailable,
+      sessionPlanBlocked,
       sessionExpired,
       sessionActive,
       sessionStatus,
@@ -385,6 +462,7 @@ export function useTableQrSession({ activeMenuPayload, hasTable, tableId }) {
       sessionLoading,
       remainingSec,
       sessionUnavailable,
+      sessionPlanBlocked,
       sessionExpired,
       sessionActive,
       sessionStatus,

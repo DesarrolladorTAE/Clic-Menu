@@ -144,6 +144,14 @@ export default function FloorTablesPanel({
                 const statusLabel = getStatusLabel(table.status);
                 const shapeLabel = getTableShapeLabel(table.shape);
 
+                const operationLock = table?.operation_lock || {};
+                const operationLocked = operationLock.locked === true;
+                const canEdit = operationLock.can_edit !== false;
+                const canDelete = operationLock.can_delete !== false;
+                const operationReason =
+                  operationLock.reason ||
+                  "La mesa tiene una operación en curso y no puede modificarse.";
+
                 return (
                   <Card
                     key={table.id}
@@ -197,15 +205,29 @@ export default function FloorTablesPanel({
                             </Typography>
                           </Box>
 
-                          <Chip
-                            label={statusLabel}
-                            size="small"
-                            sx={{
-                              fontWeight: 800,
-                              bgcolor: "#fff",
-                              color: "text.primary",
-                            }}
-                          />
+                          <Stack spacing={0.75} alignItems="flex-end">
+                            <Chip
+                              label={statusLabel}
+                              size="small"
+                              sx={{
+                                fontWeight: 800,
+                                bgcolor: "#fff",
+                                color: "text.primary",
+                              }}
+                            />
+
+                            {operationLocked ? (
+                              <Chip
+                                label="En operación"
+                                size="small"
+                                sx={{
+                                  fontWeight: 800,
+                                  bgcolor: "#E2E8F0",
+                                  color: "#334155",
+                                }}
+                              />
+                            ) : null}
+                          </Stack>
                         </Stack>
 
                         <Box>
@@ -232,10 +254,12 @@ export default function FloorTablesPanel({
                         >
                           <Button
                             onClick={() => onEditTable(table)}
-                            disabled={isDirectAttentionMode}
+                            disabled={isDirectAttentionMode || !canEdit}
                             title={
                               isDirectAttentionMode
                                 ? "Atención directa no permite editar mesas."
+                                : !canEdit
+                                ? operationReason
                                 : ""
                             }
                             variant="outlined"
@@ -254,10 +278,12 @@ export default function FloorTablesPanel({
 
                           <Button
                             onClick={() => onDeleteTable(table)}
-                            disabled={isDirectAttentionMode}
+                            disabled={isDirectAttentionMode || !canDelete}
                             title={
                               isDirectAttentionMode
                                 ? "Atención directa no permite eliminar mesas."
+                                : !canDelete
+                                ? operationReason
                                 : ""
                             }
                             variant="outlined"

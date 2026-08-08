@@ -138,6 +138,7 @@ export default function TableModal({
   initialData = null,
   onClose,
   onSaved,
+  onConflictRefresh,
   showToast,
 }) {
   const theme = useTheme();
@@ -152,10 +153,13 @@ export default function TableModal({
   const assignmentStrategy = String(
     settings?.assignment_strategy || "table_only"
   );
-  const isZoneStrategy =
-    isAssignedWaiterMode && assignmentStrategy === "zone";
-  const isTableOnlyStrategy =
-    isAssignedWaiterMode && assignmentStrategy === "table_only";
+  const isZoneStrategy = isAssignedWaiterMode && assignmentStrategy === "zone";
+  const isTableOnlyStrategy = isAssignedWaiterMode && assignmentStrategy === "table_only";
+
+  const tableEditBlocked = mode === "edit" && initialData?.operation_lock?.can_edit === false;
+  const tableEditBlockedMessage =
+    initialData?.operation_lock?.reason ||
+    "La mesa tiene una operación en curso y no puede modificarse en este momento.";
 
   const minSeats = Number(settings?.min_seats ?? 1);
   const maxSeats = Number(settings?.max_seats ?? 6);
@@ -297,7 +301,10 @@ export default function TableModal({
   const title = mode === "create" ? "Nueva mesa" : "Editar mesa";
 
   const onSubmit = async (form) => {
+    if (tableEditBlocked) return;
+
     setSaving(true);
+
     try {
       const payload = {
         zone_id: Number(form.zone_id),
@@ -334,15 +341,34 @@ export default function TableModal({
       if (onSaved) onSaved(saved);
       onClose();
     } catch (e) {
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo guardar";
+
+      if (code === "TABLE_UPDATE_BLOCKED_BY_ACTIVE_OPERATION") {
+        if (showToast) {
+          showToast(message, "warning");
+        } else {
+          alert(message);
+        }
+
+        if (onConflictRefresh) {
+          await onConflictRefresh();
+        }
+
+        onClose();
+        return;
+      }
+
       const handled = handleFormApiError(e, setError, {
         onMessage: (msg) => (showToast ? showToast(msg, "error") : alert(msg)),
       });
 
       if (!handled) {
-        const msg =
-          e?.response?.data?.message || e?.message || "No se pudo guardar";
-        if (showToast) showToast(msg, "error");
-        else alert(msg);
+        if (showToast) showToast(message, "error");
+        else alert(message);
       }
     } finally {
       setSaving(false);
@@ -445,6 +471,10 @@ export default function TableModal({
                   Datos de la mesa
                 </Typography>
 
+                {tableEditBlocked ? (
+                  <HelperNote>{tableEditBlockedMessage}</HelperNote>
+                ) : null}
+
                 <SectionTitle title="Información principal" />
 
                 <FieldBlock
@@ -459,6 +489,7 @@ export default function TableModal({
                           fullWidth
                           value={field.value ?? ""}
                           onChange={field.onChange}
+                          disabled={tableEditBlocked}
                           SelectProps={{
                             IconComponent: KeyboardArrowDownIcon,
                           }}
@@ -482,6 +513,7 @@ export default function TableModal({
                       fullWidth
                       {...register("name")}
                       placeholder='Ej. "M01"'
+                      disabled={tableEditBlocked}
                     />
                   }
                   error={errors?.name?.message}
@@ -500,6 +532,7 @@ export default function TableModal({
                             fullWidth
                             value={field.value ?? ""}
                             onChange={field.onChange}
+                            disabled={tableEditBlocked}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
@@ -535,6 +568,7 @@ export default function TableModal({
                             fullWidth
                             value={field.value ?? "square"}
                             onChange={field.onChange}
+                            disabled={tableEditBlocked}
                             SelectProps={{
                               IconComponent: KeyboardArrowDownIcon,
                             }}
@@ -565,6 +599,7 @@ export default function TableModal({
                           fullWidth
                           value={field.value ?? ""}
                           onChange={field.onChange}
+                          disabled={tableEditBlocked}
                           SelectProps={{
                             IconComponent: KeyboardArrowDownIcon,
                           }}
@@ -672,7 +707,7 @@ export default function TableModal({
                                     fullWidth
                                     value={field.value ?? ""}
                                     onChange={field.onChange}
-                                    disabled={waitersLoading || !isTableOnlyStrategy}
+                                    disabled={waitersLoading || !isTableOnlyStrategy || tableEditBlocked}
                                     SelectProps={{
                                       IconComponent: KeyboardArrowDownIcon,
                                     }}
@@ -724,7 +759,7 @@ export default function TableModal({
 
                   <Button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || tableEditBlocked}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{

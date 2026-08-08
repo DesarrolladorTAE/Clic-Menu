@@ -240,6 +240,19 @@ export default function BranchQrCreateModal({
 
   const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
 
+  const availableTableOptions = useMemo(() => {
+    return (tableOptions || []).filter(
+      (table) => table?.operation_lock?.locked !== true
+    );
+  }, [tableOptions]);
+
+  const isCustomerAssistedMode =
+    String(settings?.ordering_mode || "") === "customer_assisted";
+
+  const customerAssistedQrBlocked =
+    isCustomerAssistedMode &&
+    qrUiMeta?.customer_assisted_allowed === false;
+
   const availableQrTypes = useMemo(() => {
     const options = Array.isArray(qrUiMeta?.qr_type_options)
       ? qrUiMeta.qr_type_options
@@ -263,7 +276,8 @@ export default function BranchQrCreateModal({
     qrUiMeta?.table_selector_visible !== false &&
     qrUiMeta?.physical_table_qr_allowed !== false &&
     !!salonChannel?.id &&
-    tableOptions.length > 0;
+    !customerAssistedQrBlocked &&
+    availableTableOptions.length > 0;
 
   const whatsappAvailable =
     availableQrTypes.has("web") &&
@@ -296,6 +310,18 @@ export default function BranchQrCreateModal({
   const tableId = watch("table_id");
   const salesChannelId = watch("sales_channel_id");
 
+  const selectedTableOption = useMemo(() => {
+    if (!tableId) return null;
+
+    return (
+      tableOptions.find((table) => Number(table.id) === Number(tableId)) || null
+    );
+  }, [tableOptions, tableId]);
+
+  const selectedTableAvailable =
+    !!selectedTableOption &&
+    selectedTableOption?.operation_lock?.locked !== true;
+
   const purposeOptions = [
     {
       value: "general",
@@ -315,10 +341,17 @@ export default function BranchQrCreateModal({
       available: tableAvailable,
       disabledReason: isDirectAttentionMode
         ? "No disponible en modo de atención directa."
-        : tableOptions.length === 0
-        ? "No hay mesas disponibles en esta sucursal."
+        : !salonChannel?.id
+        ? "No se encontró el canal SALÓN."
         : qrUiMeta?.physical_table_qr_allowed === false
         ? "La configuración actual no permite QRs ligados a mesa."
+        : customerAssistedQrBlocked
+        ? qrUiMeta?.qr_ordering_blocked_reason ||
+          "No disponible con el plan actual."
+        : tableOptions.length === 0
+        ? "No hay mesas disponibles en esta sucursal."
+        : availableTableOptions.length === 0
+        ? "No hay mesas disponibles para crear un QR en este momento."
         : "No disponible con la configuración actual.",
     },
     {
@@ -359,7 +392,7 @@ export default function BranchQrCreateModal({
     }
 
     if (qrPurpose === "table") {
-      return tableAvailable && !!tableId;
+      return tableAvailable && !!tableId && selectedTableAvailable;
     }
 
     if (qrPurpose === "whatsapp") {
@@ -378,6 +411,7 @@ export default function BranchQrCreateModal({
     salesChannelId,
     generalAvailable,
     tableAvailable,
+    selectedTableAvailable,
     whatsappAvailable,
     specificChannelAvailable,
   ]);
@@ -413,6 +447,22 @@ export default function BranchQrCreateModal({
     if (!open) return;
     reset(defaultValues);
   }, [open, reset, defaultValues]);
+
+  useEffect(() => {
+    if (!open || qrPurpose !== "table" || !tableId) return;
+    if (selectedTableAvailable) return;
+
+    setValue("table_id", "", {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [
+    open,
+    qrPurpose,
+    tableId,
+    selectedTableAvailable,
+    setValue,
+  ]);
 
   useEffect(() => {
     if (!open || !qrPurpose) return;
@@ -625,16 +675,25 @@ export default function BranchQrCreateModal({
                           >
                             <MenuItem value="">Selecciona una mesa...</MenuItem>
 
-                            {tableOptions.map((table) => (
-                              <MenuItem key={table.id} value={String(table.id)}>
-                                {table.name}
-                              </MenuItem>
-                            ))}
+                            {tableOptions.map((table) => {
+                              const operationLocked = table?.operation_lock?.locked === true;
+
+                              return (
+                                <MenuItem
+                                  key={table.id}
+                                  value={String(table.id)}
+                                  disabled={operationLocked}
+                                >
+                                  {table.name}
+                                  {operationLocked ? " — En operación" : ""}
+                                </MenuItem>
+                              );
+                            })}
                           </TextField>
                         )}
                       />
                     }
-                    help="Este QR quedará ligado únicamente a la mesa seleccionada."
+                    help="Este QR quedará ligado únicamente a la mesa seleccionada. Las mesas en operación no pueden seleccionarse."
                   />
                 ) : null}
 

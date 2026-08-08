@@ -209,6 +209,13 @@ export default function PublicMenuEntryPage() {
     isWebMenu,
   });
 
+  const canStartCustomerOrder =
+    cartOrder.canStartCustomerOrder !== false;
+
+  const customerOrderStartReason = String(
+    cartOrder.customerOrderStartReason || "",
+  ).trim();
+
   useEffect(() => {
     if (!activeMenuPayload) return;
 
@@ -572,25 +579,42 @@ export default function PublicMenuEntryPage() {
 
   const hasPending =
     !!cartOrder.pendingOrder?.id &&
-    String(cartOrder.pendingOrder?.status || "pending").toLowerCase() ===
-      "pending";
-
-  const canAppend =
-    !!cartOrder.activeOrder?.id &&
-    ["open", "ready"].includes(
-      String(cartOrder.activeOrder?.status || "").toLowerCase(),
+    ["pending", "pending_approval"].includes(
+      String(cartOrder.pendingOrder?.status || "pending").toLowerCase(),
     );
+
+  const canAppend = !!cartOrder.canAppend;
+
+  const hasKnownExistingOrder = !!(
+    cartOrder.activeOrder?.id ||
+    cartOrder.pendingOrder?.id ||
+    qr.session?.order_id ||
+    qr.takeover?.order_id
+  );
+
+  const newOrderBlocked =
+    !isWebMenu &&
+    !hasKnownExistingOrder &&
+    !canStartCustomerOrder;
 
   const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
   const invalidItemsCount = Number(cartOrder.invalidCartItemsCount || 0);
 
   const submitBlockReason = hasInvalidItems
     ? "Hay productos que ya no están disponibles. Quítalos para continuar."
-    : "";
+    : newOrderBlocked
+      ? customerOrderStartReason ||
+        "No se pueden iniciar nuevos pedidos desde QR en este momento."
+      : "";
+
+  const allowNewOrderSend =
+    allowBaseSend &&
+    !hasPending &&
+    (isWebMenu || canStartCustomerOrder) &&
+    !hasInvalidItems;
 
   const allowSendButton =
-    allowBaseSend &&
-    (canAppend || !hasPending) &&
+    !!cartOrder.allowSendNow &&
     !hasInvalidItems;
 
   const billFlow = cartOrder.activeOrder?.bill_flow || null;
@@ -1140,7 +1164,7 @@ export default function PublicMenuEntryPage() {
           tableName={header?.tableName || ""}
           tableSeats={header?.tableSeats || null}
           confirmAndCreateOrder={cartOrder.confirmAndCreateOrder}
-          allowBaseSend={allowBaseSend}
+          allowBaseSend={allowNewOrderSend}
           pending={pending}
           canAppend={canAppend}
           themeColor={themeColor}

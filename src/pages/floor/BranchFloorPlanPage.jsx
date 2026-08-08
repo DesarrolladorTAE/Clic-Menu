@@ -633,6 +633,17 @@ export default function BranchFloorPlanPage() {
   };
 
   const openEditTable = (table) => {
+    if (table?.operation_lock?.can_edit === false) {
+      showAlert({
+        severity: "warning",
+        title: "Mesa en operación",
+        message:
+          table?.operation_lock?.reason ||
+          "No puedes editar esta mesa mientras tenga una operación en curso.",
+      });
+      return;
+    }
+
     setTableModalMode("edit");
     setTableModalInitial(table);
     setTableModalOpen(true);
@@ -643,6 +654,17 @@ export default function BranchFloorPlanPage() {
   };
 
   const onDeleteTable = async (table) => {
+    if (table?.operation_lock?.can_delete === false) {
+      showAlert({
+        severity: "warning",
+        title: "Mesa en operación",
+        message:
+          table?.operation_lock?.reason ||
+          "No puedes eliminar esta mesa mientras tenga una operación en curso.",
+      });
+      return;
+    }
+
     const ok = window.confirm("¿De verdad deseas eliminar esta mesa?");
     if (!ok) return;
 
@@ -657,13 +679,27 @@ export default function BranchFloorPlanPage() {
         message: "Mesa eliminada correctamente.",
       });
     } catch (e) {
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo eliminar la mesa.";
+
+      if (code === "TABLE_DELETE_BLOCKED_BY_ACTIVE_OPERATION") {
+        showAlert({
+          severity: "warning",
+          title: "Mesa en operación",
+          message,
+        });
+
+        await refreshOperationalContext();
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message ||
-          e?.message ||
-          "No se pudo eliminar la mesa.",
+        message,
       });
     }
   };
@@ -1010,6 +1046,7 @@ export default function BranchFloorPlanPage() {
         initialData={tableModalMode === "edit" ? tableModalInitial : null}
         onClose={() => setTableModalOpen(false)}
         onSaved={onTableSaved}
+        onConflictRefresh={refreshOperationalContext}
         showToast={(message, type = "info") => {
           showAlert({
             severity:

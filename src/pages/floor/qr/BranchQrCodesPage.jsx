@@ -376,8 +376,27 @@ export default function BranchQrCodesPage() {
   }, [channelOptionsRaw]);
 
   const tableOptions = useMemo(() => {
-    return (tables || []).map((t) => ({ id: Number(t.id), name: t.name }));
+    return (tables || []).map((t) => ({
+      id: Number(t.id),
+      name: t.name,
+      operation_lock: t?.operation_lock || null,
+    }));
   }, [tables]);
+
+  const refreshQrOperationalContext = async () => {
+    if (!selectedBranchId) return;
+
+    const [qrResponse, tableResponse] = await Promise.all([
+      getBranchQrCodes(restaurantId, selectedBranchId),
+      getTables(restaurantId, selectedBranchId),
+    ]);
+
+    const qrPayload = unwrapQrCodesPayload(qrResponse);
+
+    setItems(qrPayload.data);
+    setQrUiMeta(qrPayload.ui);
+    setTables(Array.isArray(tableResponse) ? tableResponse : []);
+  };
 
   const copyToClipboard = async (text) => {
     try {
@@ -398,8 +417,24 @@ export default function BranchQrCodesPage() {
 
   const onToggleActive = async (qr) => {
     const nextActive = !qr?.is_active;
+    const operationLock = qr?.operation_lock || {};
     const blockedByPlan = !!qr?.blocked_by_plan;
     const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
+
+    const operationBlocked = nextActive
+      ? operationLock?.can_update === false
+      : operationLock?.can_deactivate === false;
+
+    if (operationBlocked) {
+      showAlert({
+        severity: "warning",
+        title: "QR en operación",
+        message:
+          operationLock?.reason ||
+          "No puedes activar o desactivar el QR de esta mesa mientras tenga una operación en curso.",
+      });
+      return;
+    }
 
     if (nextActive && blockedByAttentionMode) {
       showAlert({
@@ -423,15 +458,38 @@ export default function BranchQrCodesPage() {
       return;
     }
 
+    const intendedOrderingMode = String(
+      qr?.intended_ordering_mode || settings?.ordering_mode || ""
+    );
+
+    const isCustomerAssistedTableQr =
+      qr?.type === "physical" &&
+      !!qr?.table_id &&
+      intendedOrderingMode === "customer_assisted";
+
+    if (
+      nextActive &&
+      isCustomerAssistedTableQr &&
+      qrUiMeta?.customer_assisted_allowed === false
+    ) {
+      showAlert({
+        severity: "warning",
+        title: "QR de mesa no disponible",
+        message:
+          qrUiMeta?.qr_ordering_blocked_reason ||
+          "Tu plan actual ya no permite activar QRs de mesa para Cliente asistido.",
+      });
+      return;
+    }
+
     setBusy(true);
+
     try {
       const res = await updateBranchQrCode(
         restaurantId,
         selectedBranchId,
         qr.id,
-        {
-          is_active: nextActive,
-        }
+        { is_active: nextActive }
       );
 
       const updated = unwrapMutationPayload(res);
@@ -446,12 +504,48 @@ export default function BranchQrCodesPage() {
         message: `QR ${nextActive ? "activado" : "desactivado"} correctamente.`,
       });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message || e?.message || "No se pudo actualizar";
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo actualizar el QR.";
+
+      if (code === "TABLE_QR_CHANGE_BLOCKED_BY_ACTIVE_OPERATION") {
+        showAlert({
+          severity: "warning",
+          title: "QR en operación",
+          message,
+        });
+
+        try {
+          await refreshQrOperationalContext();
+        } catch {
+          // Conservamos el aviso principal y evitamos mostrar mensajes repetidos.
+        }
+
+        return;
+      }
+
+      if (code === "CUSTOMER_ASSISTED_QR_NOT_ALLOWED_BY_PLAN") {
+        showAlert({
+          severity: "warning",
+          title: "QR de mesa no disponible",
+          message,
+        });
+
+        try {
+          await refreshQrOperationalContext();
+        } catch {
+          // Conservamos el aviso principal.
+        }
+
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",
-        message: msg,
+        message,
       });
     } finally {
       setBusy(false);
@@ -459,10 +553,22 @@ export default function BranchQrCodesPage() {
   };
 
   const onDelete = async (qr) => {
+    if (qr?.operation_lock?.can_delete === false) {
+      showAlert({
+        severity: "warning",
+        title: "QR en operación",
+        message:
+          qr?.operation_lock?.reason ||
+          "No puedes eliminar el QR de esta mesa mientras tenga una operación en curso.",
+      });
+      return;
+    }
+
     const ok = window.confirm("¿Eliminar este QR? Esto también borra la imagen SVG.");
     if (!ok) return;
 
     setBusy(true);
+
     try {
       await deleteBranchQrCode(restaurantId, selectedBranchId, qr.id);
       setItems((prev) => prev.filter((x) => x.id !== qr.id));
@@ -473,12 +579,32 @@ export default function BranchQrCodesPage() {
         message: "QR eliminado correctamente.",
       });
     } catch (e) {
-      const msg =
-        e?.response?.data?.message || e?.message || "No se pudo eliminar";
+      const code = e?.response?.data?.code;
+      const message =
+        e?.response?.data?.message ||
+        e?.message ||
+        "No se pudo eliminar el QR.";
+
+      if (code === "TABLE_QR_CHANGE_BLOCKED_BY_ACTIVE_OPERATION") {
+        showAlert({
+          severity: "warning",
+          title: "QR en operación",
+          message,
+        });
+
+        try {
+          await refreshQrOperationalContext();
+        } catch {
+          // Conservamos el aviso principal.
+        }
+
+        return;
+      }
+
       showAlert({
         severity: "error",
         title: "Error",
-        message: msg,
+        message,
       });
     } finally {
       setBusy(false);
@@ -568,6 +694,20 @@ export default function BranchQrCodesPage() {
         return;
       }
 
+      if (
+        settings?.ordering_mode === "customer_assisted" &&
+        qrUiMeta?.customer_assisted_allowed === false
+      ) {
+        showAlert({
+          severity: "warning",
+          title: "QR de mesa no disponible",
+          message:
+            qrUiMeta?.qr_ordering_blocked_reason ||
+            "Tu plan actual no permite crear nuevos QRs de mesa para Cliente asistido.",
+        });
+        return;
+      }
+
       if (!salonChannel?.id) {
         showAlert({
           severity: "error",
@@ -584,6 +724,30 @@ export default function BranchQrCodesPage() {
           severity: "warning",
           title: "Mesa requerida",
           message: "Selecciona la mesa para la que deseas crear el QR.",
+        });
+        return;
+      }
+
+      const selectedTableOption = tableOptions.find(
+        (table) => Number(table.id) === tableId
+      );
+
+      if (!selectedTableOption) {
+        showAlert({
+          severity: "warning",
+          title: "Mesa no disponible",
+          message: "La mesa seleccionada ya no está disponible.",
+        });
+        return;
+      }
+
+      if (selectedTableOption?.operation_lock?.locked === true) {
+        showAlert({
+          severity: "warning",
+          title: "Mesa en operación",
+          message:
+            selectedTableOption?.operation_lock?.reason ||
+            "No puedes crear un QR para esta mesa mientras tenga una operación en curso.",
         });
         return;
       }
@@ -689,15 +853,48 @@ export default function BranchQrCodesPage() {
         message: "QR creado correctamente.",
       });
     } catch (e) {
-      const msg =
+      const code = e?.response?.data?.code;
+      const message =
         e?.response?.data?.message ||
         e?.message ||
-        "No se pudo crear el QR";
+        "No se pudo crear el QR.";
+
+      if (code === "TABLE_QR_CHANGE_BLOCKED_BY_ACTIVE_OPERATION") {
+        showAlert({
+          severity: "warning",
+          title: "Mesa en operación",
+          message,
+        });
+
+        try {
+          await refreshQrOperationalContext();
+        } catch {
+          // Conservamos el aviso principal.
+        }
+
+        return;
+      }
+
+      if (code === "CUSTOMER_ASSISTED_QR_NOT_ALLOWED_BY_PLAN") {
+        showAlert({
+          severity: "warning",
+          title: "QR de mesa no disponible",
+          message,
+        });
+
+        try {
+          await refreshQrOperationalContext();
+        } catch {
+          // Conservamos el aviso principal.
+        }
+
+        return;
+      }
 
       showAlert({
         severity: "error",
         title: "Error",
-        message: msg,
+        message,
       });
     } finally {
       setBusy(false);
@@ -861,6 +1058,8 @@ export default function BranchQrCodesPage() {
           typeLabelMap={TYPE_LABEL}
           busy={busy}
           selectedBranchId={selectedBranchId}
+          qrUiMeta={qrUiMeta}
+          orderingMode={settings?.ordering_mode || ""}
         />
       </Stack>
 

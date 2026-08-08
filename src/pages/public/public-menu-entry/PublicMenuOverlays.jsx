@@ -4,6 +4,8 @@ import React from "react";
 import { FullOverlay, PillButton } from "../publicMenu.ui";
 
 export default function PublicMenuOverlays({ qr, hasTable }) {
+  const joinStatus = String(qr.joinReq?.status || "").toLowerCase();
+
   return (
     <>
       <FullOverlay
@@ -11,9 +13,9 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
         tone="warn"
         title="Esta mesa ya está en uso"
         message={
-          "Solo un usuario a la vez puede usar este QR.\n\n" +
-          "Parece que otra persona ya escaneó la mesa en otro dispositivo.\n" +
-          "Si se desocupa (o expira), podrás entrar."
+          "Solo un dispositivo a la vez puede usar esta sesión.\n\n" +
+          "Actualmente otro dispositivo está vinculado a esta mesa.\n" +
+          "Podrás continuar cuando la sesión sea liberada o finalice la operación."
         }
         actions={
           <PillButton
@@ -70,15 +72,15 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
         tone="err"
         title="Tiempo agotado"
         message={
-          "La sesión de esta mesa expiró (5 minutos).\n\n" +
-          "Vuelve a escanear para activar otra sesión y poder enviar pedidos."
+          "La sesión de esta mesa expiró.\n\n" +
+          "Vuelve a validar el QR para recuperar la sesión si la operación sigue activa."
         }
         actions={
           <PillButton
             tone="soft"
             onClick={() => qr.startScanSession()}
             disabled={qr.sessionLoading}
-            title="Reiniciar sesión"
+            title="Revalidar sesión"
           >
             {qr.sessionLoading ? "⏳ Activando..." : "📷 Escanear de nuevo"}
           </PillButton>
@@ -86,7 +88,7 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
       />
 
       <FullOverlay
-        open={!!qr.takeover?.available}
+        open={!!qr.takeover?.available && !joinStatus}
         tone="warn"
         title="¿Retomar cuenta?"
         message={
@@ -98,18 +100,18 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
             <PillButton
               tone="orange"
               onClick={() => qr.requestJoin()}
-              disabled={qr.sessionLoading || qr.joinReq?.status === "pending"}
+              disabled={qr.sessionLoading || joinStatus === "pending"}
               title="Enviar solicitud al mesero"
             >
-              {qr.joinReq?.status === "pending"
+              {joinStatus === "pending"
                 ? "⏳ Solicitando..."
-                : "✅ Sí, retomar"}
+                : " Sí, retomar"}
             </PillButton>
 
             <PillButton
               tone="default"
               onClick={() => qr.clearTakeover()}
-              disabled={qr.joinReq?.status === "pending"}
+              disabled={joinStatus === "pending"}
               title="Cancelar"
             >
               No
@@ -119,11 +121,51 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
       />
 
       <FullOverlay
-        open={!!qr.joinReq && qr.joinReq.status === "pending"}
+        open={joinStatus === "pending"}
         tone="default"
         title="Esperando aprobación"
         message={
-          qr.joinReq?.message || "Solicitud enviada. Espera aprobación del mesero."
+          qr.joinReq?.message ||
+          "Solicitud enviada. Espera aprobación del mesero."
+        }
+      />
+
+      <FullOverlay
+        open={joinStatus === "approved"}
+        tone="default"
+        title="Solicitud aprobada"
+        message={
+          qr.joinReq?.message ||
+          "Solicitud aprobada. Recuperando la sesión de la mesa..."
+        }
+      />
+
+      <FullOverlay
+        open={joinStatus === "rejected"}
+        tone="err"
+        title="No aprobado"
+        message={
+          qr.joinReq?.message ||
+          "No fuiste aprobado para retomar la cuenta."
+        }
+        actions={
+          <PillButton
+            tone="default"
+            onClick={() => qr.clearTakeover()}
+            title="Cerrar"
+          >
+            Ok
+          </PillButton>
+        }
+      />
+
+      <FullOverlay
+        open={joinStatus === "closed"}
+        tone="default"
+        title="Cuenta cerrada"
+        message={
+          qr.joinReq?.message ||
+          "La cuenta ya fue cerrada y ya no puede retomarse."
         }
         actions={
           <PillButton
@@ -137,11 +179,12 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
       />
 
       <FullOverlay
-        open={!!qr.joinReq && qr.joinReq.status === "rejected"}
-        tone="err"
-        title="No aprobado"
+        open={joinStatus === "unavailable"}
+        tone="warn"
+        title="No disponible"
         message={
-          qr.joinReq?.message || "No fuiste aprobado para retomar la cuenta."
+          qr.joinReq?.message ||
+          "La cuenta no está disponible para retomarse en este momento."
         }
         actions={
           <PillButton
@@ -149,10 +192,11 @@ export default function PublicMenuOverlays({ qr, hasTable }) {
             onClick={() => qr.clearTakeover()}
             title="Cerrar"
           >
-            Ok
+            Entendido
           </PillButton>
         }
       />
+      
     </>
   );
 }

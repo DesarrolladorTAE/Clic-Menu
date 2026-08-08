@@ -80,7 +80,7 @@ function isActiveOrderStatus(status) {
 }
 
 function isPendingLikeStatus(status) {
-  return ["pending", "rejected", "expired", "cancelled"].includes(
+  return ["pending", "pending_approval", "rejected", "expired", "cancelled"].includes(
     String(status || "").toLowerCase(),
   );
 }
@@ -299,6 +299,29 @@ export function useCartAndOrder({
     typeof window !== "undefined" &&
     activeMenuType === "web" &&
     !!activeMenuPayload;
+
+  const customerOrderUi =
+    activeMenuPayload?.ui &&
+    typeof activeMenuPayload.ui === "object"
+      ? activeMenuPayload.ui
+      : {};
+
+  const canStartCustomerOrder =
+    typeof customerOrderUi?.can_start_customer_order === "boolean"
+      ? customerOrderUi.can_start_customer_order
+      : null;
+
+  const canContinueExistingCustomerOrder =
+    typeof customerOrderUi?.can_continue_existing_customer_order === "boolean"
+      ? customerOrderUi.can_continue_existing_customer_order
+      : null;
+
+  const customerOrderStartReasonCode =
+    customerOrderUi?.customer_order_start_reason_code || null;
+
+  const customerOrderStartReason = String(
+    customerOrderUi?.customer_order_start_reason || "",
+  ).trim();
 
   const [cart, setCart] = useState([]);
   const [sendOpen, setSendOpen] = useState(false);
@@ -537,6 +560,7 @@ export function useCartAndOrder({
 
       if (
         status === "pending" ||
+        status === "pending_approval" ||
         status === "rejected" ||
         status === "expired" ||
         status === "cancelled"
@@ -843,7 +867,9 @@ export function useCartAndOrder({
 
   const hasPending =
     !!pendingOrder?.id &&
-    String(pendingOrder?.status || "pending").toLowerCase() === "pending";
+    ["pending", "pending_approval"].includes(
+      String(pendingOrder?.status || "pending").toLowerCase(),
+    );
 
   const isPublicRoute =
   typeof window !== "undefined" &&
@@ -866,7 +892,11 @@ export function useCartAndOrder({
   const allowSendNow =
     (isWebMenu || isPublicWebMenu)
       ? allowBase
-      : allowBase && (canAppend || !hasPending);
+      : allowBase &&
+        (
+          canAppend ||
+          (!hasPending && canStartCustomerOrder !== false)
+        );
 
   const refreshOrder = useCallback(
     async (orderId) => {
@@ -912,6 +942,22 @@ export function useCartAndOrder({
         return {
           ok: false,
           availabilityError: true,
+        };
+      }
+
+      if (canStartCustomerOrder === false) {
+        const message =
+          customerOrderStartReason ||
+          "No se pueden iniciar nuevos pedidos desde QR en este momento.";
+
+        setSendToast(`⚠️ ${message}`);
+
+        return {
+          ok: false,
+          planBlocked: true,
+          code:
+            customerOrderStartReasonCode ||
+            "QR_ORDERING_NOT_ALLOWED_BY_PLAN",
         };
       }
 
@@ -995,6 +1041,20 @@ export function useCartAndOrder({
         return { ok: false };
       } catch (e) {
         const apiError = extractApiErrorInfo(e);
+        const apiErrorCode = String(apiError?.code || "").toUpperCase();
+
+        if (
+          apiError?.status === 403 &&
+          apiErrorCode === "QR_ORDERING_NOT_ALLOWED_BY_PLAN"
+        ) {
+          setSendToast(`⚠️ ${apiError.message}`);
+
+          return {
+            ok: false,
+            planBlocked: true,
+            code: apiErrorCode,
+          };
+        }
 
         if (isAvailabilityErrorCode(apiError.code)) {
           markCartAvailabilityError(apiError);
@@ -1028,7 +1088,16 @@ export function useCartAndOrder({
         return { ok: false };
       }
     },
-    [ cart, token, refreshOrder, hasInvalidCartItems, markCartAvailabilityError, ],
+    [
+      cart,
+      token,
+      refreshOrder,
+      hasInvalidCartItems,
+      markCartAvailabilityError,
+      canStartCustomerOrder,
+      customerOrderStartReason,
+      customerOrderStartReasonCode,
+    ],
   );
 
   const appendToOpenOrder = useCallback(
@@ -1171,7 +1240,22 @@ export function useCartAndOrder({
       return;
     }
 
-    // C. VALIDACIÓN BASE ANTES DE ABRIR MODAL
+    // C. BLOQUEO EXCLUSIVO PARA EL NACIMIENTO DE UNA NUEVA ORDER
+    if (
+      canStartCustomerOrder === false &&
+      !activeOrder?.id &&
+      !pendingOrder?.id
+    ) {
+      const message =
+        customerOrderStartReason ||
+        "No se pueden iniciar nuevos pedidos desde QR en este momento.";
+
+      setSendToast(`⚠️ ${message}`);
+      setTimeout(() => setSendToast(""), 6500);
+      return;
+    }
+
+    // D. VALIDACIÓN BASE ANTES DE ABRIR MODAL
     if (!allowBase) {
       setSendToast(buildBlockerMessage());
       setTimeout(() => setSendToast(""), 5000);
@@ -1599,6 +1683,12 @@ export function useCartAndOrder({
 
     allowSendNow,
     canAppend,
+
+    canStartCustomerOrder,
+    canContinueExistingCustomerOrder,
+    customerOrderStartReasonCode,
+    customerOrderStartReason,
+
     submitOrderOrAppend,
     confirmAndCreateOrder,
 

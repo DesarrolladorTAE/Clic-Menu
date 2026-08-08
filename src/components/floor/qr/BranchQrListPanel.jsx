@@ -75,16 +75,89 @@ function getQrPurposeMeta(qr, typeLabelMap = {}) {
   };
 }
 
-function shouldDisableQrToggle({ qr, busy }) {
+function isCustomerAssistedActivationBlocked({
+  qr,
+  qrUiMeta,
+  orderingMode,
+}) {
+  const intendedOrderingMode = String(
+    qr?.intended_ordering_mode || orderingMode || ""
+  );
+
+  return (
+    !qr?.is_active &&
+    qr?.type === "physical" &&
+    !!qr?.table_id &&
+    intendedOrderingMode === "customer_assisted" &&
+    qrUiMeta?.customer_assisted_allowed === false
+  );
+}
+
+function shouldDisableQrToggle({ qr, busy, qrUiMeta, orderingMode }) {
   if (busy) return true;
 
   const nextActive = !qr?.is_active;
+  const operationLock = qr?.operation_lock || {};
 
-  if (!nextActive) {
-    return false;
+  if (nextActive) {
+    if (operationLock?.can_update === false) return true;
+    if (qr?.blocked_by_plan || qr?.blocked_by_attention_mode) return true;
+
+    return isCustomerAssistedActivationBlocked({
+      qr,
+      qrUiMeta,
+      orderingMode,
+    });
   }
 
-  return !!qr?.blocked_by_plan || !!qr?.blocked_by_attention_mode;
+  return operationLock?.can_deactivate === false;
+}
+
+function getQrToggleDisabledReason({ qr, busy, qrUiMeta, orderingMode }) {
+  if (busy) {
+    return "Espera a que termine la operación actual.";
+  }
+
+  const nextActive = !qr?.is_active;
+  const operationLock = qr?.operation_lock || {};
+
+  if (nextActive && operationLock?.can_update === false) {
+    return (
+      operationLock?.reason ||
+      "No puedes activar este QR mientras la mesa tenga una operación en curso."
+    );
+  }
+
+  if (!nextActive && operationLock?.can_deactivate === false) {
+    return (
+      operationLock?.reason ||
+      "No puedes desactivar este QR mientras la mesa tenga una operación en curso."
+    );
+  }
+
+  if (nextActive && qr?.blocked_by_attention_mode) {
+    return getQrBlockReason(qr);
+  }
+
+  if (nextActive && qr?.blocked_by_plan) {
+    return getQrBlockReason(qr);
+  }
+
+  if (
+    nextActive &&
+    isCustomerAssistedActivationBlocked({
+      qr,
+      qrUiMeta,
+      orderingMode,
+    })
+  ) {
+    return (
+      qrUiMeta?.qr_ordering_blocked_reason ||
+      "Tu plan actual ya no permite activar QRs de mesa para Cliente asistido."
+    );
+  }
+
+  return "";
 }
 
 function buildShareUrl(qr) {
@@ -110,6 +183,8 @@ export default function BranchQrListPanel({
   typeLabelMap = {},
   busy = false,
   selectedBranchId = "",
+  qrUiMeta = null,
+  orderingMode = "",
 }) {
   return (
     <Paper
@@ -252,9 +327,33 @@ export default function BranchQrListPanel({
               const blockedByPlan = !!qr?.blocked_by_plan;
               const blockedByAttentionMode = !!qr?.blocked_by_attention_mode;
               const isBlocked = blockedByPlan || blockedByAttentionMode;
+
+              const operationLock = qr?.operation_lock || {};
+              const operationLocked = operationLock?.locked === true;
+
               const blockReason = getQrBlockReason(qr);
               const blockTitle = getQrBlockTitle(qr);
-              const toggleDisabled = shouldDisableQrToggle({ qr, busy });
+
+              const toggleDisabled = shouldDisableQrToggle({
+                qr,
+                busy,
+                qrUiMeta,
+                orderingMode,
+              });
+
+              const toggleDisabledReason = getQrToggleDisabledReason({
+                qr,
+                busy,
+                qrUiMeta,
+                orderingMode,
+              });
+
+              const deleteDisabled = busy || operationLock?.can_delete === false;
+
+              const deleteDisabledReason = busy
+                ? "Espera a que termine la operación actual."
+                : operationLock?.reason ||
+                  "No puedes eliminar este QR mientras la mesa tenga una operación en curso.";
 
               return (
                 <Card
@@ -314,22 +413,42 @@ export default function BranchQrListPanel({
                           </Typography>
                         </Box>
 
-                        <Typography
-                          sx={{
-                            px: 1.25,
-                            py: 0.5,
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 800,
-                            bgcolor: qr.is_active ? "#EAF8EE" : "#FFF0EE",
-                            color: qr.is_active ? "#0A7A2F" : "#A10000",
-                            border: "1px solid",
-                            borderColor: qr.is_active ? "#B8E2C3" : "#F6C2B8",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {qr.is_active ? "Activo" : "Inactivo"}
-                        </Typography>
+                        <Stack spacing={0.75} alignItems="flex-end">
+                          <Typography
+                            sx={{
+                              px: 1.25,
+                              py: 0.5,
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 800,
+                              bgcolor: qr.is_active ? "#EAF8EE" : "#FFF0EE",
+                              color: qr.is_active ? "#0A7A2F" : "#A10000",
+                              border: "1px solid",
+                              borderColor: qr.is_active ? "#B8E2C3" : "#F6C2B8",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {qr.is_active ? "Activo" : "Inactivo"}
+                          </Typography>
+
+                          {operationLocked ? (
+                            <Typography
+                              sx={{
+                                px: 1.1,
+                                py: 0.4,
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 800,
+                                bgcolor: "#EEF2F7",
+                                color: "#475569",
+                                border: "1px solid #CBD5E1",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              En operación
+                            </Typography>
+                          ) : null}
+                        </Stack>
                       </Stack>
 
                       <Box
@@ -376,15 +495,7 @@ export default function BranchQrListPanel({
                         <InfoRow label="URL" value={qr.public_url} long />
                       </Stack>
 
-                      <Tooltip
-                        title={
-                          toggleDisabled
-                            ? busy
-                              ? "Espera a que termine la operación actual."
-                              : blockReason
-                            : ""
-                        }
-                      >
+                      <Tooltip title={toggleDisabled ? toggleDisabledReason : ""}>
                         <Box sx={{ width: "fit-content" }}>
                           <FormControlLabel
                             sx={{ m: 0 }}
@@ -444,14 +555,16 @@ export default function BranchQrListPanel({
                           </IconButton>
                         </Tooltip>
 
-                        <Tooltip title="Eliminar">
-                          <IconButton
-                            onClick={() => onDelete(qr)}
-                            disabled={busy}
-                            sx={iconDeleteSx}
-                          >
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
+                        <Tooltip title={deleteDisabled ? deleteDisabledReason : "Eliminar"}>
+                          <Box component="span" sx={{ display: "inline-flex" }}>
+                            <IconButton
+                              onClick={() => onDelete(qr)}
+                              disabled={deleteDisabled}
+                              sx={iconDeleteSx}
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
                         </Tooltip>
                       </Stack>
                     </Stack>
