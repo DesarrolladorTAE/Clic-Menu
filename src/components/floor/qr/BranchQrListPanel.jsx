@@ -8,6 +8,14 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import PaginationFooter from "../../common/PaginationFooter";
 
+function getQrSalesChannelCode(qr) {
+  return String(qr?.sales_channel?.code || "").trim().toUpperCase();
+}
+
+function isOnlineOrderQr(qr) {
+  return qr?.type === "web" && getQrSalesChannelCode(qr) === "ONLINE_ORDER";
+}
+
 function getQrBlockReason(qr) {
   if (qr?.blocked_reason) {
     return qr.blocked_reason;
@@ -27,6 +35,10 @@ function getQrBlockReason(qr) {
 function getQrBlockTitle(qr) {
   if (qr?.blocked_by_attention_mode) {
     return "QR bloqueado por modo de atención";
+  }
+
+  if (isOnlineOrderQr(qr) && qr?.blocked_by_plan) {
+    return "No se puede activar";
   }
 
   if (qr?.blocked_by_plan) {
@@ -54,9 +66,25 @@ function getQrPurposeMeta(qr, typeLabelMap = {}) {
   }
 
   if (qr?.type === "web") {
+    const channelCode = getQrSalesChannelCode(qr);
+
+    if (channelCode === "ONLINE_ORDER") {
+      return {
+        title: "Pedidos en línea",
+        description: "El cliente realiza su pedido directamente desde el menú digital",
+      };
+    }
+
+    if (channelCode === "WHATSAPP") {
+      return {
+        title: "Pedidos por WhatsApp",
+        description: "El cliente selecciona y envía su pedido por WhatsApp",
+      };
+    }
+
     return {
-      title: "Pedidos por WhatsApp",
-      description: "El cliente selecciona y envía su pedido por WhatsApp",
+      title: "QR web",
+      description: "Código QR con acceso público al menú digital",
     };
   }
 

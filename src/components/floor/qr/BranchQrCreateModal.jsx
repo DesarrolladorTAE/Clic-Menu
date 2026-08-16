@@ -13,6 +13,7 @@ import QrCode2RoundedIcon from "@mui/icons-material/QrCode2Rounded";
 import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
 import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
 import HubRoundedIcon from "@mui/icons-material/HubRounded";
+import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 
 const TERRACOTTA = "#B86149";
@@ -45,6 +46,10 @@ function getQrNoticeForCreate({
 
   if (qrPurpose === "whatsapp") {
     return "Se creará un QR para que el cliente consulte el menú, seleccione productos y envíe su pedido por WhatsApp.";
+  }
+
+  if (qrPurpose === "online_order") {
+    return "Se creará un QR para recibir órdenes sin mesa vinculada y permitir que el cliente consulte su avance mediante un enlace de seguimiento.";
   }
 
   if (qrPurpose === "channel") {
@@ -231,6 +236,7 @@ export default function BranchQrCreateModal({
   settings,
   salonChannel,
   whatsappChannel,
+  onlineOrderChannel,
   specificChannelOptions = [],
   tableOptions = [],
   qrUiMeta = null,
@@ -240,6 +246,12 @@ export default function BranchQrCreateModal({
 
   const isDirectAttentionMode = qrUiMeta?.attention_mode === "direct";
 
+  const onlineOrderQrMeta = qrUiMeta?.online_order_qr || {};
+  const onlineOrderCanCreateInactive = onlineOrderQrMeta?.can_create_inactive !== false;
+  const onlineOrderCanActivate = onlineOrderQrMeta?.can_activate === true;
+  const onlineOrderBlockedReason = onlineOrderQrMeta?.blocked_reason ||
+    "Completa la configuración de Pedidos en línea para poder activar este QR.";
+  
   const availableTableOptions = useMemo(() => {
     return (tableOptions || []).filter(
       (table) => table?.operation_lock?.locked !== true
@@ -283,6 +295,11 @@ export default function BranchQrCreateModal({
     availableQrTypes.has("web") &&
     qrUiMeta?.qr_web_whatsapp_allowed !== false &&
     !!whatsappChannel?.id;
+
+  const onlineOrderAvailable =
+    availableQrTypes.has("web") &&
+    !!onlineOrderChannel?.id &&
+    onlineOrderCanCreateInactive;
 
   const specificChannelAvailable =
     availableQrTypes.has("delivery") &&
@@ -366,14 +383,25 @@ export default function BranchQrCreateModal({
           "No disponible con la configuración actual.",
     },
     {
+      value: "online_order",
+      title: "Pedidos en línea",
+      description: "El cliente realiza su orden (sin mesa vinculada) y puede consultar su avance desde un enlace de seguimiento.",
+      icon: <ShoppingBagRoundedIcon />,
+      available: onlineOrderAvailable,
+      disabledReason: !onlineOrderChannel?.id
+        ? "No se encontró el canal ONLINE_ORDER."
+        : !onlineOrderCanCreateInactive
+        ? "No disponible con la configuración actual."
+        : "",
+    },
+    {
       value: "channel",
       title: "Canal específico",
       description: "Menú de solo lectura para otro canal de venta.",
       icon: <HubRoundedIcon />,
       available: specificChannelAvailable,
       disabledReason: !qrUiMeta?.qr_readonly_by_channel_allowed
-        ? qrUiMeta?.qr_readonly_by_channel_blocked_reason ||
-          "No disponible con el plan actual."
+        ? qrUiMeta?.qr_readonly_by_channel_blocked_reason || "No disponible con el plan actual."
         : specificChannelOptions.length === 0
         ? "No hay canales adicionales disponibles en esta sucursal."
         : "No disponible con la configuración actual.",
@@ -399,6 +427,10 @@ export default function BranchQrCreateModal({
       return whatsappAvailable;
     }
 
+    if (qrPurpose === "online_order") {
+      return onlineOrderAvailable;
+    }
+
     if (qrPurpose === "channel") {
       return specificChannelAvailable && !!salesChannelId;
     }
@@ -413,6 +445,7 @@ export default function BranchQrCreateModal({
     tableAvailable,
     selectedTableAvailable,
     whatsappAvailable,
+    onlineOrderAvailable,
     specificChannelAvailable,
   ]);
 
@@ -449,6 +482,15 @@ export default function BranchQrCreateModal({
   }, [open, reset, defaultValues]);
 
   useEffect(() => {
+    if (!open || qrPurpose !== "online_order" || onlineOrderCanActivate) return;
+
+    setValue("is_active", false, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [open, qrPurpose, onlineOrderCanActivate, setValue]);
+
+  useEffect(() => {
     if (!open || qrPurpose !== "table" || !tableId) return;
     if (selectedTableAvailable) return;
 
@@ -482,6 +524,7 @@ export default function BranchQrCreateModal({
     generalAvailable,
     tableAvailable,
     whatsappAvailable,
+    onlineOrderAvailable,
     specificChannelAvailable,
     setValue,
   ]);
@@ -640,17 +683,26 @@ export default function BranchQrCreateModal({
                       }}
                     >
                       {purposeOptions.map((option) => (
-                        <QrPurposeCard
+                        <Box
                           key={option.value}
-                          value={option.value}
-                          selected={qrPurpose === option.value}
-                          disabled={!option.available}
-                          icon={option.icon}
-                          title={option.title}
-                          description={option.description}
-                          disabledReason={option.disabledReason}
-                          onSelect={selectPurpose}
-                        />
+                          sx={{
+                            height: "100%",
+                            gridColumn: option.value === "channel"
+                              ? { xs: "auto", sm: "1 / -1" }
+                              : "auto",
+                          }}
+                        >
+                          <QrPurposeCard
+                            value={option.value}
+                            selected={qrPurpose === option.value}
+                            disabled={!option.available}
+                            icon={option.icon}
+                            title={option.title}
+                            description={option.description}
+                            disabledReason={option.disabledReason}
+                            onSelect={selectPurpose}
+                          />
+                        </Box>
                       ))}
                     </Box>
                   )}
@@ -787,23 +839,37 @@ export default function BranchQrCreateModal({
                           <Switch
                             checked={!!field.value}
                             onChange={(e) => field.onChange(e.target.checked)}
+                            disabled={qrPurpose === "online_order" && !onlineOrderCanActivate}
                             color="primary"
                           />
                         )}
                       />
                     }
                     label={
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: "text.primary",
-                        }}
-                      >
+                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: "text.primary" }}>
                         Crear como activo
                       </Typography>
                     }
                   />
+
+                  {qrPurpose === "online_order" && !onlineOrderCanActivate ? (
+                    <Typography
+                      sx={{
+                        mt: 1,
+                        pt: 1,
+                        borderTop: "1px solid",
+                        borderColor: "divider",
+                        fontSize: 12.5,
+                        color: "#8A5A00",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <Box component="span" sx={{ fontWeight: 800 }}>
+                        Este QR puede crearse ahora, pero permanecerá inactivo.
+                      </Box>{" "}
+                      {onlineOrderBlockedReason}
+                    </Typography>
+                  ) : null}
                 </Box>
 
                 <Stack

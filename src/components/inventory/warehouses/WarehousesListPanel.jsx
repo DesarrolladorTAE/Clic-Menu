@@ -1,28 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  FormControlLabel,
-  IconButton,
-  Paper,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Card, Chip, FormControlLabel, IconButton, ListItemIcon, Menu, MenuItem,
+  Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
 import EditIcon from "@mui/icons-material/Edit";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 
 import usePagination from "../../../hooks/usePagination";
 import PaginationFooter from "../../../components/common/PaginationFooter";
@@ -44,11 +31,12 @@ export default function WarehousesListPanel({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [menuWarehouse, setMenuWarehouse] = useState(null);
+
   const panelTitle = useMemo(() => {
     if (inventoryMode === "global") return "Lista de almacenes globales";
-    return branchName
-      ? `Lista de almacenes de ${branchName}`
-      : "Lista de almacenes";
+    return branchName ? `Lista de almacenes de ${branchName}` : "Lista de almacenes";
   }, [inventoryMode, branchName]);
 
   const {
@@ -68,6 +56,24 @@ export default function WarehousesListPanel({
     pageSize: PAGE_SIZE,
     mode: "frontend",
   });
+
+  const openInventoryMenu = (event, row) => {
+    setMenuAnchor(event.currentTarget);
+    setMenuWarehouse(row);
+  };
+
+  const closeInventoryMenu = () => {
+    setMenuAnchor(null);
+    setMenuWarehouse(null);
+  };
+
+  const runInventoryAction = (action) => {
+    if (!menuWarehouse) return;
+
+    const row = menuWarehouse;
+    closeInventoryMenu();
+    action(row);
+  };
 
   return (
     <Paper
@@ -94,13 +100,7 @@ export default function WarehousesListPanel({
           flexWrap: "wrap",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: 18,
-            fontWeight: 800,
-            color: "text.primary",
-          }}
-        >
+        <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
           {panelTitle}
         </Typography>
       </Box>
@@ -120,12 +120,11 @@ export default function WarehousesListPanel({
                     border: "1px solid",
                     borderColor: "divider",
                     backgroundColor: "#fff",
-                    minHeight: 420,
                     display: "flex",
                   }}
                 >
                   <Box sx={{ p: 2, width: "100%" }}>
-                    <Stack spacing={1.5} sx={{ height: "100%" }}>
+                    <Stack spacing={1.5}>
                       <Stack
                         direction="row"
                         justifyContent="space-between"
@@ -162,31 +161,31 @@ export default function WarehousesListPanel({
                         ) : null}
                       </Stack>
 
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                         <Chip
                           label={row.scope === "global" ? "Global" : "Sucursal"}
                           size="small"
                         />
+
                         <Chip
                           label={row.status === "active" ? "Activo" : "Inactivo"}
                           size="small"
-                          sx={
-                            row.status === "active"
-                              ? activeChipSx
-                              : inactiveChipSx
-                          }
+                          sx={row.status === "active" ? activeChipSx : inactiveChipSx}
                         />
+
                         {row.is_default ? (
                           <Chip label="Default" size="small" sx={defaultChipSx} />
                         ) : null}
-                      </Stack>
 
-                      <Box>
-                        <Typography sx={mobileLabelSx}>Notas</Typography>
-                        <Typography sx={mobileValueSx}>
-                          {row.notes?.trim() || "Sin notas registradas"}
-                        </Typography>
-                      </Box>
+                        {row.has_active_reservations ? (
+                          <Chip
+                            label="Inventario reservado"
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ) : null}
+                      </Stack>
 
                       <Stack spacing={1}>
                         <Box
@@ -198,9 +197,11 @@ export default function WarehousesListPanel({
                           }}
                         >
                           <Typography sx={switchLabelSx}>Activo</Typography>
+
                           <Switch
                             checked={row.status === "active"}
                             onChange={() => onToggleStatus(row)}
+                            disabled={isStatusToggleBlocked(row)}
                             color="primary"
                           />
                         </Box>
@@ -214,6 +215,7 @@ export default function WarehousesListPanel({
                           }}
                         >
                           <Typography sx={switchLabelSx}>Default</Typography>
+
                           <Switch
                             checked={!!row.is_default}
                             onChange={() => onToggleDefault(row)}
@@ -222,53 +224,29 @@ export default function WarehousesListPanel({
                         </Box>
                       </Stack>
 
-                      <Stack spacing={1}>
-                        <Button
-                          onClick={() => onGoIngredientStocks(row)}
-                          variant="contained"
-                          sx={actionButtonSx}
-                        >
-                          Stock ingredientes
-                        </Button>
-
-                        <Button
-                          onClick={() => onGoIngredientMovements(row)}
-                          variant="outlined"
-                          sx={actionButtonSx}
-                        >
-                          Mov. ingredientes
-                        </Button>
-
-                        <Button
-                          onClick={() => onGoProductStocks(row)}
-                          variant="contained"
-                          color="secondary"
-                          sx={actionButtonSx}
-                        >
-                          Stock productos
-                        </Button>
-
-                        <Button
-                          onClick={() => onGoProductMovements(row)}
-                          variant="outlined"
-                          color="secondary"
-                          sx={actionButtonSx}
-                        >
-                          Mov. productos
-                        </Button>
-                      </Stack>
-
-                      <Box sx={{ flexGrow: 1 }} />
-
                       <Stack
                         direction="row"
                         justifyContent="flex-end"
                         alignItems="center"
                         spacing={1}
+                        sx={{
+                          pt: 1,
+                          borderTop: "1px solid",
+                          borderColor: "divider",
+                        }}
                       >
                         <Tooltip title="Editar">
                           <IconButton onClick={() => onEdit(row)} sx={iconEditSx}>
                             <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Opciones de inventario">
+                          <IconButton
+                            onClick={(event) => openInventoryMenu(event, row)}
+                            sx={iconMoreSx}
+                          >
+                            <MoreVertIcon />
                           </IconButton>
                         </Tooltip>
                       </Stack>
@@ -278,18 +256,8 @@ export default function WarehousesListPanel({
               ))}
             </Stack>
           ) : (
-            <TableContainer
-              sx={{
-                width: "100%",
-                overflowX: "hidden",
-              }}
-            >
-              <Table
-                sx={{
-                  width: "100%",
-                  tableLayout: "fixed",
-                }}
-              >
+            <TableContainer sx={{ width: "100%", overflowX: "hidden" }}>
+              <Table sx={{ width: "100%", tableLayout: "fixed" }}>
                 <TableHead>
                   <TableRow
                     sx={{
@@ -303,13 +271,11 @@ export default function WarehousesListPanel({
                       },
                     }}
                   >
-                    <TableCell sx={{ width: "20%" }}>Nombre</TableCell>
-                    <TableCell sx={{ width: "10%" }}>Clave</TableCell>
-                    <TableCell sx={{ width: "14%" }}>Activo</TableCell>
-                    <TableCell sx={{ width: "14%" }}>Default</TableCell>
-                    <TableCell sx={{ width: "14%" }}>Notas</TableCell>
-                    <TableCell sx={{ width: "20%" }}>Inventario</TableCell>
-                    <TableCell align="right" sx={{ width: "8%" }}>
+                    <TableCell sx={{ width: "30%" }}>Nombre</TableCell>
+                    <TableCell sx={{ width: "18%" }}>Clave</TableCell>
+                    <TableCell sx={{ width: "22%" }}>Activo</TableCell>
+                    <TableCell sx={{ width: "18%" }}>Default</TableCell>
+                    <TableCell align="right" sx={{ width: "12%" }}>
                       Acciones
                     </TableCell>
                   </TableRow>
@@ -359,27 +325,39 @@ export default function WarehousesListPanel({
                       </TableCell>
 
                       <TableCell>
-                        <FormControlLabel
-                          sx={{
-                            m: 0,
-                            alignItems: "center",
-                            "& .MuiFormControlLabel-label": {
-                              lineHeight: 1.2,
-                            },
-                          }}
-                          control={
-                            <Switch
-                              checked={row.status === "active"}
-                              onChange={() => onToggleStatus(row)}
-                              color="primary"
+                        <Stack spacing={0.75} alignItems="flex-start">
+                          <FormControlLabel
+                            sx={{
+                              m: 0,
+                              alignItems: "center",
+                              "& .MuiFormControlLabel-label": {
+                                lineHeight: 1.2,
+                              },
+                            }}
+                            control={
+                              <Switch
+                                checked={row.status === "active"}
+                                onChange={() => onToggleStatus(row)}
+                                disabled={isStatusToggleBlocked(row)}
+                                color="primary"
+                              />
+                            }
+                            label={
+                              <Typography sx={switchLabelSx}>
+                                {row.status === "active" ? "Activo" : "Inactivo"}
+                              </Typography>
+                            }
+                          />
+
+                          {row.has_active_reservations ? (
+                            <Chip
+                              label="Inventario reservado"
+                              size="small"
+                              color="warning"
+                              variant="outlined"
                             />
-                          }
-                          label={
-                            <Typography sx={switchLabelSx}>
-                              {row.status === "active" ? "Activo" : "Inactivo"}
-                            </Typography>
-                          }
-                        />
+                          ) : null}
+                        </Stack>
                       </TableCell>
 
                       <TableCell>
@@ -406,66 +384,10 @@ export default function WarehousesListPanel({
                         />
                       </TableCell>
 
-                      <TableCell
-                        sx={{
-                          whiteSpace: "normal",
-                          wordBreak: "break-word",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        {row.notes?.trim() || "—"}
-                      </TableCell>
-
-                      <TableCell>
-                        <Stack spacing={1}>
-                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            <Button
-                              onClick={() => onGoIngredientStocks(row)}
-                              variant="contained"
-                              size="small"
-                              sx={tableActionButtonSx}
-                            >
-                              Stock ingredientes
-                            </Button>
-
-                            <Button
-                              onClick={() => onGoIngredientMovements(row)}
-                              variant="outlined"
-                              size="small"
-                              sx={tableActionButtonSx}
-                            >
-                              Mov. ingredientes
-                            </Button>
-                          </Stack>
-
-                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            <Button
-                              onClick={() => onGoProductStocks(row)}
-                              variant="contained"
-                              color="secondary"
-                              size="small"
-                              sx={tableActionButtonSx}
-                            >
-                              Stock productos
-                            </Button>
-
-                            <Button
-                              onClick={() => onGoProductMovements(row)}
-                              variant="outlined"
-                              color="secondary"
-                              size="small"
-                              sx={tableActionButtonSx}
-                            >
-                              Mov. productos
-                            </Button>
-                          </Stack>
-                        </Stack>
-                      </TableCell>
-
                       <TableCell align="right">
                         <Stack
                           direction="row"
-                          spacing={1}
+                          spacing={0.75}
                           justifyContent="flex-end"
                           alignItems="center"
                           flexWrap="nowrap"
@@ -473,6 +395,15 @@ export default function WarehousesListPanel({
                           <Tooltip title="Editar">
                             <IconButton onClick={() => onEdit(row)} sx={iconEditSx}>
                               <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip title="Opciones de inventario">
+                            <IconButton
+                              onClick={(event) => openInventoryMenu(event, row)}
+                              sx={iconMoreSx}
+                            >
+                              <MoreVertIcon />
                             </IconButton>
                           </Tooltip>
                         </Stack>
@@ -498,6 +429,82 @@ export default function WarehousesListPanel({
           />
         </>
       )}
+
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={closeInventoryMenu}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 0.75,
+              minWidth: 260,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: 3,
+            },
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => runInventoryAction(onGoIngredientStocks)}
+          sx={menuItemSx}
+        >
+          <ListItemIcon>
+            <Inventory2OutlinedIcon fontSize="small" />
+          </ListItemIcon>
+
+          <Box>
+            <Typography sx={menuTitleSx}>Stock de ingredientes</Typography>
+            <Typography sx={menuDescriptionSx}>Consultar existencias</Typography>
+          </Box>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => runInventoryAction(onGoIngredientMovements)}
+          sx={menuItemSx}
+        >
+          <ListItemIcon>
+            <SwapHorizRoundedIcon fontSize="small" />
+          </ListItemIcon>
+
+          <Box>
+            <Typography sx={menuTitleSx}>Movimientos de ingredientes</Typography>
+            <Typography sx={menuDescriptionSx}>Consultar entradas y salidas</Typography>
+          </Box>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => runInventoryAction(onGoProductStocks)}
+          sx={menuItemSx}
+        >
+          <ListItemIcon>
+            <Inventory2OutlinedIcon fontSize="small" />
+          </ListItemIcon>
+
+          <Box>
+            <Typography sx={menuTitleSx}>Stock de productos</Typography>
+            <Typography sx={menuDescriptionSx}>Consultar existencias</Typography>
+          </Box>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => runInventoryAction(onGoProductMovements)}
+          sx={menuItemSx}
+        >
+          <ListItemIcon>
+            <SwapHorizRoundedIcon fontSize="small" />
+          </ListItemIcon>
+
+          <Box>
+            <Typography sx={menuTitleSx}>Movimientos de productos</Typography>
+            <Typography sx={menuDescriptionSx}>Consultar entradas y salidas</Typography>
+          </Box>
+        </MenuItem>
+      </Menu>
     </Paper>
   );
 }
@@ -553,20 +560,9 @@ function EmptyState() {
   );
 }
 
-const mobileLabelSx = {
-  fontSize: 11,
-  fontWeight: 800,
-  color: "text.secondary",
-  textTransform: "uppercase",
-  letterSpacing: 0.3,
-};
-
-const mobileValueSx = {
-  mt: 0.25,
-  fontSize: 14,
-  color: "text.primary",
-  wordBreak: "break-word",
-};
+function isStatusToggleBlocked(row) {
+  return row.status === "active" && !!row.has_active_reservations;
+}
 
 const switchLabelSx = {
   fontSize: 14,
@@ -583,6 +579,20 @@ const iconEditSx = {
   borderRadius: 1.5,
   "&:hover": {
     bgcolor: "#C9AA39",
+  },
+};
+
+const iconMoreSx = {
+  width: 40,
+  height: 40,
+  borderRadius: 1.5,
+  bgcolor: "background.default",
+  color: "text.primary",
+  border: "1px solid",
+  borderColor: "divider",
+  "&:hover": {
+    bgcolor: "action.hover",
+    color: "primary.main",
   },
 };
 
@@ -604,19 +614,24 @@ const inactiveChipSx = {
   color: "error.main",
 };
 
-const actionButtonSx = {
-  width: "100%",
-  height: 40,
-  borderRadius: 2,
-  fontSize: 12,
-  fontWeight: 800,
-  whiteSpace: "nowrap",
+const menuItemSx = {
+  py: 1.25,
+  px: 1.5,
+  gap: 0.5,
+  "& .MuiListItemIcon-root": {
+    minWidth: 36,
+    color: "primary.main",
+  },
 };
 
-const tableActionButtonSx = {
-  height: 34,
-  borderRadius: 2,
-  fontSize: 11,
+const menuTitleSx = {
+  fontSize: 13,
   fontWeight: 800,
-  whiteSpace: "nowrap",
+  color: "text.primary",
+};
+
+const menuDescriptionSx = {
+  mt: 0.2,
+  fontSize: 11.5,
+  color: "text.secondary",
 };

@@ -214,7 +214,7 @@ export default function BranchQrCodesPage() {
   } = usePagination({
     items: sortedItems,
     initialPage: 1,
-    pageSize: 5,
+    pageSize: 6,
     mode: "frontend",
   });
 
@@ -373,6 +373,12 @@ export default function BranchQrCodesPage() {
 
   const whatsappChannel = useMemo(() => {
     return channelOptionsRaw.find((c) => isWhatsappChannel(c)) || null;
+  }, [channelOptionsRaw]);
+
+  const onlineOrderChannel = useMemo(() => {
+    return channelOptionsRaw.find(
+      (c) => String(c?.code || "").trim().toUpperCase() === "ONLINE_ORDER"
+    ) || null;
   }, [channelOptionsRaw]);
 
   const tableOptions = useMemo(() => {
@@ -779,6 +785,18 @@ export default function BranchQrCodesPage() {
 
       payload.type = "web";
       payload.sales_channel_id = Number(whatsappChannel.id);
+    } else if (qrPurpose === "online_order") {
+      if (!onlineOrderChannel?.id) {
+        showAlert({
+          severity: "error",
+          title: "Canal PEDIDOS EN LÍNEA no encontrado",
+          message: "No se encontró el canal ONLINE_ORDER para esta sucursal. Sincroniza los canales del sistema e intenta de nuevo.",
+        });
+        return;
+      }
+
+      payload.type = "web";
+      payload.sales_channel_id = Number(onlineOrderChannel.id);
     } else if (qrPurpose === "channel") {
       if (!qrUiMeta?.qr_readonly_by_channel_allowed) {
         showAlert({
@@ -928,7 +946,7 @@ export default function BranchQrCodesPage() {
         title: "Modo de atención directa",
         body:
           "• En este modo no se permite crear ni activar QR físico ligado a mesa.\n" +
-          "• Vista general y Pedidos por WhatsApp siguen disponibles.\n" +
+          "• Vista general, Pedidos por WhatsApp y Pedidos en línea siguen disponibles.\n" +
           (qrUiMeta?.qr_readonly_by_channel_allowed
             ? "• También puedes crear un QR de Canal específico para canales externos permitidos.\n"
             : "") +
@@ -1072,6 +1090,7 @@ export default function BranchQrCodesPage() {
         settings={settings}
         salonChannel={salonChannel}
         whatsappChannel={whatsappChannel}
+        onlineOrderChannel={onlineOrderChannel}
         specificChannelOptions={specificChannelOptions}
         tableOptions={tableOptions}
         qrUiMeta={qrUiMeta}

@@ -19,6 +19,7 @@ import CategoryIcon from "@mui/icons-material/Category";
 import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
+import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import PercentIcon from "@mui/icons-material/Percent";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -143,6 +144,12 @@ export default function RestaurantOperationSidebar({
         items: [
           { key: "tables", label: "Mesas", icon: <TableRestaurantIcon /> },
           { key: "cash-registers", label: "Cajas", icon: <PointOfSaleIcon /> },
+          {
+            key: "online-orders",
+            label: "Pedidos en línea",
+            icon: <ShoppingBagRoundedIcon />,
+            feature: "online_orders",
+          },
           {
             key: "billing-settings",
             label: "Cuentas y autorizaciones",

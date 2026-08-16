@@ -118,6 +118,7 @@ import CustomerLoyaltySettingsPage from "../pages/operation/loyalty/CustomerLoya
 import PublicMenuSettingsPage from "../pages/public-menu/PublicMenuSettingsPage";
 import DiscountsPage from "../pages/operation/discounts/DiscountsPage";
 import BillingSettingsPage from "../pages/operation/billing-settings/BillingSettingsPage";
+import OnlineOrdersPage from "../pages/operation/online-orders/OnlineOrdersPage";
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
@@ -160,8 +161,8 @@ export default function AppRoutes() {
 
          {/* BLOGS */}
          <Route path="/blog" element={<BlogPostsPage />} />
-        <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
-        <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}
+         <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
+         <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}
 />
 <Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}
 />
@@ -266,6 +267,7 @@ export default function AppRoutes() {
           <Route path="tables/qr-codes" element={<BranchQrCodesPage />} />
 
           <Route path="cash-registers" element={<CashRegistersPage />} />
+          <Route path="online-orders" element={<OnlineOrdersPage />} />
           <Route path="billing-settings" element={<BillingSettingsPage />} />
           <Route path="discounts" element={<DiscountsPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />

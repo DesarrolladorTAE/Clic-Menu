@@ -255,7 +255,10 @@ export default function WarehousesPage() {
     try {
       if (editing?.id) {
         const res = await updateWarehouse(restaurantId, editing.id, formData);
-        const updated = res?.data;
+        const updated = {
+          ...res?.data,
+          has_active_reservations: !!editing?.has_active_reservations,
+        };
 
         setWarehouses((prev) => {
           let next = prev.map((item) =>
@@ -284,11 +287,12 @@ export default function WarehousesPage() {
         });
       } else {
         const res = await createWarehouse(restaurantId, formData);
-        const created = res?.data;
+        const created = {
+          ...res?.data,
+          has_active_reservations: false,
+        };
 
         setWarehouses((prev) => {
-          let next = [created, ...prev];
-
           if (created?.is_default) {
             next = next.map((item) => {
               const sameContext =
@@ -319,6 +323,15 @@ export default function WarehousesPage() {
   };
 
   const handleToggleStatus = async (row) => {
+    if (row.status === "active" && row.has_active_reservations) {
+      showAlert({
+        severity: "warning",
+        title: "Almacén con reservas activas",
+        message: "No puedes desactivar este almacén mientras tenga inventario apartado por reservas activas.",
+      });
+      return;
+    }
+
     try {
       const nextStatus =
         row.status === "active"
@@ -333,7 +346,10 @@ export default function WarehousesPage() {
         }
       );
 
-      const updated = res?.data;
+      const updated = {
+        ...res?.data,
+        has_active_reservations: !!row.has_active_reservations,
+      };
 
       setWarehouses((prev) =>
         prev.map((item) =>
@@ -353,17 +369,22 @@ export default function WarehousesPage() {
       const code = pickErrorCode(e);
 
       if (
-        code ===
-        "WAREHOUSE_HAS_OPEN_CASH_SESSIONS"
+        code === "WAREHOUSE_HAS_OPEN_CASH_SESSIONS" ||
+        code === "WAREHOUSE_HAS_ACTIVE_RESERVATIONS"
       ) {
         await loadWarehouses().catch(() => {});
 
         showAlert({
           severity: "warning",
-          title: "Almacén en uso",
+          title:
+            code === "WAREHOUSE_HAS_ACTIVE_RESERVATIONS"
+              ? "Almacén con reservas activas"
+              : "Almacén en uso",
           message:
             e?.response?.data?.message ||
-            "No puedes desactivar este almacén porque está siendo utilizado por una sesión de caja abierta.",
+            (code === "WAREHOUSE_HAS_ACTIVE_RESERVATIONS"
+              ? "No puedes desactivar este almacén mientras tenga inventario apartado por reservas activas."
+              : "No puedes desactivar este almacén porque está siendo utilizado por una sesión de caja abierta."),
         });
 
         return;
@@ -385,7 +406,10 @@ export default function WarehousesPage() {
         is_default: !row.is_default,
       });
 
-      const updated = res?.data;
+      const updated = {
+        ...res?.data,
+        has_active_reservations: !!row.has_active_reservations,
+      };
 
       setWarehouses((prev) => {
         let next = prev.map((item) =>

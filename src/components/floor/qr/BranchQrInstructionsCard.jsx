@@ -35,8 +35,8 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           step="2"
           text={
             isDirectAttentionMode
-              ? "En modo directo puedes crear una Vista general, Pedidos por WhatsApp y, si tu plan lo permite, un QR para Canal específico. El QR de mesa no está disponible en este modo."
-              : "Puedes crear una Vista general o un QR de mesa. Al elegir QR de mesa, solo tendrás que seleccionar la mesa correspondiente."
+              ? "En modo directo puedes crear una Vista general, Pedidos por WhatsApp y Pedidos en línea. El QR de mesa no se utiliza en este modo."
+              : "Puedes crear una Vista general o un QR de mesa. El QR de mesa queda vinculado únicamente a la mesa seleccionada."
           }
         />
 
@@ -44,18 +44,14 @@ export default function BranchQrInstructionsCard({ qrUiMeta = null }) {
           step="3"
           text={
             readonlyByChannelAllowed
-              ? "Pedidos por WhatsApp está disponible sin seleccionar mesa. También puedes crear un QR de Canal específico para los canales externos disponibles en esta sucursal."
-              : "Pedidos por WhatsApp está disponible sin seleccionar mesa. La opción Canal específico no está disponible con el plan actual."
+              ? "Pedidos por WhatsApp y Pedidos en línea funcionan sin mesa vinculada. También puedes crear un QR de Canal específico para otros canales de venta."
+              : "Pedidos por WhatsApp y Pedidos en línea funcionan sin mesa vinculada."
           }
         />
 
         <InstructionRow
           step="4"
-          text={
-            isDirectAttentionMode
-              ? "Los QRs de mesa que ya existan pueden aparecer bloqueados y no podrán reactivarse mientras la sucursal continúe en modo directo."
-              : "La sucursal debe tener Configuración Operativa antes de poder crear y administrar sus códigos QR."
-          }
+          text="Cada código QR se administra de forma individual y conserva el tipo, canal y contexto para el que fue creado."
         />
       </Stack>
     </Paper>

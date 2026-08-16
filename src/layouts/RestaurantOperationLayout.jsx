@@ -65,6 +65,7 @@ export default function RestaurantOperationLayout() {
         pathname.includes("/products"));
 
     if (isBranchSalesChannelsSection) return "branch-sales-channels";
+    if (pathname.includes("/online-orders")) return "online-orders";
     if (pathname.includes("/reports/sales")) return "sales-report";
     if (pathname.includes("/reports/profit")) return "profit-report";
     if (pathname.includes("/purchases")) return "purchases";
@@ -132,6 +133,10 @@ export default function RestaurantOperationLayout() {
       },
       "public-menu-settings": {
         feature: "public_menu_advanced_customization",
+        redirectTo: "staff",
+      },
+      "online-orders": {
+        feature: "online_orders",
         redirectTo: "staff",
       },
     }),
@@ -243,6 +248,10 @@ export default function RestaurantOperationLayout() {
 
       case "cash-registers":
         nav(`${base}/cash-registers`, { state: { restaurantName } });
+        break;
+
+      case "online-orders":
+        nav(`${base}/online-orders`, { state: { restaurantName } });
         break;
 
       case "billing-settings":

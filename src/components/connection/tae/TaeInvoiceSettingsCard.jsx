@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Chip,
-  FormControlLabel,
-  MenuItem,
-  Paper,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
+  Box, Button, Chip, FormControlLabel, MenuItem, Paper, Stack, Switch, TextField, Typography,
 } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -225,6 +216,9 @@ export default function TaeInvoiceSettingsCard({
       global_sat_product_service: setting?.global_sat_product_service || "",
       global_sat_unit: setting?.global_sat_unit || "",
       global_description: setting?.global_description || "",
+      delivery_sat_product_service: setting?.delivery_sat_product_service || "",
+      delivery_sat_unit: setting?.delivery_sat_unit || "",
+      delivery_description: setting?.delivery_description || "",
     }),
     [setting]
   );
@@ -270,6 +264,9 @@ export default function TaeInvoiceSettingsCard({
         global_description: useGlobalData
           ? trimOrNull(form.global_description)
           : null,
+        delivery_sat_product_service: trimOrNull(form.delivery_sat_product_service),
+        delivery_sat_unit: trimOrNull(form.delivery_sat_unit)?.toUpperCase() ?? null,
+        delivery_description: trimOrNull(form.delivery_description),
       };
 
       const response = await onSave(payloadToSend);
@@ -582,6 +579,110 @@ export default function TaeInvoiceSettingsCard({
                 </Typography>
               </Box>
             )}
+
+            <SectionTitle title="Datos SAT del servicio de entrega" />
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.default",
+              }}
+            >
+              <Stack spacing={2}>
+                <Box>
+                  <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
+                    Configura cómo se identificará en la factura el costo de entrega cuando corresponda.
+                    Estos datos son independientes de las claves SAT configuradas en los productos.
+                  </Typography>
+                </Box>
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <FieldBlock
+                    label="Clave SAT producto/servicio"
+                    input={
+                      <Controller
+                        name="delivery_sat_product_service"
+                        control={control}
+                        rules={{
+                          maxLength: {
+                            value: 20,
+                            message: "La clave SAT del servicio de entrega no puede exceder 20 caracteres.",
+                          },
+                        }}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            fullWidth
+                            disabled={saving}
+                            placeholder="Ej. clave SAT del servicio"
+                            inputProps={{ maxLength: 20 }}
+                          />
+                        )}
+                      />
+                    }
+                    help="Clave SAT que identificará el servicio correspondiente al costo de entrega."
+                    error={errors?.delivery_sat_product_service?.message}
+                  />
+
+                  <FieldBlock
+                    label="Clave SAT unidad"
+                    input={
+                      <Controller
+                        name="delivery_sat_unit"
+                        control={control}
+                        rules={{
+                          maxLength: {
+                            value: 20,
+                            message: "La clave SAT de unidad para entrega no puede exceder 20 caracteres.",
+                          },
+                        }}
+                        render={({ field }) => (
+                          <TextField
+                            {...field}
+                            fullWidth
+                            disabled={saving}
+                            placeholder="Ej. E48"
+                            inputProps={{ maxLength: 20 }}
+                            onChange={(event) => field.onChange(event.target.value.toUpperCase())}
+                          />
+                        )}
+                      />
+                    }
+                    help="Clave de unidad SAT que se utilizará para el concepto de entrega."
+                    error={errors?.delivery_sat_unit?.message}
+                  />
+                </Stack>
+
+                <FieldBlock
+                  label="Descripción del servicio de entrega"
+                  input={
+                    <Controller
+                      name="delivery_description"
+                      control={control}
+                      rules={{
+                        maxLength: {
+                          value: 255,
+                          message: "La descripción del servicio de entrega no puede exceder 255 caracteres.",
+                        },
+                      }}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          fullWidth
+                          disabled={saving}
+                          placeholder="Ej. Servicio de entrega"
+                          inputProps={{ maxLength: 255 }}
+                        />
+                      )}
+                    />
+                  }
+                  help="Descripción que se mostrará para identificar el costo de entrega en la factura."
+                  error={errors?.delivery_description?.message}
+                />
+              </Stack>
+            </Box>
 
             <Stack
               direction={{ xs: "column-reverse", sm: "row" }}
