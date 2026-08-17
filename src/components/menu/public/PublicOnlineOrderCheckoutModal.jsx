@@ -1,24 +1,34 @@
 // Formulario para pedidos en línea
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Card, CardContent, Divider, MenuItem, Pagination, Stack, TextField, Typography,
+  Box, Card, CardContent, Divider, Pagination, Stack, TextField, Typography,
 } from "@mui/material";
+
+import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
 
 import { money } from "../../../hooks/public/publicMenu.utils";
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import AppAlert from "../../common/AppAlert";
+import OnlineOrderFulfillmentSection from "./online-order-checkout/OnlineOrderFulfillmentSection";
 
 const CART_PAGE_SIZE = 5;
+const DEFAULT_THEME_COLOR = "#FF7A00";
 
-function fulfillmentLabel(type) {
-  const labels = {
-    pickup: "Recoger",
-    home_delivery: "Entrega a domicilio",
-    internal_location: "Ubicación interna",
-    scheduled_point: "Punto programado",
-  };
+function safeThemeColor(value) {
+  return /^#[0-9A-Fa-f]{6}$/.test(String(value || ""))
+    ? String(value)
+    : DEFAULT_THEME_COLOR;
+}
 
-  return labels[String(type || "")] || "Forma de entrega";
+function hexToRgba(hex, alpha = 1) {
+  const safe = safeThemeColor(hex).replace("#", "");
+  const r = parseInt(safe.substring(0, 2), 16);
+  const g = parseInt(safe.substring(2, 4), 16);
+  const b = parseInt(safe.substring(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function paymentLabel(type) {
@@ -29,6 +39,23 @@ function paymentLabel(type) {
   };
 
   return labels[String(type || "")] || "Método de pago";
+}
+
+function paymentDescription(type) {
+  const descriptions = {
+    cash: "Paga en efectivo al recibir tu pedido.",
+    transfer: "Realiza el pago mediante transferencia.",
+    terminal: "Paga con tarjeta en la terminal de la sucursal.",
+  };
+
+  return descriptions[String(type || "")] || "";
+}
+
+function paymentIcon(type) {
+  if (type === "transfer") return AccountBalanceOutlinedIcon;
+  if (type === "terminal") return PointOfSaleOutlinedIcon;
+
+  return PaymentsOutlinedIcon;
 }
 
 function defaultTimingForFulfillment(fulfillment) {
@@ -79,11 +106,14 @@ export default function PublicOnlineOrderCheckoutModal({
   invalidItemsCount,
   quoting,
   creating,
+  themeColor,
   onClose,
   onQuote,
   onCreate,
   onCreated,
 }) {
+  const accentColor = safeThemeColor(themeColor);
+
   const fulfillments = useMemo(
     () => Array.isArray(checkoutConfig?.fulfillments) ? checkoutConfig.fulfillments : [],
     [checkoutConfig],
@@ -346,6 +376,11 @@ export default function PublicOnlineOrderCheckoutModal({
     setScheduledTime("");
   }
 
+  function handleTimingTypeChange(value) {
+    setTimingType(value);
+    setRequestedForAt("");
+  }
+
   function handleScheduledPointChange(value) {
     setScheduledPointId(value);
     setScheduledDate("");
@@ -585,6 +620,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
             <PillButton
               tone="orange"
+              themeColor={accentColor}
               disabled={!primaryActionEnabled}
               onClick={quote ? handleCreate : handleQuote}
             >
@@ -648,7 +684,7 @@ export default function PublicOnlineOrderCheckoutModal({
                         size="small"
                         value={orderName}
                         onChange={(e) => setOrderName(e.target.value)}
-                        placeholder="Ej. Daniela"
+                        placeholder="Ej. Pedro"
                         inputProps={{ maxLength: 120 }}
                         disabled={quoting || creating}
                       />
@@ -712,323 +748,160 @@ export default function PublicOnlineOrderCheckoutModal({
             </CardContent>
           </Card>
 
+          <OnlineOrderFulfillmentSection
+            fulfillments={fulfillments}
+            fulfillmentType={fulfillmentType}
+            selectedFulfillment={selectedFulfillment}
+            timingType={timingType}
+            requestedForAt={requestedForAt}
+            deliveryConceptId={deliveryConceptId}
+            deliveryConcepts={deliveryConcepts}
+            selectedDeliveryConcept={selectedDeliveryConcept}
+            scheduledPointId={scheduledPointId}
+            scheduledPoints={scheduledPoints}
+            selectedPoint={selectedPoint}
+            scheduledDate={scheduledDate}
+            availableBlocks={availableBlocks}
+            scheduledPointTimeBlockId={scheduledPointTimeBlockId}
+            selectedBlock={selectedBlock}
+            scheduledTime={scheduledTime}
+            themeColor={accentColor}
+            disabled={quoting || creating}
+            onFulfillmentChange={handleFulfillmentChange}
+            onTimingTypeChange={handleTimingTypeChange}
+            onRequestedForAtChange={setRequestedForAt}
+            onDeliveryConceptChange={setDeliveryConceptId}
+            onScheduledPointChange={handleScheduledPointChange}
+            onScheduledDateChange={handleScheduledDateChange}
+            onBlockChange={handleBlockChange}
+            onScheduledTimeChange={setScheduledTime}
+          />
+
           <Card
             variant="outlined"
             sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
           >
             <CardContent>
-              <Stack spacing={2}>
-                <Typography fontWeight={800}>Forma de entrega</Typography>
-
-                <FieldBlock
-                  label="Forma de entrega *"
-                  input={
-                    <TextField
-                      select
-                      size="small"
-                      value={fulfillmentType}
-                      onChange={(e) => handleFulfillmentChange(e.target.value)}
-                      disabled={quoting || creating || fulfillments.length === 0}
-                    >
-                      <MenuItem value="" disabled>
-                        Selecciona una forma de entrega
-                      </MenuItem>
-
-                      {fulfillments.map((row) => (
-                        <MenuItem key={row.fulfillment_type} value={row.fulfillment_type}>
-                          {fulfillmentLabel(row.fulfillment_type)}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  }
-                />
-
-                {selectedFulfillment?.minimum_order_amount !== null &&
-                selectedFulfillment?.minimum_order_amount !== undefined ? (
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography fontWeight={800}>Método de pago</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Pedido mínimo:{" "}
-                    <strong>{money(selectedFulfillment.minimum_order_amount)}</strong>
+                    Selecciona cómo deseas pagar tu pedido.
                   </Typography>
-                ) : null}
+                </Box>
 
-                {fulfillmentType !== "scheduled_point" && selectedFulfillment ? (
-                  <FieldBlock
-                    label="¿Cuándo lo quieres? *"
-                    input={
-                      <TextField
-                        select
-                        size="small"
-                        value={timingType}
-                        onChange={(e) => {
-                          setTimingType(e.target.value);
-                          setRequestedForAt("");
+                <Stack spacing={1}>
+                  {paymentMethods.map((payment) => {
+                    const type = String(payment?.payment_type || "");
+                    const selected = paymentType === type;
+                    const PaymentIcon = paymentIcon(type);
+
+                    return (
+                      <Box
+                        key={type}
+                        component="button"
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={quoting || creating}
+                        onClick={() => setPaymentType(type)}
+                        sx={{
+                          width: "100%",
+                          minHeight: 58,
+                          px: { xs: 1.25, sm: 1.5 },
+                          py: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.25,
+                          textAlign: "left",
+                          font: "inherit",
+                          color: "text.primary",
+                          border: "1px solid",
+                          borderColor: selected ? accentColor : "divider",
+                          borderRadius: 2,
+                          backgroundColor: selected ? hexToRgba(accentColor, 0.07) : "#FFFFFF",
+                          cursor: quoting || creating ? "not-allowed" : "pointer",
+                          opacity: quoting || creating ? 0.6 : 1,
+                          transition: "border-color 160ms ease, background-color 160ms ease",
+                          "&:hover": quoting || creating
+                            ? {}
+                            : {
+                                borderColor: accentColor,
+                                backgroundColor: hexToRgba(accentColor, selected ? 0.09 : 0.035),
+                              },
                         }}
-                        disabled={quoting || creating}
                       >
-                        <MenuItem value="" disabled>
-                          Selecciona una opción
-                        </MenuItem>
-
-                        {selectedFulfillment.allows_asap ? (
-                          <MenuItem value="asap">Lo antes posible</MenuItem>
-                        ) : null}
-
-                        {selectedFulfillment.allows_scheduling ? (
-                          <MenuItem value="scheduled">Programar pedido</MenuItem>
-                        ) : null}
-                      </TextField>
-                    }
-                  />
-                ) : null}
-
-                {timingType === "scheduled" && fulfillmentType !== "scheduled_point" ? (
-                  <FieldBlock
-                    label="Fecha y hora *"
-                    input={
-                      <TextField
-                        size="small"
-                        type="datetime-local"
-                        value={requestedForAt}
-                        onChange={(e) => setRequestedForAt(e.target.value)}
-                        disabled={quoting || creating}
-                      />
-                    }
-                  />
-                ) : null}
-
-                {timingType === "scheduled" &&
-                Number(selectedFulfillment?.minimum_lead_minutes || 0) > 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Programa tu pedido con al menos{" "}
-                    <strong>{selectedFulfillment.minimum_lead_minutes} minutos</strong>{" "}
-                    de anticipación.
-                  </Typography>
-                ) : null}
-
-                {deliveryConcepts.length > 0 ? (
-                  <FieldBlock
-                    label={
-                      fulfillmentType === "home_delivery"
-                        ? "Zona o código postal *"
-                        : "Ubicación *"
-                    }
-                    input={
-                      <TextField
-                        select
-                        size="small"
-                        value={deliveryConceptId}
-                        onChange={(e) => setDeliveryConceptId(e.target.value)}
-                        disabled={quoting || creating}
-                      >
-                        <MenuItem value="" disabled>
-                          {fulfillmentType === "home_delivery"
-                            ? "Selecciona una zona o código postal"
-                            : "Selecciona una ubicación"}
-                        </MenuItem>
-
-                        {deliveryConcepts.map((concept) => (
-                          <MenuItem key={concept.id} value={String(concept.id)}>
-                            {concept.name}
-                            {concept.postal_code ? ` · ${concept.postal_code}` : ""}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                  />
-                ) : null}
-
-                {selectedDeliveryConcept ? (
-                  <Card
-                    variant="outlined"
-                    sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
-                  >
-                    <CardContent>
-                      <Stack spacing={0.5}>
-                        <Typography fontWeight={700}>
-                          {selectedDeliveryConcept.name}
-                        </Typography>
-
-                        {selectedDeliveryConcept.description ? (
-                          <Typography variant="body2" color="text.secondary">
-                            {selectedDeliveryConcept.description}
-                          </Typography>
-                        ) : null}
-
-                        <Typography variant="body2">
-                          Costo de entrega:{" "}
-                          <strong>{money(selectedDeliveryConcept.delivery_fee || 0)}</strong>
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ) : null}
-
-                {fulfillmentType === "scheduled_point" ? (
-                  <>
-                    <FieldBlock
-                      label="Punto programado *"
-                      input={
-                        <TextField
-                          select
-                          size="small"
-                          value={scheduledPointId}
-                          onChange={(e) => handleScheduledPointChange(e.target.value)}
-                          disabled={quoting || creating}
-                        >
-                          <MenuItem value="" disabled>
-                            Selecciona un punto programado
-                          </MenuItem>
-
-                          {scheduledPoints.map((point) => (
-                            <MenuItem key={point.id} value={String(point.id)}>
-                              {point.name}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      }
-                    />
-
-                    {selectedPoint ? (
-                      <Card
-                        variant="outlined"
-                        sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
-                      >
-                        <CardContent>
-                          <Stack spacing={0.5}>
-                            <Typography fontWeight={700}>{selectedPoint.name}</Typography>
-
-                            {selectedPoint.address ? (
-                              <Typography variant="body2">
-                                {selectedPoint.address}
-                              </Typography>
-                            ) : null}
-
-                            {selectedPoint.description ? (
-                              <Typography variant="body2" color="text.secondary">
-                                {selectedPoint.description}
-                              </Typography>
-                            ) : null}
-
-                            <Typography variant="body2">
-                              Costo de entrega:{" "}
-                              <strong>{money(selectedPoint.delivery_fee || 0)}</strong>
-                            </Typography>
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-
-                    <FieldBlock
-                      label="Fecha *"
-                      input={
-                        <TextField
-                          size="small"
-                          type="date"
-                          value={scheduledDate}
-                          onChange={(e) => handleScheduledDateChange(e.target.value)}
-                          inputProps={{
-                            min: selectedPoint?.valid_from || undefined,
-                            max: selectedPoint?.valid_until || undefined,
+                        <Box
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            flexShrink: 0,
+                            borderRadius: "50%",
+                            display: "grid",
+                            placeItems: "center",
+                            color: accentColor,
+                            backgroundColor: hexToRgba(accentColor, 0.1),
                           }}
-                          disabled={!selectedPoint || quoting || creating}
-                        />
-                      }
-                    />
+                        >
+                          <PaymentIcon sx={{ fontSize: 20 }} />
+                        </Box>
 
-                    {scheduledDate && availableBlocks.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No hay horarios disponibles para la fecha seleccionada.
-                      </Typography>
-                    ) : null}
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography sx={{ fontSize: 14, fontWeight: 800, lineHeight: 1.2 }}>
+                            {paymentLabel(type)}
+                          </Typography>
 
-                    {availableBlocks.length > 0 ? (
-                      <FieldBlock
-                        label="Horario *"
-                        input={
-                          <TextField
-                            select
-                            size="small"
-                            value={scheduledPointTimeBlockId}
-                            onChange={(e) => handleBlockChange(e.target.value)}
-                            disabled={quoting || creating}
-                          >
-                            <MenuItem value="" disabled>
-                              Selecciona un horario
-                            </MenuItem>
-
-                            {availableBlocks.map((block) => (
-                              <MenuItem key={block.id} value={String(block.id)}>
-                                {block.start_time} - {block.end_time}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        }
-                      />
-                    ) : null}
-
-                    {selectedBlock ? (
-                      <FieldBlock
-                        label="Hora *"
-                        help={`Selecciona una hora dentro de ${selectedBlock.start_time} - ${selectedBlock.end_time}.`}
-                        input={
-                          <TextField
-                            size="small"
-                            type="time"
-                            value={scheduledTime}
-                            onChange={(e) => setScheduledTime(e.target.value)}
-                            inputProps={{
-                              min: selectedBlock.start_time,
-                              max: selectedBlock.end_time,
-                              step: 60,
+                          <Typography
+                            sx={{
+                              mt: 0.25,
+                              fontSize: 12,
+                              color: "text.secondary",
+                              lineHeight: 1.3,
                             }}
-                            disabled={quoting || creating}
-                          />
-                        }
-                      />
-                    ) : null}
-                  </>
-                ) : null}
+                          >
+                            {paymentDescription(type)}
+                          </Typography>
+                        </Box>
+
+                        <Box
+                          sx={{
+                            width: 18,
+                            height: 18,
+                            flexShrink: 0,
+                            borderRadius: "50%",
+                            border: "2px solid",
+                            borderColor: selected ? accentColor : "divider",
+                            display: "grid",
+                            placeItems: "center",
+                          }}
+                        >
+                          {selected ? (
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                backgroundColor: accentColor,
+                              }}
+                            />
+                          ) : null}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Stack>
               </Stack>
             </CardContent>
           </Card>
 
           <Card
             variant="outlined"
-            sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
-          >
-            <CardContent>
-              <Stack spacing={2}>
-                <Typography fontWeight={800}>Método de pago</Typography>
-
-                <FieldBlock
-                  label="Método de pago *"
-                  input={
-                    <TextField
-                      select
-                      size="small"
-                      value={paymentType}
-                      onChange={(e) => setPaymentType(e.target.value)}
-                      disabled={quoting || creating || paymentMethods.length === 0}
-                    >
-                      <MenuItem value="" disabled>
-                        Selecciona un método de pago
-                      </MenuItem>
-
-                      {paymentMethods.map((payment) => (
-                        <MenuItem key={payment.payment_type} value={payment.payment_type}>
-                          {paymentLabel(payment.payment_type)}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  }
-                />
-              </Stack>
-            </CardContent>
-          </Card>
-
-          <Card
-            variant="outlined"
-            sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
+            sx={{
+              width: "100%",
+              borderWidth: 1,
+              borderRadius: 0,
+              borderTop: `2px solid ${accentColor}`,
+              boxShadow: "none",
+            }}
           >
             <CardContent>
               <Stack spacing={1.25}>
@@ -1040,45 +913,67 @@ export default function PublicOnlineOrderCheckoutModal({
                   </Typography>
                 </Box>
 
-                {paginatedCart.map((item) => (
-                  <Card
-                    key={item.key}
-                    variant="outlined"
-                    sx={{
-                      width: "100%",
-                      minHeight: 72,
-                      borderWidth: 1,
-                      borderRadius: 0,
-                      boxShadow: "none",
-                    }}
-                  >
-                    <CardContent
+                <Box sx={{ width: "100%", backgroundColor: "transparent" }}>
+                  {paginatedCart.map((item, index) => (
+                    <Box
+                      key={item.key}
                       sx={{
+                        minHeight: 52,
+                        py: 1,
+                        px: { xs: 0.25, sm: 0.5 },
                         display: "flex",
-                        justifyContent: "space-between",
                         alignItems: "center",
+                        justifyContent: "space-between",
                         gap: 2,
-                        "&:last-child": { pb: 2 },
+                        borderBottom: index < paginatedCart.length - 1 ? "1px solid" : "none",
+                        borderColor: "divider",
+                        backgroundColor: "transparent",
                       }}
                     >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography fontWeight={700} noWrap>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          sx={{
+                            fontSize: 14,
+                            fontWeight: 750,
+                            lineHeight: 1.3,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {item.name || "Producto"}
                         </Typography>
 
                         {item.variant_name ? (
-                          <Typography variant="body2" color="text.secondary" noWrap>
+                          <Typography
+                            sx={{
+                              mt: 0.2,
+                              fontSize: 12,
+                              color: "text.secondary",
+                              lineHeight: 1.25,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
                             {item.variant_name}
                           </Typography>
                         ) : null}
                       </Box>
 
-                      <Typography fontWeight={800} sx={{ flexShrink: 0 }}>
+                      <Typography
+                        sx={{
+                          flexShrink: 0,
+                          fontSize: 14,
+                          fontWeight: 850,
+                          color: "text.primary",
+                        }}
+                      >
                         × {Number(item.quantity || 1)}
                       </Typography>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </Box>
+                  ))}
+                </Box>
 
                 {cartPageCount > 1 ? (
                   <Box sx={{ display: "flex", justifyContent: "center", pt: 0.5 }}>
@@ -1172,7 +1067,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
 function FieldBlock({ label, input, help }) {
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box sx={{ width: "100%", minWidth: 0 }}>
       <Typography
         sx={{
           fontSize: 14,

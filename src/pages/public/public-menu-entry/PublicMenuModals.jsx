@@ -60,6 +60,7 @@ export default function PublicMenuModals({
           invalidItemsCount={cartOrder.invalidCartItemsCount}
           quoting={cartOrder.onlineOrderQuoting}
           creating={cartOrder.onlineOrderCreating}
+          themeColor={themeColor}
           onClose={() => cartOrder.setSendOpen(false)}
           onQuote={cartOrder.quoteOnlineOrder}
           onCreate={cartOrder.createOnlineOrder}

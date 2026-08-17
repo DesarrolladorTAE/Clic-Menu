@@ -1,42 +1,48 @@
-//Para poner las imagenes de la parte de seguimiento
+// Para poner las imágenes de la parte de seguimiento
 import React, { useMemo } from "react";
 import {
   Box, Card, Chip, Divider, Stack, Typography,
 } from "@mui/material";
 
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
-import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import DeliveryDiningRoundedIcon from "@mui/icons-material/DeliveryDiningRounded";
-import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
-import HourglassTopRoundedIcon from "@mui/icons-material/HourglassTopRounded";
-import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
-import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
-import TakeoutDiningRoundedIcon from "@mui/icons-material/TakeoutDiningRounded";
-import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+
+const TRACKING_IMAGE_BASE = "/images/order-tracking";
 
 const STATUS_ARTWORK = {
-  processing: HourglassTopRoundedIcon,
-  pending_acceptance: AccessTimeRoundedIcon,
-  received: ReceiptLongRoundedIcon,
-  preparing: RestaurantMenuRoundedIcon,
-  ready: TakeoutDiningRoundedIcon,
-  out_for_delivery: DeliveryDiningRoundedIcon,
-  delivered: DoneAllRoundedIcon,
-  completed: VerifiedRoundedIcon,
-  rejected: CancelOutlinedIcon,
-  cancelled: CancelOutlinedIcon,
-  unknown: HourglassTopRoundedIcon,
+  processing: `${TRACKING_IMAGE_BASE}/online-order-pending-acceptance.png`,
+  pending_confirmation: `${TRACKING_IMAGE_BASE}/online-order-pending-acceptance.png`,
+  pending_acceptance: `${TRACKING_IMAGE_BASE}/online-order-pending-acceptance.png`,
+
+  accepted: `${TRACKING_IMAGE_BASE}/online-order-accepted.png`,
+  confirmed_for_preparation: `${TRACKING_IMAGE_BASE}/online-order-accepted.png`,
+  received: `${TRACKING_IMAGE_BASE}/online-order-accepted.png`,
+
+  preparing: `${TRACKING_IMAGE_BASE}/online-order-preparing.png`,
+  ready: `${TRACKING_IMAGE_BASE}/online-order-ready.png`,
+  out_for_delivery: `${TRACKING_IMAGE_BASE}/online-order-out-for-delivery.png`,
+
+  delivered: `${TRACKING_IMAGE_BASE}/online-order-completed.png`,
+  completed: `${TRACKING_IMAGE_BASE}/online-order-completed.png`,
+
+  rejected: `${TRACKING_IMAGE_BASE}/online-order-rejected.png`,
+  cancelled: `${TRACKING_IMAGE_BASE}/online-order-rejected.png`,
+
+  unknown: `${TRACKING_IMAGE_BASE}/online-order-pending-acceptance.png`,
 };
 
 export default function TrackingTab({ data, themeColor }) {
   const status = String(data?.status || "unknown");
   const isNegative = ["rejected", "cancelled"].includes(status);
-  const ArtworkIcon = STATUS_ARTWORK[status] || HourglassTopRoundedIcon;
+
+  const artworkUrl = STATUS_ARTWORK[status] || STATUS_ARTWORK.unknown;
 
   const timelineCodes = useMemo(
-    () => new Set((Array.isArray(data?.timeline) ? data.timeline : []).map((item) => String(item?.status || ""))),
+    () => new Set(
+      (Array.isArray(data?.timeline) ? data.timeline : [])
+        .map((item) => String(item?.status || "")),
+    ),
     [data?.timeline],
   );
 
@@ -79,8 +85,8 @@ export default function TrackingTab({ data, themeColor }) {
           position: "relative",
           overflow: "hidden",
           px: { xs: 2, sm: 4 },
-          pt: { xs: 3, sm: 4 },
-          pb: { xs: 3, sm: 4 },
+          pt: { xs: 4.25, sm: 5.25 },
+          pb: { xs: 3.5, sm: 4.5 },
           textAlign: "center",
           background: isNegative
             ? "linear-gradient(180deg, rgba(242,100,42,0.08) 0%, rgba(255,255,255,0) 100%)"
@@ -90,38 +96,41 @@ export default function TrackingTab({ data, themeColor }) {
         <Box
           sx={{
             position: "absolute",
-            width: { xs: 190, sm: 260 },
-            height: { xs: 190, sm: 260 },
+            width: { xs: 210, sm: 285 },
+            height: { xs: 210, sm: 285 },
             borderRadius: "50%",
-            backgroundColor: isNegative ? "rgba(242,100,42,0.06)" : `${themeColor}0D`,
-            top: { xs: -70, sm: -100 },
-            right: { xs: -70, sm: -80 },
+            backgroundColor: isNegative
+              ? "rgba(242,100,42,0.06)"
+              : `${themeColor}0D`,
+            top: { xs: -75, sm: -105 },
+            right: { xs: -75, sm: -85 },
           }}
         />
 
+        {/* Círculo principal de la ilustración */}
         <Box
           sx={{
-            width: { xs: 142, sm: 170 },
-            height: { xs: 142, sm: 170 },
+            width: { xs: 190, sm: 220, md: 240 },
+            height: { xs: 190, sm: 220, md: 240 },
             mx: "auto",
-            mb: 2.5,
+            mb: { xs: 3, sm: 3.5 },
+            position: "relative",
+            zIndex: 1,
             borderRadius: "50%",
             display: "grid",
             placeItems: "center",
-            position: "relative",
-            color: isNegative ? "error.main" : themeColor,
-            background: isNegative
-              ? "linear-gradient(145deg, rgba(242,100,42,0.14), rgba(255,255,255,0.88))"
-              : `linear-gradient(145deg, ${themeColor}20, rgba(255,255,255,0.92))`,
             border: "1px solid",
-            borderColor: isNegative ? "rgba(242,100,42,0.22)" : `${themeColor}30`,
+            borderColor: `${themeColor}30`,
+            background: `radial-gradient(circle at 50% 42%, ${themeColor}16 0%, ${themeColor}0D 45%, ${themeColor}08 72%, rgba(255,255,255,0.92) 100%)`,
+            boxShadow: `0 8px 28px ${themeColor}12`,
             "@keyframes trackingPulse": {
-              "0%, 100%": { transform: "scale(1)", boxShadow: "0 0 0 0 rgba(0,0,0,0)" },
+              "0%, 100%": {
+                transform: "scale(1)",
+                boxShadow: `0 8px 28px ${themeColor}12, 0 0 0 0 ${themeColor}00`,
+              },
               "50%": {
                 transform: "scale(1.025)",
-                boxShadow: isNegative
-                  ? "0 0 0 10px rgba(242,100,42,0.05)"
-                  : `0 0 0 10px ${themeColor}0A`,
+                boxShadow: `0 10px 34px ${themeColor}18, 0 0 0 11px ${themeColor}0A`,
               },
             },
             animation:
@@ -130,7 +139,36 @@ export default function TrackingTab({ data, themeColor }) {
                 : "trackingPulse 2.4s ease-in-out infinite",
           }}
         >
-          <ArtworkIcon sx={{ fontSize: { xs: 72, sm: 88 } }} />
+          {/* Segundo círculo: aquí queda centrada realmente la imagen */}
+          <Box
+            sx={{
+              position: "absolute",
+              inset: { xs: 12, sm: 14, md: 15 },
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              overflow: "hidden",
+              border: "1px solid",
+              borderColor: `${themeColor}18`,
+              backgroundColor: `${themeColor}08`,
+            }}
+          >
+            <Box
+              component="img"
+              src={artworkUrl}
+              alt=""
+              aria-hidden="true"
+              sx={{
+                width: "92%",
+                height: "92%",
+                objectFit: "contain",
+                objectPosition: "center center",
+                display: "block",
+                pointerEvents: "none",
+                userSelect: "none",
+              }}
+            />
+          </Box>
         </Box>
 
         <Chip
@@ -138,7 +176,9 @@ export default function TrackingTab({ data, themeColor }) {
           size="small"
           sx={{
             mb: 1.5,
-            backgroundColor: isNegative ? "rgba(242,100,42,0.10)" : `${themeColor}16`,
+            backgroundColor: isNegative
+              ? "rgba(242,100,42,0.10)"
+              : `${themeColor}16`,
             color: isNegative ? "error.main" : themeColor,
             fontWeight: 900,
           }}
@@ -195,7 +235,13 @@ export default function TrackingTab({ data, themeColor }) {
               backgroundColor: "rgba(242,100,42,0.07)",
             }}
           >
-            <Typography sx={{ fontSize: 13, color: "text.primary", lineHeight: 1.55 }}>
+            <Typography
+              sx={{
+                fontSize: 13,
+                color: "text.primary",
+                lineHeight: 1.55,
+              }}
+            >
               {data.status_reason}
             </Typography>
           </Box>
@@ -204,7 +250,12 @@ export default function TrackingTab({ data, themeColor }) {
 
       <Divider />
 
-      <Box sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 2.5, sm: 3 } }}>
+      <Box
+        sx={{
+          px: { xs: 1.5, sm: 3 },
+          py: { xs: 3, sm: 3.5 },
+        }}
+      >
         <Typography
           sx={{
             mb: 2.5,
@@ -270,11 +321,22 @@ export default function TrackingTab({ data, themeColor }) {
                     display: "grid",
                     placeItems: "center",
                     border: "2px solid",
-                    borderColor: reached || current ? themeColor : "divider",
-                    backgroundColor: reached || current ? themeColor : "background.paper",
-                    color: reached || current ? "#fff" : "text.secondary",
+                    borderColor:
+                      reached || current
+                        ? themeColor
+                        : "divider",
+                    backgroundColor:
+                      reached || current
+                        ? themeColor
+                        : "background.paper",
+                    color:
+                      reached || current
+                        ? "#fff"
+                        : "text.secondary",
                     transition: "all 300ms ease",
-                    boxShadow: current ? `0 0 0 5px ${themeColor}18` : "none",
+                    boxShadow: current
+                      ? `0 0 0 5px ${themeColor}18`
+                      : "none",
                   }}
                 >
                   {reached && !current ? (
@@ -289,7 +351,11 @@ export default function TrackingTab({ data, themeColor }) {
                     mt: 1,
                     fontSize: { xs: 10.5, sm: 12 },
                     fontWeight: current || reached ? 800 : 600,
-                    color: current ? themeColor : reached ? "text.primary" : "text.secondary",
+                    color: current
+                      ? themeColor
+                      : reached
+                        ? "text.primary"
+                        : "text.secondary",
                     lineHeight: 1.25,
                   }}
                 >
@@ -301,9 +367,26 @@ export default function TrackingTab({ data, themeColor }) {
         </Box>
 
         {status === "pending_acceptance" ? (
-          <Stack direction="row" justifyContent="center" alignItems="center" spacing={0.8} sx={{ mt: 2 }}>
-            <AccessTimeRoundedIcon sx={{ color: themeColor, fontSize: 18 }} />
-            <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
+          <Stack
+            direction="row"
+            justifyContent="center"
+            alignItems="center"
+            spacing={0.8}
+            sx={{ mt: 2 }}
+          >
+            <AccessTimeRoundedIcon
+              sx={{
+                color: themeColor,
+                fontSize: 18,
+              }}
+            />
+
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: "text.secondary",
+              }}
+            >
               La sucursal todavía debe aceptar tu pedido.
             </Typography>
           </Stack>

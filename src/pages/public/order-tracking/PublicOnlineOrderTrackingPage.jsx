@@ -1,21 +1,11 @@
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+  useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
 
 import { useParams } from "react-router-dom";
 
 import {
-  Box,
-  CircularProgress,
-  Paper,
-  Stack,
-  Tab,
-  Tabs,
-  Typography,
+  Box, CircularProgress, Paper, Stack, Tab, Tabs, Typography,
 } from "@mui/material";
 
 import SearchOffRoundedIcon from "@mui/icons-material/SearchOffRounded";
@@ -297,102 +287,117 @@ export default function PublicOnlineOrderTrackingPage() {
     <Box
       sx={{
         width: "100%",
-        minHeight: "100vh",
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
         overflowX: "hidden",
         background: `linear-gradient(180deg, ${themeColor}0F 0%, rgba(243,241,241,0) 420px)`,
       }}
     >
-      <PageContainer
-        sx={{
-          px: { xs: 0, sm: 3, md: 4 },
-          py: { xs: 0, sm: 3, md: 4 },
-        }}
-      >
-        <OrderTrackingHeader
-          data={trackingData}
-          themeColor={themeColor}
-        />
+      <OrderTrackingHeader
+        data={trackingData}
+        themeColor={themeColor}
+      />
 
-        <Box
+      <Box sx={{ width: "100%", flex: 1 }}>
+        <PageContainer
           sx={{
-            px: { xs: 2, sm: 0 },
-            pt: { xs: 1.5, sm: 2 },
+            px: { xs: 0, sm: 3, md: 4 },
+            pt: { xs: 0, sm: 2, md: 2 },
+            pb: { xs: 0, sm: 0, md: 0 },
           }}
         >
-          <Paper
+          <Box
             sx={{
-              width: "100%",
-              position: "sticky",
-              top: 0,
-              zIndex: 20,
-              overflow: "hidden",
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-              backgroundColor: "background.paper",
+              px: { xs: 2, sm: 0 },
+              pt: { xs: 1.5, sm: 0 },
             }}
           >
-            <Tabs
-              value={tab}
-              onChange={(_, nextValue) => setTab(nextValue)}
-              variant="fullWidth"
-              aria-label="Información de seguimiento del pedido"
-              TabIndicatorProps={{
-                sx: {
-                  height: 3,
-                  backgroundColor: themeColor,
-                },
-              }}
+            <Paper
               sx={{
-                minHeight: 50,
-                "& .MuiTab-root": {
-                  minHeight: 50,
-                  fontSize: { xs: 13, sm: 14 },
-                  fontWeight: 800,
-                  color: "text.secondary",
-                },
-                "& .Mui-selected": {
-                  color: `${themeColor} !important`,
-                },
+                width: "100%",
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
+                overflow: "hidden",
+                border: "1px solid",
+                borderColor: "divider",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+                backgroundColor: "background.paper",
               }}
             >
-              <Tab label="Seguimiento" />
-              <Tab label="Datos del pedido" />
-            </Tabs>
-          </Paper>
+              <Tabs
+                value={tab}
+                onChange={(_, nextValue) => setTab(nextValue)}
+                variant="fullWidth"
+                aria-label="Información de seguimiento del pedido"
+                TabIndicatorProps={{
+                  sx: {
+                    height: 3,
+                    backgroundColor: themeColor,
+                  },
+                }}
+                sx={{
+                  minHeight: 50,
+                  "& .MuiTab-root": {
+                    minHeight: 50,
+                    fontSize: { xs: 13, sm: 14 },
+                    fontWeight: 800,
+                    color: "text.secondary",
+                  },
+                  "& .Mui-selected": {
+                    color: `${themeColor} !important`,
+                  },
+                }}
+              >
+                <Tab label="Seguimiento" />
+                <Tab label="Datos del pedido" />
+              </Tabs>
+            </Paper>
 
-          <Box sx={{ mt: 2 }}>
-            {tab === 0 ? (
-              <TrackingTab
-                data={trackingData}
-                themeColor={themeColor}
-              />
-            ) : (
-              <OrderDetailsTab
-                data={trackingData}
-                themeColor={themeColor}
-                onNotify={showAlert}
-              />
-            )}
+            <Box sx={{ mt: 2 }}>
+              {tab === 0 ? (
+                <TrackingTab
+                  data={trackingData}
+                  themeColor={themeColor}
+                />
+              ) : (
+                <OrderDetailsTab
+                  data={trackingData}
+                  themeColor={themeColor}
+                  onNotify={showAlert}
+                />
+              )}
+            </Box>
+
+            <Box sx={{ height: { xs: 24, sm: 32 } }} />
           </Box>
+        </PageContainer>
+      </Box>
 
-          <Box sx={{ mt: 3, pb: { xs: 2, sm: 0 } }}>
-            <PublicMenuFooter
-              publicMenu={publicMenu}
-              restaurantName={restaurantName}
-            />
-          </Box>
-        </Box>
-
-        <AppAlert
-          open={alertState.open}
-          onClose={closeAlert}
-          severity={alertState.severity}
-          title={alertState.title}
-          message={alertState.message}
-          autoHideDuration={3000}
+      <Box
+        sx={{
+          width: "100%",
+          flexShrink: 0,
+          m: 0,
+          p: 0,
+          lineHeight: 0,
+        }}
+      >
+        <PublicMenuFooter
+          publicMenu={publicMenu}
+          restaurantName={restaurantName}
         />
-      </PageContainer>
+      </Box>
+
+      <AppAlert
+        open={alertState.open}
+        onClose={closeAlert}
+        severity={alertState.severity}
+        title={alertState.title}
+        message={alertState.message}
+        autoHideDuration={3000}
+      />
     </Box>
   );
 }

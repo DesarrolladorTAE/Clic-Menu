@@ -1,4 +1,3 @@
-//Encabezado de la pagina de seguimiento
 import React from "react";
 import {
   Avatar, Box, Card, Stack, Typography,
@@ -26,10 +25,12 @@ export default function OrderTrackingHeader({ data, themeColor }) {
     <Card
       sx={{
         width: "100%",
+        maxWidth: "none",
         overflow: "visible",
-        border: "1px solid",
+        border: 0,
+        borderBottom: "1px solid",
         borderColor: "divider",
-        borderRadius: { xs: 0, sm: 1 },
+        borderRadius: 0,
         boxShadow: "none",
         backgroundColor: "background.paper",
       }}
@@ -37,9 +38,10 @@ export default function OrderTrackingHeader({ data, themeColor }) {
       <Box
         sx={{
           position: "relative",
-          height: { xs: 185, sm: 225, md: 245 },
+          width: "100%",
+          height: { xs: 185, sm: 225, md: 270 },
           overflow: "hidden",
-          borderRadius: { xs: 0, sm: "6px 6px 0 0" },
+          borderRadius: 0,
           background: coverUrl
             ? undefined
             : `linear-gradient(135deg, ${themeColor} 0%, ${themeColor}CC 48%, ${themeColor}88 100%)`,
@@ -51,7 +53,13 @@ export default function OrderTrackingHeader({ data, themeColor }) {
               component="img"
               src={coverUrl}
               alt={`Portada de ${branchName}`}
-              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              sx={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center",
+                display: "block",
+              }}
             />
 
             <Box
@@ -69,31 +77,46 @@ export default function OrderTrackingHeader({ data, themeColor }) {
       <Box
         sx={{
           position: "relative",
-          px: { xs: 2, sm: 3 },
+          width: "100%",
+          px: { xs: 2, sm: 3, md: 4 },
           pb: { xs: 2.5, sm: 3 },
           pt: { xs: 6.5, sm: 2.5 },
+          display: { xs: "block", sm: "flex" },
+          alignItems: { sm: "center" },
+          gap: { sm: 2, md: 2.5 },
         }}
       >
         <Avatar
           src={logoUrl || undefined}
           alt={`Logo de ${branchName}`}
           sx={{
-            position: "absolute",
-            left: { xs: 18, sm: 26 },
-            top: { xs: -48, sm: -54 },
-            width: { xs: 96, sm: 108 },
-            height: { xs: 96, sm: 108 },
+            position: { xs: "absolute", sm: "relative" },
+            left: { xs: 18, sm: "auto" },
+            top: { xs: -48, sm: "auto" },
+            width: { xs: 96, sm: 88, md: 96 },
+            height: { xs: 96, sm: 88, md: 96 },
+            flexShrink: 0,
             border: "4px solid",
             borderColor: "background.paper",
             backgroundColor: themeColor,
             color: "#fff",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.15)",
+            boxShadow: {
+              xs: "0 6px 18px rgba(0,0,0,0.15)",
+              sm: "0 4px 14px rgba(0,0,0,0.10)",
+            },
           }}
         >
-          <RestaurantRoundedIcon sx={{ fontSize: 44 }} />
+          <RestaurantRoundedIcon sx={{ fontSize: { xs: 44, sm: 38, md: 42 } }} />
         </Avatar>
 
-        <Box sx={{ pl: { xs: 0, sm: 15 }, minHeight: { sm: 70 } }}>
+        <Box
+          sx={{
+            minWidth: 0,
+            flex: 1,
+            pl: 0,
+            minHeight: { sm: 70 },
+          }}
+        >
           <Typography
             sx={{
               fontSize: { xs: 22, sm: 26 },

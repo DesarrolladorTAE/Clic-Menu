@@ -1,4 +1,4 @@
-//Tarjeta de datos de la orden
+// Tarjeta de datos de la orden
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box, Button, Card, Chip, Divider, Stack, Typography,
@@ -57,59 +57,69 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
           overflow: "hidden",
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: 1,
-                display: "grid",
-                placeItems: "center",
-                color: themeColor,
-                backgroundColor: `${themeColor}12`,
-              }}
-            >
-              <RestaurantMenuRoundedIcon fontSize="small" />
-            </Box>
+        <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
+          <Box sx={{ width: "100%", minWidth: 0 }}>
+            <Stack direction="row" spacing={1.1} alignItems="center" sx={{ mb: 2 }}>
+              <Box
+                sx={{
+                  width: 38,
+                  height: 38,
+                  flexShrink: 0,
+                  borderRadius: 1,
+                  display: "grid",
+                  placeItems: "center",
+                  color: themeColor,
+                  backgroundColor: `${themeColor}12`,
+                }}
+              >
+                <RestaurantMenuRoundedIcon fontSize="small" />
+              </Box>
 
-            <Box>
-              <Typography sx={{ fontSize: 18, fontWeight: 900, color: "text.primary" }}>
-                Tus productos
-              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 18, fontWeight: 900, color: "text.primary" }}>
+                  Tus productos
+                </Typography>
 
-              <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
-                {products.length} {products.length === 1 ? "producto" : "productos"} en tu pedido
-              </Typography>
-            </Box>
-          </Stack>
-
-          {products.length > 0 ? (
-            <Stack spacing={1.5}>
-              {paginatedProducts.map((product, index) => (
-                <ProductItem
-                  key={`${product?.name || "producto"}-${startIndex + index}`}
-                  item={product}
-                  themeColor={themeColor}
-                />
-              ))}
+                <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
+                  {products.length} {products.length === 1 ? "producto" : "productos"} en tu pedido
+                </Typography>
+              </Box>
             </Stack>
-          ) : (
-            <Box
-              sx={{
-                p: 3,
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1,
-                textAlign: "center",
-                backgroundColor: "background.default",
-              }}
-            >
-              <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
-                No hay productos para mostrar.
-              </Typography>
-            </Box>
-          )}
+
+            {products.length > 0 ? (
+              <Box
+                sx={{
+                  width: "100%",
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                {paginatedProducts.map((product, index) => (
+                  <ProductItem
+                    key={`${product?.name || "producto"}-${startIndex + index}`}
+                    item={product}
+                    themeColor={themeColor}
+                    isLast={index === paginatedProducts.length - 1}
+                  />
+                ))}
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  p: 3,
+                  border: "1px solid",
+                  borderColor: `${themeColor}22`,
+                  borderRadius: 1,
+                  textAlign: "center",
+                  backgroundColor: `${themeColor}06`,
+                }}
+              >
+                <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
+                  No hay productos para mostrar.
+                </Typography>
+              </Box>
+            )}
+          </Box>
         </Box>
 
         {products.length > PAGE_SIZE ? (
@@ -129,7 +139,14 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
 
         <Divider />
 
-        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+        <Box
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+            p: { xs: 2, sm: 2.5, md: 3 },
+          }}
+        >
           <Typography sx={{ fontSize: 16, fontWeight: 900, color: "text.primary", mb: 1.5 }}>
             Resumen
           </Typography>
@@ -137,7 +154,11 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
           <SummaryRow label="Productos" value={money(summary.gross)} />
 
           {summary.discount > 0 ? (
-            <SummaryRow label="Descuentos" value={`-${money(summary.discount)}`} valueColor="success.main" />
+            <SummaryRow
+              label="Descuentos"
+              value={`-${money(summary.discount)}`}
+              valueColor="success.main"
+            />
           ) : null}
 
           <SummaryRow label="Costo de entrega" value={money(data?.delivery_fee)} />
@@ -168,8 +189,6 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
 }
 
 function OrderInformationCard({ data, themeColor }) {
-  const financialStatus = String(data?.financial_status || "unpaid");
-
   return (
     <Card
       sx={{
@@ -203,8 +222,12 @@ function OrderInformationCard({ data, themeColor }) {
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" },
+            gridTemplateColumns: {
+              xs: "repeat(2, minmax(0, 1fr))",
+              md: "repeat(4, minmax(0, 1fr))",
+            },
             gap: 1.25,
+            alignItems: "stretch",
           }}
         >
           <InfoBox
@@ -251,8 +274,28 @@ function OrderInformationCard({ data, themeColor }) {
               <Chip
                 size="small"
                 label={data?.financial_status_label || "Pendiente de pago"}
-                color={resolveFinancialChipColor(financialStatus)}
-                sx={{ mt: 0.7 }}
+                sx={{
+                  mt: 0.8,
+                  maxWidth: "100%",
+                  width: "fit-content",
+                  height: "auto",
+                  minHeight: 28,
+                  color: themeColor,
+                  fontWeight: 850,
+                  border: "1px solid",
+                  borderColor: `${themeColor}32`,
+                  backgroundColor: `${themeColor}12`,
+                  "& .MuiChip-label": {
+                    display: "block",
+                    px: 1.2,
+                    py: 0.55,
+                    whiteSpace: "normal",
+                    overflow: "visible",
+                    textOverflow: "clip",
+                    wordBreak: "break-word",
+                    lineHeight: 1.25,
+                  },
+                }}
               />
             }
           />
@@ -283,20 +326,39 @@ function InfoBox({ icon, label, value, themeColor, extra, highlight = false }) {
   return (
     <Box
       sx={{
+        width: "100%",
+        minWidth: 0,
         minHeight: 96,
         p: 1.4,
+        boxSizing: "border-box",
         border: "1px solid",
         borderColor: highlight ? `${themeColor}55` : "divider",
         borderRadius: 1,
         backgroundColor: highlight ? `${themeColor}08` : "background.default",
       }}
     >
-      <Stack direction="row" spacing={0.7} alignItems="center">
-        <Box sx={{ display: "flex", color: themeColor, "& svg": { fontSize: 17 } }}>
+      <Stack direction="row" spacing={0.7} alignItems="flex-start" sx={{ minWidth: 0 }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexShrink: 0,
+            color: themeColor,
+            "& svg": { fontSize: 17 },
+          }}
+        >
           {icon}
         </Box>
 
-        <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: "text.secondary" }}>
+        <Typography
+          sx={{
+            minWidth: 0,
+            fontSize: 11.5,
+            fontWeight: 800,
+            color: "text.secondary",
+            lineHeight: 1.35,
+            wordBreak: "break-word",
+          }}
+        >
           {label}
         </Typography>
       </Stack>
@@ -305,16 +367,21 @@ function InfoBox({ icon, label, value, themeColor, extra, highlight = false }) {
         <Typography
           sx={{
             mt: 1,
+            minWidth: 0,
             fontSize: highlight ? 16 : 13.5,
             fontWeight: highlight ? 900 : 800,
             color: highlight ? themeColor : "text.primary",
+            lineHeight: 1.45,
+            overflowWrap: "anywhere",
             wordBreak: "break-word",
           }}
         >
           {value || "No disponible"}
         </Typography>
       ) : (
-        extra
+        <Box sx={{ minWidth: 0, maxWidth: "100%" }}>
+          {extra}
+        </Box>
       )}
     </Box>
   );
@@ -340,12 +407,18 @@ function DestinationBlock({ destination, themeColor }) {
         mt: 2,
         p: { xs: 1.5, sm: 2 },
         border: "1px solid",
-        borderColor: "divider",
+        borderColor: `${themeColor}24`,
+        borderLeft: `3px solid ${themeColor}`,
         borderRadius: 1,
-        backgroundColor: "background.default",
+        backgroundColor: `${themeColor}06`,
       }}
     >
-      <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: rows.length ? 1.5 : 0 }}>
+      <Stack
+        direction="row"
+        spacing={0.8}
+        alignItems="center"
+        sx={{ mb: rows.length ? 1.5 : 0 }}
+      >
         <LocationOnOutlinedIcon sx={{ color: themeColor, fontSize: 20 }} />
 
         <Typography sx={{ fontSize: 14, fontWeight: 900, color: "text.primary" }}>
@@ -378,36 +451,66 @@ function DestinationBlock({ destination, themeColor }) {
   );
 }
 
-function ProductItem({ item, themeColor, level = 0 }) {
+function ProductItem({ item, themeColor, level = 0, isLast = false }) {
   const modifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
   const components = Array.isArray(item?.components) ? item.components : [];
   const notes = normalizeNotes(item?.notes);
   const hasDiscount = Number(item?.discount_total || 0) > 0;
+  const nested = level > 0;
 
   return (
     <Box
       sx={{
         width: "100%",
-        p: { xs: 1.5, sm: 2 },
-        border: "1px solid",
+        py: nested ? 1 : { xs: 1.4, sm: 1.6 },
+        px: nested ? 1.2 : { xs: 0.25, sm: 0.5 },
+        borderBottom: !nested && !isLast ? "1px solid" : "none",
         borderColor: "divider",
-        borderRadius: 1,
-        backgroundColor: level > 0 ? "background.default" : "#fff",
+        backgroundColor: nested ? `${themeColor}06` : "transparent",
+        borderLeft: nested ? `3px solid ${themeColor}` : "none",
+        borderRadius: nested ? 1 : 0,
       }}
     >
-      <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        spacing={{ xs: 1.5, sm: 2 }}
+        alignItems="flex-start"
+      >
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontSize: 15, fontWeight: 900, color: "text.primary" }}>
+          <Typography
+            sx={{
+              fontSize: nested ? 13.5 : { xs: 14.5, sm: 15 },
+              fontWeight: 900,
+              color: "text.primary",
+              lineHeight: 1.35,
+              wordBreak: "break-word",
+            }}
+          >
             {item?.name || item?.product_name || "Producto"}
           </Typography>
 
           {item?.variant_name ? (
-            <Typography sx={{ mt: 0.3, fontSize: 12.5, color: "text.secondary" }}>
+            <Typography
+              sx={{
+                mt: 0.3,
+                fontSize: 12.5,
+                color: "text.secondary",
+                lineHeight: 1.35,
+              }}
+            >
               {item.variant_name}
             </Typography>
           ) : null}
 
-          <Typography sx={{ mt: 0.5, fontSize: 12, fontWeight: 800, color: themeColor }}>
+          <Typography
+            sx={{
+              mt: 0.55,
+              fontSize: 12,
+              fontWeight: 850,
+              color: themeColor,
+            }}
+          >
             Cantidad: {Number(item?.quantity || 0)}
           </Typography>
         </Box>
@@ -425,14 +528,20 @@ function ProductItem({ item, themeColor, level = 0 }) {
             </Typography>
           ) : null}
 
-          <Typography sx={{ fontSize: 15, fontWeight: 900, color: "text.primary" }}>
+          <Typography
+            sx={{
+              fontSize: nested ? 13.5 : 15,
+              fontWeight: 900,
+              color: "text.primary",
+            }}
+          >
             {money(item?.net_line_total)}
           </Typography>
         </Box>
       </Stack>
 
       {modifiers.length ? (
-        <Stack spacing={1} sx={{ mt: 1.5 }}>
+        <Stack spacing={1} sx={{ mt: 1.25 }}>
           {modifiers.map((group, groupIndex) => (
             <Box key={`${group?.group_name || "extras"}-${groupIndex}`}>
               <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
@@ -452,7 +561,7 @@ function ProductItem({ item, themeColor, level = 0 }) {
                   </Typography>
 
                   {Number(option?.total_price || 0) > 0 ? (
-                    <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
+                    <Typography sx={{ fontSize: 12.5, color: "text.secondary", flexShrink: 0 }}>
                       {money(option.total_price)}
                     </Typography>
                   ) : null}
@@ -464,7 +573,15 @@ function ProductItem({ item, themeColor, level = 0 }) {
       ) : null}
 
       {notes ? (
-        <Box sx={{ mt: 1.5, p: 1, borderRadius: 1, backgroundColor: `${themeColor}08` }}>
+        <Box
+          sx={{
+            mt: 1.25,
+            px: 1,
+            py: 0.8,
+            borderLeft: `2px solid ${themeColor}`,
+            backgroundColor: `${themeColor}07`,
+          }}
+        >
           <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
             Notas
           </Typography>
@@ -476,18 +593,19 @@ function ProductItem({ item, themeColor, level = 0 }) {
       ) : null}
 
       {components.length ? (
-        <Box sx={{ mt: 1.5 }}>
-          <Typography sx={{ mb: 1, fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
+        <Box sx={{ mt: 1.4 }}>
+          <Typography sx={{ mb: 0.8, fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
             Incluye
           </Typography>
 
-          <Stack spacing={1}>
+          <Stack spacing={0.8}>
             {components.map((component, index) => (
               <ProductItem
                 key={`${component?.name || "componente"}-${index}`}
                 item={component}
                 themeColor={themeColor}
                 level={level + 1}
+                isLast={index === components.length - 1}
               />
             ))}
           </Stack>
@@ -597,7 +715,14 @@ function TransferCard({ transfer, themeColor, onNotify }) {
                     size="small"
                     startIcon={<ContentCopyRoundedIcon />}
                     onClick={() => copyValue(data.account_number, "La cuenta")}
-                    sx={{ color: themeColor, borderColor: themeColor }}
+                    sx={{
+                      color: themeColor,
+                      borderColor: themeColor,
+                      "&:hover": {
+                        borderColor: themeColor,
+                        backgroundColor: `${themeColor}08`,
+                      },
+                    }}
                   >
                     Copiar
                   </Button>
@@ -615,7 +740,14 @@ function TransferCard({ transfer, themeColor, onNotify }) {
                     size="small"
                     startIcon={<ContentCopyRoundedIcon />}
                     onClick={() => copyValue(data.clabe, "La CLABE")}
-                    sx={{ color: themeColor, borderColor: themeColor }}
+                    sx={{
+                      color: themeColor,
+                      borderColor: themeColor,
+                      "&:hover": {
+                        borderColor: themeColor,
+                        backgroundColor: `${themeColor}08`,
+                      },
+                    }}
                   >
                     Copiar
                   </Button>
@@ -628,16 +760,23 @@ function TransferCard({ transfer, themeColor, onNotify }) {
                 sx={{
                   p: 1.5,
                   border: "1px solid",
-                  borderColor: "divider",
+                  borderColor: `${themeColor}24`,
                   borderRadius: 1,
-                  backgroundColor: "background.default",
+                  backgroundColor: `${themeColor}06`,
                 }}
               >
                 <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
                   Indicaciones
                 </Typography>
 
-                <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.primary", whiteSpace: "pre-line" }}>
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: 13,
+                    color: "text.primary",
+                    whiteSpace: "pre-line",
+                  }}
+                >
                   {data.instructions}
                 </Typography>
               </Box>
@@ -669,7 +808,15 @@ function TransferRow({ label, value, action }) {
             {label}
           </Typography>
 
-          <Typography sx={{ mt: 0.3, fontSize: 13.5, fontWeight: 800, color: "text.primary", wordBreak: "break-all" }}>
+          <Typography
+            sx={{
+              mt: 0.3,
+              fontSize: 13.5,
+              fontWeight: 800,
+              color: "text.primary",
+              wordBreak: "break-all",
+            }}
+          >
             {value}
           </Typography>
         </Box>
@@ -705,12 +852,6 @@ function resolveTimingLabel(data) {
   }
 
   return data?.timing_type_label || "No disponible";
-}
-
-function resolveFinancialChipColor(status) {
-  if (status === "paid") return "success";
-  if (status === "partially_refunded" || status === "refunded") return "info";
-  return "warning";
 }
 
 function normalizeNotes(value) {
