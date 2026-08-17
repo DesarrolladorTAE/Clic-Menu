@@ -424,8 +424,8 @@ function NewItemsPricingPreview({
             lineHeight: 1.45,
           }}
         >
-          Los importes son una vista previa. El backend confirmará promociones
-          y total al enviar la comanda.
+          Los importes son una vista previa. Las promociones y el total final
+          se confirmarán al enviar la comanda.
         </div>
       )}
     </div>

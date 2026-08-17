@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Badge } from "../../../../pages/public/publicMenu.ui";
 import {
   buildNewItemsPricingSummary,
-  formatAvailabilityCaption,
-  formatAvailabilityShortLabel,
   getAvailabilityData,
+  getPublicAvailabilityPresentation,
   money,
 } from "../../../../hooks/public/publicMenu.utils";
 import {
@@ -16,6 +15,15 @@ import CompositeDetailBlock from "./CompositeDetailBlock";
 import QtyControl from "./QtyControl";
 
 const NEW_ITEMS_PAGE_SIZE = 4;
+
+function normalizeAvailabilityMaxQty(value) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return null;
+
+  return Math.max(0, Math.floor(quantity));
+}
 
 function NoteButton({ item, onOpenNote }) {
   const note = String(item?.notes || "").trim();
@@ -86,20 +94,30 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
     (item?.availability_status
       ? {
           status: item.availability_status,
-          reason: item.availability_reason,
           is_available_now: item.is_available_now,
+          max_available_qty: item?.max_available_qty ?? null,
         }
       : null);
 
   const invalidItem = isCartItemAvailabilityInvalid(item);
-  const invalidAvailabilityLabel =
-    formatAvailabilityShortLabel(itemAvailability) || "No disponible";
+  const availabilityUi = getPublicAvailabilityPresentation(itemAvailability);
 
-  const invalidAvailabilityReason = String(
-    item?.availability_reason ||
-      formatAvailabilityCaption(itemAvailability) ||
-      "",
-  ).trim();
+  const selectedQty = Math.max(0, Number(item?.quantity || 0));
+
+  const maxAvailableQty = normalizeAvailabilityMaxQty(
+    itemAvailability?.max_available_qty,
+  );
+
+  const quantityExceedsAvailability =
+    maxAvailableQty !== null && selectedQty > maxAvailableQty;
+
+  const invalidAvailabilityLabel = quantityExceedsAvailability
+    ? "Disponibilidad limitada"
+    : availabilityUi.label || "No disponible";
+
+  const invalidAvailabilityCaption = quantityExceedsAvailability
+    ? `Cantidad seleccionada: ${selectedQty}. Máx. disponible: ${maxAvailableQty}.`
+    : availabilityUi.caption || invalidAvailabilityLabel;
 
   return (
     <div
@@ -167,7 +185,7 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
       {invalidItem ? (
         <div
           role="alert"
-          title={invalidAvailabilityReason || invalidAvailabilityLabel}
+          title={invalidAvailabilityCaption}
           style={{
             padding: "10px 12px",
             borderRadius: 9,
@@ -183,9 +201,15 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
           </div>
 
           <div style={{ fontWeight: 700 }}>
-            Este producto dejó de estar disponible.
-            <br />
-            Quítalo para continuar.
+            {quantityExceedsAvailability ? (
+              <>
+                Seleccionaste {selectedQty}. Máx. disponible: {maxAvailableQty}.
+                <br />
+                Ajusta la cantidad para continuar.
+              </>
+            ) : (
+              <>Quítalo para continuar.</>
+            )}
           </div>
         </div>
       ) : null}

@@ -137,6 +137,7 @@ import RestaurantSubscriptionHistoryPage from "../pages/owner/subscription-histo
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 import PublicInvoicePage from "../pages/public/invoice/PublicInvoicePage";
+import PublicOnlineOrderTrackingPage from "../pages/public/order-tracking/PublicOnlineOrderTrackingPage";
 
 //BLOGS
 import TestEventPage from "../realtime/TestEventPage";
@@ -153,8 +154,9 @@ export default function AppRoutes() {
       <Route path="/contacto" element={<LandingContactPage />} />
       <Route path="/terminos-y-condiciones" element={<LandingTermsPage />} />
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
+      <Route path="/order/:trackingToken" element={<PublicOnlineOrderTrackingPage />} />
       <Route path="/invoice/:token" element={<PublicInvoicePage />} />
-      
+
       <Route path="/test-mui" element={<TestMui />} />
 
       <Route path="/test-event" element={<TestEventPage />} />

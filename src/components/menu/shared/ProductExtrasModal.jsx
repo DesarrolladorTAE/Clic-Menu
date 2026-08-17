@@ -5,6 +5,7 @@ import {
   buildModifierContextSections,
   buildModifierDisplayGroupsFromApiGroups,
   formatModifierGroupMeta,
+  getPublicAvailabilityPresentation,
   isAvailabilityBlocked,
   money,
 } from "../../../hooks/public/publicMenu.utils";
@@ -304,29 +305,21 @@ function getOptionQuantityLimit(option) {
 
 function getAvailabilityUi(option) {
   const availability =
-    option?.availability &&
-    typeof option.availability === "object"
+    option?.availability && typeof option.availability === "object"
       ? option.availability
       : null;
 
   /*
-   * availability.status enviado por backend tiene prioridad
-   * sobre cualquier etiqueta visual.
+   * El estado del backend sigue siendo la autoridad para bloquear.
+   * availability_label solo se conserva como compatibilidad cuando
+   * no existe un objeto availability.
    */
   const status = String(
-    availability?.status ||
-      option?.availability_label ||
-      "available",
-  ).toLowerCase();
+    availability?.status || option?.availability_label || "available",
+  ).trim().toLowerCase();
 
-  const maxQty =
-    availability?.max_available_qty ?? null;
-
-  const reason =
-    availability?.reason || null;
-
-  const explicitlyUnavailable =
-    option?.is_available === false;
+  const maxQty = availability?.max_available_qty ?? null;
+  const explicitlyUnavailable = option?.is_available === false;
 
   const blockedByBackend = availability
     ? isAvailabilityBlocked(availability)
@@ -344,87 +337,61 @@ function getAvailabilityUi(option) {
     !blockedByBackend &&
     !hasZeroAvailability;
 
-  const map = {
-    disponible: {
-      label: "Disponible",
-      bg: "#e8f7ee",
-      color: "#18794e",
-      border: "rgba(24,121,78,0.18)",
-    },
-    available: {
-      label: "Disponible",
-      bg: "#e8f7ee",
-      color: "#18794e",
-      border: "rgba(24,121,78,0.18)",
-    },
-    agotado: {
-      label: "Agotado",
-      bg: "#fdecec",
-      color: "#b42318",
-      border: "rgba(180,35,24,0.18)",
-    },
-    out_of_stock: {
-      label: "Agotado",
-      bg: "#fdecec",
-      color: "#b42318",
-      border: "rgba(180,35,24,0.18)",
-    },
-    stock_insuficiente: {
-      label: "Stock insuficiente",
-      bg: "#fff4e5",
-      color: "#b26a00",
-      border: "rgba(178,106,0,0.18)",
-    },
-    insufficient_stock: {
-      label: "Stock insuficiente",
-      bg: "#fff4e5",
-      color: "#b26a00",
-      border: "rgba(178,106,0,0.18)",
-    },
-    sin_receta: {
-      label: "Sin receta",
-      bg: "#f3e8ff",
-      color: "#7c3aed",
-      border: "rgba(124,58,237,0.18)",
-    },
-    recipe_missing: {
-      label: "Sin receta",
-      bg: "#f3e8ff",
-      color: "#7c3aed",
-      border: "rgba(124,58,237,0.18)",
-    },
-    bloqueado: {
-      label: "Bloqueado",
-      bg: "#eef2ff",
-      color: "#4338ca",
-      border: "rgba(67,56,202,0.18)",
-    },
-    inventory_blocked: {
-      label: "Bloqueado",
-      bg: "#eef2ff",
-      color: "#4338ca",
-      border: "rgba(67,56,202,0.18)",
-    },
+  const presentation = availability
+    ? getPublicAvailabilityPresentation(availability)
+    : null;
+
+  const safeFallbackLabels = {
+    agotado: "Agotado",
+    out_of_stock: "Agotado",
+    stock_insuficiente: "Disponibilidad limitada",
+    insufficient_stock: "Disponibilidad limitada",
+    unavailable_by_schedule: "No disponible por horario",
   };
 
-  const current =
-    !isAvailable &&
-    ["available", "disponible"].includes(status)
-      ? map.inventory_blocked
-      : map[status] ||
-        (isAvailable
-          ? map.available
-          : map.inventory_blocked);
+  const presentationLabel =
+    !["available", "disponible"].includes(status)
+      ? presentation?.label
+      : "";
+
+  const label = isAvailable
+    ? presentation?.label || "Disponible"
+    : presentationLabel || safeFallbackLabels[status] || "No disponible";
+
+  const caption = isAvailable
+    ? presentation?.caption || label
+    : (!["available", "disponible"].includes(status)
+        ? presentation?.caption
+        : "") || label;
+
+  const limited =
+    ["insufficient_stock", "stock_insuficiente"].includes(status);
+
+  const colors = isAvailable
+    ? {
+        bg: "#e8f7ee",
+        color: "#18794e",
+        border: "rgba(24,121,78,0.18)",
+      }
+    : limited
+      ? {
+          bg: "#fff4e5",
+          color: "#b26a00",
+          border: "rgba(178,106,0,0.18)",
+        }
+      : {
+          bg: "#fdecec",
+          color: "#b42318",
+          border: "rgba(180,35,24,0.18)",
+        };
 
   return {
     isAvailable,
     status,
-    label: current.label,
-    bg: current.bg,
-    color: current.color,
-    border: current.border,
+    label,
+    caption,
     maxQty,
-    reason,
+    ...colors,
   };
 }
 
@@ -531,6 +498,7 @@ function OptionRow({
             }}
           >
             <span
+              title={availabilityUi.caption || availabilityUi.label}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -561,19 +529,6 @@ function OptionRow({
             ) : null}
           </div>
 
-          {availabilityUi.reason ? (
-            <div
-              style={{
-                fontSize: 12,
-                marginTop: 8,
-                color: disabledByAvailability ? "#b42318" : "#6E6A6A",
-                fontWeight: disabledByAvailability ? 700 : 500,
-                lineHeight: 1.45,
-              }}
-            >
-              {availabilityUi.reason}
-            </div>
-          ) : null}
         </div>
 
         {readOnly ? (
@@ -1023,16 +978,9 @@ export default function ProductExtrasModal({
           const effectiveMaxQty = quantityLimit.effectiveMax;
 
           if (!availabilityUi.isAvailable) {
-            const reason = String(
-              availabilityUi.reason || "",
-            ).trim();
-
             setErrorMsg(
-              reason
-                ? `La opción "${option?.name || "Extra"}" no está disponible. ${reason}`
-                : `La opción "${option?.name || "Extra"}" ya no está disponible.`,
+              `La opción "${option?.name || "Extra"}" ya no está disponible.`,
             );
-
             return;
           }
 

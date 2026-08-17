@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendPublicOrderItems,
+  createPublicOnlineOrder,
   createPublicOrder,
   getPublicOrder,
-  sendPublicWhatsapp
+  quotePublicOnlineOrder,
+  sendPublicWhatsapp,
 } from "../../services/public/publicMenu.service";
 import {
   buildAvailabilityErrorMessage,
@@ -75,6 +77,56 @@ function normalizeItemsForApi(cart) {
   });
 }
 
+function normalizeOnlineOrderItemsForApi(cart) {
+  const arr = Array.isArray(cart) ? cart : [];
+
+  return arr.map((item) => {
+    const payload = {
+      product_id: Number(item.product_id),
+      variant_id: item.variant_id ? Number(item.variant_id) : null,
+      quantity: Number(item.quantity || 1),
+      notes: item.notes ? String(item.notes).slice(0, 500) : null,
+    };
+
+    const parentModifiers = normalizeModifierGroupsForKey(item?.modifiers || []);
+
+    if (parentModifiers.length > 0) {
+      payload.modifiers = parentModifiers.map((group) => ({
+        modifier_group_id: Number(group.modifier_group_id),
+        options: group.options.map((option) => ({
+          modifier_option_id: Number(option.modifier_option_id),
+          quantity: Number(option.quantity || 1),
+        })),
+      }));
+    }
+
+    if (Array.isArray(item.components) && item.components.length > 0) {
+      payload.components = normalizeCompositeComponentsForKey(item.components).map((component) => {
+        const componentPayload = {
+          component_product_id: Number(component.component_product_id),
+          variant_id: component.variant_id ? Number(component.variant_id) : null,
+        };
+
+        const componentModifiers = normalizeModifierGroupsForKey(component?.modifiers || []);
+
+        if (componentModifiers.length > 0) {
+          componentPayload.modifiers = componentModifiers.map((group) => ({
+            modifier_group_id: Number(group.modifier_group_id),
+            options: group.options.map((option) => ({
+              modifier_option_id: Number(option.modifier_option_id),
+              quantity: Number(option.quantity || 1),
+            })),
+          }));
+        }
+
+        return componentPayload;
+      });
+    }
+
+    return payload;
+  });
+}
+
 function isActiveOrderStatus(status) {
   return ["open", "ready", "paying", "paid"].includes(String(status || "").toLowerCase());
 }
@@ -97,6 +149,118 @@ function hasOwn(source, key) {
     typeof source === "object" &&
     Object.prototype.hasOwnProperty.call(source, key)
   );
+}
+
+function createOnlineOrderIdempotencyKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `oo_${crypto.randomUUID()}`;
+  }
+
+  const random = () => Math.random().toString(36).slice(2);
+  return `oo_${Date.now().toString(36)}_${random()}_${random()}`;
+}
+
+function firstOnlineOrderValidationError(errors) {
+  if (!errors || typeof errors !== "object") return { field: "", message: "" };
+
+  const field = Object.keys(errors)[0] || "";
+  const value = field ? errors[field] : null;
+  const message = Array.isArray(value) ? value[0] : value;
+
+  return {
+    field,
+    message: String(message || "").trim(),
+  };
+}
+
+function isTechnicalOnlineOrderMessage(message) {
+  const text = String(message || "").trim().toLowerCase();
+  if (!text) return false;
+
+  const technicalTerms = [
+    "timing_type",
+    "requested_for_at",
+    "delivery_concept_id",
+    "scheduled_point_id",
+    "scheduled_point_time_block_id",
+    "scheduled_date",
+    "payment_type",
+    "idempotency_key",
+    "warehouse",
+    "inventory",
+    "inventario",
+    "product_id",
+    "variant_id",
+    "backend",
+    "frontend",
+  ];
+
+  return technicalTerms.some((term) => text.includes(term));
+}
+
+function buildOnlineOrderPublicErrorMessage(error, fallback) {
+  const apiError = extractApiErrorInfo(error);
+  const responseData =
+    error?.response?.data && typeof error.response.data === "object"
+      ? error.response.data
+      : {};
+
+  const errors =
+    apiError?.errors && typeof apiError.errors === "object"
+      ? apiError.errors
+      : responseData?.errors && typeof responseData.errors === "object"
+        ? responseData.errors
+        : null;
+
+  const firstError = firstOnlineOrderValidationError(errors);
+  const code = String(apiError?.code || responseData?.code || "").trim().toUpperCase();
+
+  const friendlyByField = {
+    order_name: "Escribe el nombre para tu pedido.",
+    customer_phone: "Ingresa un teléfono válido de 10 dígitos.",
+    customer_email: "Ingresa un correo electrónico válido.",
+    customer_notes: "Revisa las notas del pedido.",
+    fulfillment_type: "Selecciona una forma de entrega disponible.",
+    timing_type: "Selecciona cuándo quieres recibir tu pedido.",
+    requested_for_at: "Selecciona una fecha y hora válidas para tu pedido.",
+    delivery_concept_id: "Selecciona una zona, código postal o ubicación disponible.",
+    scheduled_point_id: "Selecciona un punto de entrega disponible.",
+    scheduled_point_time_block_id: "Selecciona un horario disponible.",
+    scheduled_date: "Selecciona una fecha válida.",
+    payment_type: "Selecciona un método de pago disponible.",
+    items: "Revisa los productos de tu pedido antes de continuar.",
+    idempotency_key: "No se pudo preparar el envío. Intenta nuevamente.",
+  };
+
+  if (code === "ONLINE_ORDER_IDEMPOTENCY_CONFLICT") {
+    return "Los datos del pedido cambiaron. Calcula nuevamente el total e intenta otra vez.";
+  }
+
+  if (code.includes("INVENTORY")) {
+    return "La disponibilidad de uno o más productos cambió. Revisa tu pedido e intenta nuevamente.";
+  }
+
+  const firstMessage = firstError.message;
+
+  if (
+    firstMessage &&
+    !firstMessage.startsWith("The ") &&
+    !isTechnicalOnlineOrderMessage(firstMessage)
+  ) {
+    return firstMessage;
+  }
+
+  const backendMessage = String(apiError?.message || responseData?.message || "").trim();
+
+  if (
+    backendMessage &&
+    !backendMessage.startsWith("The ") &&
+    !isTechnicalOnlineOrderMessage(backendMessage)
+  ) {
+    return backendMessage;
+  }
+
+  return friendlyByField[firstError.field] || fallback;
 }
 
 function buildCartPromotionMetadata(source, basePrice) {
@@ -154,6 +318,52 @@ function buildCartPromotionMetadata(source, basePrice) {
   };
 }
 
+function buildCartAvailabilityMetadata(source) {
+  const availability =
+    source?.availability && typeof source.availability === "object"
+      ? { ...source.availability }
+      : null;
+
+  if (!availability) {
+    return {
+      availability: null,
+      availability_status: null,
+      availability_reason: null,
+      is_available_now: null,
+    };
+  }
+
+  const status = String(availability?.status || "").trim().toLowerCase() || null;
+  const reason = String(availability?.reason || "").trim() || null;
+
+  const rawMax = availability?.max_available_qty;
+  const parsedMax =
+    rawMax === null || rawMax === undefined || rawMax === ""
+      ? null
+      : Number(rawMax);
+
+  const maxAvailableQty =
+    parsedMax === null || !Number.isFinite(parsedMax)
+      ? null
+      : Math.max(0, parsedMax);
+
+  const isAvailableNow =
+    typeof availability?.is_available_now === "boolean"
+      ? availability.is_available_now
+      : typeof source?.is_available === "boolean"
+        ? source.is_available
+        : status
+          ? status === "available"
+          : null;
+
+  return {
+    availability: { ...availability, max_available_qty: maxAvailableQty },
+    availability_status: status,
+    availability_reason: reason,
+    is_available_now: isAvailableNow,
+  };
+}
+
 function mergeConfirmedOrderTotals(
   currentOrder,
   source,
@@ -203,10 +413,18 @@ function mergeConfirmedOrderTotals(
 function applyAvailabilityErrorToCart(items, apiError) {
   const rows = Array.isArray(items) ? items : [];
   const data = apiError?.data && typeof apiError.data === "object" ? apiError.data : {};
-  const sourceAvailability =
+
+  const nestedAvailability =
     data?.availability && typeof data.availability === "object"
       ? data.availability
-      : {};
+      : null;
+
+  const sourceAvailability = nestedAvailability || {
+    status: data?.availability_status || null,
+    reason: data?.reason || null,
+    max_available_qty: hasOwn(data, "max_available_qty") ? data.max_available_qty : null,
+    is_available_now: false,
+  };
 
   const code = String(apiError?.code || "").trim().toUpperCase();
   const fallbackStatus =
@@ -229,8 +447,11 @@ function applyAvailabilityErrorToCart(items, apiError) {
   const availability = {
     ...sourceAvailability,
     status,
-    is_available_now: false,
     reason,
+    is_available_now: false,
+    max_available_qty: hasOwn(sourceAvailability, "max_available_qty")
+      ? sourceAvailability.max_available_qty
+      : null,
     source:
       sourceAvailability?.source ||
       (status === "unavailable_by_schedule"
@@ -288,17 +509,43 @@ export function useCartAndOrder({
   sessionUnavailable,
   activeMenuType,
   activeMenuPayload,
-  isWebMenu,
+  publicFlow,
+  qrType,
+  salesChannelCode,
 }) {
-  const isWebType = activeMenuType === "web";
-  /**
-   * NUEVA FUENTE DE VERDAD SOLO PARA PUBLIC MENU WEB
-   * (no afecta otros sistemas)
-   */
-  const isPublicWebMenu =
-    typeof window !== "undefined" &&
-    activeMenuType === "web" &&
-    !!activeMenuPayload;
+  const normalizedQrType = String(
+    qrType || activeMenuPayload?.qr_type || activeMenuType || "",
+  ).trim().toLowerCase();
+
+  const normalizedSalesChannelCode = String(
+    salesChannelCode ||
+    activeMenuPayload?.sales_channel_code ||
+    activeMenuPayload?.sales_channel?.code ||
+    "",
+  ).trim().toUpperCase();
+
+  const normalizedPublicFlow = String(
+    publicFlow || activeMenuPayload?.public_flow || "catalog_only",
+  ).trim().toLowerCase();
+
+  const isWhatsappFlow =
+    normalizedQrType === "web" &&
+    normalizedSalesChannelCode === "WHATSAPP" &&
+    normalizedPublicFlow === "whatsapp";
+
+  const isOnlineOrderFlow =
+    normalizedQrType === "web" &&
+    normalizedSalesChannelCode === "ONLINE_ORDER" &&
+    normalizedPublicFlow === "online_order";
+
+  const isWebOrderingFlow = isWhatsappFlow || isOnlineOrderFlow;
+
+  const onlineOrderCheckout =
+    isOnlineOrderFlow &&
+    activeMenuPayload?.online_order_checkout &&
+    typeof activeMenuPayload.online_order_checkout === "object"
+      ? activeMenuPayload.online_order_checkout
+      : null;
 
   const customerOrderUi =
     activeMenuPayload?.ui &&
@@ -331,6 +578,11 @@ export function useCartAndOrder({
   const [childCount, setChildCount] = useState("");
   const [sending, setSending] = useState(false);
   const [sendToast, setSendToast] = useState("");
+
+  const [onlineOrderQuoting, setOnlineOrderQuoting] = useState(false);
+  const [onlineOrderCreating, setOnlineOrderCreating] = useState(false);
+  const [onlineOrderCreated, setOnlineOrderCreated] = useState(null);
+  const onlineOrderAttemptRef = useRef({ signature: "", key: "" });
 
   const [pendingOrder, setPendingOrder] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -370,11 +622,8 @@ export function useCartAndOrder({
         };
       }
 
-      if (activeMenuType !== "web") {
-        setSendToast(
-          "Este menú no permite envío por WhatsApp.",
-        );
-
+      if (!isWhatsappFlow) {
+        setSendToast("Este menú no permite enviar pedidos por WhatsApp.");
         return { ok: false };
       }
 
@@ -399,10 +648,7 @@ export function useCartAndOrder({
       ).trim();
 
       if (!url) {
-        setSendToast(
-          "El servidor no devolvió el enlace de WhatsApp.",
-        );
-
+        setSendToast("No se pudo abrir WhatsApp. Intenta nuevamente.");
         return { ok: false };
       }
 
@@ -490,12 +736,189 @@ export function useCartAndOrder({
       return { ok: false };
     }
   }, [
-    activeMenuType,
+    isWhatsappFlow,
     cart,
     token,
     hasInvalidCartItems,
     markCartAvailabilityError,
   ]);
+
+  const quoteOnlineOrder = useCallback(
+    async (selection) => {
+      if (!isOnlineOrderFlow) {
+        return { ok: false, message: "Pedidos en línea no está disponible en este menú." };
+      }
+
+      if (hasInvalidCartItems) {
+        return {
+          ok: false,
+          message: "Hay productos que ya no están disponibles. Revisa tu pedido para continuar.",
+        };
+      }
+
+      const items = normalizeOnlineOrderItemsForApi(cart);
+
+      if (items.length === 0) {
+        return { ok: false, message: "Agrega al menos un producto para continuar." };
+      }
+
+      setOnlineOrderQuoting(true);
+
+      try {
+        const res = await quotePublicOnlineOrder({
+          token: String(token || ""),
+          payload: { ...(selection || {}), items },
+        });
+
+        const quote =
+          res?.data && typeof res.data === "object"
+            ? res.data
+            : null;
+
+        if (!quote) {
+          return {
+            ok: false,
+            message: "No se pudo calcular el total del pedido. Intenta nuevamente.",
+          };
+        }
+
+        return { ok: true, data: quote };
+      } catch (error) {
+        const apiError = extractApiErrorInfo(error);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
+
+          return {
+            ok: false,
+            availabilityError: true,
+            message: buildAvailabilityErrorMessage(apiError),
+          };
+        }
+
+        return {
+          ok: false,
+          message: buildOnlineOrderPublicErrorMessage(
+            error,
+            "No se pudo calcular el total del pedido. Intenta nuevamente.",
+          ),
+        };
+      } finally {
+        setOnlineOrderQuoting(false);
+      }
+    },
+    [
+      isOnlineOrderFlow,
+      hasInvalidCartItems,
+      cart,
+      token,
+      markCartAvailabilityError,
+    ],
+  );
+
+  const createOnlineOrder = useCallback(
+    async (selection) => {
+      if (!isOnlineOrderFlow) {
+        return { ok: false, message: "Pedidos en línea no está disponible en este menú." };
+      }
+
+      if (hasInvalidCartItems) {
+        return {
+          ok: false,
+          message: "Hay productos que ya no están disponibles. Revisa tu pedido para continuar.",
+        };
+      }
+
+      const items = normalizeOnlineOrderItemsForApi(cart);
+
+      if (items.length === 0) {
+        return { ok: false, message: "Agrega al menos un producto para continuar." };
+      }
+
+      const basePayload = { ...(selection || {}), items };
+      const signature = JSON.stringify(basePayload);
+
+      if (
+        onlineOrderAttemptRef.current.signature !== signature ||
+        !onlineOrderAttemptRef.current.key
+      ) {
+        onlineOrderAttemptRef.current = {
+          signature,
+          key: createOnlineOrderIdempotencyKey(),
+        };
+      }
+
+      const payload = {
+        idempotency_key: onlineOrderAttemptRef.current.key,
+        ...basePayload,
+      };
+
+      setOnlineOrderCreating(true);
+
+      try {
+        const res = await createPublicOnlineOrder({
+          token: String(token || ""),
+          payload,
+        });
+
+        if (res?.ok !== true) {
+          return {
+            ok: false,
+            message: String(res?.message || "No se pudo enviar el pedido. Intenta nuevamente."),
+          };
+        }
+
+        const responseData =
+          res?.data && typeof res.data === "object"
+            ? res.data
+            : {};
+
+        const created = {
+          public_number: String(responseData?.public_number || ""),
+          tracking_token: String(responseData?.tracking_token || ""),
+          tracking_url: String(responseData?.tracking_url || ""),
+          status: String(responseData?.status || ""),
+          idempotent: Boolean(responseData?.idempotent),
+          message: String(res?.message || "Pedido enviado correctamente."),
+        };
+
+        setOnlineOrderCreated(created);
+        setCart([]);
+
+        return { ok: true, data: created };
+      } catch (error) {
+        const apiError = extractApiErrorInfo(error);
+
+        if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
+
+          return {
+            ok: false,
+            availabilityError: true,
+            message: buildAvailabilityErrorMessage(apiError),
+          };
+        }
+
+        return {
+          ok: false,
+          message: buildOnlineOrderPublicErrorMessage(
+            error,
+            "No se pudo enviar el pedido. Intenta nuevamente.",
+          ),
+        };
+      } finally {
+        setOnlineOrderCreating(false);
+      }
+    },
+    [
+      isOnlineOrderFlow,
+      hasInvalidCartItems,
+      cart,
+      token,
+      markCartAvailabilityError,
+    ],
+  );
+
 
   const currentOrderId = useMemo(() => {
     return Number(
@@ -628,11 +1051,8 @@ export function useCartAndOrder({
 
     const baseUnitPrice = safeNum(p?.price, 0);
 
-    const promotionMetadata =
-      buildCartPromotionMetadata(
-        p,
-        baseUnitPrice,
-      );
+    const promotionMetadata = buildCartPromotionMetadata(p, baseUnitPrice);
+    const availabilityMetadata = buildCartAvailabilityMetadata(p);
 
     upsertCartItem({
       key,
@@ -643,6 +1063,7 @@ export function useCartAndOrder({
 
       unit_price: baseUnitPrice,
       ...promotionMetadata,
+      ...availabilityMetadata,
 
       quantity: 1,
       notes: "",
@@ -700,11 +1121,8 @@ export function useCartAndOrder({
       safeNum(p?.price, 0),
     );
 
-    const promotionMetadata =
-      buildCartPromotionMetadata(
-        v,
-        baseUnitPrice,
-      );
+    const promotionMetadata = buildCartPromotionMetadata(v, baseUnitPrice);
+    const availabilityMetadata = buildCartAvailabilityMetadata(v);
 
     upsertCartItem({
       key,
@@ -715,6 +1133,7 @@ export function useCartAndOrder({
 
       unit_price: baseUnitPrice,
       ...promotionMetadata,
+      ...availabilityMetadata,
 
       quantity: 1,
       notes: "",
@@ -755,8 +1174,44 @@ export function useCartAndOrder({
   }
 
   function setCartQty(key, qty) {
-    const qn = Math.max(1, Math.min(99, Number(qty || 1)));
-    setCart((prev) => prev.map((x) => (x.key === key ? { ...x, quantity: qn } : x)));
+    const requestedQty = Math.max(1, Math.min(99, Math.trunc(Number(qty || 1))));
+
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+
+        const rawMax = item?.availability?.max_available_qty;
+
+        if (rawMax === null || rawMax === undefined || rawMax === "") {
+          return { ...item, quantity: requestedQty };
+        }
+
+        const maxAvailable = Math.floor(Number(rawMax));
+        if (!Number.isFinite(maxAvailable) || maxAvailable <= 0) return item;
+
+        const productId = getCartLineProductId(item);
+        const variantId = getCartLineVariantId(item);
+
+        const usedByOtherLines = prev.reduce((sum, other) => {
+          if (other.key === key) return sum;
+
+          const sameProduct = getCartLineProductId(other) === productId;
+          const sameVariant = getCartLineVariantId(other) === variantId;
+
+          return sameProduct && sameVariant
+            ? sum + Math.max(0, Number(other?.quantity || 0))
+            : sum;
+        }, 0);
+
+        const availableForThisLine = Math.floor(maxAvailable - usedByOtherLines);
+        if (availableForThisLine <= 0) return item;
+
+        return {
+          ...item,
+          quantity: Math.max(1, Math.min(requestedQty, availableForThisLine)),
+        };
+      }),
+    );
   }
 
   function setCartNotes(key, notes) {
@@ -841,12 +1296,12 @@ export function useCartAndOrder({
 
   const totalGlobal = displayTotal;
 
-  const tableOk = isWebMenu || isPublicWebMenu ? true : !!hasTable;
-  const sessionOk = isWebMenu || isPublicWebMenu ? true : !!sessionActive;
-  const modeOk =
-    isWebMenu || isPublicWebMenu
-      ? true
-      : String(orderingMode || "") === "customer_assisted";
+  const tableOk = isWebOrderingFlow ? true : !!hasTable;
+  const sessionOk = isWebOrderingFlow ? true : !!sessionActive;
+  const modeOk = isWebOrderingFlow
+    ? true
+    : String(orderingMode || "") === "customer_assisted";
+
   const selectableOk = !!canSelect;
   const busyOk = !sessionBusy;
   const unavailableOk = !sessionUnavailable;
@@ -859,7 +1314,7 @@ export function useCartAndOrder({
     !!activeOrder?.id &&
     ["open", "ready"].includes(String(activeOrder?.status || "").toLowerCase());
 
-  const orderUiOk = isWebMenu
+  const orderUiOk = isWebOrderingFlow
     ? true
     : canAppend
       ? orderUi?.can_add_items !== false && orderUi?.can_send_items !== false
@@ -871,12 +1326,8 @@ export function useCartAndOrder({
       String(pendingOrder?.status || "pending").toLowerCase(),
     );
 
-  const isPublicRoute =
-  typeof window !== "undefined" &&
-  window.location.pathname.startsWith("/menu");
-
   const allowBase =
-    ((isWebMenu || isPublicWebMenu)
+    (isWebOrderingFlow
       ? selectableOk && hasItems && orderUiOk && payingOk
       : tableOk &&
         sessionOk &&
@@ -889,14 +1340,9 @@ export function useCartAndOrder({
         payingOk) &&
     !hasInvalidCartItems;
 
-  const allowSendNow =
-    (isWebMenu || isPublicWebMenu)
-      ? allowBase
-      : allowBase &&
-        (
-          canAppend ||
-          (!hasPending && canStartCustomerOrder !== false)
-        );
+  const allowSendNow = isWebOrderingFlow
+    ? allowBase
+    : allowBase && (canAppend || (!hasPending && canStartCustomerOrder !== false));
 
   const refreshOrder = useCallback(
     async (orderId) => {
@@ -1187,22 +1633,32 @@ export function useCartAndOrder({
   );
 
   function buildBlockerMessage() {
-    const reasons = [];
+    if (hasInvalidCartItems) {
+      return "Hay productos que ya no están disponibles. Quítalos para continuar.";
+    }
 
-    if (!isWebMenu && !sessionOk) reasons.push("sesión no activa");
-    if (!isWebMenu && !tableOk) reasons.push("mesa no detectada");
-    if (!modeOk) reasons.push("modo no permitido");
-    if (!selectableOk) reasons.push("menú no seleccionable");
-    if (!busyOk) reasons.push("mesa ocupada por otro dispositivo");
-    if (!unavailableOk) reasons.push("sesión no disponible");
-    if (!hasItems) reasons.push("sin productos");
-    if (hasInvalidCartItems) reasons.push("hay productos no disponibles");
-    if (!orderUiOk) reasons.push("orden bloqueada para agregar");
-    if (!payingOk) reasons.push("cuenta en proceso de pago");
+    if (!hasItems) return "Agrega al menos un producto para continuar.";
 
-    return reasons.length
-      ? `⚠️ No se puede enviar en este momento: ${reasons.join(", ")}.`
-      : "⚠️ No se puede enviar en este momento.";
+    if (!isWebOrderingFlow && !sessionOk) {
+      return "La sesión de la mesa ya no está activa. Escanea nuevamente el QR.";
+    }
+
+    if (!isWebOrderingFlow && !tableOk) {
+      return "No se pudo identificar la mesa de este QR.";
+    }
+
+    if (!selectableOk || !modeOk) {
+      return "Este menú no permite realizar pedidos en este momento.";
+    }
+
+    if (!busyOk) return "Esta mesa está siendo atendida desde otro dispositivo.";
+    if (!unavailableOk) return "La sesión de esta mesa ya no está disponible.";
+
+    if (!orderUiOk || !payingOk) {
+      return "La orden ya no permite agregar productos.";
+    }
+
+    return "No se puede continuar en este momento.";
   }
 
   // ==========================================
@@ -1219,15 +1675,29 @@ export function useCartAndOrder({
       return;
     }
 
-    // A. FLUJO WEB (WHATSAPP)
-    if (activeMenuType === "web") {
+    // A. WEB + WHATSAPP
+    if (isWhatsappFlow) {
       const res = await sendWhatsAppOrder();
       if (!res.ok) return;
+
       setTimeout(() => setSendToast(""), 4000);
       return;
     }
 
-    // B. APPEND A ORDEN EXISTENTE (No necesita modal)
+    // B. WEB + ONLINE_ORDER
+    if (isOnlineOrderFlow) {
+      if (!allowBase) {
+        setSendToast(`⚠️ ${buildBlockerMessage()}`);
+        setTimeout(() => setSendToast(""), 3000);
+        return;
+      }
+
+      setOnlineOrderCreated(null);
+      setSendOpen(true);
+      return;
+    }
+
+    // C. APPEND A ORDEN DE MESA EXISTENTE
     if (canAppend && activeOrder?.id) {
       setSending(true);
       setSendToast("");
@@ -1240,7 +1710,7 @@ export function useCartAndOrder({
       return;
     }
 
-    // C. BLOQUEO EXCLUSIVO PARA EL NACIMIENTO DE UNA NUEVA ORDER
+    // D. BLOQUEO EXCLUSIVO PARA EL NACIMIENTO DE UNA NUEVA ORDER
     if (
       canStartCustomerOrder === false &&
       !activeOrder?.id &&
@@ -1255,7 +1725,7 @@ export function useCartAndOrder({
       return;
     }
 
-    // D. VALIDACIÓN BASE ANTES DE ABRIR MODAL
+    // E. VALIDACIÓN BASE ANTES DE ABRIR MODAL
     if (!allowBase) {
       setSendToast(buildBlockerMessage());
       setTimeout(() => setSendToast(""), 5000);
@@ -1277,6 +1747,9 @@ export function useCartAndOrder({
   // ==========================================
   async function confirmAndCreateOrder() {
     if (sending) return;
+
+    // WHATSAPP y ONLINE_ORDER no crean la orden pública de mesa.
+    if (isWebOrderingFlow) return;
 
     if (hasInvalidCartItems) {
       setSendToast(
@@ -1624,6 +2097,10 @@ export function useCartAndOrder({
     setAdultCount("");
     setChildCount("");
     setSendToast("");
+    setOnlineOrderQuoting(false);
+    setOnlineOrderCreating(false);
+    setOnlineOrderCreated(null);
+    onlineOrderAttemptRef.current = { signature: "", key: "" };
     setPendingOrder(null);
     setActiveOrder(null);
     setOldItems([]);
@@ -1660,6 +2137,14 @@ export function useCartAndOrder({
 
     sendOpen,
     setSendOpen,
+
+    onlineOrderCheckout,
+    onlineOrderQuoting,
+    onlineOrderCreating,
+    onlineOrderCreated,
+    quoteOnlineOrder,
+    createOnlineOrder,
+
     customerName,
     setCustomerName,
     partySize,

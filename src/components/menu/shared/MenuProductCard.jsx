@@ -7,10 +7,9 @@ import {
   ProductThumb,
 } from "../../../pages/public/publicMenu.ui";
 import {
-  formatAvailabilityCaption,
-  formatAvailabilityShortLabel,
   getAvailabilityData,
   getAvailabilityTone,
+  getPublicAvailabilityPresentation,
   hasAnyModifierGroups,
   isAvailabilityBlocked,
   money,
@@ -58,15 +57,15 @@ function AvailabilityPill({ availability }) {
 
   if (!a) return null;
 
-  const label = formatAvailabilityShortLabel(a);
+  const presentation = getPublicAvailabilityPresentation(a);
   const tone = getAvailabilityTone(a?.status);
   const ui = getAvailabilityPalette(theme, tone);
 
-  if (!label) return null;
+  if (!presentation.label) return null;
 
   return (
     <span
-      title={formatAvailabilityCaption(a)}
+      title={presentation.caption}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -82,7 +81,7 @@ function AvailabilityPill({ availability }) {
         whiteSpace: "nowrap",
       }}
     >
-      {label}
+      {presentation.label}
     </span>
   );
 }
@@ -93,8 +92,8 @@ function AvailabilityNotice({ availability }) {
 
   if (!a) return null;
 
-  const caption = formatAvailabilityCaption(a);
-  if (!caption) return null;
+  const presentation = getPublicAvailabilityPresentation(a);
+  if (!presentation.caption) return null;
 
   const blocked = isAvailabilityBlocked(a);
 
@@ -115,7 +114,7 @@ function AvailabilityNotice({ availability }) {
         fontWeight: 700,
       }}
     >
-      {caption}
+      {presentation.caption}
     </div>
   );
 }
@@ -160,7 +159,9 @@ export default function MenuProductCard({
 
   const productAvailability = getAvailabilityData(product);
   const productBlocked = isAvailabilityBlocked(productAvailability);
-  const productAvailabilityLabel = formatAvailabilityShortLabel(productAvailability) || "No disponible";
+  const productAvailabilityUi = getPublicAvailabilityPresentation(productAvailability);
+  const productAvailabilityLabel = productAvailabilityUi.label || "No disponible";
+  const productAvailabilityCaption = productAvailabilityUi.caption || "No disponible";
 
   const canChooseMain =
     showSelectBtn &&
@@ -436,12 +437,12 @@ export default function MenuProductCard({
                 !canSelect
                   ? "Solo lectura"
                   : productBlocked
-                  ? formatAvailabilityCaption(productAvailability) || "No disponible"
-                  : isComposite && hasComposite
-                  ? "Configurar producto compuesto"
-                  : hasVariants
-                  ? "Agregar producto base a comanda"
-                  : "Agregar a comanda"
+                    ? productAvailabilityCaption
+                    : isComposite && hasComposite
+                      ? "Configurar producto compuesto"
+                      : hasVariants
+                        ? "Agregar producto base a comanda"
+                        : "Agregar a comanda"
               }
               disabled={!canSelect || productBlocked}
             >
@@ -467,7 +468,7 @@ export default function MenuProductCard({
                 onClick={handleOpenVariants}
                 title={
                   productBlocked
-                    ? formatAvailabilityCaption(productAvailability) || productAvailabilityLabel
+                    ? productAvailabilityCaption
                     : "Ver variantes disponibles"
                 }
                 disabled={!onOpenVariants || !canSelect || productBlocked}
@@ -485,7 +486,7 @@ export default function MenuProductCard({
                 }}
                 title={
                   productBlocked
-                    ? formatAvailabilityCaption(productAvailability) || productAvailabilityLabel
+                    ? productAvailabilityCaption
                     : "Ver extras disponibles de este producto"
                 }
                 disabled={!canSelect || productBlocked}

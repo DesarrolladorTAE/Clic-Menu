@@ -11,7 +11,10 @@ export function useActiveMenuPayload({
   resetOnChannelChange,
   setCallLocked,
 }) {
-  const isWeb = useMemo(() => String(data?.type) === "web", [data]);
+  const isWeb = useMemo(() => {
+    const qrType = String(data?.qr_type || data?.type || "").trim().toLowerCase();
+    return qrType === "web";
+  }, [data]);
 
   const webChannels = useMemo(() => {
     if (!isWeb) return [];
@@ -57,13 +60,18 @@ export function useActiveMenuPayload({
       Object.keys(menusByChannel).length > 0;
 
     /**
-     * El backend actual del QR web de WhatsApp ya entrega
-     * directamente el menú predeterminado del canal:
+     * El backend actual de los QR web ya entrega directamente
+     * el menú resuelto para su canal, tanto WHATSAPP como ONLINE_ORDER:
      *
      * - data.menu
      * - data.menu_context
      * - data.sections
      * - data.sales_channel
+     * - data.public_flow
+     * - data.sales_channel_code
+     *
+     * ONLINE_ORDER también puede incluir:
+     * - data.online_order_checkout
      *
      * Cuando no existe menus_by_channel, data ya es el payload
      * activo y no deben eliminarse sus secciones.
@@ -71,9 +79,7 @@ export function useActiveMenuPayload({
     if (!hasMenusByChannel) {
       return {
         ...data,
-        sections: Array.isArray(data?.sections)
-          ? data.sections
-          : [],
+        sections: Array.isArray(data?.sections) ? data.sections : [],
       };
     }
 
@@ -94,11 +100,15 @@ export function useActiveMenuPayload({
       return {
         ...data,
         sections: [],
-        ui: data?.ui,
-        table: data?.table,
-        ordering_mode: data?.ordering_mode,
-        table_service_mode: data?.table_service_mode,
-        type: data?.type,
+        ui: data?.ui || {},
+        table: data?.table || null,
+        ordering_mode: data?.ordering_mode ?? null,
+        table_service_mode: data?.table_service_mode ?? null,
+        type: data?.type || null,
+        qr_type: data?.qr_type || data?.type || null,
+        sales_channel_code: data?.sales_channel_code || null,
+        public_flow: data?.public_flow || "catalog_only",
+        online_order_checkout: data?.online_order_checkout ?? null,
       };
     }
 
@@ -108,14 +118,25 @@ export function useActiveMenuPayload({
      */
     return {
       ...selectedPayload,
-      sections: Array.isArray(selectedPayload?.sections)
-        ? selectedPayload.sections
-        : [],
-      ui: data?.ui,
-      table: data?.table,
-      ordering_mode: data?.ordering_mode,
-      table_service_mode: data?.table_service_mode,
-      type: data?.type,
+      sections: Array.isArray(selectedPayload?.sections) ? selectedPayload.sections : [],
+      ui: selectedPayload?.ui || data?.ui || {},
+      table: selectedPayload?.table ?? data?.table ?? null,
+      ordering_mode: selectedPayload?.ordering_mode ?? data?.ordering_mode ?? null,
+      table_service_mode:
+        selectedPayload?.table_service_mode ?? data?.table_service_mode ?? null,
+      type: selectedPayload?.type || data?.type || null,
+      qr_type:
+        selectedPayload?.qr_type ||
+        data?.qr_type ||
+        selectedPayload?.type ||
+        data?.type ||
+        null,
+      sales_channel_code:
+        selectedPayload?.sales_channel_code || data?.sales_channel_code || null,
+      public_flow:
+        selectedPayload?.public_flow || data?.public_flow || "catalog_only",
+      online_order_checkout:
+        selectedPayload?.online_order_checkout ?? data?.online_order_checkout ?? null,
     };
   }, [data, isWeb, activeWebChannelId]);
 
@@ -140,10 +161,7 @@ export function useActiveMenuPayload({
     };
   }, [activeMenuPayload]);
 
-  const ui = useMemo(
-    () => activeMenuPayload?.ui || {},
-    [activeMenuPayload]
-  );
+  const ui = useMemo(() => activeMenuPayload?.ui || {}, [activeMenuPayload]);
 
   const hasTable = !!activeMenuPayload?.table?.id;
 
@@ -152,24 +170,21 @@ export function useActiveMenuPayload({
     : null;
 
   const badgeUi = useMemo(() => {
-    if (!ui?.ui_mode) {
-      return {
-        tone: "default",
-        label: "Menú",
-      };
+    const uiMode = String(ui?.ui_mode || "").trim().toLowerCase();
+    const canSelectProducts = ui?.can_select_products === true;
+
+    if (!uiMode) {
+      return { tone: "default", label: "Menú" };
     }
 
-    if (ui.ui_mode === "selectable") {
-      return {
-        tone: "ok",
-        label: "Seleccionable",
-      };
+    if (
+      canSelectProducts &&
+      ["selectable", "whatsapp_order", "online_order"].includes(uiMode)
+    ) {
+      return { tone: "ok", label: "Seleccionable" };
     }
 
-    return {
-      tone: "default",
-      label: "Solo lectura",
-    };
+    return { tone: "default", label: "Solo lectura" };
   }, [ui]);
 
   /**
@@ -190,9 +205,9 @@ export function useActiveMenuPayload({
     if (!activeMenuPayload) return;
 
     /**
-     * En web, la configuración UI global ya fue integrada
-     * dentro de activeMenuPayload.
-     */
+   * La configuración UI correspondiente al payload activo
+   * ya fue integrada dentro de activeMenuPayload.
+   */
     if (ui?.call_waiter_enabled === true) {
       setCallLocked?.(false);
     }

@@ -588,19 +588,51 @@ export function Modal({
   footerStyle = {},
   closeOnBackdrop = true,
   backdropBlur = true,
+  fullScreenMobile = false,
+  squareCorners = false,
 }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 600px)").matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const media = window.matchMedia("(max-width: 600px)");
+    const handleChange = (event) => setIsMobile(event.matches);
+
+    setIsMobile(media.matches);
+    media.addEventListener?.("change", handleChange);
+
+    return () => media.removeEventListener?.("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
+
+  const useMobileFullScreen = fullScreenMobile && isMobile;
 
   return createPortal(
     <div
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 2147483000,
+        zIndex: 1300,
         background: "rgba(17,24,39,0.58)",
         display: "grid",
-        placeItems: "center",
-        padding: 16,
+        placeItems: useMobileFullScreen ? "stretch" : "center",
+        padding: useMobileFullScreen ? 0 : 16,
         backdropFilter: backdropBlur ? "blur(8px)" : "none",
       }}
       onMouseDown={(e) => {
@@ -609,13 +641,14 @@ export function Modal({
     >
       <div
         style={{
-          width,
-          maxWidth: "100%",
-          maxHeight,
+          width: useMobileFullScreen ? "100%" : width,
+          maxWidth: useMobileFullScreen ? "100%" : "100%",
+          height: useMobileFullScreen ? "100dvh" : "auto",
+          maxHeight: useMobileFullScreen ? "100dvh" : maxHeight,
           background: MENU_UI.surfaceSoft,
-          borderRadius: 28,
-          border: "1px solid rgba(255,255,255,0.55)",
-          boxShadow: "0 28px 90px rgba(17,24,39,0.30)",
+          borderRadius: squareCorners || useMobileFullScreen ? 0 : 28,
+          border: useMobileFullScreen ? "none" : "1px solid rgba(255,255,255,0.55)",
+          boxShadow: useMobileFullScreen ? "none" : "0 28px 90px rgba(17,24,39,0.30)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",

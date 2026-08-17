@@ -181,19 +181,33 @@ export async function requestPublicOrderBill({ orderId, token }) {
 }
 
 
-/**
- * =========================================================
- * 7) WhatsApp (carrito sin orden)
- * =========================================================
- */
 export async function sendPublicWhatsapp({ token, items }) {
   const payload = {
     token: String(token || ""),
     items: Array.isArray(items) ? items : [],
   };
 
+  const { data } = await publicApi.post(`/public/web/send-whatsapp`, payload);
+  return data;
+}
+
+/**
+ * =========================================================
+ * 8) Pedidos en línea
+ * =========================================================
+ */
+export async function quotePublicOnlineOrder({ token, payload }) {
   const { data } = await publicApi.post(
-    `/public/web/send-whatsapp`,
+    `/public/menu/${encodeURIComponent(String(token || ""))}/online-order/quote`,
+    payload,
+  );
+
+  return data;
+}
+
+export async function createPublicOnlineOrder({ token, payload }) {
+  const { data } = await publicApi.post(
+    `/public/menu/${encodeURIComponent(String(token || ""))}/online-order/orders`,
     payload,
   );
 

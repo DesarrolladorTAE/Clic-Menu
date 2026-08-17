@@ -5,10 +5,9 @@ import { useTheme } from "@mui/material/styles";
 import { Badge, Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import {
   AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE,
-  formatAvailabilityCaption,
-  formatAvailabilityShortLabel,
   getAvailabilityData,
   getAvailabilityTone,
+  getPublicAvailabilityPresentation,
   isAvailabilityBlocked,
   money,
   normalizePromotionPresentation,
@@ -71,12 +70,15 @@ function AvailabilityPill({ availability }) {
 
   if (!a) return null;
 
+  const presentation = getPublicAvailabilityPresentation(a);
   const tone = getAvailabilityTone(a?.status);
   const ui = getAvailabilityPalette(theme, tone);
 
+  if (!presentation.label) return null;
+
   return (
     <span
-      title={formatAvailabilityCaption(a)}
+      title={presentation.caption}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -91,7 +93,7 @@ function AvailabilityPill({ availability }) {
         whiteSpace: "nowrap",
       }}
     >
-      {formatAvailabilityShortLabel(a)}
+      {presentation.label}
     </span>
   );
 }
@@ -102,8 +104,8 @@ function AvailabilityNotice({ availability }) {
 
   if (!a) return null;
 
-  const caption = formatAvailabilityCaption(a);
-  if (!caption) return null;
+  const presentation = getPublicAvailabilityPresentation(a);
+  if (!presentation.caption) return null;
 
   const blocked = isAvailabilityBlocked(a);
 
@@ -124,7 +126,7 @@ function AvailabilityNotice({ availability }) {
         fontWeight: 800,
       }}
     >
-      {caption}
+      {presentation.caption}
     </div>
   );
 }
@@ -145,7 +147,17 @@ function VariantCard({
   const variantAvailability = resolveVariantAvailability(product, variant);
   const variantBlocked = isAvailabilityBlocked(variantAvailability);
 
-  const variantName = variant?.name || variant?.display_name || `Variante ${index + 1}`;
+  const variantAvailabilityUi =
+    getPublicAvailabilityPresentation(variantAvailability);
+
+  const variantAvailabilityLabel =
+    variantAvailabilityUi.label || "No disponible";
+
+  const variantAvailabilityCaption =
+    variantAvailabilityUi.caption || "No disponible";
+
+  const variantName =
+    variant?.name || variant?.display_name || `Variante ${index + 1}`;
 
   const variantPromotion = normalizePromotionPresentation(variant);
 
@@ -331,14 +343,13 @@ function VariantCard({
             !canSelect
               ? "Solo lectura"
               : variantBlocked
-                ? formatAvailabilityCaption(variantAvailability) ||
-                  "No disponible"
+                ? variantAvailabilityCaption
                 : "Agregar variante a comanda"
           }
           disabled={!canSelect || variantBlocked}
         >
           {variantBlocked
-            ? formatAvailabilityShortLabel(variantAvailability) || "No disponible"
+            ? variantAvailabilityLabel
             : "➕ Seleccionar variante"}
         </PillButton>
       ) : null}

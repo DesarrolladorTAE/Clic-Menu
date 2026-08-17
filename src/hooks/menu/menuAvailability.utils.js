@@ -35,8 +35,16 @@ function normalizeStatus(value) {
 
 function normalizeReason(value) {
   const reason = String(value || "").trim();
-
   return reason !== "" ? reason : null;
+}
+
+function normalizeMaxAvailableQty(value) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return null;
+
+  return Math.max(0, Math.floor(quantity));
 }
 
 function extractMenuSections(source) {
@@ -102,6 +110,7 @@ function normalizeEffectiveAvailability(source) {
     status,
     is_available_now: isAvailableNow,
     reason,
+    max_available_qty: normalizeMaxAvailableQty(availability?.max_available_qty),
   };
 }
 
@@ -407,12 +416,12 @@ export function getEffectiveMenuAvailability(
 
 /**
  * Reconciliación de líneas locales todavía no persistidas.
- *
- * Agrega o actualiza exclusivamente:
+ * Actualiza exclusivamente el estado de disponibilidad recibido
+ * nuevamente desde el catálogo del backend:
  * - availability_status;
  * - availability_reason;
  * - is_available_now;
- * - availability.
+ * - availability, incluyendo max_available_qty.
  *
  * No modifica:
  * - key;
@@ -476,24 +485,36 @@ export function reconcilePendingCartAvailability(items, menuSource) {
 /**
  * Determina si una línea pendiente está bloqueada.
  *
- * La fuente principal es is_available_now.
- * El status funciona como respaldo.
+ * Autoridad:
+ * - is_available_now;
+ * - status;
+ * - max_available_qty entregado por backend.
+ *
+ * No calcula inventario ni modifica quantity.
  */
 export function isCartItemAvailabilityInvalid(item) {
   if (!item || typeof item !== "object") return false;
   if (item?.is_available_now === false) return true;
 
   const availability = getAvailabilityData(item);
-
   if (availability?.is_available_now === false) return true;
 
   const status = normalizeStatus(
     item?.availability_status || availability?.status,
   );
 
-  if (status === "") return false;
+  if (status !== "" && status !== AVAILABILITY_STATUS_AVAILABLE) return true;
 
-  return status !== AVAILABILITY_STATUS_AVAILABLE;
+  const maxAvailableQty = normalizeMaxAvailableQty(
+    availability?.max_available_qty,
+  );
+
+  if (maxAvailableQty !== null) {
+    const quantity = Math.max(0, Number(item?.quantity || 0));
+    if (quantity > maxAvailableQty) return true;
+  }
+
+  return false;
 }
 
 /**

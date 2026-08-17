@@ -4,6 +4,7 @@ import {
   PillButton,
 } from "../../../pages/public/publicMenu.ui";
 import {
+  getPublicAvailabilityPresentation,
   isAvailabilityBlocked,
 } from "../../../hooks/public/publicMenu.utils";
 
@@ -21,25 +22,6 @@ function getAvailabilityTone(status = "") {
   }
 
   return "default";
-}
-
-function getAvailabilityLabel(itemOrVariant) {
-  const status = String(itemOrVariant?.availability?.status || "").toLowerCase();
-
-  if (status === "available") return "Disponible";
-  if (status === "out_of_stock") return "Agotado";
-  if (status === "insufficient_stock") return "Stock insuficiente";
-  if (status === "recipe_missing") return "Sin receta";
-  if (status === "inventory_blocked") return "Bloqueado";
-
-  const raw = String(itemOrVariant?.availability_label || "").trim();
-  if (!raw) return "No disponible";
-
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
-
-function getAvailabilityReason(itemOrVariant) {
-  return String(itemOrVariant?.availability?.reason || "").trim();
 }
 
 function isSourceUnavailable(source) {
@@ -89,6 +71,9 @@ function AvailabilityChip({ source }) {
   const availability = source?.availability || null;
   if (!availability) return null;
 
+  const presentation = getPublicAvailabilityPresentation(availability);
+  if (!presentation.label) return null;
+
   const tone = getAvailabilityTone(availability?.status);
 
   const palette = {
@@ -132,18 +117,22 @@ function AvailabilityChip({ source }) {
         lineHeight: 1.1,
         maxWidth: "100%",
       }}
-      title={getAvailabilityReason(source) || getAvailabilityLabel(source)}
+      title={presentation.caption || presentation.label}
     >
-      {getAvailabilityLabel(source)}
+      {presentation.label}
     </div>
   );
 }
 
 function AvailabilityNotice({ source }) {
-  const reason = getAvailabilityReason(source);
-  if (!reason) return null;
+  const availability = source?.availability || null;
+  if (!availability) return null;
 
   const blocked = isSourceUnavailable(source);
+  if (!blocked) return null;
+
+  const presentation = getPublicAvailabilityPresentation(availability);
+  if (!presentation.caption) return null;
 
   return (
     <div
@@ -151,14 +140,13 @@ function AvailabilityNotice({ source }) {
         fontSize: 12,
         padding: "8px 10px",
         borderRadius: 12,
-        border: blocked
-          ? "1px solid rgba(239, 68, 68, 0.20)"
-          : "1px solid rgba(16, 185, 129, 0.18)",
-        background: blocked ? "#fff5f5" : "#f0fdf4",
-        color: blocked ? "#B91C1C" : "#047857",
+        border: "1px solid rgba(239, 68, 68, 0.20)",
+        background: "#fff5f5",
+        color: "#B91C1C",
+        fontWeight: 800,
       }}
     >
-      {reason}
+      {presentation.caption}
     </div>
   );
 }
@@ -246,10 +234,6 @@ export default function CompositeProductModal({
                 ? c.default_option || c
                 : null
             );
-
-          const effectiveSelectionUnavailable =
-            included &&
-            isSourceUnavailable(effectiveSelectionSource);
 
           return (
             <div
@@ -426,25 +410,6 @@ export default function CompositeProductModal({
                     >
                       La variante seleccionada ya no está disponible.
                       Elige otra opción.
-                    </div>
-                  ) : null}
-
-                  {effectiveSelectionUnavailable &&
-                  effectiveSelectionSource &&
-                  !getAvailabilityReason(effectiveSelectionSource) ? (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        padding: "8px 10px",
-                        borderRadius: 12,
-                        border:
-                          "1px solid rgba(239, 68, 68, 0.20)",
-                        background: "#fff5f5",
-                        color: "#B91C1C",
-                        fontWeight: 800,
-                      }}
-                    >
-                      La opción seleccionada no está disponible.
                     </div>
                   ) : null}
 

@@ -14,6 +14,9 @@ export default function PublicMenuCartDrawerBlock({
   canAppend,
   pending,
   allowSendButton,
+  hasInvalidItems,
+  invalidItemsCount,
+  submitBlockReason,
 
   billRequesting,
   billToast,
@@ -38,8 +41,18 @@ export default function PublicMenuCartDrawerBlock({
   const effectiveCanAppend =
     !isPaymentInProgress && Boolean(canAppend);
 
-  const effectivePending =
-    !isPaymentInProgress && Boolean(pending);
+  const effectivePending = !isPaymentInProgress && Boolean(pending);
+
+  const effectiveHasInvalidItems =
+    !isPaymentInProgress && Boolean(hasInvalidItems);
+
+  const effectiveInvalidItemsCount = effectiveHasInvalidItems
+    ? Math.max(0, Number(invalidItemsCount || 0))
+    : 0;
+
+  const effectiveSubmitBlockReason = effectiveHasInvalidItems
+    ? String(submitBlockReason || "").trim()
+    : "";
 
   const effectiveShowBillButton =
     !isPaymentInProgress && Boolean(showBillButton);
@@ -122,8 +135,13 @@ export default function PublicMenuCartDrawerBlock({
         sending={cartOrder.sending}
         canAppend={effectiveCanAppend}
         canSubmit={
-          !isPaymentInProgress && Boolean(allowSendButton)
+          !isPaymentInProgress &&
+          !effectiveHasInvalidItems &&
+          Boolean(allowSendButton)
         }
+        hasInvalidItems={effectiveHasInvalidItems}
+        invalidItemsCount={effectiveInvalidItemsCount}
+        submitBlockReason={effectiveSubmitBlockReason}
         showPaymentMessage={isPaymentInProgress}
         onEmpty={() => cartOrder.setCart([])}
         onSubmit={() => {

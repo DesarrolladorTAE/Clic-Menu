@@ -1105,30 +1105,57 @@ export function getAvailabilityData(source) {
   return null;
 }
 
+function getAvailabilityMaxQty(source) {
+  const raw = source?.max_available_qty;
+
+  if (raw === null || raw === undefined || raw === "") return null;
+
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+
+  return Math.max(0, Math.floor(value));
+}
+
+function isTechnicalAvailabilityMessage(message) {
+  const text = String(message || "").trim().toLowerCase();
+
+  if (!text) return false;
+
+  const technicalTerms = [
+    "recipe_missing",
+    "inventory_blocked",
+    "warehouse",
+    "warehouse_id",
+    "almacén",
+    "almacen",
+    "inventario",
+    "inventory",
+    "ingrediente",
+    "ingredient",
+    "receta",
+    "product_id",
+    "variant_id",
+    "component_product_id",
+    "stock",
+  ];
+
+  return technicalTerms.some((term) => text.includes(term));
+}
+
 export function translateAvailabilityStatus(status) {
-  const v = String(status || "")
-    .trim()
-    .toLowerCase();
+  const v = String(status || "").trim().toLowerCase();
 
   const map = {
     available: "Disponible",
     out_of_stock: "Agotado",
-    insufficient_stock: "Stock insuficiente",
-    recipe_missing: "Receta faltante",
-    inventory_blocked: "Bloqueado por inventario",
-
-    unavailable_by_schedule:
-      "No disponible por horario",
-
-    no_longer_sellable:
-      "Ya no está disponible",
+    insufficient_stock: "Disponibilidad limitada",
+    recipe_missing: "No disponible",
+    inventory_blocked: "No disponible",
+    unavailable_by_schedule: "No disponible por horario",
+    no_longer_sellable: "No disponible",
   };
 
-  return map[v] || (
-    status
-      ? String(status)
-      : "Sin disponibilidad"
-  );
+  return map[v] || "No disponible";
 }
 
 export function getAvailabilityTone(status) {
@@ -1159,6 +1186,71 @@ export function getAvailabilityTone(status) {
   return "default";
 }
 
+export function getPublicAvailabilityPresentation(availability) {
+  const a = getAvailabilityData(availability);
+
+  if (!a) {
+    return {
+      status: "",
+      label: "",
+      caption: "",
+      maxAvailableQty: null,
+    };
+  }
+
+  const status = String(a?.status || "").trim().toLowerCase();
+  const maxAvailableQty = getAvailabilityMaxQty(a);
+
+  if (status === "available") {
+    return {
+      status,
+      label: maxAvailableQty !== null && maxAvailableQty > 0
+        ? `Disponible · ${maxAvailableQty}`
+        : "Disponible",
+      caption: maxAvailableQty !== null && maxAvailableQty > 0
+        ? `Máx. disponible: ${maxAvailableQty}`
+        : "Disponible",
+      maxAvailableQty,
+    };
+  }
+
+  if (status === "insufficient_stock") {
+    return {
+      status,
+      label: "Disponibilidad limitada",
+      caption: maxAvailableQty !== null && maxAvailableQty > 0
+        ? `Disponibilidad limitada · Máx. disponible: ${maxAvailableQty}`
+        : "Disponibilidad limitada",
+      maxAvailableQty,
+    };
+  }
+
+  if (status === "out_of_stock") {
+    return {
+      status,
+      label: "Agotado",
+      caption: "Agotado",
+      maxAvailableQty,
+    };
+  }
+
+  if (status === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE) {
+    return {
+      status,
+      label: "No disponible por horario",
+      caption: "No disponible por horario",
+      maxAvailableQty,
+    };
+  }
+
+  return {
+    status,
+    label: "No disponible",
+    caption: "No disponible",
+    maxAvailableQty,
+  };
+}
+
 export function isAvailabilityBlocked(availability) {
   const a = getAvailabilityData(availability);
   if (!a) return false;
@@ -1173,94 +1265,11 @@ export function isAvailabilityBlocked(availability) {
 }
 
 export function formatAvailabilityCaption(availability) {
-  const a = getAvailabilityData(availability);
-
-  if (!a) {
-    return "";
-  }
-
-  const status = String(
-    a?.status || "",
-  )
-    .trim()
-    .toLowerCase();
-
-  const reason = String(
-    a?.reason || "",
-  ).trim();
-
-  const rawMaxQty = a?.max_available_qty;
-
-  const maxQty =
-    rawMaxQty === null ||
-    rawMaxQty === undefined ||
-    rawMaxQty === ""
-      ? null
-      : Number(rawMaxQty);
-
-  if (status === "available") {
-    if (Number.isFinite(maxQty) && maxQty > 0) {
-      return `Máx. disponible: ${maxQty}`;
-    }
-    return "Disponible";
-  }
-
-  if (reason) {
-    return reason;
-  }
-
-  if (status === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE) {
-    return "No disponible por horario.";
-  }
-
-  if (status === AVAILABILITY_STATUS_NO_LONGER_SELLABLE) {
-    return "Este producto dejó de estar disponible.";
-  }
-
-  return translateAvailabilityStatus(
-    status,
-  );
+  return getPublicAvailabilityPresentation(availability).caption;
 }
 
 export function formatAvailabilityShortLabel(availability) {
-  const a = getAvailabilityData(availability);
-
-  if (!a) {
-    return "";
-  }
-
-  const status = String(
-    a?.status || "",
-  )
-    .trim()
-    .toLowerCase();
-
-  const rawMaxQty = a?.max_available_qty;
-
-  const maxQty =
-    rawMaxQty === null ||
-    rawMaxQty === undefined ||
-    rawMaxQty === ""
-      ? null
-      : Number(rawMaxQty);
-
-  if (status === "available") {
-    return ( Number.isFinite(maxQty) && maxQty > 0 )
-      ? `Disponible · ${maxQty}`
-      : "Disponible";
-  }
-
-  if (status === AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE) {
-    return "No disponible por horario";
-  }
-
-  if (status === AVAILABILITY_STATUS_NO_LONGER_SELLABLE) {
-    return "Ya no está disponible";
-  }
-
-  return translateAvailabilityStatus(
-    status,
-  );
+  return getPublicAvailabilityPresentation(availability).label;
 }
 
 export function extractApiErrorInfo(error) {
@@ -1311,79 +1320,56 @@ export function buildAvailabilityErrorMessage(errorInfo) {
   const alreadyExtracted =
     errorInfo &&
     typeof errorInfo === "object" &&
-    Object.prototype.hasOwnProperty.call(
-      errorInfo,
-      "code",
-    ) &&
-    Object.prototype.hasOwnProperty.call(
-      errorInfo,
-      "message",
-    );
+    Object.prototype.hasOwnProperty.call(errorInfo, "code") &&
+    Object.prototype.hasOwnProperty.call(errorInfo, "message");
 
-  const info = alreadyExtracted
-    ? errorInfo
-    : extractApiErrorInfo(errorInfo);
-
-  const code = String(
-    info?.code || "",
-  )
-    .trim()
-    .toUpperCase();
+  const info = alreadyExtracted ? errorInfo : extractApiErrorInfo(errorInfo);
+  const code = String(info?.code || "").trim().toUpperCase();
 
   const fallbackMessages = {
-    INSUFFICIENT_PRODUCT_AVAILABILITY: "No hay disponibilidad suficiente.",
-
-    MENU_NOT_AVAILABLE: "El menú ya no está disponible.",
-
-    PRODUCT_NOT_AVAILABLE_IN_MENU: "Este producto dejó de estar disponible en el menú.",
-
+    INSUFFICIENT_PRODUCT_AVAILABILITY: "Disponibilidad limitada.",
+    MENU_NOT_AVAILABLE: "El menú no está disponible en este momento.",
+    PRODUCT_NOT_AVAILABLE_IN_MENU: "Este producto ya no está disponible.",
     SECTION_NOT_AVAILABLE_BY_SCHEDULE: "Esta sección no está disponible por horario.",
-
     CATEGORY_NOT_AVAILABLE_BY_SCHEDULE: "Esta categoría no está disponible por horario.",
-
-    PRODUCT_NOT_AVAILABLE_BY_SCHEDULE:"Este producto no está disponible por horario.",
-
+    PRODUCT_NOT_AVAILABLE_BY_SCHEDULE: "Este producto no está disponible por horario.",
     VARIANT_NOT_AVAILABLE: "La variante seleccionada ya no está disponible.",
   };
 
-  const data =
-    info?.data &&
-    typeof info.data === "object"
-      ? info.data
-      : {};
+  const data = info?.data && typeof info.data === "object" ? info.data : {};
+  const effectiveAvailability = getAvailabilityData(data);
 
-  const effectiveAvailability =
-    getAvailabilityData(data);
+  const backendMessage = String(info?.message || "").trim();
+  const safeBackendMessage =
+    backendMessage && !isTechnicalAvailabilityMessage(backendMessage)
+      ? backendMessage
+      : "";
 
-  const availabilityReason = String(
-    effectiveAvailability?.reason ||
-    data?.reason ||
-    "",
-  ).trim();
+  const presentation = getPublicAvailabilityPresentation(
+    effectiveAvailability || data,
+  );
 
-  const baseMessage = String(
-    info?.message ||
-    availabilityReason ||
+  let baseMessage =
+    safeBackendMessage ||
     fallbackMessages[code] ||
-    "No hay disponibilidad suficiente.",
-  ).trim();
+    presentation.caption ||
+    "Este producto no está disponible en este momento.";
 
   const rawMaxQty =
     data?.max_available_qty ??
     effectiveAvailability?.max_available_qty;
 
   const maxQty =
-    rawMaxQty === null ||
-    rawMaxQty === undefined ||
-    rawMaxQty === ""
+    rawMaxQty === null || rawMaxQty === undefined || rawMaxQty === ""
       ? null
       : Number(rawMaxQty);
 
   if (
     Number.isFinite(maxQty) &&
-    maxQty > 0
+    maxQty > 0 &&
+    !baseMessage.includes(String(Math.floor(maxQty)))
   ) {
-    return `${baseMessage}\nMáximo disponible: ${maxQty}.`;
+    baseMessage = `${baseMessage}\nMáx. disponible: ${Math.floor(maxQty)}.`;
   }
 
   return baseMessage;

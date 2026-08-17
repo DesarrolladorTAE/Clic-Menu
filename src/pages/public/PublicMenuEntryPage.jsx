@@ -1,6 +1,6 @@
 // src/pages/public/PublicMenuEntryPage.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import echo from "../../realtime/echo";
 
@@ -61,6 +61,7 @@ import {
 
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
+  const navigate = useNavigate();
 
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [q, setQ] = useState("");
@@ -175,26 +176,52 @@ export default function PublicMenuEntryPage() {
 
   const uiFlags = ui || {};
 
-  const isWebMenu = uiFlags?.ui_mode === "whatsapp_order";
-  const uiMode = uiFlags?.ui_mode;
-  
-  const canSelect =
-    uiMode === "whatsapp_order"
-      ? true
-      : uiMode === "selectable"
-        ? !!uiFlags?.can_select_products
-        : !!uiFlags?.can_select_products;
-  
-  const showSelectBtn =
-    isWebMenu || (!!ui?.show_select_button && canSelect);
-    
+  const qrType = String(
+    activeMenuPayload?.qr_type || activeMenuPayload?.type || "",
+  ).trim().toLowerCase();
+
+  const salesChannelCode = String(
+    activeMenuPayload?.sales_channel_code ||
+    activeMenuPayload?.sales_channel?.code ||
+    "",
+  ).trim().toUpperCase();
+
+  const publicFlow = String(
+    activeMenuPayload?.public_flow || "catalog_only",
+  ).trim().toLowerCase();
+
+  const isWhatsappFlow =
+    qrType === "web" &&
+    salesChannelCode === "WHATSAPP" &&
+    publicFlow === "whatsapp";
+
+  const isOnlineOrderFlow =
+    qrType === "web" &&
+    salesChannelCode === "ONLINE_ORDER" &&
+    publicFlow === "online_order";
+
+  const isWebOrderingFlow = isWhatsappFlow || isOnlineOrderFlow;
+
+  const isPhysicalSalonFlow =
+    qrType === "physical" &&
+    salesChannelCode === "SALON" &&
+    publicFlow === "salon";
+
+  const canSelect = !!uiFlags?.can_select_products;
+  const showSelectBtn = !!uiFlags?.show_select_button && canSelect;
+
   const showCallBtn =
-    !isWebMenu &&
-    !!ui?.show_call_waiter_button &&
-    !!ui?.call_waiter_enabled &&
+    isPhysicalSalonFlow &&
+    !!uiFlags?.show_call_waiter_button &&
+    !!uiFlags?.call_waiter_enabled &&
     hasTable;
 
   const orderingMode = String(header?.orderingMode || "");
+
+  const isCustomerAssistedTableFlow =
+    isPhysicalSalonFlow &&
+    hasTable &&
+    orderingMode === "customer_assisted";
 
   const cartOrder = useCartAndOrder({
     token,
@@ -206,10 +233,31 @@ export default function PublicMenuEntryPage() {
     sessionUnavailable: qr.sessionUnavailable,
     activeMenuType: activeMenuPayload?.type,
     activeMenuPayload,
-    isWebMenu,
+    publicFlow,
+    qrType,
+    salesChannelCode,
   });
 
-  const canStartCustomerOrder =
+  const handleOnlineOrderCreated = useCallback(
+  (createdOrder) => {
+    const trackingUrl = String(createdOrder?.tracking_url || "").trim();
+    const trackingToken = String(createdOrder?.tracking_token || "").trim();
+
+    const safeTrackingUrl = /^\/order\/[A-Za-z0-9]{12}$/.test(trackingUrl)
+      ? trackingUrl
+      : /^[A-Za-z0-9]{12}$/.test(trackingToken)
+        ? `/order/${trackingToken}`
+        : "";
+
+    if (!safeTrackingUrl) return false;
+
+    navigate(safeTrackingUrl, { replace: true });
+    return true;
+  },
+  [navigate],
+);
+
+  const canStartTableCustomerOrder =
     cartOrder.canStartCustomerOrder !== false;
 
   const customerOrderStartReason = String(
@@ -562,20 +610,19 @@ export default function PublicMenuEntryPage() {
     },
   });
 
+  const webOrderingReady = isWebOrderingFlow;
+
+  const tableOrderingReady =
+    isCustomerAssistedTableFlow &&
+    qr.sessionActive &&
+    !qr.sessionBusy &&
+    !qr.sessionUnavailable;
+
   const allowBaseSend =
     canSelect &&
     cartOrder.cart.length > 0 &&
     !cartOrder.hasInvalidCartItems &&
-    !qr.sessionBusy &&
-    !qr.sessionUnavailable &&
-    (
-      isWebMenu ||
-      (
-        hasTable &&
-        qr.sessionActive &&
-        orderingMode === "customer_assisted"
-      )
-    );
+    (webOrderingReady || tableOrderingReady);
 
   const hasPending =
     !!cartOrder.pendingOrder?.id &&
@@ -593,9 +640,9 @@ export default function PublicMenuEntryPage() {
   );
 
   const newOrderBlocked =
-    !isWebMenu &&
+    isCustomerAssistedTableFlow &&
     !hasKnownExistingOrder &&
-    !canStartCustomerOrder;
+    !canStartTableCustomerOrder;
 
   const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
   const invalidItemsCount = Number(cartOrder.invalidCartItemsCount || 0);
@@ -610,24 +657,26 @@ export default function PublicMenuEntryPage() {
   const allowNewOrderSend =
     allowBaseSend &&
     !hasPending &&
-    (isWebMenu || canStartCustomerOrder) &&
-    !hasInvalidItems;
+    !hasInvalidItems &&
+    (isWebOrderingFlow || canStartTableCustomerOrder);
 
   const allowSendButton =
     !!cartOrder.allowSendNow &&
     !hasInvalidItems;
 
   const billFlow = cartOrder.activeOrder?.bill_flow || null;
+
   const canRequestBill =
+    isCustomerAssistedTableFlow &&
     !!cartOrder.activeOrder?.id &&
-    orderingMode === "customer_assisted" &&
     !!billFlow?.can_request_bill;
 
   const requestBillReason = String(billFlow?.reason || "");
   const billAlreadySent = !!billFlow?.already_sent;
   const billRequestStatus = String(billFlow?.request_status || "");
+
   const showBillButton =
-    orderingMode === "customer_assisted" && !!cartOrder.activeOrder?.id;
+    isCustomerAssistedTableFlow && !!cartOrder.activeOrder?.id;
 
   const cartDrawerItemCount =
     Number(cartOrder.cart?.length || 0) +
@@ -637,6 +686,9 @@ export default function PublicMenuEntryPage() {
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
     (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
 
+  const cartDisplayName = isOnlineOrderFlow ? "Pedido" : "Comanda";
+  const cartInlineName = isOnlineOrderFlow ? "pedido" : "comanda";
+    
   const handleRequestBill = async () => {
     const orderId = Number(cartOrder?.activeOrder?.id || 0);
     if (!orderId || billRequesting) return;
@@ -1004,7 +1056,7 @@ export default function PublicMenuEntryPage() {
     {
       tone: badgeUi.tone,
       label: badgeUi.label,
-      title: uiFlags?.reason || "",
+      title: String(uiFlags?.notice || "").trim(),
     },
     {
       tone: "dark",
@@ -1013,7 +1065,7 @@ export default function PublicMenuEntryPage() {
     },
   ];
 
-  if (!isWebMenu && hasTable && String(activeMenuPayload?.type) === "physical") {
+  if (isPhysicalSalonFlow && hasTable) {
     headerBadges.push({
       tone: qr.sessionActive ? "ok" : "warn",
       label: `⏳ ${fmtMMSS(qr.remainingSec)}`,
@@ -1021,11 +1073,11 @@ export default function PublicMenuEntryPage() {
     });
   }
 
-  if (orderingMode === "customer_assisted" && hasTable) {
+  if (isCustomerAssistedTableFlow) {
     if (canAppend) {
       headerBadges.push({
         tone: "ok",
-        label: "✅ Orden abierta",
+        label: "Orden abierta",
         title: "Orden abierta: puedes agregar productos",
       });
     } else if (pending) {
@@ -1054,7 +1106,8 @@ export default function PublicMenuEntryPage() {
   );
 
   const extraInfo =
-    header?.orderingMode || header?.tableServiceMode ? (
+    !isOnlineOrderFlow &&
+    (header?.orderingMode || header?.tableServiceMode) ? (
       <>
         {header?.orderingMode ? (
           <>
@@ -1097,7 +1150,7 @@ export default function PublicMenuEntryPage() {
         </PillButton>
       ) : null}
 
-      {!isWebMenu && hasTable && String(activeMenuPayload?.type) === "physical" ? (
+      {isPhysicalSalonFlow && hasTable ? (
         <PillButton
           onClick={() => qr.startScanSession()}
           disabled={qr.sessionLoading || !!qr.sessionBusy}
@@ -1160,7 +1213,9 @@ export default function PublicMenuEntryPage() {
         <PublicMenuOverlays qr={qr} hasTable={hasTable} />
 
         <PublicMenuModals
+          publicFlow={publicFlow}
           cartOrder={cartOrder}
+          onOnlineOrderCreated={handleOnlineOrderCreated}
           tableName={header?.tableName || ""}
           tableSeats={header?.tableSeats || null}
           confirmAndCreateOrder={cartOrder.confirmAndCreateOrder}
@@ -1193,6 +1248,7 @@ export default function PublicMenuEntryPage() {
         />
 
         <PublicMenuCartDrawerBlock
+          publicFlow={publicFlow}
           open={cartDrawerOpen}
           onClose={() => setCartDrawerOpen(false)}
           cartOrder={cartOrder}
@@ -1237,10 +1293,8 @@ export default function PublicMenuEntryPage() {
             extraFilterActions={
               canSelect ? (
                 <Badge tone="ok" title="Items nuevos por enviar/agregar">
-                  En comanda:{" "}
-                  <strong style={{ marginLeft: 6 }}>
-                    {cartOrder.cart.length}
-                  </strong>
+                  En {cartInlineName}:{" "}
+                  <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
                 </Badge>
               ) : null
             }
@@ -1299,19 +1353,16 @@ export default function PublicMenuEntryPage() {
           />
         </div>
 
-        {(isWebMenu || canSelect) ? (
+        {canSelect ? (
           <MenuCartFloatingButton
             itemCount={cartDrawerItemCount}
-            total={
-              cartOrder.displayTotal ??
-              cartOrder.totalGlobal
-            }
+            total={cartOrder.displayTotal ?? cartOrder.totalGlobal}
             totalLabel={cartOrder.totalLabel}
             isEstimated={cartOrder.isEstimated}
             disabled={false}
             onClick={() => setCartDrawerOpen(true)}
-            label={hasCartContent ? "Ver comanda" : "Comanda"}
-            title="Abrir comanda"
+            label={hasCartContent ? `Ver ${cartInlineName}` : cartDisplayName}
+            title={`Abrir ${cartInlineName}`}
             themeColor={themeColor}
           />
         ) : null}
