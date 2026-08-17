@@ -1,16 +1,7 @@
 // src/components/layout/CashierSidebar.jsx
 import React, { useMemo, useState } from "react";
 import {
-  Box,
-  Divider,
-  Drawer,
-  IconButton,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Tooltip,
-  Typography,
-  useMediaQuery,
+  Box, Divider, Drawer, IconButton, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -18,6 +9,7 @@ import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
+import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
 import AddShoppingCartRoundedIcon from "@mui/icons-material/AddShoppingCartRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import PeopleRoundedIcon from "@mui/icons-material/PeopleRounded";
@@ -32,6 +24,7 @@ export default function CashierSidebar({
   onCloseCashier,
   title = "Caja",
   closing = false,
+  canUseOnlineOrders = false,
   canUseCustomerLoyaltyModules = false,
 }) {
   const theme = useTheme();
@@ -47,6 +40,15 @@ export default function CashierSidebar({
         label: "Dashboard",
         icon: <DashboardRoundedIcon />,
       },
+      ...(canUseOnlineOrders
+        ? [
+            {
+              key: "online-orders",
+              label: "Pedidos en línea",
+              icon: <ShoppingBagRoundedIcon />,
+            },
+          ]
+        : []),
       {
         key: "new-sale",
         label: "Nueva venta",
@@ -58,16 +60,16 @@ export default function CashierSidebar({
         icon: <HistoryRoundedIcon />,
       },
       ...(canUseCustomerLoyaltyModules
-      ? [
-          {
-            key: "customers",
-            label: "Clientes",
-            icon: <PeopleRoundedIcon />,
-          },
-        ]
-      : []),
+        ? [
+            {
+              key: "customers",
+              label: "Clientes",
+              icon: <PeopleRoundedIcon />,
+            },
+          ]
+        : []),
     ],
-    [canUseCustomerLoyaltyModules],
+    [canUseOnlineOrders, canUseCustomerLoyaltyModules],
   );
 
   const width = collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH;

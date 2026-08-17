@@ -14,6 +14,7 @@ import {
 import echo from "../../../realtime/echo";
 
 import KitchenTopbar from "../../../components/staff/kitchen/KitchenTopbar";
+import KitchenTabs from "../../../components/staff/kitchen/KitchenTabs";
 import KitchenMessages from "../../../components/staff/kitchen/KitchenMessages";
 import KitchenEmptyState from "../../../components/staff/kitchen/KitchenEmptyState";
 import KitchenOrderCard from "../../../components/staff/kitchen/KitchenOrderCard";
@@ -123,7 +124,7 @@ export default function KitchenDashboard() {
   const [okMsg, setOkMsg] = useState("");
   const [ctx, setCtx] = useState(null);
 
-  const [includeReady, setIncludeReady] = useState(false);
+  const [tab, setTab] = useState("preparing");
   const [orders, setOrders] = useState([]);
   const [notifyingOrderId, setNotifyingOrderId] = useState(null);
   const [busyItemIds, setBusyItemIds] = useState({});
@@ -137,6 +138,26 @@ export default function KitchenDashboard() {
   const abortRef = useRef(false);
   const wsRefreshFastRef = useRef(null);
   const wsRefreshSlowRef = useRef(null);
+
+  useEffect(() => {
+    if (!okMsg) return;
+
+    const timer = setTimeout(() => {
+      setOkMsg("");
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [okMsg]);
+
+  useEffect(() => {
+    if (!err) return;
+
+    const timer = setTimeout(() => {
+      setErr("");
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [err]);
 
   const setItemBusy = (itemId, value) => {
     setBusyItemIds((prev) => {
@@ -229,7 +250,7 @@ export default function KitchenDashboard() {
 
       try {
         const res = await fetchKitchenKdsOrders({
-          include_ready_items: includeReady ? 1 : 0,
+          include_ready_items: 1,
         });
 
         const ok = !!res?.ok;
@@ -258,7 +279,7 @@ export default function KitchenDashboard() {
         setBusy(false);
       }
     },
-    [includeReady, nav, clearStaff]
+    [nav, clearStaff]
   );
 
   const patchOrderByItemId = useCallback((itemId, updater) => {
@@ -325,10 +346,6 @@ export default function KitchenDashboard() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [loadOrders]);
-
-  useEffect(() => {
-    loadOrders({ silent: true });
-  }, [includeReady, loadOrders]);
 
   const branchId = Number(ctx?.branch?.id || ctx?.branch_id || 0);
   const staffId = Number(ctx?.user?.id || ctx?.staff_id || 0);
@@ -400,15 +417,25 @@ export default function KitchenDashboard() {
     }
   };
 
-  const visibleOrders = useMemo(() => {
-    if (includeReady) return orders;
-
-    return (orders || []).filter((o) => {
-      const hasVisibleItems = Array.isArray(o?.items) && o.items.length > 0;
-      const keepByUnreadNotice = !!o?.ready_notice_sent;
-      return hasVisibleItems || keepByUnreadNotice;
+  const preparingOrders = useMemo(() => {
+    return (orders || []).filter((order) => {
+      return Number(order?.non_ready_count || 0) > 0;
     });
-  }, [orders, includeReady]);
+  }, [orders]);
+
+  const readyOrders = useMemo(() => {
+    return (orders || []).filter((order) => {
+      const nonReadyCount = Number(order?.non_ready_count || 0);
+      const readyUnpickedCount = Number(order?.ready_unpicked_count || 0);
+      const readyNoticeSent = !!order?.ready_notice_sent;
+
+      return nonReadyCount === 0 && (readyUnpickedCount > 0 || readyNoticeSent);
+    });
+  }, [orders]);
+
+  const visibleOrders = tab === "ready" ? readyOrders : preparingOrders;
+  const preparingCount = preparingOrders.length;
+  const readyCount = readyOrders.length;
 
   const resetWarehouseDialog = () => {
     setWarehouseDialogState(
@@ -503,7 +530,7 @@ export default function KitchenDashboard() {
           ...order,
           items: nextItems,
         },
-        includeReady
+        true
       );
     });
 
@@ -698,7 +725,7 @@ export default function KitchenDashboard() {
         };
       });
 
-      return recalcOrderDerived({ ...order, items: nextItems }, includeReady);
+      return recalcOrderDerived({ ...order, items: nextItems }, true);
     });
 
     try {
@@ -733,32 +760,41 @@ export default function KitchenDashboard() {
             can_notify_ready: false,
           },
         },
-        includeReady
+        true
       )
     );
 
+    const orderSource = String(order?.source || "").trim().toLowerCase();
+    const isCashierDirect = orderSource === "cashier_direct";
+    const isOnlineOrder = orderSource === "online_order";
+    const sendsReadyToCashier = isCashierDirect || isOnlineOrder;
+
     try {
       const res = await notifyKitchenOrderReady(orderId);
-      const isCashierDirect = String(order?.source || "") === "cashier_direct";
+
       setOkMsg(
         res?.message ||
           (res?.data?.already
-            ? isCashierDirect
-              ? "El aviso de orden lista para caja ya estaba enviado."
+            ? sendsReadyToCashier
+              ? isOnlineOrder
+                ? "El aviso del pedido en línea listo ya estaba enviado a caja."
+                : "El aviso de orden lista para caja ya estaba enviado."
               : "El aviso de pedido listo ya estaba enviado."
-            : isCashierDirect
-            ? "Orden lista para entregar en caja."
+            : sendsReadyToCashier
+            ? isOnlineOrder
+              ? "Pedido en línea listo avisado a caja."
+              : "Orden lista para entregar en caja."
             : "Aviso enviado al mesero.")
       );
     } catch (e) {
       await loadOrders({ silent: true });
 
-      const isCashierDirect = String(order?.source || "") === "cashier_direct";
-
       setErr(
         e?.response?.data?.message ||
-          (isCashierDirect
-            ? "No se pudo enviar el aviso de orden lista a caja."
+          (sendsReadyToCashier
+            ? isOnlineOrder
+              ? "No se pudo avisar a caja que el pedido en línea está listo."
+              : "No se pudo enviar el aviso de orden lista a caja."
             : "No se pudo enviar el aviso de pedido listo.")
       );
     } finally {
@@ -772,18 +808,28 @@ export default function KitchenDashboard() {
         ctx={ctx}
         busy={busy}
         refreshing={refreshing}
-        includeReady={includeReady}
-        onToggleIncludeReady={() => setIncludeReady((s) => !s)}
         onRefresh={() => loadOrders()}
         onExit={onExit}
       />
 
-      <KitchenMessages err={err} okMsg={okMsg} />
+      <KitchenTabs
+        tab={tab}
+        onChange={setTab}
+        preparingCount={preparingCount}
+        readyCount={readyCount}
+      />
+
+      <KitchenMessages
+        err={err}
+        okMsg={okMsg}
+        onCloseErr={() => setErr("")}
+        onCloseOk={() => setOkMsg("")}
+      />
 
       {busy ? (
         <div style={note}>Cargando…</div>
       ) : !visibleOrders?.length ? (
-        <KitchenEmptyState />
+        <KitchenEmptyState tab={tab} />
       ) : (
         <div style={grid}>
           {visibleOrders.map((o) => (

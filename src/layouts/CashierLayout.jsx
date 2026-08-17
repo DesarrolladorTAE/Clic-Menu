@@ -33,14 +33,25 @@ export default function CashierLayout() {
   const currentKey = getCurrentKey(pathname);
 
   const planFeatures = planAccess?.features || {};
+  const canUseOnlineOrders = !!planFeatures?.online_orders;
   const canUseCustomerLoyaltyModules = !!planFeatures?.customer_loyalty_modules;
 
+  const isOnlineOrdersRoute = currentKey === "online-orders";
   const isCustomersRoute = currentKey === "customers";
+
+  const shouldBlockOnlineOrdersRoute =
+    isOnlineOrdersRoute &&
+    !planAccessLoading &&
+    planAccess &&
+    !canUseOnlineOrders;
+
   const shouldBlockCustomersRoute =
     isCustomersRoute &&
     !planAccessLoading &&
     planAccess &&
     !canUseCustomerLoyaltyModules;
+
+  const shouldBlockCurrentRoute = shouldBlockOnlineOrdersRoute || shouldBlockCustomersRoute;
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -101,6 +112,13 @@ export default function CashierLayout() {
     };
   }, []);
 
+  
+  React.useEffect(() => {
+    if (!shouldBlockOnlineOrdersRoute) return;
+
+    nav("/staff/cashier/queue", { replace: true });
+  }, [shouldBlockOnlineOrdersRoute, nav]);
+
   React.useEffect(() => {
     if (!shouldBlockCustomersRoute) return;
 
@@ -111,6 +129,29 @@ export default function CashierLayout() {
     switch (key) {
       case "dashboard":
         nav("/staff/cashier/queue");
+        break;
+
+      case "online-orders":
+        if (planAccessLoading) {
+          showAlert({
+            severity: "info",
+            title: "Cargando permisos",
+            message: "Espera un momento mientras validamos tu plan.",
+          });
+          return;
+        }
+
+        if (!canUseOnlineOrders) {
+          showAlert({
+            severity: "warning",
+            title: "Pedidos en línea no disponibles",
+            message: "Tu plan actual no tiene disponible el módulo de Pedidos en línea.",
+          });
+          nav("/staff/cashier/queue");
+          return;
+        }
+
+        nav("/staff/cashier/online-orders");
         break;
 
       case "new-sale":
@@ -230,6 +271,7 @@ export default function CashierLayout() {
         closing={closing}
         onNavigate={handleNavigate}
         onCloseCashier={handleCloseCashier}
+        canUseOnlineOrders={canUseOnlineOrders}
         canUseCustomerLoyaltyModules={canUseCustomerLoyaltyModules}
       />
 
@@ -241,7 +283,7 @@ export default function CashierLayout() {
           bgcolor: "background.default",
         }}
       >
-        {!shouldBlockCustomersRoute ? <Outlet /> : null}
+        {!shouldBlockCurrentRoute ? <Outlet /> : null}
       </Box>
 
       <AppAlert
@@ -257,6 +299,7 @@ export default function CashierLayout() {
 }
 
 function getCurrentKey(pathname) {
+  if (pathname.includes("/staff/cashier/online-orders")) return "online-orders";
   if (pathname.includes("/staff/cashier/direct-order")) return "new-sale";
   if (pathname.includes("/staff/cashier/refunds")) return "history";
   if (pathname.includes("/staff/cashier/customers")) return "customers";

@@ -1206,22 +1206,72 @@ export const pillBase = {
   fontSize: 11,
 };
 
+export const messagesContainer = {
+  position: "fixed",
+  right: 20,
+  bottom: 20,
+  zIndex: 1400,
+  width: "min(390px, calc(100vw - 32px))",
+  display: "grid",
+  gap: 10,
+  pointerEvents: "none",
+};
+
+const messageBase = {
+  display: "grid",
+  gridTemplateColumns: "36px minmax(0, 1fr) 28px",
+  alignItems: "center",
+  gap: 10,
+  padding: "12px 12px",
+  borderRadius: 12,
+  boxShadow: "0 10px 30px rgba(17,24,39,0.16)",
+  fontSize: 13,
+  lineHeight: 1.4,
+  pointerEvents: "auto",
+};
+
 export const msgErr = {
-  background: "#ffe5e5",
-  border: "1px solid #ffb4b4",
-  padding: 10,
-  borderRadius: 10,
-  marginBottom: 10,
+  ...messageBase,
+  background: "#fff7f7",
+  border: "1px solid #ffcaca",
   color: "#7a0010",
-  fontWeight: 900,
 };
 
 export const msgOk = {
-  background: "#ecfdf5",
-  border: "1px solid #bbf7d0",
-  padding: 10,
-  borderRadius: 10,
-  marginBottom: 10,
+  ...messageBase,
+  background: "#f4fcf7",
+  border: "1px solid #b9e8ca",
   color: "#166534",
-  fontWeight: 900,
+};
+
+export const messageIcon = {
+  width: 34,
+  height: 34,
+  borderRadius: "50%",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid currentColor",
+  fontWeight: 1000,
+  fontSize: 16,
+  flexShrink: 0,
+};
+
+export const messageContent = {
+  minWidth: 0,
+  overflowWrap: "anywhere",
+};
+
+export const messageCloseButton = {
+  width: 28,
+  height: 28,
+  padding: 0,
+  border: "none",
+  borderRadius: 8,
+  background: "transparent",
+  color: "currentColor",
+  cursor: "pointer",
+  fontSize: 22,
+  lineHeight: 1,
+  opacity: 0.7,
 };

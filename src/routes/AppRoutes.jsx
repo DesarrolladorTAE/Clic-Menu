@@ -54,6 +54,8 @@ import CashierSaleDetailPage from "../pages/staff/casher/CashierSaleDetailPage";
 import CashierRefundsHistoryPage from "../pages/staff/casher/refunds/CashierRefundsHistoryPage";
 import CashierCustomersPage from "../pages/staff/casher/customer/CashierCustomersPage";
 import CashierDirectOrderPage from "../pages/staff/casher/CashierDirectOrderPage";
+import CashierOnlineOrdersPage from "../pages/staff/casher/onlineOrders/CashierOnlineOrdersPage";
+import CashierOnlineOrderDetailPage from "../pages/staff/casher/onlineOrders/CashierOnlineOrderDetailPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -165,9 +167,9 @@ export default function AppRoutes() {
          <Route path="/blog" element={<BlogPostsPage />} />
          <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
          <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}
-/>
-<Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}
-/>
+          />
+          <Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}
+          />
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />
@@ -193,6 +195,8 @@ export default function AppRoutes() {
         <Route path="/staff/cashier" element={<CashierLayout />}>
           <Route path="queue" element={<CashierQueuePage />} />
           <Route path="direct-order" element={<CashierDirectOrderPage />} />
+          <Route path="online-orders" element={<CashierOnlineOrdersPage />} />
+          <Route path="online-orders/:onlineOrderId" element={<CashierOnlineOrderDetailPage />} />
           <Route path="refunds" element={<CashierRefundsHistoryPage />} />
           <Route path="customers" element={<CashierCustomersPage />} />
         </Route>

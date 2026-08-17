@@ -82,6 +82,11 @@ export default function KitchenOrderCard({
   const hasVisibleItems = items.length > 0;
   const groupedView = useMemo(() => buildKitchenItemsView(items), [items]);
 
+  const orderSource = String(order?.source || "").trim().toLowerCase();
+  const isCashierDirect = orderSource === "cashier_direct";
+  const isOnlineOrder = orderSource === "online_order";
+  const sendsReadyToCashier = isCashierDirect || isOnlineOrder;
+
   const elapsed = formatElapsed(order?.created_at);
 
   return (
@@ -90,7 +95,11 @@ export default function KitchenOrderCard({
         <div style={{ minWidth: 0 }}>
           <div style={ticketHeadTop}>
             <div style={ticketMesaText}>
-              Mesa: {order?.table_name || order?.table_id || "—"}
+              {isOnlineOrder
+                ? "Pedido en línea"
+                : isCashierDirect
+                ? "Caja"
+                : `Mesa: ${order?.table_name || order?.table_id || "—"}`}
             </div>
             <div style={ticketTimePill}>{elapsed}</div>
           </div>
@@ -105,9 +114,13 @@ export default function KitchenOrderCard({
               </span>
               <span
                 style={badgeDark2}
-                title={`Estado interno: ${String(order?.status || "")}`}
+                title={
+                  isOnlineOrder
+                    ? "Origen: Pedido en línea"
+                    : `Estado interno: ${String(order?.status || "")}`
+                }
               >
-                {String(orderStatusEs || "—").toUpperCase()}
+                {isOnlineOrder ? "PEDIDO EN LÍNEA" : String(orderStatusEs || "—").toUpperCase()}
               </span>
             </div>
           </div>
@@ -154,14 +167,14 @@ export default function KitchenOrderCard({
         ) : readyNoticeSent ? (
           <div style={emptyItemsBox}>
             <div style={emptyItemsTitle}>
-              {order?.source === "cashier_direct"
+              {sendsReadyToCashier
                 ? "Esperando confirmación de caja"
                 : "Esperando confirmación del mesero"}
             </div>
             <div style={emptyItemsText}>
               Ya no hay ítems visibles en esta comanda, mas el aviso de{" "}
-              <b>Pedido listo</b> sigue activo. La tarjeta permanecerá aquí
-              hasta que {order?.source === "cashier_direct" ? "caja" : "el mesero"} lo marque como <b>Leído</b>.
+              <b>Pedido listo</b> sigue activo. La tarjeta permanecerá aquí hasta que{" "}
+              {sendsReadyToCashier ? "caja" : "el mesero"} lo marque como <b>Leído</b>.
             </div>
           </div>
         ) : (
@@ -178,14 +191,12 @@ export default function KitchenOrderCard({
         <div style={ticketFooterLeft}>
           {readyNoticeSent ? (
             <span style={noticeSentPill}>
-              {order?.source === "cashier_direct"
-                ? "Aviso enviado a caja"
-                : "Aviso enviado al mesero"}
+              {sendsReadyToCashier ? "Aviso enviado a caja" : "Aviso enviado al mesero"}
             </span>
           ) : (
             <span style={noticePendingPill}>
               {allReady
-                ? order?.source === "cashier_direct"
+                ? sendsReadyToCashier
                   ? "Listo para avisar a caja"
                   : "Listo para avisar al mesero"
                 : "Aún hay ítems pendientes"}
@@ -202,8 +213,8 @@ export default function KitchenOrderCard({
               canNotifyReady
                 ? readyNoticeSent
                   ? "El aviso ya fue enviado."
-                  : order?.source === "cashier_direct"
-                  ? "Avisar a caja que la orden está lista"
+                  : sendsReadyToCashier
+                  ? "Avisar a caja que el pedido está listo"
                   : "Avisar al mesero que el pedido está listo"
                 : "Aún hay pedidos pendientes"
             }
@@ -211,10 +222,10 @@ export default function KitchenOrderCard({
             {notifying
               ? "Enviando aviso…"
               : readyNoticeSent
-              ? order?.source === "cashier_direct"
+              ? isCashierDirect
                 ? "Aviso a caja enviado"
                 : "Pedido listo enviado"
-              : order?.source === "cashier_direct"
+              : isCashierDirect
               ? "Avisar a caja"
               : "Pedido listo"}
           </button>
