@@ -1,21 +1,11 @@
 import React from "react";
 import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Chip,
-  Divider,
-  Drawer,
-  Fab,
-  IconButton,
-  Stack,
-  Typography,
+  Badge,Box,Button,Card,Chip,Divider,Drawer,Fab,IconButton,Stack,Typography,
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
-import KitchenRoundedIcon from "@mui/icons-material/KitchenRounded";
+import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
 
 export default function CashierReadyNotificationsDrawer({
   open,
@@ -143,8 +133,7 @@ export default function CashierReadyNotificationsDrawer({
                     lineHeight: 1.5,
                   }}
                 >
-                  Revisa las órdenes de venta directa que cocina marcó como
-                  listas para entregar.
+                  Revisa los avisos de Cocina pendientes para Caja, tanto de ventas directas como de Pedidos en línea.
                 </Typography>
               </Box>
             </Stack>
@@ -183,6 +172,11 @@ export default function CashierReadyNotificationsDrawer({
 function CashierReadyNoticeCard({ notification, busy = false, onRead }) {
   const order = notification?.order || null;
   const sale = notification?.sale || null;
+  const type = String(notification?.type || "");
+  const isOnlineOrder = type === "online_order_ready";
+  const isCashierDirect = type === "cashier_direct_ready";
+  const typeLabel = isOnlineOrder ? "Pedido en línea" : isCashierDirect ? "Venta directa" : "Aviso de cocina";
+  const TypeIcon = isOnlineOrder ? ShoppingBagRoundedIcon : PointOfSaleRoundedIcon;
 
   return (
     <Card
@@ -232,14 +226,16 @@ function CashierReadyNoticeCard({ notification, busy = false, onRead }) {
           </Box>
 
           <Chip
-            icon={<KitchenRoundedIcon />}
-            label="Cocina"
+            icon={<TypeIcon />}
+            label={typeLabel}
             size="small"
+            variant="outlined"
             sx={{
               flexShrink: 0,
               fontWeight: 800,
-              bgcolor: "#FFF3E0",
-              color: "#A75A00",
+              color: isOnlineOrder ? "primary.main" : "secondary.main",
+              borderColor: isOnlineOrder ? "primary.main" : "secondary.main",
+              "& .MuiChip-icon": { color: "inherit" },
             }}
           />
         </Stack>
@@ -248,32 +244,34 @@ function CashierReadyNoticeCard({ notification, busy = false, onRead }) {
 
         <Stack spacing={0.65}>
           <InfoRow label="Orden" value={`#${notification?.order_id || "—"}`} />
-          <InfoRow
-            label="Venta"
-            value={notification?.sale_id ? `#${notification.sale_id}` : "—"}
-          />
+
+          {notification?.sale_id ? (
+            <InfoRow label="Venta" value={`#${notification.sale_id}`} />
+          ) : null}
+
           <InfoRow
             label="Cliente"
-            value={order?.customer_name || "Cliente mostrador"}
+            value={order?.customer_name || (isOnlineOrder ? "Cliente" : "Cliente mostrador")}
           />
+
           <InfoRow
             label="Total"
             value={formatCurrency(sale?.total ?? order?.total ?? 0)}
           />
-          <InfoRow label="Pagada" value={formatDateTime(sale?.paid_at)} />
+
+          {sale?.paid_at ? (
+            <InfoRow label="Pagada" value={formatDateTime(sale.paid_at)} />
+          ) : null}
+
           <InfoRow label="Aviso" value={formatDateTime(notification?.notified_at)} />
         </Stack>
 
         <Button
           variant="contained"
-          color="success"
+          color="primary"
           disabled={busy}
           onClick={onRead}
-          sx={{
-            height: 40,
-            borderRadius: 2,
-            fontWeight: 800,
-          }}
+          sx={{ height: 40, borderRadius: 2, fontWeight: 800 }}
         >
           {busy ? "Marcando…" : "Marcar como leído"}
         </Button>

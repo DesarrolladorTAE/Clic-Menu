@@ -280,13 +280,12 @@ export default function CashierQueuePage() {
       const targetStaffId = Number(payload?.target_staff_id || 0);
       const message = String(payload?.message || "").trim();
       const reason = String(payload?.reason || "").trim();
+      const isReadConfirmation = ["cashier_ready_notice_read", "online_order_ready_notification_read"].includes(reason);
+
+      if (isReadConfirmation) return;
 
       if (message && (!targetStaffId || !staffId || targetStaffId === staffId)) {
-        showAlert({
-          severity:
-            reason === "cashier_ready_notice_read" ? "success" : "info",
-          message,
-        });
+        showAlert({ severity: "info", message });
       }
     };
 
@@ -471,9 +470,8 @@ export default function CashierQueuePage() {
     } catch (error) {
       showAlert({
         severity: "error",
-        message: pickErr(
-          error,
-          "No se pudo marcar el aviso como leído."
+        message: friendlyReadyNotificationMessage(
+          pickErr(error, "No se pudo marcar el aviso como leído.")
         ),
       });
     } finally {
@@ -1380,4 +1378,8 @@ function isPlainObject(value) {
     typeof value === "object" &&
     !Array.isArray(value)
   );
+}
+
+function friendlyReadyNotificationMessage(message) {
+  return String(message || "").replaceAll("handoff", "proceso de entrega de Cocina a Caja");
 }

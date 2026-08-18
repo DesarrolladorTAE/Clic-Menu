@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Box, CircularProgress, Stack, Typography } from "@mui/material";
+
+import PageContainer from "../../../components/common/PageContainer";
+import AppAlert from "../../../components/common/AppAlert";
+import PaginationFooter from "../../../components/common/PaginationFooter";
+import usePagination from "../../../hooks/usePagination";
 
 import { staffContext } from "../../../services/staff/staffAuth.service";
 import { useStaffAuth } from "../../../context/StaffAuthContext";
@@ -15,7 +21,6 @@ import echo from "../../../realtime/echo";
 
 import KitchenTopbar from "../../../components/staff/kitchen/KitchenTopbar";
 import KitchenTabs from "../../../components/staff/kitchen/KitchenTabs";
-import KitchenMessages from "../../../components/staff/kitchen/KitchenMessages";
 import KitchenEmptyState from "../../../components/staff/kitchen/KitchenEmptyState";
 import KitchenOrderCard from "../../../components/staff/kitchen/KitchenOrderCard";
 import KitchenWarehouseSelectorDialog from "../../../components/staff/kitchen/KitchenWarehouseSelectorDialog";
@@ -23,10 +28,7 @@ import KitchenWarehouseSelectorDialog from "../../../components/staff/kitchen/Ki
 import {
   buildConsumptionUi,
   buildKitchenInventoryError,
-  grid,
-  note,
   recalcOrderDerived,
-  wrap,
 } from "../../../components/staff/kitchen/kitchen.helpers";
 
 const ITEM_WAREHOUSE_SELECTION_FIELD =
@@ -34,6 +36,8 @@ const ITEM_WAREHOUSE_SELECTION_FIELD =
 
 const PARENT_WAREHOUSE_SELECTION_FIELD =
   "selected_parent_warehouse_id";
+
+const PAGE_SIZE = 2;
 
 function createEmptyWarehouseSelections() {
   return {
@@ -119,7 +123,6 @@ export default function KitchenDashboard() {
   const { clearStaff, exitSmart } = useStaffAuth();
 
   const [busy, setBusy] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState("");
   const [okMsg, setOkMsg] = useState("");
   const [ctx, setCtx] = useState(null);
@@ -138,26 +141,6 @@ export default function KitchenDashboard() {
   const abortRef = useRef(false);
   const wsRefreshFastRef = useRef(null);
   const wsRefreshSlowRef = useRef(null);
-
-  useEffect(() => {
-    if (!okMsg) return;
-
-    const timer = setTimeout(() => {
-      setOkMsg("");
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [okMsg]);
-
-  useEffect(() => {
-    if (!err) return;
-
-    const timer = setTimeout(() => {
-      setErr("");
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [err]);
 
   const setItemBusy = (itemId, value) => {
     setBusyItemIds((prev) => {
@@ -241,46 +224,31 @@ export default function KitchenDashboard() {
     }
   }, [nav, clearStaff]);
 
-  const loadOrders = useCallback(
-    async (opts = {}) => {
-      const { silent = false } = opts;
+  const loadOrders = useCallback(async () => {
+    setErr("");
 
-      if (!silent) setRefreshing(true);
-      setErr("");
+    try {
+      const res = await fetchKitchenKdsOrders({ include_ready_items: 1 });
+      const ok = !!res?.ok;
+      const data = ok ? res?.data : [];
+      setOrders(Array.isArray(data) ? data : []);
+    } catch (e) {
+      const status = e?.response?.status;
 
-      try {
-        const res = await fetchKitchenKdsOrders({
-          include_ready_items: 1,
-        });
-
-        const ok = !!res?.ok;
-        const data = ok ? res?.data : [];
-        setOrders(Array.isArray(data) ? data : []);
-      } catch (e) {
-        const status = e?.response?.status;
-
-        if (status === 401) {
-          clearStaff();
-          nav("/staff/login", { replace: true });
-          return;
-        }
-
-        if (isContextConflict(e)) {
-          nav("/staff/select-context", { replace: true });
-          return;
-        }
-
-        setErr(
-          e?.response?.data?.message ||
-            "No se pudieron cargar las comandas de cocina."
-        );
-      } finally {
-        if (!silent) setRefreshing(false);
-        setBusy(false);
+      if (status === 401) {
+        clearStaff();
+        nav("/staff/login", { replace: true });
+        return;
       }
-    },
-    [nav, clearStaff]
-  );
+
+      if (isContextConflict(e)) {
+        nav("/staff/select-context", { replace: true });
+        return;
+      }
+
+      setErr(e?.response?.data?.message || "No se pudieron cargar las comandas de cocina.");
+    }
+  }, [nav, clearStaff]);
 
   const patchOrderByItemId = useCallback((itemId, updater) => {
     if (!itemId) return;
@@ -315,7 +283,7 @@ export default function KitchenDashboard() {
         setBusy(false);
         return;
       }
-      await loadOrders({ silent: true });
+      await loadOrders();
       setBusy(false);
     })();
 
@@ -329,14 +297,14 @@ export default function KitchenDashboard() {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(() => {
         if (document.hidden) return;
-        loadOrders({ silent: true });
+        loadOrders();
       }, 10000);
     };
 
     startPolling();
 
     const onVis = () => {
-      if (!document.hidden) loadOrders({ silent: true });
+      if (!document.hidden) loadOrders();
     };
 
     document.addEventListener("visibilitychange", onVis);
@@ -348,7 +316,6 @@ export default function KitchenDashboard() {
   }, [loadOrders]);
 
   const branchId = Number(ctx?.branch?.id || ctx?.branch_id || 0);
-  const staffId = Number(ctx?.user?.id || ctx?.staff_id || 0);
 
   useEffect(() => {
     if (!branchId) return;
@@ -360,11 +327,11 @@ export default function KitchenDashboard() {
       if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
 
       wsRefreshFastRef.current = setTimeout(() => {
-        loadOrders({ silent: true });
+        loadOrders();
       }, 120);
 
       wsRefreshSlowRef.current = setTimeout(() => {
-        loadOrders({ silent: true });
+        loadOrders();
       }, 900);
     };
 
@@ -373,13 +340,6 @@ export default function KitchenDashboard() {
       if (!eventBranchId || eventBranchId !== branchId) return;
 
       scheduleRefresh();
-
-      const targetStaffId = Number(payload?.target_staff_id || 0);
-      const msg = String(payload?.message || "").trim();
-
-      if (msg && (!targetStaffId || targetStaffId === staffId)) {
-        setOkMsg(msg);
-      }
     };
 
     echo.private(channelName).listen(".kitchen.kds.updated", handleKitchenUpdated);
@@ -396,7 +356,7 @@ export default function KitchenDashboard() {
 
       echo.leaveChannel(channelName);
     };
-  }, [branchId, staffId, loadOrders]);
+  }, [branchId, loadOrders]);
 
   useEffect(() => {
     return () => {
@@ -433,9 +393,25 @@ export default function KitchenDashboard() {
     });
   }, [orders]);
 
-  const visibleOrders = tab === "ready" ? readyOrders : preparingOrders;
   const preparingCount = preparingOrders.length;
   const readyCount = readyOrders.length;
+
+  const preparingPagination = usePagination({
+    items: preparingOrders,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const readyPagination = usePagination({
+    items: readyOrders,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const activePagination = tab === "ready" ? readyPagination : preparingPagination;
+  const visibleOrders = activePagination.paginatedItems;
 
   const resetWarehouseDialog = () => {
     setWarehouseDialogState(
@@ -567,7 +543,7 @@ export default function KitchenDashboard() {
       * La actualización optimista se revierte con los
       * datos autoritativos del backend.
       */
-      await loadOrders({ silent: true });
+      await loadOrders();
       setConsumptionBadge(id, null);
 
       const responseCode = String(
@@ -639,7 +615,7 @@ export default function KitchenDashboard() {
         })
       );
     } catch (e) {
-      await loadOrders({ silent: true });
+      await loadOrders();
       setConsumptionBadge(id, null);
       setErr(buildKitchenInventoryError(e));
     } finally {
@@ -732,7 +708,7 @@ export default function KitchenDashboard() {
       await readyKitchenItem(id);
       setOkMsg("Ítem marcado como listo.");
     } catch (e) {
-      await loadOrders({ silent: true });
+      await loadOrders();
       setErr(
         e?.response?.data?.message ||
           "No se pudo marcar como listo el ítem."
@@ -787,7 +763,7 @@ export default function KitchenDashboard() {
             : "Aviso enviado al mesero.")
       );
     } catch (e) {
-      await loadOrders({ silent: true });
+      await loadOrders();
 
       setErr(
         e?.response?.data?.message ||
@@ -803,65 +779,88 @@ export default function KitchenDashboard() {
   };
 
   return (
-    <div style={wrap}>
-      <KitchenTopbar
-        ctx={ctx}
-        busy={busy}
-        refreshing={refreshing}
-        onRefresh={() => loadOrders()}
-        onExit={onExit}
-      />
+    <PageContainer>
+      <Stack spacing={2.5}>
+        <KitchenTopbar ctx={ctx} busy={busy} onExit={onExit} />
 
-      <KitchenTabs
-        tab={tab}
-        onChange={setTab}
-        preparingCount={preparingCount}
-        readyCount={readyCount}
-      />
+        <KitchenTabs
+          tab={tab}
+          onChange={setTab}
+          preparingCount={preparingCount}
+          readyCount={readyCount}
+        />
 
-      <KitchenMessages
-        err={err}
-        okMsg={okMsg}
-        onCloseErr={() => setErr("")}
-        onCloseOk={() => setOkMsg("")}
-      />
+        {busy ? (
+          <Box sx={{ minHeight: 260, display: "grid", placeItems: "center" }}>
+            <Stack spacing={1.5} alignItems="center">
+              <CircularProgress />
+              <Typography sx={{ fontSize: 14, color: "text.secondary" }}>Cargando pedidos de Cocina…</Typography>
+            </Stack>
+          </Box>
+        ) : visibleOrders.length === 0 ? (
+          <KitchenEmptyState tab={tab} />
+        ) : (
+          <>
+            <Box
+              sx={{
+                display: "grid",
+                gap: 2,
+                gridTemplateColumns: {
+                  xs: "minmax(0, 1fr)",
+                  md: "repeat(2, minmax(0, 1fr))",
+                },
+                alignItems: "stretch",
+              }}
+            >
+              {visibleOrders.map((order) => (
+                <KitchenOrderCard
+                  key={order.id}
+                  order={order}
+                  onStart={doStart}
+                  onReady={doReady}
+                  onNotifyReady={doNotifyReady}
+                  busy={busy}
+                  notifying={notifyingOrderId === order.id}
+                  busyItemIds={busyItemIds}
+                  itemConsumptionState={itemConsumptionState}
+                />
+              ))}
+            </Box>
 
-      {busy ? (
-        <div style={note}>Cargando…</div>
-      ) : !visibleOrders?.length ? (
-        <KitchenEmptyState tab={tab} />
-      ) : (
-        <div style={grid}>
-          {visibleOrders.map((o) => (
-            <KitchenOrderCard
-              key={o.id}
-              order={o}
-              onStart={doStart}
-              onReady={doReady}
-              onNotifyReady={doNotifyReady}
-              busy={refreshing}
-              notifying={notifyingOrderId === o.id}
-              busyItemIds={busyItemIds}
-              itemConsumptionState={itemConsumptionState}
-            />
-          ))}
-        </div>
-      )}
+            <Box
+              sx={{
+                overflow: "hidden",
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                bgcolor: "background.paper",
+              }}
+            >
+              <PaginationFooter
+                page={activePagination.page}
+                totalPages={activePagination.totalPages}
+                startItem={activePagination.startItem}
+                endItem={activePagination.endItem}
+                total={activePagination.total}
+                hasPrev={activePagination.hasPrev}
+                hasNext={activePagination.hasNext}
+                onPrev={activePagination.prevPage}
+                onNext={activePagination.nextPage}
+                itemLabel="pedidos"
+              />
+            </Box>
+          </>
+        )}
+      </Stack>
 
       <KitchenWarehouseSelectorDialog
         open={warehouseDialogState.open}
         payload={warehouseDialogState.payload}
-        inventoryContext={
-          warehouseDialogState.inventoryContext
-        }
-        selectionField={
-          warehouseDialogState.selectionField
-        }
+        inventoryContext={warehouseDialogState.inventoryContext}
+        selectionField={warehouseDialogState.selectionField}
         initialSelectedWarehouseId={
           warehouseDialogState.selectionField
-            ? warehouseDialogState.selections?.[
-                warehouseDialogState.selectionField
-              ] || null
+            ? warehouseDialogState.selections?.[warehouseDialogState.selectionField] || null
             : null
         }
         message={warehouseDialogState.message}
@@ -869,6 +868,19 @@ export default function KitchenDashboard() {
         onClose={closeWarehouseDialog}
         onConfirm={doStartWithWarehouseSelection}
       />
-    </div>
+
+      <AppAlert
+        open={Boolean(err || okMsg)}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") return;
+          setErr("");
+          setOkMsg("");
+        }}
+        severity={err ? "error" : "success"}
+        title={err ? "No se pudo completar" : "Listo"}
+        message={err || okMsg}
+        autoHideDuration={3000}
+      />
+    </PageContainer>
   );
 }

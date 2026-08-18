@@ -1,11 +1,9 @@
 import React, { useMemo } from "react";
+import { Button } from "@mui/material";
 import {
   badgeDark2,
   badgeOk2,
   badgeWarn2,
-  btnAction,
-  btnActionOk,
-  btnNotifyReady,
   buildKitchenItemsView,
   chipModifier,
   compositeChildRow,
@@ -205,8 +203,10 @@ export default function KitchenOrderCard({
         </div>
 
         <div style={ticketFooterRight}>
-          <button
-            style={btnNotifyReady(canNotifyReady && !busy && !notifying)}
+          <Button
+            type="button"
+            variant="contained"
+            color="primary"
             onClick={() => onNotifyReady(order)}
             disabled={busy || notifying || !canNotifyReady}
             title={
@@ -218,17 +218,18 @@ export default function KitchenOrderCard({
                   : "Avisar al mesero que el pedido está listo"
                 : "Aún hay pedidos pendientes"
             }
+            sx={{ minWidth: 158, fontWeight: 800 }}
           >
             {notifying
               ? "Enviando aviso…"
               : readyNoticeSent
-              ? isCashierDirect
+              ? sendsReadyToCashier
                 ? "Aviso a caja enviado"
                 : "Pedido listo enviado"
-              : isCashierDirect
+              : sendsReadyToCashier
               ? "Avisar a caja"
               : "Pedido listo"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -376,31 +377,41 @@ function ItemRow({
       </div>
 
       <div style={ticketRight}>
-        <button
-          style={btnAction(canStart && !itemBusyState)}
+        <Button
+          type="button"
+          variant="contained"
+          color="secondary"
           onClick={() => onStart(item)}
           disabled={!canStart || busy || !!itemBusyState}
-          title={
-            canStart
-              ? "Marcar como en proceso"
-              : "Solo se permite si está pendiente"
-          }
+          title={canStart ? "Comenzar la preparación" : "Solo se permite si está pendiente"}
+          sx={{
+            width: { xs: 104, sm: 110 },
+            minWidth: { xs: 104, sm: 110 },
+            minHeight: 40,
+            px: 1,
+            fontWeight: 800,
+          }}
         >
           {itemBusyState === "start" ? "Empezando…" : "Empezar"}
-        </button>
+        </Button>
 
-        <button
-          style={btnActionOk(canReady && !itemBusyState)}
+        <Button
+          type="button"
+          variant="outlined"
+          color="secondary"
           onClick={() => onReady(item)}
           disabled={!canReady || busy || !!itemBusyState}
-          title={
-            canReady
-              ? "Marcar como listo"
-              : "Solo se permite si está en proceso"
-          }
+          title={canReady ? "Marcar como listo" : "Solo se permite si está en preparación"}
+          sx={{
+            width: { xs: 104, sm: 110 },
+            minWidth: { xs: 104, sm: 110 },
+            minHeight: 40,
+            px: 1,
+            fontWeight: 800,
+          }}
         >
           {itemBusyState === "ready" ? "Marcando…" : "Listo"}
-        </button>
+        </Button>
       </div>
     </div>
   );

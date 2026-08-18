@@ -738,8 +738,11 @@ export const grid = {
 };
 
 export const ticketCard = {
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
   border: "1px solid #eaeaea",
-  borderRadius: 16,
+  borderRadius: 6,
   overflow: "hidden",
   background: "#fff",
   boxShadow: "0 1px 0 rgba(0,0,0,0.04)",

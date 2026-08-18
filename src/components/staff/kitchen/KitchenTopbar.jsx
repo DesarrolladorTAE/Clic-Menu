@@ -1,62 +1,47 @@
 import React from "react";
-import {
-  btnDanger,
-  btnGhost,
-  btnPrimary,
-  sub,
-  title,
-  topbar,
-} from "./kitchen.helpers";
+import { Button, Stack, Typography } from "@mui/material";
 
-export default function KitchenTopbar({
-  ctx,
-  busy,
-  refreshing,
-  includeReady,
-  onToggleIncludeReady,
-  onRefresh,
-  onExit,
-}) {
+export default function KitchenTopbar({ ctx, busy, onExit }) {
   return (
-    <div style={topbar}>
-      <div>
-        <div style={title}>Monitor de Cocina (KDS)</div>
-        <div style={sub}>
-          {ctx?.restaurant?.trade_name || ctx?.restaurant?.name || "—"}{" "}
-          <span style={{ opacity: 0.6 }}>·</span> {ctx?.branch?.name || "—"}
-        </div>
-      </div>
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      justifyContent="space-between"
+      alignItems={{ xs: "stretch", sm: "center" }}
+      spacing={2}
+    >
+      <Stack spacing={0.4} sx={{ minWidth: 0 }}>
+        <Typography
+          variant="h5"
+          sx={{
+            fontSize: { xs: 24, sm: 28 },
+            fontWeight: 800,
+            color: "text.primary",
+            lineHeight: 1.2,
+          }}
+        >
+          Monitor de Cocina (KDS)
+        </Typography>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          justifyContent: "flex-end",
+        <Typography sx={{ fontSize: 13, color: "text.secondary", wordBreak: "break-word" }}>
+          {ctx?.restaurant?.trade_name || ctx?.restaurant?.name || "—"}
+          <span style={{ opacity: 0.6 }}> · </span>
+          {ctx?.branch?.name || "—"}
+        </Typography>
+      </Stack>
+
+      <Button
+        type="button"
+        variant="contained"
+        color="primary"
+        disabled={busy}
+        onClick={onExit}
+        sx={{
+          minWidth: { xs: "100%", sm: 110 },
+          alignSelf: { xs: "stretch", sm: "center" },
         }}
       >
-        <button
-          style={btnGhost}
-          onClick={onToggleIncludeReady}
-          title="Mostrar u ocultar ítems listos (supervisión)"
-          disabled={busy}
-        >
-          {includeReady ? "Mostrando listos" : "Ocultar listos"}
-        </button>
-
-        <button
-          style={btnPrimary}
-          onClick={onRefresh}
-          disabled={busy || refreshing}
-          title="Refrescar"
-        >
-          {refreshing ? "Actualizando…" : "Refrescar"}
-        </button>
-
-        <button style={btnDanger} onClick={onExit} title="Salir">
-          Salir
-        </button>
-      </div>
-    </div>
+        Salir
+      </Button>
+    </Stack>
   );
-}  
+} 
