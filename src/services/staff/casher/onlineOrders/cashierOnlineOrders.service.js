@@ -44,6 +44,16 @@ export async function rejectCashierOnlineOrder(onlineOrderId, reason) {
   return res?.data;
 }
 
+export async function cancelCashierOnlineOrder(onlineOrderId, reason) {
+  const res = await staffApi.post(
+    `/staff/cashier/online-orders/${onlineOrderId}/cancel`,
+    { reason },
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
 export async function takeCashierOnlineOrder(onlineOrderId) {
   const res = await staffApi.post(
     `/staff/cashier/online-orders/${onlineOrderId}/take`,

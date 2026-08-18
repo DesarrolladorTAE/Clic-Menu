@@ -26,8 +26,15 @@ export default function CashierPaymentFormCard({
   hasPreview = false,
   onPay,
   disabled = false,
+  maxPayments = 3,
+  showAddPayment = true,
+  showRemovePayment = true,
+  paymentMethodLocked = false,
+  description = null,
+  helperText = null,
 }) {
-  const hasMaxPayments = payments.length >= 3;
+  const normalizedMaxPayments = Math.max(1, Math.trunc(Number(maxPayments) || 3));
+  const hasMaxPayments = payments.length >= normalizedMaxPayments;
 
   const hasRawInitialAmount =
     initialAmount !== null &&
@@ -109,25 +116,28 @@ export default function CashierPaymentFormCard({
                   lineHeight: 1.5,
                 }}
               >
-                Captura uno, dos o hasta tres métodos para cobrar únicamente la
-                cuenta seleccionada.
+                {description || "Captura uno, dos o hasta tres métodos para cobrar únicamente la cuenta seleccionada."}
               </Typography>
             </Box>
 
-            <Button
-              variant="outlined"
-              onClick={onAddPayment}
-              disabled={disabled || hasMaxPayments || previewing || paying}
-              startIcon={<AddRoundedIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 180 },
-                height: 42,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              {hasMaxPayments ? "Máximo 3 pagos" : "Agregar pago"}
-            </Button>
+            {showAddPayment ? (
+              <Button
+                variant="outlined"
+                onClick={onAddPayment}
+                disabled={disabled || hasMaxPayments || previewing || paying}
+                startIcon={<AddRoundedIcon />}
+                sx={{
+                  minWidth: { xs: "100%", sm: 180 },
+                  height: 42,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                {hasMaxPayments
+                  ? `Máximo ${normalizedMaxPayments} pago${normalizedMaxPayments === 1 ? "" : "s"}`
+                  : "Agregar pago"}
+              </Button>
+            ) : null}
           </Stack>
 
           <Box
@@ -259,33 +269,26 @@ export default function CashierPaymentFormCard({
                         Pago {index + 1}
                       </Typography>
 
-                      <IconButton
-                        onClick={() =>
-                          onRemovePayment?.(payment.localId)
-                        }
-                        disabled={
-                          payments.length <= 1 ||
-                          disabled ||
-                          previewing ||
-                          paying
-                        }
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          bgcolor: "error.main",
-                          color: "#fff",
-                          borderRadius: 1.5,
-                          "&:hover": {
-                            bgcolor: "error.dark",
-                          },
-                          "&.Mui-disabled": {
-                            bgcolor: "action.disabledBackground",
-                            color: "action.disabled",
-                          },
-                        }}
-                      >
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
+                      {showRemovePayment ? (
+                        <IconButton
+                          onClick={() => onRemovePayment?.(payment.localId)}
+                          disabled={payments.length <= 1 || disabled || previewing || paying}
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            bgcolor: "error.main",
+                            color: "#fff",
+                            borderRadius: 1.5,
+                            "&:hover": { bgcolor: "error.dark" },
+                            "&.Mui-disabled": {
+                              bgcolor: "action.disabledBackground",
+                              color: "action.disabled",
+                            },
+                          }}
+                        >
+                          <DeleteOutlineRoundedIcon fontSize="small" />
+                        </IconButton>
+                      ) : null}
                     </Stack>
 
                     <Stack
@@ -306,7 +309,7 @@ export default function CashierPaymentFormCard({
                                 event.target.value
                               )
                             }
-                            disabled={disabled || previewing || paying}
+                            disabled={disabled || previewing || paying || paymentMethodLocked}
                           >
                             <MenuItem value="">
                               Selecciona un método
@@ -551,8 +554,7 @@ export default function CashierPaymentFormCard({
                 lineHeight: 1.55,
               }}
             >
-              Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo
-              método en la misma operación.
+              {helperText || "Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo método en la misma operación."}
             </Typography>
           </Box>
 

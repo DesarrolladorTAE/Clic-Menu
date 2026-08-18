@@ -9,6 +9,7 @@ import { useStaffAuth } from "../../../../context/StaffAuthContext";
 
 import {
   acceptCashierOnlineOrder,
+  cancelCashierOnlineOrder,
   confirmCashierOnlineOrderPreparation,
   deliverCashierOnlineOrder,
   fetchCashierOnlineOrders,
@@ -26,7 +27,7 @@ import CashierOnlineOrdersPanel from "../../../../components/staff/casher/online
 import CashierOnlineOrderActionDialog from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrderActionDialog";
 
 const PAGE_SIZE = 5;
-const DIALOG_ACTIONS = ["reject", "release", "deliver"];
+const DIALOG_ACTIONS = ["reject", "release", "deliver", "cancel"];
 
 export default function CashierOnlineOrdersPage() {
   const nav = useNavigate();
@@ -201,9 +202,23 @@ export default function CashierOnlineOrdersPage() {
     });
   };
 
+  const handleOpenPayment = (order) => {
+    const onlineOrderId = Number(order?.id || 0);
+    if (!onlineOrderId) return;
+
+    nav(`/staff/cashier/online-orders/${onlineOrderId}/payment`, {
+      state: { fromTab: "mine" },
+    });
+  };
+
   const handleOrderAction = (action, order) => {
     const onlineOrderId = Number(order?.id || 0);
     if (!onlineOrderId || busyOrderId) return;
+
+    if (["prepare_payment", "pay"].includes(action)) {
+      handleOpenPayment(order);
+      return;
+    }
 
     if (DIALOG_ACTIONS.includes(action)) {
       setDialogAction(action);
@@ -231,6 +246,10 @@ export default function CashierOnlineOrdersPage() {
 
         case "reject":
           response = await rejectCashierOnlineOrder(onlineOrderId, payload.reason);
+          break;
+        
+        case "cancel":
+          response = await cancelCashierOnlineOrder(onlineOrderId, payload.reason);
           break;
 
         case "take":

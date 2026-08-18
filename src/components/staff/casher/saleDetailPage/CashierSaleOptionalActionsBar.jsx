@@ -17,6 +17,9 @@ export default function CashierSaleOptionalActionsBar({
   adjustmentsDisabled = false,
   customerDisabled = false,
   discountsDisabled = false,
+  showAdjustments = true,
+  showCustomer = true,
+  showDiscounts = true,
   onOpenAdjustments,
   onOpenCustomer,
   onOpenDiscounts,
@@ -42,6 +45,11 @@ export default function CashierSaleOptionalActionsBar({
   const adjustmentActionDisabled = disabled || adjustmentsDisabled;
   const customerActionDisabled = disabled || customerDisabled;
   const discountActionDisabled = disabled || discountsDisabled;
+
+  const visibleActionsCount = Math.max(
+    1,
+    [showAdjustments, showCustomer, showDiscounts].filter(Boolean).length
+  );
 
   return (
     <Paper
@@ -85,50 +93,58 @@ export default function CashierSaleOptionalActionsBar({
             gap: 1.5,
             gridTemplateColumns: {
               xs: "1fr",
-              md: "repeat(3, minmax(0, 1fr))",
+              md: visibleActionsCount === 1
+                ? "1fr"
+                : `repeat(${visibleActionsCount}, minmax(0, 1fr))`,
             },
           }}
         >
-          <ActionButton
-            icon={<TuneRoundedIcon />}
-            title="Ajustes y cancelaciones"
-            status={
-              adjustmentsCount > 0
-                ? `${adjustmentsCount} ajuste${adjustmentsCount === 1 ? "" : "s"}`
-                : "Sin ajustes"
-            }
-            active={adjustmentsCount > 0}
-            disabled={adjustmentActionDisabled}
-            onClick={onOpenAdjustments}
-          />
+         {showAdjustments ? (
+            <ActionButton
+              icon={<TuneRoundedIcon />}
+              title="Ajustes y cancelaciones"
+              status={
+                adjustmentsCount > 0
+                  ? `${adjustmentsCount} ajuste${adjustmentsCount === 1 ? "" : "s"}`
+                  : "Sin ajustes"
+              }
+              active={adjustmentsCount > 0}
+              disabled={adjustmentActionDisabled}
+              onClick={onOpenAdjustments}
+            />
+          ) : null}
 
-          <ActionButton
-            icon={<PersonRoundedIcon />}
-            title="Cliente"
-            status={
-              hasFormalCustomer
-                ? "Cliente asociado"
-                : hasSimpleContact
-                ? "Contacto simple"
-                : "Sin cliente"
-            }
-            active={hasFormalCustomer || hasSimpleContact}
-            disabled={customerActionDisabled}
-            onClick={onOpenCustomer}
-          />
+          {showCustomer ? (
+            <ActionButton
+              icon={<PersonRoundedIcon />}
+              title="Cliente"
+              status={
+                hasFormalCustomer
+                  ? "Cliente asociado"
+                  : hasSimpleContact
+                  ? "Contacto simple"
+                  : "Sin cliente"
+              }
+              active={hasFormalCustomer || hasSimpleContact}
+              disabled={customerActionDisabled}
+              onClick={onOpenCustomer}
+            />
+          ) : null}
 
-          <ActionButton
-            icon={<LocalOfferRoundedIcon />}
-            title="Descuentos manuales"
-            status={
-              manualDiscountTotal > 0
-                ? `${formatCurrency(manualDiscountTotal)} manual aplicado`
-                : "Sin descuentos manuales"
-            }
-            active={manualDiscountTotal > 0}
-            disabled={discountActionDisabled}
-            onClick={onOpenDiscounts}
-          />
+          {showDiscounts ? (
+            <ActionButton
+              icon={<LocalOfferRoundedIcon />}
+              title="Descuentos manuales"
+              status={
+                manualDiscountTotal > 0
+                  ? `${formatCurrency(manualDiscountTotal)} manual aplicado`
+                  : "Sin descuentos manuales"
+              }
+              active={manualDiscountTotal > 0}
+              disabled={discountActionDisabled}
+              onClick={onOpenDiscounts}
+            />
+          ) : null}
         </Box>
       </Stack>
     </Paper>

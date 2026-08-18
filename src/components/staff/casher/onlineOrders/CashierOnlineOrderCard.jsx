@@ -1,14 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Divider,
-  Stack,
-  Typography,
+  Box, Button, Card, CardContent, Chip, CircularProgress, Divider, IconButton, Menu, MenuItem, Stack, Typography,
 } from "@mui/material";
 
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -20,6 +12,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
@@ -55,13 +48,37 @@ export default function CashierOnlineOrderCard({
   onOpenDetail,
   onAction,
 }) {
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+
   const orderMissing = order?.order_missing === true;
   const scheduledValue = order?.requested_for_at || order?.estimated_for_at;
   const actionsDisabled = disabled || Boolean(busyAction);
 
-  const actions = (Array.isArray(order?.actions) ? order.actions : []).filter((action) =>
-    CARD_ACTIONS.includes(action)
-  );
+  const backendActions = Array.isArray(order?.actions) ? order.actions : [];
+  const canCancelOrder = backendActions.includes("cancel");
+  const menuOpen = Boolean(menuAnchorEl);
+  const paymentAction = backendActions.includes("pay")
+    ? "pay"
+    : backendActions.includes("prepare_payment")
+    ? "prepare_payment"
+    : null;
+
+  const actions = [
+    ...backendActions.filter((action) => CARD_ACTIONS.includes(action)),
+    ...(paymentAction ? [paymentAction] : []),
+  ];
+
+  const handleOpenMenu = (event) => {
+    if (actionsDisabled) return;
+    setMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseMenu = () => setMenuAnchorEl(null);
+
+  const handleCancelOrder = () => {
+    setMenuAnchorEl(null);
+    onAction?.("cancel", order);
+  };
 
   return (
     <Card
@@ -133,8 +150,7 @@ export default function CashierOnlineOrderCard({
             <Stack
               direction="row"
               spacing={0.75}
-              flexWrap="wrap"
-              useFlexGap
+              alignItems="center"
               justifyContent="flex-end"
               sx={{
                 ml: { sm: "auto" },
@@ -142,7 +158,6 @@ export default function CashierOnlineOrderCard({
                 maxWidth: { xs: "100%", sm: "58%" },
               }}
             >
-              
               <Chip
                 label={financialStatusLabel(order?.financial_status)}
                 size="small"
@@ -150,6 +165,73 @@ export default function CashierOnlineOrderCard({
                 variant="outlined"
                 sx={{ fontWeight: 800 }}
               />
+
+              {canCancelOrder ? (
+                <>
+                  <IconButton
+                    type="button"
+                    size="small"
+                    aria-label="Más opciones"
+                    aria-controls={menuOpen ? `online-order-menu-${order?.id}` : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={menuOpen ? "true" : undefined}
+                    disabled={actionsDisabled}
+                    onClick={handleOpenMenu}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      color: "text.secondary",
+                      "&:hover": { borderColor: "primary.main", color: "primary.main", bgcolor: "action.hover" },
+                    }}
+                  >
+                    <MoreVertRoundedIcon fontSize="small" />
+                  </IconButton>
+
+                  <Menu
+                    id={`online-order-menu-${order?.id}`}
+                    anchorEl={menuAnchorEl}
+                    open={menuOpen}
+                    onClose={handleCloseMenu}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                    transformOrigin={{ vertical: "top", horizontal: "right" }}
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          mt: 0,
+                          minWidth: 190,
+                          borderRadius: 0,
+                          border: "1px solid",
+                          borderColor: "divider",
+                          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem
+                      onClick={handleCancelOrder}
+                      disabled={actionsDisabled}
+                      sx={{
+                        minWidth: 190,
+                        minHeight: 44,
+                        gap: 1.25,
+                        px: 2,
+                        borderRadius: 0,
+                        color: "text.primary",
+                        fontSize: 14,
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: "action.hover" },
+                        "& .MuiSvgIcon-root": { color: "text.secondary" },
+                      }}
+                    >
+                      <CloseRoundedIcon fontSize="small" />
+                      Cancelar pedido
+                    </MenuItem>
+                  </Menu>
+                </>
+              ) : null}
             </Stack>
           </Stack>
 
@@ -361,6 +443,20 @@ function actionConfig(action) {
       color: "secondary",
       variant: "contained",
       icon: <LocalShippingRoundedIcon />,
+    },
+    prepare_payment: {
+      label: "Registrar cobro",
+      loadingLabel: "Abriendo cobro…",
+      color: "secondary",
+      variant: "contained",
+      icon: <PaymentsRoundedIcon />,
+    },
+    pay: {
+      label: "Registrar cobro",
+      loadingLabel: "Abriendo cobro…",
+      color: "secondary",
+      variant: "contained",
+      icon: <PaymentsRoundedIcon />,
     },
     deliver: {
       label: "Marcar entregado",

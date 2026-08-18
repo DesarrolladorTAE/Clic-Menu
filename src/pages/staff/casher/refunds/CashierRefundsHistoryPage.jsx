@@ -121,7 +121,9 @@ export default function CashierRefundsHistoryPage() {
         ? Math.max(backendAvailable, 0)
         : Math.max(total - refundedTotal, 0);
 
+      const backendCanRefund = row?.refund_permissions?.can_refund === true;
       const canRefund =
+        backendCanRefund &&
         ["paid", "partially_refunded"].includes(status) &&
         availableToRefund > 0;
 
@@ -140,6 +142,7 @@ export default function CashierRefundsHistoryPage() {
         ticket: row?.ticket || null,
         customer: row?.customer || null,
         contact_data: row?.contact_data || null,
+        refund_permissions: row?.refund_permissions || null,
       };
     });
   };
@@ -298,9 +301,10 @@ export default function CashierRefundsHistoryPage() {
         severity: "warning",
         title: "Devolución no disponible",
         message:
-          Number(data?.sale?.available_to_refund || 0) <= 0
+          data?.refund_permissions?.message ||
+          (Number(data?.sale?.available_to_refund || 0) <= 0
             ? "Esta venta ya no tiene saldo disponible para devolución."
-            : "Esta venta no se encuentra en un estado válido para devolución.",
+            : "Esta venta no se encuentra en un estado válido para devolución."),
       });
       return;
     }
@@ -347,9 +351,10 @@ export default function CashierRefundsHistoryPage() {
         severity: "warning",
         title: "Devolución no disponible",
         message:
-          Number(selectedSummary?.sale?.available_to_refund || 0) <= 0
+          selectedSummary?.refund_permissions?.message ||
+          (Number(selectedSummary?.sale?.available_to_refund || 0) <= 0
             ? "Esta venta ya no tiene saldo disponible para devolución."
-            : "Esta venta ya no se encuentra disponible para devolución.",
+            : "Esta venta ya no se encuentra disponible para devolución."),
       });
       return;
     }
@@ -372,8 +377,10 @@ export default function CashierRefundsHistoryPage() {
 
       await load({ silent: true });
     } catch (e) {
+      const status = Number(e?.response?.status || 0);
+
       showAlert({
-        severity: "error",
+        severity: [409, 422].includes(status) ? "warning" : "error",
         title: "No se pudo aplicar",
         message: pickErr(e, "No se pudo aplicar la devolución total."),
       });

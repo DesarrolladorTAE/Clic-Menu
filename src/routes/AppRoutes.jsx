@@ -56,6 +56,7 @@ import CashierCustomersPage from "../pages/staff/casher/customer/CashierCustomer
 import CashierDirectOrderPage from "../pages/staff/casher/CashierDirectOrderPage";
 import CashierOnlineOrdersPage from "../pages/staff/casher/onlineOrders/CashierOnlineOrdersPage";
 import CashierOnlineOrderDetailPage from "../pages/staff/casher/onlineOrders/CashierOnlineOrderDetailPage";
+import CashierOnlineOrderPaymentPage from "../pages/staff/casher/onlineOrders/CashierOnlineOrderPaymentPage";
 
 //Administrador
 import Dashboard from "../pages/admin/Dashboard";
@@ -197,6 +198,7 @@ export default function AppRoutes() {
           <Route path="direct-order" element={<CashierDirectOrderPage />} />
           <Route path="online-orders" element={<CashierOnlineOrdersPage />} />
           <Route path="online-orders/:onlineOrderId" element={<CashierOnlineOrderDetailPage />} />
+          <Route path="online-orders/:onlineOrderId/payment" element={<CashierOnlineOrderPaymentPage />} />
           <Route path="refunds" element={<CashierRefundsHistoryPage />} />
           <Route path="customers" element={<CashierCustomersPage />} />
         </Route>
