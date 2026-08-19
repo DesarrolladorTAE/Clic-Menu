@@ -130,6 +130,33 @@ function selectFieldSx(accentColor) {
   };
 }
 
+function nativeDateTimeFieldSx(accentColor) {
+  return {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+    "& .MuiOutlinedInput-root": {
+      width: "100%",
+      minWidth: 0,
+      minHeight: 48,
+      boxSizing: "border-box",
+    },
+    "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+      borderColor: accentColor,
+      borderWidth: "1px",
+    },
+    "& .MuiInputBase-input": {
+      width: "100%",
+      minWidth: 0,
+      maxWidth: "100%",
+      height: 48,
+      px: 1.75,
+      py: 0,
+      boxSizing: "border-box",
+    },
+  };
+}
+
 function menuItemSx(accentColor) {
   return {
     "&.Mui-selected": {
@@ -381,26 +408,7 @@ export default function OnlineOrderFulfillmentSection({
                   value={requestedForAt}
                   onChange={(e) => onRequestedForAtChange?.(e.target.value)}
                   disabled={disabled}
-                  sx={{
-                    width: "100%",
-                    minWidth: 0,
-                    maxWidth: "100%",
-                    "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                      borderColor: accentColor,
-                      borderWidth: "1px",
-                    },
-                    "& .MuiInputBase-root": {
-                      width: "100%",
-                      minWidth: 0,
-                      maxWidth: "100%",
-                    },
-                    "& input": {
-                      width: "100%",
-                      minWidth: 0,
-                      maxWidth: "100%",
-                      boxSizing: "border-box",
-                    },
-                  }}
+                  sx={nativeDateTimeFieldSx(accentColor)}
                 />
               }
             />
@@ -577,26 +585,7 @@ export default function OnlineOrderFulfillmentSection({
                       max: selectedPoint?.valid_until || undefined,
                     }}
                     disabled={!selectedPoint || disabled}
-                    sx={{
-                      width: "100%",
-                      minWidth: 0,
-                      maxWidth: "100%",
-                      "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                        borderColor: accentColor,
-                        borderWidth: "1px",
-                      },
-                      "& .MuiInputBase-root": {
-                        width: "100%",
-                        minWidth: 0,
-                        maxWidth: "100%",
-                      },
-                      "& input": {
-                        width: "100%",
-                        minWidth: 0,
-                        maxWidth: "100%",
-                        boxSizing: "border-box",
-                      },
-                    }}
+                    sx={nativeDateTimeFieldSx(accentColor)}
                   />
                 }
               />
@@ -653,26 +642,7 @@ export default function OnlineOrderFulfillmentSection({
                         step: 60,
                       }}
                       disabled={disabled}
-                      sx={{
-                        width: "100%",
-                        minWidth: 0,
-                        maxWidth: "100%",
-                        "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                          borderColor: accentColor,
-                          borderWidth: "1px",
-                        },
-                        "& .MuiInputBase-root": {
-                          width: "100%",
-                          minWidth: 0,
-                          maxWidth: "100%",
-                        },
-                        "& input": {
-                          width: "100%",
-                          minWidth: 0,
-                          maxWidth: "100%",
-                          boxSizing: "border-box",
-                        },
-                      }}
+                      sx={nativeDateTimeFieldSx(accentColor)}
                     />
                   }
                 />
