@@ -5,6 +5,7 @@ import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
 import { useStaffAuth } from "../../../../context/StaffAuthContext";
+import echo from "../../../../realtime/echo";
 
 import { fetchCashierOnlineOrderDetail } from "../../../../services/staff/casher/onlineOrders/cashierOnlineOrders.service";
 
@@ -29,6 +30,8 @@ export default function CashierOnlineOrderDetailPage() {
   });
 
   const pollRef = useRef(null);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -106,6 +109,8 @@ export default function CashierOnlineOrderDetailPage() {
     }
   };
 
+  const branchId = Number(order?.meta?.branch_id || 0);
+
   useEffect(() => {
     load();
 
@@ -118,6 +123,49 @@ export default function CashierOnlineOrderDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    const channelName = `branch.${branchId}.cashier`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+
+      wsRefreshFastRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 120);
+
+      wsRefreshSlowRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 900);
+    };
+
+    const handleCashierQueueUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+
+      scheduleRefresh();
+    };
+
+    echo.private(channelName).listen(".cashier.queue.updated", handleCashierQueueUpdated);
+
+    return () => {
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, id]);
 
   const handleBack = () => {
     const fromTab = location.state?.fromTab === "mine" ? "mine" : "available";

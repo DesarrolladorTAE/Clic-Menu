@@ -7,6 +7,11 @@ import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneR
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
 
+import PaginationFooter from "../../../common/PaginationFooter";
+import usePagination from "../../../../hooks/usePagination";
+
+const NOTICE_PAGE_SIZE = 3;
+
 export default function CashierReadyNotificationsDrawer({
   open,
   onOpen,
@@ -14,8 +19,27 @@ export default function CashierReadyNotificationsDrawer({
   notifications = [],
   busyId = null,
   onReadNotification,
+  onlineOrderNotifications = [],
+  onlineOrderBusyId = null,
+  onReadOnlineOrderNotification,
 }) {
-  const count = Array.isArray(notifications) ? notifications.length : 0;
+  const readyItems = Array.isArray(notifications) ? notifications : [];
+  const onlineOrderItems = Array.isArray(onlineOrderNotifications) ? onlineOrderNotifications : [];
+  const count = readyItems.length + onlineOrderItems.length;
+
+  const readyPagination = usePagination({
+    items: readyItems,
+    initialPage: 1,
+    pageSize: NOTICE_PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const onlineOrderPagination = usePagination({
+    items: onlineOrderItems,
+    initialPage: 1,
+    pageSize: NOTICE_PAGE_SIZE,
+    mode: "frontend",
+  });
 
   return (
     <>
@@ -71,6 +95,7 @@ export default function CashierReadyNotificationsDrawer({
         open={open}
         onClose={onClose}
         ModalProps={{ keepMounted: true }}
+        sx={{ zIndex: 1600 }}
         slotProps={{
           paper: {
             sx: {
@@ -133,7 +158,7 @@ export default function CashierReadyNotificationsDrawer({
                     lineHeight: 1.5,
                   }}
                 >
-                  Revisa los avisos de Cocina pendientes para Caja, tanto de ventas directas como de Pedidos en línea.
+                  Revisa los avisos de Cocina y los nuevos Pedidos en línea pendientes de atención.
                 </Typography>
               </Box>
             </Stack>
@@ -149,11 +174,11 @@ export default function CashierReadyNotificationsDrawer({
             }}
           >
             <NoticeSection
-              title="Órdenes listas"
-              count={count}
+              title="Avisos de cocina"
+              count={readyItems.length}
               emptyText="No hay avisos de cocina pendientes para caja."
             >
-              {notifications.map((notification) => (
+              {readyPagination.paginatedItems.map((notification) => (
                 <CashierReadyNoticeCard
                   key={notification.id}
                   notification={notification}
@@ -161,6 +186,27 @@ export default function CashierReadyNotificationsDrawer({
                   onRead={() => onReadNotification?.(notification.id)}
                 />
               ))}
+
+              <NoticePagination pagination={readyPagination} />
+            </NoticeSection>
+
+            <Divider sx={{ my: 2 }} />
+
+            <NoticeSection
+              title="Nuevos pedidos en línea"
+              count={onlineOrderItems.length}
+              emptyText="No hay nuevos Pedidos en línea pendientes de revisar."
+            >
+              {onlineOrderPagination.paginatedItems.map((notification) => (
+                <CashierOnlineOrderNewNoticeCard
+                  key={notification.notification_id}
+                  notification={notification}
+                  busy={Number(onlineOrderBusyId || 0) === Number(notification.notification_id)}
+                  onRead={() => onReadOnlineOrderNotification?.(notification.notification_id)}
+                />
+              ))}
+
+              <NoticePagination pagination={onlineOrderPagination} />
             </NoticeSection>
           </Box>
         </Box>
@@ -280,8 +326,117 @@ function CashierReadyNoticeCard({ notification, busy = false, onRead }) {
   );
 }
 
+function CashierOnlineOrderNewNoticeCard({ notification, busy = false, onRead }) {
+  const publicNumber = String(notification?.public_number || "").trim();
+
+  return (
+    <Card
+      sx={{
+        p: 1.5,
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        boxShadow: "none",
+        backgroundColor: "background.paper",
+      }}
+    >
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between">
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 800,
+                color: "text.primary",
+                lineHeight: 1.35,
+                wordBreak: "break-word",
+              }}
+            >
+              {notification?.title || "Nuevo pedido en línea"}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.35,
+                fontSize: 13,
+                color: "text.primary",
+                lineHeight: 1.5,
+                wordBreak: "break-word",
+              }}
+            >
+              {notification?.message || "Nuevo Pedido en línea pendiente de aceptación."}
+            </Typography>
+          </Box>
+
+          <Chip
+            icon={<ShoppingBagRoundedIcon />}
+            label="Pedido nuevo"
+            size="small"
+            variant="outlined"
+            sx={{
+              flexShrink: 0,
+              fontWeight: 800,
+              color: "primary.main",
+              borderColor: "primary.main",
+              "& .MuiChip-icon": { color: "inherit" },
+            }}
+          />
+        </Stack>
+
+        <Divider />
+
+        <Stack spacing={0.65}>
+          <InfoRow label="Pedido" value={publicNumber ? `#${publicNumber}` : "—"} />
+          <InfoRow label="Estado" value="Pendiente de aceptación" />
+          <InfoRow label="Aviso" value={formatDateTime(notification?.notified_at)} />
+        </Stack>
+
+        <Button
+          variant="contained"
+          color="primary"
+          disabled={busy}
+          onClick={onRead}
+          sx={{ height: 40, borderRadius: 2, fontWeight: 800 }}
+        >
+          {busy ? "Marcando…" : "Marcar como leído"}
+        </Button>
+      </Stack>
+    </Card>
+  );
+}
+
+function NoticePagination({ pagination }) {
+  if (!pagination || pagination.totalPages <= 1) return null;
+
+  return (
+    <Box
+      sx={{
+        mt: 0.25,
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        backgroundColor: "background.paper",
+      }}
+    >
+      <PaginationFooter
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        startItem={pagination.startItem}
+        endItem={pagination.endItem}
+        total={pagination.total}
+        hasPrev={pagination.hasPrev}
+        hasNext={pagination.hasNext}
+        onPrev={pagination.prevPage}
+        onNext={pagination.nextPage}
+        itemLabel="avisos"
+      />
+    </Box>
+  );
+}
+
 function NoticeSection({ title, count, emptyText, children }) {
-  const hasItems = React.Children.count(children) > 0;
+  const hasItems = Number(count || 0) > 0;
 
   return (
     <Box

@@ -6,6 +6,7 @@ import LocalOfferRoundedIcon from "@mui/icons-material/LocalOfferRounded";
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
 import { useStaffAuth } from "../../../../context/StaffAuthContext";
+import echo from "../../../../realtime/echo";
 
 import CashierOnlineOrderPaymentHeroCard from "../../../../components/staff/casher/onlineOrders/paymentPage/CashierOnlineOrderPaymentHeroCard";
 import CashierOrderItemsCard from "../../../../components/staff/casher/saleDetailPage/CashierOrderItemsCard";
@@ -314,8 +315,11 @@ export default function CashierOnlineOrderPaymentPage() {
   });
 
   const pollRef = useRef(null);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
   const redirectTimerRef = useRef(null);
   const loadingRequestRef = useRef(false);
+  const paymentInProgressRef = useRef(false);
   const paymentCompletedRef = useRef(false);
   const paymentLocalIdRef = useRef(1);
   const discountDraftIdRef = useRef(1);
@@ -323,6 +327,7 @@ export default function CashierOnlineOrderPaymentPage() {
   const targetOnlineOrderId = numberOrNull(onlineOrderId);
   const selectedSaleId = numberOrNull(sale?.sale_id ?? sale?.id);
   const selectedCheckId = numberOrNull(selectedCheck?.id ?? selectedCheck?.order_check_id);
+  const branchId = Number(onlineOrder?.meta?.branch_id || 0);
 
   const actions = useMemo(() => toArray(onlineOrder?.actions), [onlineOrder]);
   const canManageDiscounts = actions.includes("discount") && !previewing && !paying && !postPaymentOpen;
@@ -615,7 +620,11 @@ export default function CashierOnlineOrderPaymentPage() {
     load({ silent: false, preserveForm: false });
 
     pollRef.current = setInterval(() => {
-      if (document.visibilityState === "visible" && !paymentCompletedRef.current) {
+      if (
+        document.visibilityState === "visible" &&
+        !paymentInProgressRef.current &&
+        !paymentCompletedRef.current
+      ) {
         load({ silent: true, preserveForm: true });
       }
     }, POLL_INTERVAL);
@@ -627,6 +636,56 @@ export default function CashierOnlineOrderPaymentPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetOnlineOrderId]);
+
+  useEffect(() => {
+    if (!branchId) return undefined;
+
+    const channelName = `branch.${branchId}.cashier`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+
+      wsRefreshFastRef.current = setTimeout(() => {
+        if (paymentInProgressRef.current || paymentCompletedRef.current) return;
+        load({ silent: true, preserveForm: true });
+      }, 120);
+
+      wsRefreshSlowRef.current = setTimeout(() => {
+        if (paymentInProgressRef.current || paymentCompletedRef.current) return;
+        load({ silent: true, preserveForm: true });
+      }, 900);
+    };
+
+    const handleCashierQueueUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+      if (paymentInProgressRef.current || paymentCompletedRef.current) return;
+
+      const eventSaleId = Number(payload?.sale_id || 0);
+      if (eventSaleId && selectedSaleId && eventSaleId !== selectedSaleId) return;
+
+      scheduleRefresh();
+    };
+
+    echo.private(channelName).listen(".cashier.queue.updated", handleCashierQueueUpdated);
+
+    return () => {
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, selectedSaleId]);
 
   useEffect(() => {
     if (activeTool === "discounts" && !canManageDiscounts) setActiveTool(null);
@@ -1598,15 +1657,15 @@ export default function CashierOnlineOrderPaymentPage() {
 
     try {
       setPaying(true);
+      paymentInProgressRef.current = true;
 
       /*
-       * La vista previa ya debió preparar la cuenta. Se revalida de forma
-       * idempotente por si el estado cambió entre preview y pago.
-       */
+      * La vista previa ya debió preparar la cuenta. Se revalida de forma
+      * idempotente por si el estado cambió entre preview y pago.
+      */
       await ensurePreparedForPayment();
 
       const response = await payCashierSale(selectedSaleId, normalizedPayload);
-
       const paidSale = response?.data?.sale || null;
       const paidOrder = response?.data?.order || null;
       const paidSettlement = response?.data?.settlement || null;
@@ -1697,6 +1756,7 @@ export default function CashierOnlineOrderPaymentPage() {
         message: pickErr(error, "No se pudo registrar el cobro."),
       });
     } finally {
+      paymentInProgressRef.current = false;
       setPaying(false);
     }
   };

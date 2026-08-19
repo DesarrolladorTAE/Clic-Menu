@@ -4,7 +4,7 @@ const NO_CACHE_HEADERS = {
   "Cache-Control": "no-cache, no-store, must-revalidate",
   Pragma: "no-cache",
   Expires: "0",
-};
+}; 
 
 export async function fetchCashierOnlineOrders() {
   const res = await staffApi.get("/staff/cashier/online-orders", {
@@ -20,6 +20,25 @@ export async function fetchCashierOnlineOrderDetail(onlineOrderId) {
     params: { _t: Date.now() },
     headers: NO_CACHE_HEADERS,
   });
+
+  return res?.data;
+}
+
+export async function fetchCashierOnlineOrderNewNotifications() {
+  const res = await staffApi.get("/staff/cashier/online-order-new-notifications", {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
+}
+
+export async function markCashierOnlineOrderNewNotificationRead(notificationId) {
+  const res = await staffApi.post(
+    `/staff/cashier/online-order-new-notifications/${notificationId}/read`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
 
   return res?.data;
 }

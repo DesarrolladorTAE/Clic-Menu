@@ -12,6 +12,7 @@ import SearchOffRoundedIcon from "@mui/icons-material/SearchOffRounded";
 
 import PageContainer from "../../../components/common/PageContainer";
 import AppAlert from "../../../components/common/AppAlert";
+import echo from "../../../realtime/echo";
 
 import PublicMenuFooter from "../../../components/menu/public/PublicMenuFooter";
 
@@ -38,6 +39,7 @@ export default function PublicOnlineOrderTrackingPage() {
 
   const requestRunningRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const wsRefreshRef = useRef(null);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -163,9 +165,7 @@ export default function PublicOnlineOrderTrackingPage() {
     }, SILENT_REFRESH_MS);
 
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        loadTracking({ silent: true });
-      }
+      if (document.visibilityState === "visible") loadTracking({ silent: true });
     };
 
     const refreshOnFocus = () => {
@@ -179,6 +179,38 @@ export default function PublicOnlineOrderTrackingPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.removeEventListener("focus", refreshOnFocus);
+    };
+  }, [trackingToken, loadTracking]);
+
+  useEffect(() => {
+    const token = String(trackingToken || "").trim();
+    if (!isValidPublicTrackingToken(token)) return;
+
+    const channelName = `public.online-order.${token}`;
+
+    const scheduleRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (wsRefreshRef.current) window.clearTimeout(wsRefreshRef.current);
+
+      wsRefreshRef.current = window.setTimeout(() => {
+        wsRefreshRef.current = null;
+        loadTracking({ silent: true });
+      }, 120);
+    };
+
+    const handleTrackingUpdated = () => {
+      scheduleRefresh();
+    };
+
+    echo.channel(channelName).listen(".online-order.tracking.updated", handleTrackingUpdated);
+
+    return () => {
+      if (wsRefreshRef.current) {
+        window.clearTimeout(wsRefreshRef.current);
+        wsRefreshRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
     };
   }, [trackingToken, loadTracking]);
 

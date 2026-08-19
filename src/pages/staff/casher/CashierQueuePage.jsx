@@ -33,6 +33,11 @@ import {
   markCashierReadyNotificationRead,
 } from "../../../services/staff/casher/cashierReadyNotifications.service";
 
+import {
+  fetchCashierOnlineOrderNewNotifications,
+  markCashierOnlineOrderNewNotificationRead,
+} from "../../../services/staff/casher/onlineOrders/cashierOnlineOrders.service";
+
 import echo from "../../../realtime/echo";
 
 import CashierQueueHeroCard from "../../../components/staff/casher/queuePage/CashierQueueHeroCard";
@@ -90,6 +95,8 @@ export default function CashierQueuePage() {
 
   const [readyNotifications, setReadyNotifications] = useState([]);
   const [readyBusyId, setReadyBusyId] = useState(null);
+  const [onlineOrderNotifications, setOnlineOrderNotifications] = useState([]);
+  const [onlineOrderBusyId, setOnlineOrderBusyId] = useState(null);
   const [readyDrawerOpen, setReadyDrawerOpen] = useState(false);
 
   const [alertState, setAlertState] = useState({
@@ -152,14 +159,18 @@ export default function CashierQueuePage() {
     try {
       if (!silent) setLoading(true);
 
-      const [queueResponse, readyResponse] = await Promise.all([
+      const [queueResponse, readyResponse, onlineOrderNotificationsResponse] = await Promise.all([
         fetchCashierSaleQueue(),
         fetchCashierReadyNotifications().catch(() => null),
+        fetchCashierOnlineOrderNewNotifications().catch(() => null),
       ]);
 
       setQueueData(queueResponse?.data || null);
-      setReadyNotifications(
-        Array.isArray(readyResponse?.data) ? readyResponse.data : []
+      setReadyNotifications(Array.isArray(readyResponse?.data) ? readyResponse.data : []);
+      setOnlineOrderNotifications(
+        Array.isArray(onlineOrderNotificationsResponse?.data?.notifications)
+          ? onlineOrderNotificationsResponse.data.notifications
+          : []
       );
     } catch (error) {
       const status = Number(error?.response?.status || 0);
@@ -280,7 +291,11 @@ export default function CashierQueuePage() {
       const targetStaffId = Number(payload?.target_staff_id || 0);
       const message = String(payload?.message || "").trim();
       const reason = String(payload?.reason || "").trim();
-      const isReadConfirmation = ["cashier_ready_notice_read", "online_order_ready_notification_read"].includes(reason);
+      const isReadConfirmation = [
+        "cashier_ready_notice_read",
+        "online_order_ready_notification_read",
+        "online_order_new_notification_read",
+      ].includes(reason);
 
       if (isReadConfirmation) return;
 
@@ -454,28 +469,52 @@ export default function CashierQueuePage() {
       const response = await markCashierReadyNotificationRead(notificationId);
 
       setReadyNotifications((current) =>
-        current.filter(
-          (row) => Number(row?.id) !== Number(notificationId)
-        )
+        current.filter((row) => Number(row?.id) !== Number(notificationId))
       );
 
       showAlert({
         severity: "success",
-        message:
-          response?.message ||
-          "Aviso de caja marcado como leído. La orden quedó lista para entregar.",
+        message: response?.message || "Aviso de caja marcado como leído. La orden quedó lista para entregar.",
       });
 
       load({ silent: true });
     } catch (error) {
       showAlert({
         severity: "error",
-        message: friendlyReadyNotificationMessage(
-          pickErr(error, "No se pudo marcar el aviso como leído.")
-        ),
+        message: friendlyReadyNotificationMessage(pickErr(error, "No se pudo marcar el aviso como leído.")),
       });
     } finally {
       setReadyBusyId(null);
+    }
+  };
+
+  const handleReadOnlineOrderNotification = async (notificationId) => {
+    if (!notificationId) return;
+
+    setOnlineOrderBusyId(notificationId);
+
+    try {
+      const response = await markCashierOnlineOrderNewNotificationRead(notificationId);
+
+      setOnlineOrderNotifications((current) =>
+        current.filter((row) => Number(row?.notification_id) !== Number(notificationId))
+      );
+
+      showAlert({
+        severity: "success",
+        message: response?.message || "Aviso de Pedido en línea marcado como leído.",
+      });
+
+      load({ silent: true });
+    } catch (error) {
+      showAlert({
+        severity: "error",
+        message: pickErr(error, "No se pudo marcar el aviso del Pedido en línea como leído."),
+      });
+
+      load({ silent: true });
+    } finally {
+      setOnlineOrderBusyId(null);
     }
   };
 
@@ -1217,6 +1256,9 @@ export default function CashierQueuePage() {
         notifications={readyNotifications}
         busyId={readyBusyId}
         onReadNotification={handleReadReadyNotification}
+        onlineOrderNotifications={onlineOrderNotifications}
+        onlineOrderBusyId={onlineOrderBusyId}
+        onReadOnlineOrderNotification={handleReadOnlineOrderNotification}
       />
 
       <AppAlert

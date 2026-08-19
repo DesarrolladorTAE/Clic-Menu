@@ -6,13 +6,16 @@ import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
 import usePagination from "../../../../hooks/usePagination";
 import { useStaffAuth } from "../../../../context/StaffAuthContext";
+import echo from "../../../../realtime/echo";
 
 import {
   acceptCashierOnlineOrder,
   cancelCashierOnlineOrder,
   confirmCashierOnlineOrderPreparation,
   deliverCashierOnlineOrder,
+  fetchCashierOnlineOrderNewNotifications,
   fetchCashierOnlineOrders,
+  markCashierOnlineOrderNewNotificationRead,
   markCashierOnlineOrderOutForDelivery,
   markCashierOnlineOrderReady,
   rejectCashierOnlineOrder,
@@ -21,10 +24,16 @@ import {
   takeCashierOnlineOrder,
 } from "../../../../services/staff/casher/onlineOrders/cashierOnlineOrders.service";
 
+import {
+  fetchCashierReadyNotifications,
+  markCashierReadyNotificationRead,
+} from "../../../../services/staff/casher/cashierReadyNotifications.service";
+
 import CashierOnlineOrdersHeroCard from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersHeroCard";
 import CashierOnlineOrdersTabs from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersTabs";
 import CashierOnlineOrdersPanel from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersPanel";
 import CashierOnlineOrderActionDialog from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrderActionDialog";
+import CashierReadyNotificationsDrawer from "../../../../components/staff/casher/queuePage/CashierReadyNotificationsDrawer";
 
 const PAGE_SIZE = 5;
 const DIALOG_ACTIONS = ["reject", "release", "deliver", "cancel"];
@@ -45,6 +54,12 @@ export default function CashierOnlineOrdersPage() {
   const [dialogAction, setDialogAction] = useState("");
   const [dialogOrder, setDialogOrder] = useState(null);
 
+  const [readyNotifications, setReadyNotifications] = useState([]);
+  const [readyBusyId, setReadyBusyId] = useState(null);
+  const [onlineOrderNotifications, setOnlineOrderNotifications] = useState([]);
+  const [onlineOrderBusyId, setOnlineOrderBusyId] = useState(null);
+  const [noticesDrawerOpen, setNoticesDrawerOpen] = useState(false);
+
   const [alertState, setAlertState] = useState({
     open: false,
     severity: "info",
@@ -53,6 +68,8 @@ export default function CashierOnlineOrdersPage() {
   });
 
   const pollRef = useRef(null);
+  const wsRefreshFastRef = useRef(null);
+  const wsRefreshSlowRef = useRef(null);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -107,14 +124,28 @@ export default function CashierOnlineOrdersPage() {
     try {
       if (!silent) setLoading(true);
 
-      const response = await fetchCashierOnlineOrders();
-      setData(response?.data || null);
+      const [ordersResponse, readyResponse, onlineOrderNotificationsResponse] = await Promise.all([
+        fetchCashierOnlineOrders(),
+        fetchCashierReadyNotifications().catch(() => null),
+        fetchCashierOnlineOrderNewNotifications().catch(() => null),
+      ]);
+
+      setData(ordersResponse?.data || null);
+      setReadyNotifications(Array.isArray(readyResponse?.data) ? readyResponse.data : []);
+      setOnlineOrderNotifications(
+        Array.isArray(onlineOrderNotificationsResponse?.data?.notifications)
+          ? onlineOrderNotificationsResponse.data.notifications
+          : []
+      );
     } catch (error) {
       if (!silent) handleRequestError(error, "No se pudieron cargar los pedidos en línea.");
     } finally {
       if (!silent) setLoading(false);
     }
   };
+
+  const meta = data?.meta || {};
+  const branchId = Number(meta?.branch_id || 0);
 
   useEffect(() => {
     load();
@@ -130,6 +161,56 @@ export default function CashierOnlineOrdersPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    const channelName = `branch.${branchId}.cashier`;
+
+    const scheduleRefresh = () => {
+      if (wsRefreshFastRef.current) clearTimeout(wsRefreshFastRef.current);
+      if (wsRefreshSlowRef.current) clearTimeout(wsRefreshSlowRef.current);
+
+      wsRefreshFastRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 120);
+
+      wsRefreshSlowRef.current = setTimeout(() => {
+        load({ silent: true });
+      }, 900);
+    };
+
+    const handleCashierQueueUpdated = (payload = {}) => {
+      const eventBranchId = Number(payload?.branch_id || 0);
+      if (!eventBranchId || eventBranchId !== branchId) return;
+
+      scheduleRefresh();
+
+      const reason = String(payload?.reason || "").trim();
+      const message = String(payload?.message || "").trim();
+
+      if (reason === "online_order_new_notification_created" && message) {
+        showAlert({ severity: "info", title: "Nuevo pedido en línea", message });
+      }
+    };
+
+    echo.private(channelName).listen(".cashier.queue.updated", handleCashierQueueUpdated);
+
+    return () => {
+      if (wsRefreshFastRef.current) {
+        clearTimeout(wsRefreshFastRef.current);
+        wsRefreshFastRef.current = null;
+      }
+
+      if (wsRefreshSlowRef.current) {
+        clearTimeout(wsRefreshSlowRef.current);
+        wsRefreshSlowRef.current = null;
+      }
+
+      echo.leaveChannel(channelName);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab") === "mine" ? "mine" : "available";
@@ -191,6 +272,58 @@ export default function CashierOnlineOrdersPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", resolved);
     setSearchParams(nextParams, { replace: true });
+  };
+
+  const handleReadReadyNotification = async (notificationId) => {
+    if (!notificationId) return;
+
+    setReadyBusyId(notificationId);
+
+    try {
+      const response = await markCashierReadyNotificationRead(notificationId);
+
+      setReadyNotifications((current) =>
+        current.filter((row) => Number(row?.id) !== Number(notificationId))
+      );
+
+      showAlert({
+        severity: "success",
+        message: response?.message || "Aviso de cocina marcado como leído.",
+      });
+
+      load({ silent: true });
+    } catch (error) {
+      handleRequestError(error, "No se pudo marcar el aviso de cocina como leído.");
+      load({ silent: true });
+    } finally {
+      setReadyBusyId(null);
+    }
+  };
+
+  const handleReadOnlineOrderNotification = async (notificationId) => {
+    if (!notificationId) return;
+
+    setOnlineOrderBusyId(notificationId);
+
+    try {
+      const response = await markCashierOnlineOrderNewNotificationRead(notificationId);
+
+      setOnlineOrderNotifications((current) =>
+        current.filter((row) => Number(row?.notification_id) !== Number(notificationId))
+      );
+
+      showAlert({
+        severity: "success",
+        message: response?.message || "Aviso de Pedido en línea marcado como leído.",
+      });
+
+      load({ silent: true });
+    } catch (error) {
+      handleRequestError(error, "No se pudo marcar el aviso del Pedido en línea como leído.");
+      load({ silent: true });
+    } finally {
+      setOnlineOrderBusyId(null);
+    }
   };
 
   const handleOpenDetail = (order) => {
@@ -364,7 +497,7 @@ export default function CashierOnlineOrdersPage() {
           onAction={handleOrderAction}
         />
       </Stack>
-
+ 
       <CashierOnlineOrderActionDialog
         open={Boolean(dialogAction && dialogOrder)}
         action={dialogAction}
@@ -372,6 +505,18 @@ export default function CashierOnlineOrdersPage() {
         submitting={Boolean(dialogOrder) && Number(busyOrderId || 0) === Number(dialogOrder?.id || 0) && busyAction === dialogAction}
         onClose={handleDialogClose}
         onConfirm={handleDialogConfirm}
+      />
+
+      <CashierReadyNotificationsDrawer
+        open={noticesDrawerOpen}
+        onOpen={() => setNoticesDrawerOpen(true)}
+        onClose={() => setNoticesDrawerOpen(false)}
+        notifications={readyNotifications}
+        busyId={readyBusyId}
+        onReadNotification={handleReadReadyNotification}
+        onlineOrderNotifications={onlineOrderNotifications}
+        onlineOrderBusyId={onlineOrderBusyId}
+        onReadOnlineOrderNotification={handleReadOnlineOrderNotification}
       />
 
       <AppAlert
