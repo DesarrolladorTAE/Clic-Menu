@@ -17,6 +17,7 @@ export default function PublicMenuCartDrawerBlock({
   hasInvalidItems,
   invalidItemsCount,
   submitBlockReason,
+  themeColor,
 
   billRequesting,
   billToast,
@@ -119,6 +120,7 @@ export default function PublicMenuCartDrawerBlock({
       <MenuCartPanel
         title="Comanda"
         subtitle={panelSubtitle}
+        themeColor={themeColor}
         customerName={
           cartOrder?.activeOrder?.id
             ? cartOrder.activeOrder?.customer_name || ""

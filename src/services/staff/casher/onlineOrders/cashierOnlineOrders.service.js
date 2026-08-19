@@ -133,6 +133,16 @@ export async function markCashierOnlineOrderOutForDelivery(onlineOrderId) {
   return res?.data;
 }
 
+export async function markCashierOnlineOrderArrivedAtDestination(onlineOrderId) {
+  const res = await staffApi.post(
+    `/staff/cashier/online-orders/${onlineOrderId}/arrived-at-destination`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
 export async function deliverCashierOnlineOrder(onlineOrderId) {
   const res = await staffApi.post(
     `/staff/cashier/online-orders/${onlineOrderId}/deliver`,
@@ -142,3 +152,4 @@ export async function deliverCashierOnlineOrder(onlineOrderId) {
 
   return res?.data;
 }
+

@@ -1259,6 +1259,7 @@ export default function PublicMenuEntryPage() {
           hasInvalidItems={hasInvalidItems}
           invalidItemsCount={invalidItemsCount}
           submitBlockReason={submitBlockReason}
+          themeColor={themeColor}
           billRequesting={billRequesting}
           billToast={billToast}
           canRequestBill={canRequestBill}

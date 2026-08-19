@@ -75,6 +75,38 @@ function timingOptions(fulfillment) {
   return options;
 }
 
+const WEEKDAY_LABELS = {
+  1: "Lunes",
+  2: "Martes",
+  3: "Miércoles",
+  4: "Jueves",
+  5: "Viernes",
+  6: "Sábado",
+  7: "Domingo",
+};
+
+function formatTime12(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return String(value || "");
+
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (hours < 0 || hours > 23) return String(value || "");
+
+  const suffix = hours < 12 ? "a. m." : "p. m.";
+  const displayHour = hours % 12 || 12;
+
+  return `${displayHour}:${minutes} ${suffix}`;
+}
+
+function formatTextList(items = []) {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} y ${items[1]}`;
+
+  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
 function selectedSummarySx(accentColor) {
   return {
     width: "100%",
@@ -146,6 +178,20 @@ export default function OnlineOrderFulfillmentSection({
     () => timingOptions(selectedFulfillment),
     [selectedFulfillment],
   );
+
+  const selectedPointDays = useMemo(() => {
+    const blocks = Array.isArray(selectedPoint?.time_blocks) ? selectedPoint.time_blocks : [];
+
+    const days = [...new Set(
+      blocks
+        .map((block) => Number(block?.day_of_week))
+        .filter((day) => WEEKDAY_LABELS[day])
+    )]
+      .sort((a, b) => a - b)
+      .map((day) => WEEKDAY_LABELS[day]);
+
+    return formatTextList(days);
+  }, [selectedPoint]);
 
   return (
     <Card
@@ -503,6 +549,12 @@ export default function OnlineOrderFulfillmentSection({
                         </Typography>
                       ) : null}
 
+                      {selectedPointDays ? (
+                        <Typography sx={{ fontSize: 12.5, lineHeight: 1.35 }}>
+                          Días disponibles: <strong>{selectedPointDays}</strong>
+                        </Typography>
+                      ) : null}
+
                       <Typography sx={{ fontSize: 12.5, lineHeight: 1.35 }}>
                         Costo de entrega:{" "}
                         <strong>{money(selectedPoint.delivery_fee || 0)}</strong>
@@ -577,7 +629,7 @@ export default function OnlineOrderFulfillmentSection({
                           value={String(block.id)}
                           sx={menuItemSx(accentColor)}
                         >
-                          {block.start_time} - {block.end_time}
+                          {formatTime12(block.start_time)} - {formatTime12(block.end_time)}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -588,7 +640,7 @@ export default function OnlineOrderFulfillmentSection({
               {selectedBlock ? (
                 <FieldBlock
                   label="Hora *"
-                  help={`Selecciona una hora dentro de ${selectedBlock.start_time} - ${selectedBlock.end_time}.`}
+                  help={`Selecciona una hora dentro de ${formatTime12(selectedBlock.start_time)} - ${formatTime12(selectedBlock.end_time)}.`}
                   input={
                     <TextField
                       size="small"

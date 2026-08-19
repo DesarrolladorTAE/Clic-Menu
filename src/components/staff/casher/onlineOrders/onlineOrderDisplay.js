@@ -8,7 +8,8 @@ export function onlineOrderStatusLabel(value) {
     confirmed_for_preparation: "Confirmado para preparación",
     preparing: "En preparación",
     ready: "Listo",
-    out_for_delivery: "En reparto",
+    out_for_delivery: "En camino",
+    arrived_at_destination: "Llegó al destino",
     delivered: "Entregado",
     completed: "Completado",
     rejected: "Rechazado",
@@ -24,7 +25,7 @@ export function onlineOrderStatusColor(value) {
   if (["completed", "delivered"].includes(status)) return "success";
   if (status === "ready") return "success";
   if (["rejected", "cancelled"].includes(status)) return "error";
-  if (["preparing", "confirmed_for_preparation", "out_for_delivery"].includes(status)) return "info";
+  if (["preparing", "confirmed_for_preparation", "out_for_delivery", "arrived_at_destination"].includes(status)) return "info";
   if (["pending_confirmation", "pending_acceptance", "accepted"].includes(status)) return "warning";
 
   return "default";

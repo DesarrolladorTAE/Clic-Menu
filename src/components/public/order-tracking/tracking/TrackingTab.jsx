@@ -22,6 +22,7 @@ const STATUS_ARTWORK = {
   preparing: `${TRACKING_IMAGE_BASE}/online-order-preparing.png`,
   ready: `${TRACKING_IMAGE_BASE}/online-order-ready.png`,
   out_for_delivery: `${TRACKING_IMAGE_BASE}/online-order-out-for-delivery.png`,
+  arrived_at_destination: `${TRACKING_IMAGE_BASE}/online-order-arrived-at-destination.png`,
 
   delivered: `${TRACKING_IMAGE_BASE}/online-order-completed.png`,
   completed: `${TRACKING_IMAGE_BASE}/online-order-completed.png`,
@@ -47,12 +48,16 @@ export default function TrackingTab({ data, themeColor }) {
   );
 
   const steps = useMemo(() => {
-    if (String(data?.fulfillment_type || "") === "home_delivery") {
+    const fulfillmentType = String(data?.fulfillment_type || "");
+    const usesDeliveryJourney = ["home_delivery", "internal_location", "scheduled_point"].includes(fulfillmentType);
+
+    if (usesDeliveryJourney) {
       return [
         { code: "received", label: "Recibido" },
         { code: "preparing", label: "Preparando" },
         { code: "ready", label: "Listo" },
         { code: "out_for_delivery", label: "En camino" },
+        { code: "arrived_at_destination", label: "Llegó" },
         { code: "delivered", label: "Entregado" },
       ];
     }

@@ -253,6 +253,7 @@ export default function MenuCartPanel({
   title = "Comanda",
   subtitle = "",
   customerName = "",
+  themeColor = "",
   total = 0,
   pricingSummary = null,
   oldItems = [],
@@ -405,6 +406,7 @@ export default function MenuCartPanel({
 
             <PillButton
               tone={hasInvalidCartItems ? "danger" : "orange"}
+              themeColor={hasInvalidCartItems ? undefined : themeColor}
               onClick={handleSubmit}
               disabled={submitDisabled}
               title={resolvedSubmitTitle}

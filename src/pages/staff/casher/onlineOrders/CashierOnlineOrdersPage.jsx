@@ -17,6 +17,7 @@ import {
   fetchCashierOnlineOrders,
   markCashierOnlineOrderNewNotificationRead,
   markCashierOnlineOrderOutForDelivery,
+  markCashierOnlineOrderArrivedAtDestination,
   markCashierOnlineOrderReady,
   rejectCashierOnlineOrder,
   releaseCashierOnlineOrder,
@@ -407,6 +408,10 @@ export default function CashierOnlineOrdersPage() {
 
         case "out_for_delivery":
           response = await markCashierOnlineOrderOutForDelivery(onlineOrderId);
+          break;
+
+        case "arrived_at_destination":
+          response = await markCashierOnlineOrderArrivedAtDestination(onlineOrderId);
           break;
 
         case "deliver":

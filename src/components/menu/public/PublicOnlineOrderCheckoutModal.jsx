@@ -303,37 +303,49 @@ export default function PublicOnlineOrderCheckoutModal({
     fieldValidity,
   ]);
 
+  const missingFields = useMemo(() => {
+    const fields = [];
+
+    if (!fieldValidity.orderName) fields.push("nombre para tu pedido");
+    if (!fieldValidity.customerPhone) fields.push("teléfono con WhatsApp");
+    if (!fieldValidity.customerEmail) fields.push("correo electrónico válido");
+    if (!fieldValidity.fulfillmentType) fields.push("forma de entrega");
+    if (!fieldValidity.timingType) fields.push("cuándo quieres recibir tu pedido");
+
+    if (!fieldValidity.deliveryConceptId) {
+      fields.push(fulfillmentType === "home_delivery" ? "zona o código postal" : "ubicación");
+    }
+
+    if (!fieldValidity.requestedForAt) fields.push("fecha y hora");
+    if (!fieldValidity.scheduledPointId) fields.push("punto programado");
+    if (!fieldValidity.scheduledDate) fields.push("fecha");
+    if (!fieldValidity.scheduledPointTimeBlockId) fields.push("horario");
+    if (!fieldValidity.scheduledTime) fields.push("hora");
+    if (!fieldValidity.paymentType) fields.push("método de pago");
+
+    return fields;
+  }, [fieldValidity, fulfillmentType]);
+
   const primaryActionEnabled = quote
     ? Boolean(quotedSelection) && !quoting && !creating
     : formReady && !quoting && !creating;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || fulfillmentType || fulfillments.length !== 1) return;
 
-    const initialFulfillment =
-      fulfillments.length === 1 ? String(fulfillments[0]?.fulfillment_type || "") : "";
-
+    const initialFulfillment = String(fulfillments[0]?.fulfillment_type || "");
     const initialFulfillmentRow =
       fulfillments.find((row) => row?.fulfillment_type === initialFulfillment) || null;
 
-    setOrderName("");
-    setCustomerPhone("");
-    setCustomerEmail("");
-    setCustomerNotes("");
     setFulfillmentType(initialFulfillment);
     setTimingType(defaultTimingForFulfillment(initialFulfillmentRow));
-    setRequestedForAt("");
-    setDeliveryConceptId("");
-    setScheduledPointId("");
-    setScheduledDate("");
-    setScheduledPointTimeBlockId("");
-    setScheduledTime("");
-    setPaymentType(paymentMethods.length === 1 ? String(paymentMethods[0]?.payment_type || "") : "");
-    setQuote(null);
-    setQuotedSelection(null);
-    setErrorMessage("");
-    setCartPage(1);
-  }, [open, fulfillments, paymentMethods]);
+  }, [open, fulfillments, fulfillmentType]);
+
+  useEffect(() => {
+    if (!open || paymentType || paymentMethods.length !== 1) return;
+
+    setPaymentType(String(paymentMethods[0]?.payment_type || ""));
+  }, [open, paymentMethods, paymentType]);
 
   useEffect(() => {
     if (cartPage > cartPageCount) setCartPage(cartPageCount);
@@ -989,6 +1001,27 @@ export default function PublicOnlineOrderCheckoutModal({
             </CardContent>
           </Card>
 
+            {!quote &&
+              fulfillments.length > 0 &&
+              paymentMethods.length > 0 &&
+              missingFields.length > 0 ? (
+                <Box
+                  sx={{
+                    px: 1.25,
+                    py: 1,
+                    borderLeft: `3px solid ${accentColor}`,
+                    backgroundColor: hexToRgba(accentColor, 0.045),
+                  }}
+                >
+                  <Typography sx={{ fontSize: 12.5, color: "text.secondary", lineHeight: 1.5 }}>
+                    <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
+                      Falta capturar:
+                    </Box>{" "}
+                    {formatMissingFields(missingFields)}.
+                  </Typography>
+                </Box>
+            ) : null}
+
           {quote ? (
             <Card
               variant="outlined"
@@ -1095,4 +1128,12 @@ function FieldBlock({ label, input, help }) {
       ) : null}
     </Box>
   );
+}
+
+function formatMissingFields(fields = []) {
+  if (fields.length === 0) return "";
+  if (fields.length === 1) return fields[0];
+  if (fields.length === 2) return `${fields[0]} y ${fields[1]}`;
+
+  return `${fields.slice(0, -1).join(", ")} y ${fields[fields.length - 1]}`;
 }

@@ -11,6 +11,7 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
+import WhereToVoteRoundedIcon from "@mui/icons-material/WhereToVoteRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
@@ -38,6 +39,7 @@ const CARD_ACTIONS = [
   "start_preparation",
   "mark_ready",
   "out_for_delivery",
+  "arrived_at_destination",
   "deliver",
 ];
 
@@ -310,9 +312,11 @@ export default function CashierOnlineOrderCard({
                   gridTemplateColumns: actions.length > 1 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
                 }}
               >
-                {actions.map((action) => {
+                {actions.map((action, index) => {
                   const config = actionConfig(action);
                   if (!config) return null;
+
+                  const spansFullRow = actions.length > 1 && actions.length % 2 === 1 && index === actions.length - 1;
 
                   return (
                     <Button
@@ -322,14 +326,11 @@ export default function CashierOnlineOrderCard({
                       color={config.color}
                       disabled={actionsDisabled}
                       onClick={() => onAction?.(action, order)}
-                      startIcon={
-                        busyAction === action
-                          ? <CircularProgress size={17} color="inherit" />
-                          : config.icon
-                      }
+                      startIcon={busyAction === action ? <CircularProgress size={17} color="inherit" /> : config.icon}
                       sx={{
                         minWidth: 0,
                         minHeight: 44,
+                        gridColumn: spansFullRow ? "1 / -1" : "auto",
                         px: { xs: 1, sm: 2 },
                         fontSize: { xs: 12.5, sm: 14 },
                         fontWeight: 800,
@@ -438,11 +439,18 @@ function actionConfig(action) {
       icon: <TaskAltRoundedIcon />,
     },
     out_for_delivery: {
-      label: "Marcar en reparto",
+      label: "Marcar en camino",
       loadingLabel: "Actualizando…",
       color: "secondary",
       variant: "contained",
       icon: <LocalShippingRoundedIcon />,
+    },
+    arrived_at_destination: {
+      label: "Llegó al destino",
+      loadingLabel: "Actualizando…",
+      color: "secondary",
+      variant: "contained",
+      icon: <WhereToVoteRoundedIcon />,
     },
     prepare_payment: {
       label: "Registrar cobro",
