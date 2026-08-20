@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton,
-  Paper, Stack, Switch, Typography, useMediaQuery,
+  Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle,
+  IconButton, Paper, Stack, Switch, Typography, useMediaQuery,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
@@ -226,16 +226,22 @@ export default function ActivationControlCard({
           sx={{
             px: { xs: 2, sm: 3 },
             py: 2,
-            bgcolor: "primary.main",
+            bgcolor: "#111111",
             color: "#fff",
           }}
         >
-          <Stack direction="row" justifyContent="space-between" spacing={2}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={2}
+          >
             <Box>
               <Typography
                 sx={{
-                  fontSize: { xs: 20, sm: 22 },
                   fontWeight: 800,
+                  fontSize: { xs: 20, sm: 24 },
+                  lineHeight: 1.2,
                   color: "#fff",
                 }}
               >
@@ -248,7 +254,7 @@ export default function ActivationControlCard({
                 sx={{
                   mt: 0.5,
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.86)",
+                  color: "rgba(255,255,255,0.82)",
                 }}
               >
                 {branchName || "Sucursal seleccionada"}
@@ -258,7 +264,14 @@ export default function ActivationControlCard({
             <IconButton
               onClick={closeConfirm}
               disabled={saving}
-              sx={{ color: "#fff" }}
+              sx={{
+                color: "#fff",
+                bgcolor: "rgba(255,255,255,0.08)",
+                borderRadius: 1,
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.16)",
+                },
+              }}
             >
               <CloseIcon />
             </IconButton>
@@ -271,68 +284,70 @@ export default function ActivationControlCard({
             bgcolor: "background.default",
           }}
         >
-          <Paper
+          <Card
             sx={{
-              p: { xs: 2, sm: 2.5 },
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "none",
+              borderRadius: 0,
               backgroundColor: "background.paper",
             }}
           >
-            <Stack spacing={2.5}>
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  color: "text.primary",
-                  lineHeight: 1.65,
-                }}
-              >
-                {nextValue
-                  ? "La sucursal comenzará a operar Pedidos en línea con la configuración que preparaste."
-                  : "La configuración se conservará, pero la sucursal dejará de recibir nuevos Pedidos en línea. Los QR activos correspondientes a este servicio también se desactivarán."}
-              </Typography>
-
-              <Stack
-                direction={{ xs: "column-reverse", sm: "row" }}
-                justifyContent="flex-end"
-                spacing={1.5}
-              >
-                <Button
-                  type="button"
-                  variant="outlined"
-                  onClick={closeConfirm}
-                  disabled={saving}
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Stack spacing={2.5}>
+                <Typography
                   sx={{
-                    minWidth: { xs: "100%", sm: 140 },
-                    height: 44,
+                    fontSize: 14,
+                    color: "text.primary",
+                    lineHeight: 1.65,
                   }}
                 >
-                  Cancelar
-                </Button>
+                  {nextValue
+                    ? "La sucursal comenzará a operar Pedidos en línea con la configuración que preparaste."
+                    : "La configuración se conservará, pero la sucursal dejará de recibir nuevos Pedidos en línea. Los QR activos correspondientes a este servicio también se desactivarán."}
+                </Typography>
 
-                <Button
-                  type="button"
-                  variant="contained"
-                  onClick={confirm}
-                  disabled={saving}
-                  sx={{
-                    minWidth: { xs: "100%", sm: 180 },
-                    height: 44,
-                    fontWeight: 800,
-                  }}
+                <Stack
+                  direction={{ xs: "column-reverse", sm: "row" }}
+                  justifyContent="flex-end"
+                  spacing={1.5}
+                  pt={1}
                 >
-                  {saving
-                    ? "Guardando…"
-                    : nextValue
-                      ? "Sí, activar"
-                      : "Sí, desactivar"}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    onClick={closeConfirm}
+                    disabled={saving}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 140 },
+                      height: 44,
+                      borderRadius: 2,
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="contained"
+                    onClick={confirm}
+                    disabled={saving}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 180 },
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {saving
+                      ? "Guardando…"
+                      : nextValue
+                        ? "Sí, activar"
+                        : "Sí, desactivar"}
+                  </Button>
+                </Stack>
               </Stack>
-            </Stack>
-          </Paper>
+            </CardContent>
+          </Card>
         </DialogContent>
+
       </Dialog>
     </>
   );

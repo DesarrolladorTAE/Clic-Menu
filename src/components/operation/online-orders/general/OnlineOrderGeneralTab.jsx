@@ -8,6 +8,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
 import PhoneAndroidRoundedIcon from "@mui/icons-material/PhoneAndroidRounded";
+import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
@@ -23,6 +24,7 @@ const KITCHEN_MODE_WITHOUT_KITCHEN = "without_kitchen";
 const EMPTY_VALUES = {
   kitchen_mode: "",
   max_active_orders_per_phone: "",
+  new_order_notification_phone: "",
 };
 
 function mapSettingToForm(setting) {
@@ -33,6 +35,7 @@ function mapSettingToForm(setting) {
       setting?.max_active_orders_per_phone === undefined
         ? ""
         : String(setting.max_active_orders_per_phone),
+    new_order_notification_phone: setting?.new_order_notification_phone ?? "",
   };
 }
 
@@ -71,6 +74,7 @@ export default function OnlineOrderGeneralTab({
 
   const kitchenMode = watch("kitchen_mode");
   const phoneLimit = watch("max_active_orders_per_phone");
+  const notificationPhone = watch("new_order_notification_phone");
   const currentActive = isSettingActive(setting?.is_active);
 
   const contextItems = useMemo(
@@ -107,8 +111,15 @@ export default function OnlineOrderGeneralTab({
         chipColor: phoneLimit ? "primary" : "default",
         icon: <PhoneAndroidRoundedIcon fontSize="small" />,
       },
+      {
+        title: "Avisos de nuevos pedidos",
+        value: notificationPhone || "Sin número configurado",
+        chipLabel: notificationPhone ? "Configurado" : "Opcional",
+        chipColor: notificationPhone ? "primary" : "default",
+        icon: <NotificationsActiveRoundedIcon fontSize="small" />,
+      },
     ],
-    [branchId, branchName, currentActive, kitchenMode, phoneLimit]
+    [branchId, branchName, currentActive, kitchenMode, phoneLimit, notificationPhone]
   );
 
   useEffect(() => {
@@ -177,11 +188,12 @@ export default function OnlineOrderGeneralTab({
     clearErrors();
 
     const phoneLimitValue = String(values.max_active_orders_per_phone || "").trim();
+    const notificationPhoneValue = String(values.new_order_notification_phone || "").trim();
 
     const payload = {
       kitchen_mode: values.kitchen_mode || null,
-      max_active_orders_per_phone:
-        phoneLimitValue === "" ? null : Number(phoneLimitValue),
+      max_active_orders_per_phone: phoneLimitValue === "" ? null : Number(phoneLimitValue),
+      new_order_notification_phone: notificationPhoneValue === "" ? null : notificationPhoneValue,
     };
 
     try {
@@ -206,6 +218,10 @@ export default function OnlineOrderGeneralTab({
       const phoneLimitError = Array.isArray(errors?.max_active_orders_per_phone)
         ? errors.max_active_orders_per_phone[0]
         : null;
+      
+      const notificationPhoneError = Array.isArray(errors?.new_order_notification_phone)
+        ? errors.new_order_notification_phone[0]
+        : null;
 
       if (kitchenError) {
         setError("kitchen_mode", {
@@ -218,6 +234,13 @@ export default function OnlineOrderGeneralTab({
         setError("max_active_orders_per_phone", {
           type: "server",
           message: phoneLimitError,
+        });
+      }
+
+      if (notificationPhoneError) {
+        setError("new_order_notification_phone", {
+          type: "server",
+          message: notificationPhoneError,
         });
       }
 
@@ -349,7 +372,6 @@ export default function OnlineOrderGeneralTab({
 
             <Stack spacing={2.5}>
               <SectionTitle title="Funcionamiento de los pedidos" />
-
               <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                 <FieldBlock
                   label="Modo de preparación"
@@ -420,8 +442,45 @@ export default function OnlineOrderGeneralTab({
                 />
               </Stack>
 
-              <SectionTitle title="Activación" />
+              <SectionTitle title="Avisos de nuevos pedidos" />
+              <FieldBlock
+                label="Número para recibir avisos"
+                help="Este número recibirá un mensaje de WhatsApp cuando llegue un nuevo pedido a esta sucursal. Si lo dejas vacío, no se enviarán estos avisos."
+                input={
+                  <Controller
+                    name="new_order_notification_phone"
+                    control={control}
+                    rules={{
+                      validate: (value) => {
+                        const normalized = String(value || "").trim();
+                        if (normalized === "") return true;
+                        if (!/^[0-9]{10}$/.test(normalized)) return "El número debe contener exactamente 10 dígitos.";
+                        return true;
+                      },
+                    }}
+                    render={({ field, fieldState }) => (
+                      <TextField
+                        type="text"
+                        value={field.value ?? ""}
+                        onChange={(event) => {
+                          const onlyNumbers = event.target.value.replace(/\D/g, "").slice(0, 10);
+                          field.onChange(onlyNumbers);
+                        }}
+                        placeholder="Ej. 7441234567"
+                        error={!!fieldState.error}
+                        helperText={fieldState.error?.message || ""}
+                        inputProps={{
+                          inputMode: "numeric",
+                          pattern: "[0-9]*",
+                          maxLength: 10,
+                        }}
+                      />
+                    )}
+                  />
+                }
+              />
 
+              <SectionTitle title="Activación" />
               <Box
                 sx={{
                   p: 1.75,
