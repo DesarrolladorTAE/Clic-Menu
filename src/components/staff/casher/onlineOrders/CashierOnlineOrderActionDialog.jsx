@@ -34,7 +34,7 @@ export default function CashierOnlineOrderActionDialog({
       open={open}
       title={config.title}
       description={config.description}
-      icon={config.icon}
+      icon={["reject", "cancel"].includes(action) ? null : config.icon}
       busy={submitting}
       maxWidth="sm"
       onClose={onClose}
