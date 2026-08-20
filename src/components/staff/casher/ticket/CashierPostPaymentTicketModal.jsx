@@ -23,6 +23,7 @@ export default function CashierPostPaymentTicketModal({
   busyDownload = false,
   busyWhatsapp = false,
   onSendWhatsapp,
+  showWhatsapp = true,
   printConfig = null,
   customerSummary = null,
   ticket = null,
@@ -180,12 +181,14 @@ export default function CashierPostPaymentTicketModal({
               ticketErrorMessage={ticketErrorMessage}
             />
 
-            <CashierTicketWhatsappCard
-              ticketAvailable={ticketAvailable}
-              customerSummary={customerSummary}
-              onSendWhatsapp={onSendWhatsapp}
-              busy={busyWhatsapp}
-            />
+            {showWhatsapp ? (
+              <CashierTicketWhatsappCard
+                ticketAvailable={ticketAvailable}
+                customerSummary={customerSummary}
+                onSendWhatsapp={onSendWhatsapp}
+                busy={busyWhatsapp}
+              />
+            ) : null}
 
             {thermalPrintEnabled ? (
               <Box

@@ -1952,6 +1952,7 @@ export default function CashierOnlineOrderPaymentPage() {
         onThermalPrintTicket={handleThermalPrintTicket}
         onDownloadTicket={handleDownloadTicket}
         onSendWhatsapp={handleSendTicketWhatsapp}
+        showWhatsapp={false}
         busyView={ticketBusy.view}
         busyPrint={ticketBusy.print}
         busyThermalPrint={ticketBusy.thermalPrint}
