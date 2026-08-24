@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
 
     // Carpeta final que subirás a cPanel (estándar: dist)
     build: {
+      target: "chrome80",
       outDir: "dist",
       emptyOutDir: true,
     },
