@@ -132,6 +132,7 @@ import ProfitReportPage from "../pages/reports/profit/ProfitReportPage";
 
 //Conexiones
 import TaecontaAccountPage from "../pages/connection/tae/TaecontaAccountPage";
+import NetpayConnectionPage from "../pages/connection/netpay/NetpayConnectionPage";
 
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
@@ -286,6 +287,7 @@ export default function AppRoutes() {
           <Route path="reports/profit" element={<ProfitReportPage />} />
           
           <Route path="connections/taeconta" element={<TaecontaAccountPage />} />
+          <Route path="connections/netpay" element={<NetpayConnectionPage />} />
         </Route>
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />

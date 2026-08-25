@@ -18,6 +18,15 @@ import {
   closeCashierSession,
 } from "../../../services/staff/casher/cashierSession.service";
 
+import {
+  getNetpayCapabilities,
+  isNetpayBridgeAvailable,
+} from "../../../services/native/netpayBridge.service";
+
+import {
+  syncCashierNetpayTerminal,
+} from "../../../services/staff/casher/netpayTerminal.service";
+
 import CashierSessionHeroCard from "../../../components/staff/casher/homePage/CashierSessionHeroCard";
 import CashRegisterCard from "../../../components/staff/casher/homePage/CashRegisterCard";
 import OpenCashSessionModal from "../../../components/staff/casher/homePage/OpenCashSessionModal";
@@ -88,6 +97,34 @@ export default function CashierHomePage() {
     return status === 409 && (message.includes("no hay un turno activo") || message.includes("selecciona sucursal"));
   };
 
+  const syncNetpayTerminal = async () => {
+    if (!isNetpayBridgeAvailable()) return null;
+
+    try {
+      const capabilities = getNetpayCapabilities();
+      if (!capabilities) return null;
+
+      return await syncCashierNetpayTerminal(capabilities);
+    } catch (e) {
+      const validationErrors = e?.response?.data?.errors;
+      const firstValidationMessage = validationErrors && typeof validationErrors === "object"
+        ? Object.values(validationErrors).flat().find(Boolean)
+        : null;
+
+      showAlert({
+        severity: "warning",
+        title: "NetPay",
+        message:
+          firstValidationMessage ||
+          e?.response?.data?.message ||
+          e?.message ||
+          "No se pudo sincronizar la terminal NetPay.",
+      });
+
+      return null;
+    }
+  };
+
   const load = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
@@ -133,15 +170,24 @@ export default function CashierHomePage() {
   };
 
   useEffect(() => {
-    load();
+    let cancelled = false;
 
-    pollRef.current = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        load({ silent: true });
-      }
-    }, 10000);
+    const boot = async () => {
+      await syncNetpayTerminal();
+      if (cancelled) return;
+
+      await load();
+      if (cancelled) return;
+
+      pollRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") load({ silent: true });
+      }, 10000);
+    };
+
+    boot();
 
     return () => {
+      cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

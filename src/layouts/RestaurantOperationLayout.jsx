@@ -90,11 +90,11 @@ export default function RestaurantOperationLayout() {
       return "customer-loyalty-settings";
     }
 
-    if (pathname.includes("/connections/taeconta")) {
-      return "taeconta";
-    }
+    if (pathname.includes("/connections/taeconta")) return "taeconta";
+    if (pathname.includes("/connections/netpay")) return "netpay";
 
     return "staff";
+
   }, [pathname]);
 
   const restrictedRouteByKey = useMemo(
@@ -286,7 +286,13 @@ export default function RestaurantOperationLayout() {
         nav(`${base}/connections/taeconta`, {
           state: { restaurantName },
         });
-        break;  
+        break;
+
+      case "netpay":
+        nav(`${base}/connections/netpay`, {
+          state: { restaurantName },
+        });
+        break;
 
       default:
         nav(`${base}/staff`, { state: { restaurantName } });

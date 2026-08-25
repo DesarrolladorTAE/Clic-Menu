@@ -36,6 +36,7 @@ import LocalDiningRoundedIcon from "@mui/icons-material/LocalDiningRounded";
 import SettingsSuggestRoundedIcon from "@mui/icons-material/SettingsSuggestRounded";
 import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 import WebAssetOutlinedIcon from "@mui/icons-material/WebAssetOutlined";
+import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED = 78;
@@ -199,6 +200,12 @@ export default function RestaurantOperationSidebar({
             key: "taeconta",
             label: "Taeconta",
             icon: <WebAssetOutlinedIcon />,
+          },
+          {
+            key: "netpay",
+            label: "NetPay",
+            icon: <CreditCardRoundedIcon />,
+            disabled: true,
           },
         ],
       },
