@@ -38,6 +38,11 @@ import {
   markCashierOnlineOrderNewNotificationRead,
 } from "../../../services/staff/casher/onlineOrders/cashierOnlineOrders.service";
 
+import {
+  getCashierPendingNetpayOperation,
+  resumeCashierPendingNetpayOperation,
+} from "../../../services/staff/casher/cashierNetpayPayment.service";
+
 import echo from "../../../realtime/echo";
 
 import CashierQueueHeroCard from "../../../components/staff/casher/queuePage/CashierQueueHeroCard";
@@ -98,6 +103,7 @@ export default function CashierQueuePage() {
   const [onlineOrderNotifications, setOnlineOrderNotifications] = useState([]);
   const [onlineOrderBusyId, setOnlineOrderBusyId] = useState(null);
   const [readyDrawerOpen, setReadyDrawerOpen] = useState(false);
+  const [netpayResumeBusy, setNetpayResumeBusy] = useState(false);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -109,6 +115,7 @@ export default function CashierQueuePage() {
   const pollRef = useRef(null);
   const wsRefreshFastRef = useRef(null);
   const wsRefreshSlowRef = useRef(null);
+  const netpayResumeRef = useRef(null);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -344,6 +351,113 @@ export default function CashierQueuePage() {
     () => (Array.isArray(queueData?.my_sales) ? queueData.my_sales : []),
     [queueData]
   );
+
+  useEffect(() => {
+    if (mySales.length === 0) return;
+
+    let pending;
+
+    try {
+      pending = getCashierPendingNetpayOperation();
+    } catch {
+      return;
+    }
+
+    const operation = pending?.operation;
+
+    if (!pending?.hasPendingOperation || !operation?.normalizedResult) return;
+
+    const pendingSaleId = Number(operation.saleId || 0);
+    const transactionId = Number(operation.netpayTransactionId || 0);
+    const localState = String(operation.localState || "").toLowerCase();
+    const operationType = String(operation.operationType || "").toLowerCase();
+    const resultType = String(operation.normalizedResult?.operation || "").toLowerCase();
+    const eventUuid = String(
+      operation.normalizedResult?.event_uuid ||
+      operation.normalizedResult?.eventUuid ||
+      ""
+    ).trim();
+
+    if (
+      !pendingSaleId ||
+      !transactionId ||
+      !eventUuid ||
+      localState !== "result_pending_backend" ||
+      operationType !== "recovery" ||
+      resultType !== "recovery_result"
+    ) {
+      return;
+    }
+
+    const belongsToMySales = mySales.some((row) => {
+      if (Number(row?.sale_id || 0) === pendingSaleId) return true;
+
+      return Array.isArray(row?.checks) &&
+        row.checks.some((check) => Number(check?.sale_id || 0) === pendingSaleId);
+    });
+
+    if (!belongsToMySales) return;
+
+    const resumeKey = `${transactionId}:${eventUuid}`;
+    if (netpayResumeRef.current === resumeKey) return;
+
+    netpayResumeRef.current = resumeKey;
+
+    const resumePendingResult = async () => {
+      try {
+        setNetpayResumeBusy(true);
+
+        const result = await resumeCashierPendingNetpayOperation({
+          saleId: pendingSaleId,
+        });
+
+        await load({ silent: true });
+
+        const outcome = String(result?.outcome || "").toLowerCase();
+
+        if (outcome === "no_record") {
+          showAlert({
+            severity: "info",
+            title: "NetPay",
+            message:
+              result?.backendResponse?.message ||
+              result?.normalizedResult?.message ||
+              "NetPay no encontró registro bancario para la operación pendiente.",
+          });
+        } else if (
+          [
+            "pending_recovery",
+            "pending_reversal",
+            "approved_local_error",
+            "recovery_pending_local",
+            "operation_pending_local",
+          ].includes(outcome)
+        ) {
+          showAlert({
+            severity: "warning",
+            title: "NetPay pendiente",
+            message:
+              result?.backendResponse?.message ||
+              "La operación NetPay continúa pendiente y no se modificará la cuenta.",
+          });
+        }
+      } catch (error) {
+        showAlert({
+          severity: "warning",
+          title: "NetPay pendiente",
+          message: pickErr(
+            error,
+            "No se pudo procesar el resultado NetPay pendiente. La operación permanecerá protegida."
+          ),
+        });
+      } finally {
+        setNetpayResumeBusy(false);
+      }
+    };
+
+    resumePendingResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mySales]);
 
   const myTotal = useMemo(
     () =>
@@ -1122,7 +1236,8 @@ export default function CashierQueuePage() {
   const actionsDisabled =
     releaseSubmitting ||
     mergeSubmitting ||
-    authorizationSubmitting;
+    authorizationSubmitting ||
+    netpayResumeBusy;
 
   const authorizationContent = authorizationDialogContent(
     pendingAuthorization?.type

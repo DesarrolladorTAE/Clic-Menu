@@ -84,7 +84,27 @@ export default function CashierOrderItemsCard({
           </Box>
 
           {hasItems ? (
-            <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Stack
+              direction="row"
+              flexWrap="wrap"
+              useFlexGap
+              sx={{
+                columnGap: { xs: 1, sm: 1.25 },
+                rowGap: { xs: 1.25, sm: 1 },
+                alignItems: "center",
+                "& .MuiChip-root": {
+                  maxWidth: "100%",
+                  height: "auto",
+                  minHeight: 24,
+                },
+                "& .MuiChip-label": {
+                  display: "block",
+                  whiteSpace: "normal",
+                  lineHeight: 1.3,
+                  py: 0.35,
+                },
+              }}
+            >
               <Chip
                 label={`${itemsSummary.items_count} ítems`}
                 size="small"
@@ -253,9 +273,13 @@ function OrderItemBlock({ item, level = 0 }) {
           <Box sx={{ minWidth: 0 }}>
             <Stack
               direction="row"
-              spacing={1}
               alignItems="center"
               flexWrap="wrap"
+              useFlexGap
+              sx={{
+                columnGap: 1,
+                rowGap: 0.75,
+              }}
             >
               <Typography
                 sx={{
@@ -264,6 +288,7 @@ function OrderItemBlock({ item, level = 0 }) {
                   color: "text.primary",
                   lineHeight: 1.3,
                   wordBreak: "break-word",
+                  minWidth: 0,
                 }}
               >
                 {formatQuantity(quantity)} × {itemName}
@@ -277,6 +302,7 @@ function OrderItemBlock({ item, level = 0 }) {
                     height: 24,
                     fontSize: 12,
                     fontWeight: 800,
+                    flexShrink: 0,
                     bgcolor:
                       level > 0
                         ? "rgba(255,152,0,0.10)"

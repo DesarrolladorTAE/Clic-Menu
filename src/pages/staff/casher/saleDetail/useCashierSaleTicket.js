@@ -1,0 +1,238 @@
+// src/pages/staff/casher/saleDetail/useCashierSaleTicket.js
+
+import {
+  fetchCashierTicketById,
+  openCashierTicketHtmlInNewTab,
+  printCashierTicketFromHtml,
+  saveCashierTicketPdf,
+  openCashierTicketWindow,
+  sendCashierSaleTicketWhatsapp,
+  fetchCashierSaleTicketPrintConfig,
+  fetchCashierSaleTicketPrintPayload,
+  sendCashierThermalPrintPayload,
+} from "../../../../services/staff/casher/cashierTicket.service";
+
+export default function useCashierSaleTicket({
+  selectedSaleId,
+  postPaymentSale,
+  postPaymentTicket,
+  setPostPaymentTicket,
+  setPostPaymentPrintConfig,
+  ticketBusy,
+  setTicketBusy,
+  showAlert,
+  pickErr,
+}) {
+  const setTicketBusyKey = (key, value) => {
+    setTicketBusy((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const loadPostPaymentPrintConfig = async (targetSaleId) => {
+    if (!targetSaleId) {
+      setPostPaymentPrintConfig(null);
+      return null;
+    }
+
+    try {
+      const res = await fetchCashierSaleTicketPrintConfig(targetSaleId);
+      const config = res?.data || null;
+      setPostPaymentPrintConfig(config);
+      return config;
+    } catch {
+      setPostPaymentPrintConfig(null);
+      return null;
+    }
+  };
+
+  const ensureLatestTicket = async () => {
+    const currentTicketId = Number(postPaymentTicket?.id || 0);
+
+    if (!currentTicketId) {
+      throw new Error("No hay ticket disponible para consultar.");
+    }
+
+    const res = await fetchCashierTicketById(currentTicketId);
+    return res?.data || postPaymentTicket;
+  };
+
+  const handleViewTicket = async () => {
+    const ticketWindow = openCashierTicketWindow("Cargando ticket…");
+
+    if (!ticketWindow) {
+      showAlert({
+        severity: "error",
+        message: "El navegador bloqueó la apertura de la vista del ticket.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("view", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await openCashierTicketHtmlInNewTab(latestTicket.id, ticketWindow);
+    } catch (e) {
+      try {
+        if (!ticketWindow.closed) ticketWindow.close();
+      } catch (error) {
+        console.error(error);
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo abrir la vista del ticket."),
+      });
+    } finally {
+      setTicketBusyKey("view", false);
+    }
+  };
+
+  const handlePrintTicket = async () => {
+    const printWindow = openCashierTicketWindow("Preparando impresión…");
+
+    if (!printWindow) {
+      showAlert({
+        severity: "error",
+        message: "El navegador bloqueó la ventana de impresión.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("print", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await printCashierTicketFromHtml(latestTicket.id, printWindow);
+    } catch (e) {
+      try {
+        if (!printWindow.closed) printWindow.close();
+      } catch (error) {
+        console.error(error);
+      }
+
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo imprimir el ticket."),
+      });
+    } finally {
+      setTicketBusyKey("print", false);
+    }
+  };
+
+  const handleThermalPrintTicket = async () => {
+    const currentSaleId = Number(
+      postPaymentSale?.sale_id ||
+      postPaymentSale?.id ||
+      selectedSaleId ||
+      0
+    );
+
+    if (!currentSaleId) {
+      showAlert({
+        severity: "warning",
+        message: "No hay una cuenta válida para imprimir.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("thermalPrint", true);
+
+      const configRes = await fetchCashierSaleTicketPrintConfig(currentSaleId);
+      const config = configRes?.data || null;
+
+      if (!config?.enabled || !config?.show_print_button) {
+        showAlert({
+          severity: "warning",
+          message:
+            config?.message ||
+            "La impresión térmica no está habilitada para esta sucursal.",
+        });
+        return;
+      }
+
+      setPostPaymentPrintConfig(config);
+
+      const payloadRes = await fetchCashierSaleTicketPrintPayload(currentSaleId);
+      const payload = payloadRes?.payload || null;
+
+      if (!payload) {
+        throw new Error("No se recibió el payload de impresión térmica.");
+      }
+
+      await sendCashierThermalPrintPayload(payload, config);
+
+      showAlert({
+        severity: "success",
+        message: "Ticket enviado a impresión térmica correctamente.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(
+          e,
+          "No se pudo enviar el ticket a la aplicación de impresión térmica."
+        ),
+      });
+    } finally {
+      setTicketBusyKey("thermalPrint", false);
+    }
+  };
+
+  const handleDownloadTicket = async () => {
+    try {
+      setTicketBusyKey("download", true);
+      const latestTicket = await ensureLatestTicket();
+      setPostPaymentTicket(latestTicket);
+      await saveCashierTicketPdf(latestTicket.id);
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo descargar el PDF del ticket."),
+      });
+    } finally {
+      setTicketBusyKey("download", false);
+    }
+  };
+
+  const handleSendTicketWhatsapp = async ({ phone, body, saveContact }) => {
+    const targetSaleId = Number(
+      postPaymentSale?.sale_id ||
+      postPaymentSale?.id ||
+      selectedSaleId ||
+      0
+    );
+
+    try {
+      setTicketBusyKey("whatsapp", true);
+
+      await sendCashierSaleTicketWhatsapp(targetSaleId, {
+        phone,
+        body,
+        save_contact: saveContact,
+      });
+
+      showAlert({
+        severity: "success",
+        message: "Ticket enviado correctamente por WhatsApp.",
+      });
+    } catch (e) {
+      showAlert({
+        severity: "error",
+        message: pickErr(e, "No se pudo enviar el ticket por WhatsApp."),
+      });
+    } finally {
+      setTicketBusyKey("whatsapp", false);
+    }
+  };
+
+  return {
+    ticketBusy,
+    loadPostPaymentPrintConfig,
+    handleViewTicket,
+    handlePrintTicket,
+    handleThermalPrintTicket,
+    handleDownloadTicket,
+    handleSendTicketWhatsapp,
+  };
+}

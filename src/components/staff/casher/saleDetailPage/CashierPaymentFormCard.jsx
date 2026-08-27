@@ -1,5 +1,6 @@
 // src/components/staff/casher/saleDetailPage/CashierPaymentFormCard.jsx
-//Tarjetita pagos
+// Tarjetita pagos
+
 import React from "react";
 import {
   Box, Button, Card, CardContent, IconButton, MenuItem, Stack, TextField, Typography,
@@ -14,6 +15,7 @@ export default function CashierPaymentFormCard({
   methods = [],
   initialAmount = null,
   preview = null,
+  previewMode = null,
   tip,
   onTipChange,
   payments = [],
@@ -32,40 +34,111 @@ export default function CashierPaymentFormCard({
   paymentMethodLocked = false,
   description = null,
   helperText = null,
+
+  netpayAvailable = false,
+  netpayMode = false,
+  onNetpayModeChange,
+  netpayBusy = false,
+  netpayStatus = "",
+  netpayStatusLabel = "",
+  netpayTerminal = null,
+  netpayRecoveryRequired = false,
+  onRetryNetpayRecovery,
+
+  paymentAmountLocked = false,
+  bankFieldsLocked = false,
+
+  // Alias utilizado actualmente por CashierOnlineOrderPaymentPage.
+  amountLocked = false,
+  hideManualCardFields = false,
 }) {
   const normalizedMaxPayments = Math.max(1, Math.trunc(Number(maxPayments) || 3));
-  const hasMaxPayments = payments.length >= normalizedMaxPayments;
+  const validatedPreview = preview?.preview ?? preview ?? null;
+
+  const detectedPreviewMode =
+    previewMode ||
+    validatedPreview?.preview_type ||
+    null;
+
+  const isNetpay =
+    Boolean(netpayMode) ||
+    detectedPreviewMode === "netpay";
+
+  const visibleMethods = isNetpay
+    ? methods.filter((method) =>
+        ["credit_card", "debit_card"].includes(
+          String(method?.code || "").toLowerCase()
+        )
+      )
+    : methods;
+
+  const operationLocked =
+    Boolean(netpayBusy) ||
+    Boolean(netpayRecoveryRequired);
+
+  const financialInteractionLocked =
+    disabled ||
+    previewing ||
+    paying ||
+    operationLocked;
+
+  const isAmountLocked =
+    isNetpay ||
+    paymentAmountLocked ||
+    amountLocked;
+
+  const hideBankFields =
+    isNetpay ||
+    bankFieldsLocked ||
+    hideManualCardFields;
+
+  const canShowAddPayment =
+    showAddPayment &&
+    !isNetpay;
+
+  const canShowRemovePayment =
+    showRemovePayment &&
+    !isNetpay;
+
+  const hasMaxPayments =
+    payments.length >= normalizedMaxPayments;
 
   const hasRawInitialAmount =
     initialAmount !== null &&
     initialAmount !== undefined &&
     initialAmount !== "";
 
-  const normalizedInitialAmount = hasRawInitialAmount
-    ? Number(initialAmount)
-    : Number.NaN;
-
-  const hasInitialAmount =
-    Number.isFinite(normalizedInitialAmount) &&
-    normalizedInitialAmount > 0;
-
-  const validatedPreview =
-    preview?.preview ??
-    preview ??
-    null;
+  const normalizedInitialAmount =
+    hasRawInitialAmount
+      ? Number(initialAmount)
+      : Number.NaN;
 
   const validatedFinalTotal = Number(
     validatedPreview?.final_total
   );
 
+  const validatedNetpayTotal = Number(
+    validatedPreview?.expected_total
+  );
+
   const hasValidatedFinalTotal =
     Boolean(hasPreview) &&
+    !isNetpay &&
     Number.isFinite(validatedFinalTotal) &&
     validatedFinalTotal > 0;
 
-  const displayedAmount = hasValidatedFinalTotal
-    ? validatedFinalTotal
-    : normalizedInitialAmount;
+  const hasValidatedNetpayTotal =
+    Boolean(hasPreview) &&
+    isNetpay &&
+    Number.isFinite(validatedNetpayTotal) &&
+    validatedNetpayTotal > 0;
+
+  const displayedAmount =
+    hasValidatedNetpayTotal
+      ? validatedNetpayTotal
+      : hasValidatedFinalTotal
+      ? validatedFinalTotal
+      : normalizedInitialAmount;
 
   const hasDisplayedAmount =
     Number.isFinite(displayedAmount) &&
@@ -76,8 +149,31 @@ export default function CashierPaymentFormCard({
   );
 
   const hasValidatedChange =
+    !isNetpay &&
     Boolean(hasPreview) &&
     validatedPreview !== null;
+
+  const resolvedNetpayStatus = normalizeNetpayStatus(netpayStatus);
+
+  const resolvedNetpayStatusLabel =
+    netpayStatusLabel ||
+    resolveNetpayStatusLabel({
+      status: resolvedNetpayStatus,
+      previewing,
+      paying,
+      netpayBusy,
+      recoveryRequired: netpayRecoveryRequired,
+    });
+
+  const canToggleNetpay =
+    typeof onNetpayModeChange === "function";
+
+  const netpayToggleDisabled =
+    previewing ||
+    paying ||
+    netpayBusy ||
+    netpayRecoveryRequired ||
+    (!netpayMode && !netpayAvailable);
 
   return (
     <Card
@@ -116,28 +212,53 @@ export default function CashierPaymentFormCard({
                   lineHeight: 1.5,
                 }}
               >
-                {description || "Captura uno, dos o hasta tres métodos para cobrar únicamente la cuenta seleccionada."}
+                {description ||
+                  (isNetpay
+                    ? "El cobro se procesará mediante la terminal PAX con NetPay."
+                    : "Captura uno, dos o hasta tres métodos para cobrar únicamente la cuenta seleccionada.")}
               </Typography>
             </Box>
 
-            {showAddPayment ? (
-              <Button
-                variant="outlined"
-                onClick={onAddPayment}
-                disabled={disabled || hasMaxPayments || previewing || paying}
-                startIcon={<AddRoundedIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 180 },
-                  height: 42,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                {hasMaxPayments
-                  ? `Máximo ${normalizedMaxPayments} pago${normalizedMaxPayments === 1 ? "" : "s"}`
-                  : "Agregar pago"}
-              </Button>
-            ) : null}
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ flexShrink: 0 }}
+            >
+              {canToggleNetpay ? (
+                <Button
+                  variant={netpayMode ? "contained" : "outlined"}
+                  onClick={() => onNetpayModeChange?.(!netpayMode)}
+                  disabled={netpayToggleDisabled}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 150 },
+                    height: 42,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {netpayMode ? "Usando NetPay" : "Usar NetPay"}
+                </Button>
+              ) : null}
+
+              {canShowAddPayment ? (
+                <Button
+                  variant="outlined"
+                  onClick={onAddPayment}
+                  disabled={financialInteractionLocked || hasMaxPayments}
+                  startIcon={<AddRoundedIcon />}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 180 },
+                    height: 42,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {hasMaxPayments
+                    ? `Máximo ${normalizedMaxPayments} pago${normalizedMaxPayments === 1 ? "" : "s"}`
+                    : "Agregar pago"}
+                </Button>
+              ) : null}
+            </Stack>
           </Stack>
 
           <Box
@@ -163,7 +284,9 @@ export default function CashierPaymentFormCard({
                     color: "text.primary",
                   }}
                 >
-                  {hasValidatedFinalTotal
+                  {hasValidatedNetpayTotal
+                    ? "Total esperado NetPay"
+                    : hasValidatedFinalTotal
                     ? "Total validado de la cuenta"
                     : "Importe actual de la cuenta"}
                 </Typography>
@@ -176,8 +299,12 @@ export default function CashierPaymentFormCard({
                     lineHeight: 1.45,
                   }}
                 >
-                  {hasValidatedFinalTotal
+                  {hasValidatedNetpayTotal
+                    ? "Importe calculado y validado por Clic Menu para enviarse a NetPay."
+                    : hasValidatedFinalTotal
                     ? "Importe confirmado por la vista previa del cobro."
+                    : isNetpay
+                    ? "Este importe es informativo hasta que Clic Menu genere y valide la vista previa NetPay."
                     : "Incluye el neto sincronizado de la cuenta y la propina capturada. La vista previa validará el total definitivo."}
                 </Typography>
               </Box>
@@ -197,6 +324,76 @@ export default function CashierPaymentFormCard({
             </Stack>
           </Box>
 
+          {isNetpay ? (
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: netpayRecoveryRequired ? "warning.main" : "divider",
+                borderRadius: 1,
+                backgroundColor: "#FCFCFC",
+                p: 1.5,
+              }}
+            >
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "stretch", sm: "center" }}
+                spacing={1.25}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Estado NetPay
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 13,
+                      color: netpayRecoveryRequired ? "warning.main" : "text.secondary",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {resolvedNetpayStatusLabel}
+                  </Typography>
+
+                  {netpayTerminal ? (
+                    <Typography
+                      sx={{
+                        mt: 0.35,
+                        fontSize: 12,
+                        color: "text.secondary",
+                      }}
+                    >
+                      Terminal PAX sincronizada con Clic Menu.
+                    </Typography>
+                  ) : null}
+                </Box>
+
+                {netpayRecoveryRequired && typeof onRetryNetpayRecovery === "function" ? (
+                  <Button
+                    variant="outlined"
+                    onClick={onRetryNetpayRecovery}
+                    disabled={netpayBusy || paying}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 190 },
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Recuperar operación
+                  </Button>
+                ) : null}
+              </Stack>
+            </Box>
+          ) : null}
+
           <Box>
             <Typography sx={fieldLabelSx}>Propina</Typography>
 
@@ -206,7 +403,7 @@ export default function CashierPaymentFormCard({
               onChange={(event) => onTipChange?.(event.target.value)}
               inputProps={{ inputMode: "decimal" }}
               placeholder="0.00"
-              disabled={disabled || previewing || paying}
+              disabled={financialInteractionLocked}
             />
           </Box>
 
@@ -216,18 +413,13 @@ export default function CashierPaymentFormCard({
               gap: 2,
               gridTemplateColumns: {
                 xs: "1fr",
-                md:
-                  payments.length === 1
-                    ? "1fr"
-                    : "repeat(2, minmax(0, 1fr))",
+                md: payments.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))",
               },
             }}
           >
             {payments.map((payment, index) => {
               const method = methods.find(
-                (row) =>
-                  Number(row.id) ===
-                  Number(payment.payment_method_id)
+                (row) => Number(row.id) === Number(payment.payment_method_id)
               );
 
               const usedMethodIds = payments
@@ -269,10 +461,10 @@ export default function CashierPaymentFormCard({
                         Pago {index + 1}
                       </Typography>
 
-                      {showRemovePayment ? (
+                      {canShowRemovePayment ? (
                         <IconButton
                           onClick={() => onRemovePayment?.(payment.localId)}
-                          disabled={payments.length <= 1 || disabled || previewing || paying}
+                          disabled={payments.length <= 1 || financialInteractionLocked}
                           sx={{
                             width: 40,
                             height: 40,
@@ -291,10 +483,7 @@ export default function CashierPaymentFormCard({
                       ) : null}
                     </Stack>
 
-                    <Stack
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={2}
-                    >
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                       <FieldBlock
                         label="Método de pago *"
                         input={
@@ -309,20 +498,23 @@ export default function CashierPaymentFormCard({
                                 event.target.value
                               )
                             }
-                            disabled={disabled || previewing || paying || paymentMethodLocked}
+                            disabled={
+                              disabled ||
+                              previewing ||
+                              paying ||
+                              netpayBusy ||
+                              netpayRecoveryRequired ||
+                              paymentMethodLocked
+                            }
                           >
                             <MenuItem value="">
-                              Selecciona un método
+                              {isNetpay ? "Selecciona Crédito o Débito" : "Selecciona un método"}
                             </MenuItem>
 
-                            {methods.map((methodRow) => {
-                              const isUsedByOther = usedMethodIds.includes(
-                                Number(methodRow.id)
-                              );
-
+                            {visibleMethods.map((methodRow) => {
+                              const isUsedByOther = usedMethodIds.includes(Number(methodRow.id));
                               const isSelected =
-                                Number(payment.payment_method_id) ===
-                                Number(methodRow.id);
+                                Number(payment.payment_method_id) === Number(methodRow.id);
 
                               return (
                                 <MenuItem
@@ -353,134 +545,49 @@ export default function CashierPaymentFormCard({
                             }
                             inputProps={{ inputMode: "decimal" }}
                             placeholder="0.00"
-                            disabled={disabled || previewing || paying}
-                          />
-                        }
-                      />
-                    </Stack>
-
-                    <Stack
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={2}
-                    >
-                      <FieldBlock
-                        label={`Referencia${
-                          method?.requires_reference ? " *" : ""
-                        }`}
-                        input={
-                          <TextField
-                            fullWidth
-                            value={payment.reference}
-                            onChange={(event) =>
-                              onPaymentChange?.(
-                                payment.localId,
-                                "reference",
-                                event.target.value
-                              )
-                            }
-                            placeholder={
-                              method?.requires_reference
-                                ? "Requerida"
-                                : "No aplica"
-                            }
                             disabled={
                               disabled ||
                               previewing ||
                               paying ||
-                              !method?.requires_reference
-                            }
-                          />
-                        }
-                      />
-
-                      <FieldBlock
-                        label={`Últimos 4 dígitos${
-                          method?.requires_last4 ? " *" : ""
-                        }`}
-                        input={
-                          <TextField
-                            fullWidth
-                            value={payment.last4}
-                            onChange={(event) =>
-                              onPaymentChange?.(
-                                payment.localId,
-                                "last4",
-                                String(event.target.value || "")
-                                  .replace(/\D/g, "")
-                                  .slice(0, 4)
-                              )
-                            }
-                            inputProps={{
-                              inputMode: "numeric",
-                              maxLength: 4,
-                            }}
-                            placeholder={
-                              method?.requires_last4
-                                ? "0000"
-                                : "No aplica"
-                            }
-                            disabled={
-                              disabled ||
-                              previewing ||
-                              paying ||
-                              !method?.requires_last4
+                              netpayBusy ||
+                              netpayRecoveryRequired ||
+                              isAmountLocked
                             }
                           />
                         }
                       />
                     </Stack>
 
-                    <Stack
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={2}
-                    >
-                      <FieldBlock
-                        label={`Recibido${
-                          method?.requires_received_amount ? " *" : ""
-                        }`}
-                        input={
-                          <TextField
-                            fullWidth
-                            value={payment.received}
-                            onChange={(event) =>
-                              onPaymentChange?.(
-                                payment.localId,
-                                "received",
-                                event.target.value
-                              )
-                            }
-                            inputProps={{ inputMode: "decimal" }}
-                            placeholder={
-                              method?.requires_received_amount
-                                ? "0.00"
-                                : "No aplica"
-                            }
-                            disabled={
-                              disabled ||
-                              previewing ||
-                              paying ||
-                              !method?.requires_received_amount
-                            }
-                          />
-                        }
+                    {!hideBankFields ? (
+                      <NormalPaymentExtraFields
+                        method={method}
+                        payment={payment}
+                        onPaymentChange={onPaymentChange}
+                        disabled={disabled}
+                        previewing={previewing}
+                        paying={paying}
                       />
-
-                      <FieldBlock
-                        label="Cambio estimado"
-                        input={
-                          <TextField
-                            fullWidth
-                            value={formatCurrency(
-                              calculateEstimatedChange(
-                                payment,
-                                method
-                              )
-                            )}
-                            disabled
-                          />
-                        }
-                      />
-                    </Stack>
+                    ) : (
+                      <Box
+                        sx={{
+                          border: "1px dashed",
+                          borderColor: "divider",
+                          borderRadius: 1,
+                          p: 1.5,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            color: "text.secondary",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          La referencia bancaria, los últimos 4 dígitos y los datos de la tarjeta
+                          serán obtenidos directamente de NetPay. No se capturan manualmente.
+                        </Typography>
+                      </Box>
+                    )}
                   </Stack>
                 </Box>
               );
@@ -554,7 +661,10 @@ export default function CashierPaymentFormCard({
                 lineHeight: 1.55,
               }}
             >
-              {helperText || "Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo método en la misma operación."}
+              {helperText ||
+                (isNetpay
+                  ? "NetPay permite exactamente un método de pago: tarjeta de crédito o débito. El importe será validado por Clic Menu antes de enviarse a la terminal."
+                  : "Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo método en la misma operación.")}
             </Typography>
           </Box>
 
@@ -566,7 +676,7 @@ export default function CashierPaymentFormCard({
             <Button
               variant="outlined"
               onClick={onPreview}
-              disabled={disabled || previewing || paying}
+              disabled={financialInteractionLocked}
               startIcon={<VisibilityRoundedIcon />}
               sx={{
                 minWidth: { xs: "100%", sm: 180 },
@@ -576,7 +686,9 @@ export default function CashierPaymentFormCard({
               }}
             >
               {previewing
-                ? "Validando…"
+                ? isNetpay
+                  ? "Validando NetPay…"
+                  : "Validando…"
                 : "Generar vista previa"}
             </Button>
 
@@ -587,7 +699,9 @@ export default function CashierPaymentFormCard({
                 disabled ||
                 !hasPreview ||
                 previewing ||
-                paying
+                paying ||
+                netpayBusy ||
+                netpayRecoveryRequired
               }
               startIcon={<PaymentsRoundedIcon />}
               sx={{
@@ -597,7 +711,11 @@ export default function CashierPaymentFormCard({
                 fontWeight: 800,
               }}
             >
-              {paying ? "Cobrando…" : "Cobrar cuenta"}
+              {paying
+                ? isNetpay
+                  ? "Procesando NetPay…"
+                  : "Cobrando…"
+                : "Cobrar cuenta"}
             </Button>
           </Stack>
         </Stack>
@@ -615,27 +733,199 @@ function FieldBlock({ label, input }) {
   );
 }
 
+function NormalPaymentExtraFields({
+  method,
+  payment,
+  onPaymentChange,
+  disabled,
+  previewing,
+  paying,
+}) {
+  if (!method) return null;
+
+  const fields = [];
+
+  if (method?.requires_reference) {
+    fields.push({
+      key: "reference",
+      label: "Referencia *",
+      input: (
+        <TextField
+          fullWidth
+          value={payment.reference}
+          onChange={(event) =>
+            onPaymentChange?.(
+              payment.localId,
+              "reference",
+              event.target.value
+            )
+          }
+          placeholder="Requerida"
+          disabled={disabled || previewing || paying}
+        />
+      ),
+    });
+  }
+
+  if (method?.requires_last4) {
+    fields.push({
+      key: "last4",
+      label: "Últimos 4 dígitos *",
+      input: (
+        <TextField
+          fullWidth
+          value={payment.last4}
+          onChange={(event) =>
+            onPaymentChange?.(
+              payment.localId,
+              "last4",
+              String(event.target.value || "")
+                .replace(/\D/g, "")
+                .slice(0, 4)
+            )
+          }
+          inputProps={{
+            inputMode: "numeric",
+            maxLength: 4,
+          }}
+          placeholder="0000"
+          disabled={disabled || previewing || paying}
+        />
+      ),
+    });
+  }
+
+  if (method?.requires_received_amount) {
+    fields.push({
+      key: "received",
+      label: "Recibido *",
+      input: (
+        <TextField
+          fullWidth
+          value={payment.received}
+          onChange={(event) =>
+            onPaymentChange?.(
+              payment.localId,
+              "received",
+              event.target.value
+            )
+          }
+          inputProps={{ inputMode: "decimal" }}
+          placeholder="0.00"
+          disabled={disabled || previewing || paying}
+        />
+      ),
+    });
+  }
+
+  fields.push({
+    key: "change",
+    label: "Cambio estimado",
+    input: (
+      <TextField
+        fullWidth
+        value={formatCurrency(calculateEstimatedChange(payment, method))}
+        disabled
+      />
+    ),
+  });
+
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gap: 2,
+        gridTemplateColumns: {
+          xs: "1fr",
+          md: "repeat(2, minmax(0, 1fr))",
+        },
+      }}
+    >
+      {fields.map((field, index) => {
+        const isLastOddField =
+          fields.length % 2 !== 0 &&
+          index === fields.length - 1;
+
+        return (
+          <Box
+            key={field.key}
+            sx={{
+              minWidth: 0,
+              gridColumn: {
+                xs: "1 / -1",
+                md: isLastOddField ? "1 / -1" : "auto",
+              },
+            }}
+          >
+            <FieldBlock
+              label={field.label}
+              input={field.input}
+            />
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function normalizeNetpayStatus(value) {
+  if (typeof value === "string") return value;
+
+  if (value && typeof value === "object") {
+    return String(value.status || "");
+  }
+
+  return "";
+}
+
+function resolveNetpayStatusLabel({
+  status,
+  previewing,
+  paying,
+  netpayBusy,
+  recoveryRequired,
+}) {
+  if (recoveryRequired && !status) {
+    return "Existe una operación NetPay pendiente de resolución.";
+  }
+
+  const labels = {
+    resolving_terminal: "Validando NetPay…",
+    creating_intent: "Preparando y enviando la operación a la terminal…",
+    starting_sale: "Enviando a terminal…",
+    waiting_sale_result: "Esperando respuesta de la terminal…",
+    sending_sale_result: "Procesando resultado NetPay…",
+    finalizing: "Procesando resultado y finalizando el cobro…",
+    requesting_recovery: "Recuperando operación…",
+    starting_recovery: "Recuperando operación por folio…",
+    waiting_recovery_result: "Esperando respuesta de recuperación…",
+    sending_recovery_result: "Procesando resultado de recuperación…",
+    recovery_required: "La operación requiere recuperación…",
+    resuming_pending_operation: "Recuperando operación pendiente…",
+    completed: "Operación NetPay completada.",
+  };
+
+  if (status && labels[status]) return labels[status];
+  if (previewing) return "Validando NetPay…";
+  if (paying || netpayBusy) return "Procesando operación NetPay…";
+
+  return "NetPay listo para validar el cobro.";
+}
+
 function calculateEstimatedChange(payment, method) {
   if (!method?.requires_received_amount) return 0;
 
   const amount = Number(payment?.amount || 0);
   const received = Number(payment?.received || 0);
 
-  if (
-    !Number.isFinite(amount) ||
-    !Number.isFinite(received)
-  ) {
-    return 0;
-  }
+  if (!Number.isFinite(amount) || !Number.isFinite(received)) return 0;
 
   return Math.max(0, received - amount);
 }
 
 function formatCurrency(value) {
   const normalized = Number(value);
-  const safe = Number.isFinite(normalized)
-    ? normalized
-    : 0;
+  const safe = Number.isFinite(normalized) ? normalized : 0;
 
   try {
     return new Intl.NumberFormat("es-MX", {

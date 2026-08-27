@@ -229,7 +229,27 @@ export default function CashierSaleDetailHeroCard({
             </Button>
           </Stack>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            useFlexGap
+            sx={{
+              columnGap: { xs: 1, sm: 1.25 },
+              rowGap: { xs: 1.25, sm: 1 },
+              alignItems: "center",
+              "& .MuiChip-root": {
+                maxWidth: "100%",
+                height: "auto",
+                minHeight: 24,
+              },
+              "& .MuiChip-label": {
+                display: "block",
+                whiteSpace: "normal",
+                lineHeight: 1.3,
+                py: 0.35,
+              },
+            }}
+          >
             <Chip
               label={readinessLabel}
               size="small"
@@ -338,7 +358,27 @@ export default function CashierSaleDetailHeroCard({
             />
           </Box>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            flexWrap="wrap"
+            useFlexGap
+            sx={{
+              columnGap: { xs: 1, sm: 1.25 },
+              rowGap: { xs: 1.25, sm: 1 },
+              alignItems: "center",
+              "& .MuiChip-root": {
+                maxWidth: "100%",
+                height: "auto",
+                minHeight: 24,
+              },
+              "& .MuiChip-label": {
+                display: "block",
+                whiteSpace: "normal",
+                lineHeight: 1.3,
+                py: 0.35,
+              },
+            }}
+          >
             <Chip
               label={`Subtotal ${formatCurrency(exactSale?.subtotal)}`}
               size="small"
