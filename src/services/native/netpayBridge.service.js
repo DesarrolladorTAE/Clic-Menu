@@ -181,6 +181,14 @@ export function startNetpayRecoveryByFolio(payload) {
   );
 }
 
+export function startNetpayCancellation(payload) {
+  return callBridgeJsonMethod(
+    "cancel",
+    payload,
+    "Android no devolvió una respuesta válida al iniciar la cancelación NetPay."
+  );
+}
+
 export function getNetpayPendingOperation() {
   return callBridgeJsonMethod(
     "getPendingOperation",

@@ -706,7 +706,36 @@ async function processRecoveryNormalizedResult({
     };
   }
 
-  if (transactionCanBeAcknowledged(transaction)) {
+    const recoveryPurpose = String(
+    backendResponse?.purpose || ""
+  ).toLowerCase();
+
+  const cancellationVerification =
+    recoveryPurpose ===
+    "cancellation_verification";
+
+  const cancellationBankCancelled =
+    cancellationVerification &&
+    String(
+      transaction?.bank_status || ""
+    ).toLowerCase() === "cancelled";
+
+  const cancellationLocallyApplied =
+    cancellationBankCancelled &&
+    (
+      Boolean(
+        backendResponse?.local_application
+      ) ||
+      backendResponse?.already_finalized === true
+    );
+
+  if (
+    transactionCanBeAcknowledged(transaction) &&
+    (
+      !cancellationBankCancelled ||
+      cancellationLocallyApplied
+    )
+  ) {
     acknowledgeAndroidOperation({
       netpayTransactionId,
       operationUuid,
@@ -1345,8 +1374,22 @@ export async function resumeCashierPendingNetpayOperation({
     operation
   );
 
+  const operationType = String(
+    operation.operationType || ""
+  ).toLowerCase();
+
+  if (
+    operationType !== "sale" &&
+    operationType !== "recovery"
+  ) {
+    return {
+      outcome: "different_operation_type",
+      pendingOperation: operation,
+    };
+  }
+
   if (operation.normalizedResult) {
-    if (operation.operationUuid) {
+    if (operationType === "recovery") {
       return processRecoveryNormalizedResult({
         saleId: normalizedSaleId,
         netpayTransactionId:
@@ -1384,10 +1427,6 @@ export async function resumeCashierPendingNetpayOperation({
 
   const localState = String(
     operation.localState || ""
-  ).toLowerCase();
-
-  const operationType = String(
-    operation.operationType || ""
   ).toLowerCase();
 
   if (

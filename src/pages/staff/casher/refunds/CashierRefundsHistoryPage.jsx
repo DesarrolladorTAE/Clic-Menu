@@ -17,6 +17,11 @@ import {
 } from "../../../../services/staff/casher/cashierRefunds.service";
 
 import {
+  executeCashierNetpayCancellation,
+  resumeCashierPendingNetpayCancellation,
+} from "../../../../services/staff/casher/cashierNetpayCancellation.service";
+
+import {
   sendCashierSaleTicketWhatsapp,
   fetchCashierSaleTicketPrintConfig,
   fetchCashierSaleTicketPrintPayload,
@@ -67,6 +72,7 @@ export default function CashierRefundsHistoryPage() {
   });
 
   const pollRef = useRef(null);
+  const pendingCancellationResumeRef = useRef(false);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -179,6 +185,94 @@ export default function CashierRefundsHistoryPage() {
     }
   };
 
+  const handleResolvedNetpayCancellation = async (
+    result,
+    { resumed = false } = {}
+  ) => {
+    const outcome = String(
+      result?.outcome || ""
+    ).toLowerCase();
+
+    if (
+      outcome === "none" ||
+      outcome ===
+        "different_operation_type"
+    ) {
+      return false;
+    }
+
+    if (outcome === "cancelled") {
+      setCancelOpen(false);
+      setCancelReason("");
+      setSelectedSummary(null);
+
+      showAlert({
+        severity: "success",
+        title: resumed
+          ? "Cancelación recuperada"
+          : "Devolución aplicada",
+        message:
+          result?.message ||
+          "NetPay confirmó la cancelación y Clic Menu registró correctamente la devolución total.",
+      });
+
+      await load({
+        silent: true,
+      });
+
+      return true;
+    }
+
+    if (
+      outcome === "not_cancelled"
+    ) {
+      showAlert({
+        severity: "warning",
+        title:
+          "Cancelación no confirmada",
+        message:
+          result?.message ||
+          "NetPay no confirmó la cancelación bancaria. La venta permanece cobrada.",
+      });
+
+      return false;
+    }
+
+    if (
+      outcome ===
+      "recovery_required"
+    ) {
+      showAlert({
+        severity: "warning",
+        title:
+          "Verificación pendiente",
+        message:
+          result?.message ||
+          "La cancelación NetPay continúa pendiente de recuperación.",
+      });
+
+      return false;
+    }
+
+    if (
+      outcome ===
+      "operation_pending_local"
+    ) {
+      showAlert({
+        severity: "warning",
+        title:
+          "Operación NetPay pendiente",
+        message:
+          result?.message ||
+          "Existe una cancelación NetPay pendiente en esta terminal.",
+      });
+
+      return false;
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     load();
 
@@ -193,6 +287,55 @@ export default function CashierRefundsHistoryPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (
+      loading ||
+      pendingCancellationResumeRef.current
+    ) {
+      return;
+    }
+
+    pendingCancellationResumeRef.current =
+      true;
+
+    let active = true;
+
+    const resumePendingCancellation =
+      async () => {
+        try {
+          const result =
+            await resumeCashierPendingNetpayCancellation();
+
+          if (!active) return;
+
+          await handleResolvedNetpayCancellation(
+            result,
+            { resumed: true }
+          );
+        } catch (e) {
+          if (!active) return;
+
+          showAlert({
+            severity: "error",
+            title:
+              "No se pudo recuperar NetPay",
+            message: pickErr(
+              e,
+              "No se pudo continuar la cancelación NetPay pendiente."
+            ),
+          });
+        }
+      };
+
+    resumePendingCancellation();
+
+    return () => {
+      active = false;
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const filteredRows = useMemo(() => {
     const query = String(filters?.query || "").trim().toLowerCase();
@@ -362,8 +505,14 @@ export default function CashierRefundsHistoryPage() {
     setCancelBusy(true);
 
     try {
-      const res = await refundCashierSaleFull(saleId, { reason });
-      const data = res?.data?.summary || null;
+      const res =
+        await refundCashierSaleFull(
+          saleId,
+          { reason }
+        );
+
+      const data =
+        res?.data?.summary || null;
 
       setSelectedSummary(data);
       setCancelOpen(false);
@@ -372,17 +521,99 @@ export default function CashierRefundsHistoryPage() {
       showAlert({
         severity: "success",
         title: "Devolución aplicada",
-        message: res?.message || "Devolución total aplicada correctamente.",
+        message:
+          res?.message ||
+          "Devolución total aplicada correctamente.",
       });
 
-      await load({ silent: true });
+      await load({
+        silent: true,
+      });
     } catch (e) {
-      const status = Number(e?.response?.status || 0);
+      const code =
+        pickCode(e);
+
+      if (
+        code ===
+        "NETPAY_BANK_CANCELLATION_REQUIRED"
+      ) {
+        const netpayTransactionId =
+          Number(
+            e?.response?.data?.data
+              ?.netpay_transaction_id ||
+              0
+          );
+
+        if (
+          !Number.isInteger(
+            netpayTransactionId
+          ) ||
+          netpayTransactionId <= 0
+        ) {
+          showAlert({
+            severity: "error",
+            title:
+              "No se pudo cancelar",
+            message:
+              "Backend indicó que la venta requiere cancelación NetPay, pero no devolvió la operación bancaria relacionada.",
+          });
+
+          return;
+        }
+
+        try {
+          const result =
+            await executeCashierNetpayCancellation({
+              saleId,
+              netpayTransactionId,
+              reason,
+            });
+
+          await handleResolvedNetpayCancellation(
+            result
+          );
+        } catch (netpayError) {
+          const netpayStatus =
+            Number(
+              netpayError?.response
+                ?.status || 0
+            );
+
+          showAlert({
+            severity:
+              [409, 422].includes(
+                netpayStatus
+              )
+                ? "warning"
+                : "error",
+            title:
+              "No se pudo cancelar en NetPay",
+            message: pickErr(
+              netpayError,
+              "No se pudo completar la cancelación bancaria NetPay."
+            ),
+          });
+        }
+
+        return;
+      }
+
+      const status =
+        Number(
+          e?.response?.status || 0
+        );
 
       showAlert({
-        severity: [409, 422].includes(status) ? "warning" : "error",
-        title: "No se pudo aplicar",
-        message: pickErr(e, "No se pudo aplicar la devolución total."),
+        severity:
+          [409, 422].includes(status)
+            ? "warning"
+            : "error",
+        title:
+          "No se pudo aplicar",
+        message: pickErr(
+          e,
+          "No se pudo aplicar la devolución total."
+        ),
       });
     } finally {
       setCancelBusy(false);

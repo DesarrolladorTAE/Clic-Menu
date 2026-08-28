@@ -96,3 +96,44 @@ export async function finalizeApprovedNetpayTransaction(
 
   return res?.data;
 }
+
+export async function requestNetpayCancellation(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/cancellation`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+export async function storeNetpayCancellationResult(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/cancellation-result`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+export async function finalizeNetpayCancellation(
+  saleId,
+  netpayTransactionId
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/finalize-cancellation`,
+    {},
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
