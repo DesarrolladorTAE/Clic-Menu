@@ -198,11 +198,10 @@ export default function SalesReportPreview({
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: "45%" }}>Método</TableCell>
-                  <TableCell sx={{ width: "25%" }}>Código</TableCell>
-                  <TableCell align="right" sx={{ width: "30%" }}>
-                    Total
-                  </TableCell>
+                  <TableCell sx={{ width: "32%" }}>Método</TableCell>
+                  <TableCell sx={{ width: "22%" }}>Código</TableCell>
+                  <TableCell sx={{ width: "24%" }}>Proveedor</TableCell>
+                  <TableCell align="right" sx={{ width: "22%" }}>Total</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -216,16 +215,13 @@ export default function SalesReportPreview({
                         </Box>
                       </TableCell>
                       <TableCell>{payment.code || "—"}</TableCell>
+                      <TableCell>{payment.provider_name || "—"}</TableCell>
                       <TableCell align="right">{money(payment.total)}</TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      align="center"
-                      sx={{ color: "#6E6A6A", p: "14px" }}
-                    >
+                    <TableCell colSpan={4} align="center" sx={{ color: "#6E6A6A", p: "14px" }}>
                       No hay métodos de pago registrados en este rango.
                     </TableCell>
                   </TableRow>
@@ -451,8 +447,11 @@ function formatPaymentMethods(paymentMethods = []) {
   return paymentMethods
     .map((payment) => {
       const name = String(payment?.name || "Método").trim();
+      const providerName = String(payment?.provider_name || "").trim();
       const amount = money(payment?.amount || 0);
-      return `${name}: ${amount}`;
+      const displayName = providerName ? `${name} (${providerName})` : name;
+
+      return `${displayName}: ${amount}`;
     })
     .join(" | ");
 }

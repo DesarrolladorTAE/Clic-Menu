@@ -1,8 +1,14 @@
 // src/services/native/netpayBridge.service.js
 
+/*
+ * Puente React → Android para operaciones NetPay.
+ * Expone capacidades, venta, recuperación, cancelación y reimpresión de voucher,
+ * y reutiliza clicmenu:netpay-result para recibir los resultados asíncronos.
+ */
 export const NETPAY_RESULT_EVENT = "clicmenu:netpay-result";
 
 function createBridgeError(code, message, data = null) {
+
   const error = new Error(message);
   error.code = code;
   error.data = data;
@@ -186,6 +192,14 @@ export function startNetpayCancellation(payload) {
     "cancel",
     payload,
     "Android no devolvió una respuesta válida al iniciar la cancelación NetPay."
+  );
+}
+
+export function startNetpayVoucherReprint(payload) {
+  return callBridgeJsonMethod(
+    "reprint",
+    payload,
+    "Android no devolvió una respuesta válida al iniciar la reimpresión del voucher NetPay."
   );
 }
 

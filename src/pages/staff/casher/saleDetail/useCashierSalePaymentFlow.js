@@ -845,6 +845,9 @@ export default function useCashierSalePaymentFlow({
     const transaction = result?.transaction || null;
     const backendResponse = result?.backendResponse || null;
     const finalization = backendResponse?.finalization || null;
+    const netpayTransactionId = numberOrNull(
+      transaction?.netpay_transaction_id
+    );
 
     const actualMethodCode =
       transaction?.detail?.card_type === "C"
@@ -861,6 +864,7 @@ export default function useCashierSalePaymentFlow({
       ...(sale || {}),
       id: finalization?.sale_id || sale?.id || selectedSaleId,
       sale_id: finalization?.sale_id || sale?.sale_id || sale?.id || selectedSaleId,
+      netpay_transaction_id: netpayTransactionId,
       status: finalization?.sale_status || "paid",
       total: transaction?.expected_total ?? sale?.total,
       payable_total: transaction?.expected_total ?? sale?.payable_total,

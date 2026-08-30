@@ -1,8 +1,13 @@
 // src/services/staff/casher/netpayTransaction.service.js
 
+/*
+ * Endpoints de operaciones NetPay asociadas a una Sale.
+ * Centraliza venta, recuperación, cancelación bancaria y reimpresión de voucher.
+ */
 import staffApi from "../../staffApi";
 
 const NO_CACHE_HEADERS = {
+
   "Cache-Control": "no-cache, no-store, must-revalidate",
   Pragma: "no-cache",
   Expires: "0",
@@ -132,6 +137,34 @@ export async function finalizeNetpayCancellation(
   const res = await staffApi.post(
     `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/finalize-cancellation`,
     {},
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+export async function requestNetpayVoucherReprint(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/voucher-reprint`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+export async function storeNetpayVoucherReprintResult(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/voucher-reprint-result`,
+    payload,
     { headers: NO_CACHE_HEADERS }
   );
 

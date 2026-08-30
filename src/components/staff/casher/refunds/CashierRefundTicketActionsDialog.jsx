@@ -11,6 +11,7 @@ import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import PhoneRoundedIcon from "@mui/icons-material/PhoneRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 
 export default function CashierRefundTicketActionsDialog({
   open = false,
@@ -24,6 +25,10 @@ export default function CashierRefundTicketActionsDialog({
   thermalConfig = null,
   onThermalPrint,
   thermalPrinting = false,
+
+  voucherReprintAvailable = false,
+  onReprintNetpayVoucher,
+  voucherReprinting = false,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -51,7 +56,7 @@ export default function CashierRefundTicketActionsDialog({
   const ticketAvailable = Boolean(sale?.ticket?.id);
   const cleanPhone = String(phone || "").replace(/\D/g, "");
 
-  const busy = sendingWhatsapp || thermalPrinting;
+  const busy = sendingWhatsapp || thermalPrinting || voucherReprinting;
 
   const canSendWhatsapp =
     !!sale?.sale_id &&
@@ -63,6 +68,12 @@ export default function CashierRefundTicketActionsDialog({
     !!sale?.sale_id &&
     ticketAvailable &&
     thermalEnabled &&
+    !busy;
+
+  const canReprintNetpayVoucher =
+    !!sale?.sale_id &&
+    Number(sale?.netpay_transaction_id || 0) > 0 &&
+    voucherReprintAvailable &&
     !busy;
 
   const handlePhoneChange = (value) => {
@@ -85,8 +96,12 @@ export default function CashierRefundTicketActionsDialog({
 
   const handleThermalPrint = () => {
     if (!canThermalPrint) return;
-
     onThermalPrint?.(sale);
+  };
+
+  const handleReprintNetpayVoucher = () => {
+    if (!canReprintNetpayVoucher) return;
+    onReprintNetpayVoucher?.(sale);
   };
 
   if (!open) return null;
@@ -159,7 +174,7 @@ export default function CashierRefundTicketActionsDialog({
                   lineHeight: 1.45,
                 }}
               >
-                Reenvía el ticket por WhatsApp o envíalo a impresión térmica.
+                Reenvía el Ticket Clic Menu o administra el voucher NetPay de esta venta.
               </Typography>
             </Box>
           </Stack>
@@ -444,14 +459,8 @@ export default function CashierRefundTicketActionsDialog({
                     </Box>
 
                     <Box>
-                      <Typography
-                        sx={{
-                          fontSize: 18,
-                          fontWeight: 800,
-                          color: "text.primary",
-                        }}
-                      >
-                        Impresión térmica
+                      <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
+                        Ticket Clic Menu
                       </Typography>
 
                       <Typography
@@ -462,9 +471,11 @@ export default function CashierRefundTicketActionsDialog({
                           lineHeight: 1.55,
                         }}
                       >
-                        {thermalConfig?.app_type?.name
-                          ? `Enviar ticket a ${thermalConfig.app_type.name}.`
-                          : "Enviar ticket a la aplicación de impresión térmica."}
+                        {thermalConfig?.transport === "pax_internal"
+                          ? "Imprime el Ticket Clic Menu directamente en la impresora interna de la terminal PAX."
+                          : thermalConfig?.app_type?.name
+                          ? `Enviar el Ticket Clic Menu a ${thermalConfig.app_type.name}.`
+                          : "Enviar el Ticket Clic Menu a la aplicación de impresión térmica."}
                       </Typography>
                     </Box>
                   </Stack>
@@ -482,6 +493,70 @@ export default function CashierRefundTicketActionsDialog({
                     }}
                   >
                     {thermalPrinting ? "Enviando…" : "Imprimir térmico"}
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {voucherReprintAvailable ? (
+            <Card
+              sx={{
+                borderRadius: 0,
+                backgroundColor: "background.paper",
+                boxShadow: "none",
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 1.5,
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: "rgba(46, 125, 50, 0.14)",
+                        color: "#2e7d32",
+                      }}
+                    >
+                      <ReplayRoundedIcon fontSize="small" />
+                    </Box>
+
+                    <Box>
+                      <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
+                        Voucher NetPay
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.35,
+                          fontSize: 13,
+                          color: "text.secondary",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        Reimprime el comprobante bancario original de la operación NetPay.
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Button
+                    type="button"
+                    onClick={handleReprintNetpayVoucher}
+                    disabled={!canReprintNetpayVoucher}
+                    variant="outlined"
+                    startIcon={<ReplayRoundedIcon />}
+                    sx={{
+                      height: 44,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {voucherReprinting ? "Reimprimiendo…" : "Reimprimir voucher NetPay"}
                   </Button>
                 </Stack>
               </CardContent>

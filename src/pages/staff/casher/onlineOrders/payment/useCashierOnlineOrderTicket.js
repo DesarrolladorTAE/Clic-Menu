@@ -17,6 +17,11 @@ import {
   sendCashierThermalPrintPayload,
 } from "../../../../../services/staff/casher/cashierTicket.service";
 
+import {
+  executeCashierNetpayVoucherReprint,
+  getCashierNetpayVoucherReprintError,
+} from "../../../../../services/staff/casher/cashierNetpayVoucherReprint.service";
+
 import { pickErr } from "./cashierOnlineOrderPayment.utils";
 
 export default function useCashierOnlineOrderTicket({
@@ -37,6 +42,7 @@ export default function useCashierOnlineOrderTicket({
     view: false,
     print: false,
     thermalPrint: false,
+    voucherReprint: false,
     download: false,
     whatsapp: false,
   });
@@ -44,6 +50,10 @@ export default function useCashierOnlineOrderTicket({
   const setTicketBusyKey = (key, value) => {
     setTicketBusy((previous) => ({ ...previous, [key]: value }));
   };
+
+  const voucherReprintAvailable =
+    Number(postPaymentSale?.sale_id || postPaymentSale?.id || 0) > 0 &&
+    Number(postPaymentSale?.netpay_transaction_id || 0) > 0;
 
   const loadPostPaymentPrintConfig = async (targetSaleId) => {
     if (!targetSaleId) {
@@ -192,6 +202,107 @@ export default function useCashierOnlineOrderTicket({
     }
   };
 
+  const handleReprintNetpayVoucher = async () => {
+    const targetSaleId = Number(
+      postPaymentSale?.sale_id || postPaymentSale?.id || selectedSaleId || 0
+    );
+
+    const netpayTransactionId = Number(
+      postPaymentSale?.netpay_transaction_id || 0
+    );
+
+    if (!targetSaleId || !netpayTransactionId) {
+      showAlert({
+        severity: "warning",
+        title: "Voucher no disponible",
+        message: "No se encontró una operación NetPay finalizada para esta venta.",
+      });
+      return;
+    }
+
+    try {
+      setTicketBusyKey("voucherReprint", true);
+
+      const result = await executeCashierNetpayVoucherReprint({
+        saleId: targetSaleId,
+        netpayTransactionId,
+      });
+
+      const outcome = String(result?.outcome || "").toLowerCase();
+
+      if (result?.reprintSuccess === true || outcome === "reprinted") {
+        showAlert({
+          severity: "success",
+          title: "Voucher reimpreso",
+          message:
+            result?.backendResponse?.message ||
+            "El voucher NetPay fue reimpreso correctamente.",
+        });
+        return;
+      }
+
+      if (outcome === "voucher_in_progress") {
+        showAlert({
+          severity: "warning",
+          title: "Reimpresión en proceso",
+          message: "La reimpresión del voucher NetPay continúa pendiente en la terminal.",
+        });
+        return;
+      }
+
+      if (outcome === "communication_error") {
+        showAlert({
+          severity: "warning",
+          title: "Reimpresión no confirmada",
+          message:
+            result?.backendResponse?.message ||
+            "No fue posible confirmar técnicamente la reimpresión del voucher NetPay.",
+        });
+        return;
+      }
+
+      if (outcome === "not_sent") {
+        showAlert({
+          severity: "warning",
+          title: "Voucher no enviado",
+          message:
+            result?.backendResponse?.message ||
+            "La solicitud de reimpresión no llegó a enviarse correctamente a NetPay.",
+        });
+        return;
+      }
+
+      if (outcome === "invalid_response") {
+        showAlert({
+          severity: "warning",
+          title: "Respuesta no válida",
+          message:
+            result?.backendResponse?.message ||
+            "NetPay respondió, pero Backend no pudo confirmar una reimpresión válida del voucher.",
+        });
+        return;
+      }
+
+      showAlert({
+        severity: "warning",
+        title: "Reimpresión no confirmada",
+        message:
+          result?.backendResponse?.message ||
+          "NetPay no confirmó la reimpresión del voucher.",
+      });
+    } catch (error) {
+      const netpayError = getCashierNetpayVoucherReprintError(error);
+
+      showAlert({
+        severity: "error",
+        title: "No se pudo reimprimir",
+        message: netpayError.message,
+      });
+    } finally {
+      setTicketBusyKey("voucherReprint", false);
+    }
+  };
+
   const handleDownloadTicket = async () => {
     try {
       setTicketBusyKey("download", true);
@@ -277,11 +388,17 @@ export default function useCashierOnlineOrderTicket({
     const transaction = result?.transaction || backendResponse?.data || null;
     const ticket = finalization?.ticket || null;
 
+    const netpayTransactionId = Number(transaction?.netpay_transaction_id || 0);
+
     const paidSale = {
       ...(sale || {}),
       id: Number(finalization?.sale_id || sale?.id || sale?.sale_id || selectedSaleId || 0),
       sale_id: Number(finalization?.sale_id || sale?.sale_id || sale?.id || selectedSaleId || 0),
       status: finalization?.sale_status || sale?.status || "paid",
+      netpay_transaction_id:
+        Number.isInteger(netpayTransactionId) && netpayTransactionId > 0
+          ? netpayTransactionId
+          : null,
     };
 
     setSettlement(null);
@@ -322,11 +439,13 @@ export default function useCashierOnlineOrderTicket({
     postPaymentSale,
     postPaymentOrder,
     ticketBusy,
+    voucherReprintAvailable,
 
     loadPostPaymentPrintConfig,
     handleViewTicket,
     handlePrintTicket,
     handleThermalPrintTicket,
+    handleReprintNetpayVoucher,
     handleDownloadTicket,
     handleSendTicketWhatsapp,
     openNormalPaymentResult,

@@ -147,6 +147,7 @@ export default function CashierSaleDetailPage() {
     view: false,
     print: false,
     thermalPrint: false,
+    voucherReprint: false,
     download: false,
     whatsapp: false,
   });
@@ -933,13 +934,16 @@ export default function CashierSaleDetailPage() {
         onViewTicket={ticketFlow.handleViewTicket}
         onPrintTicket={ticketFlow.handlePrintTicket}
         onThermalPrintTicket={ticketFlow.handleThermalPrintTicket}
+        onReprintNetpayVoucher={ticketFlow.handleReprintNetpayVoucher}
         onDownloadTicket={ticketFlow.handleDownloadTicket}
         onSendWhatsapp={ticketFlow.handleSendTicketWhatsapp}
         busyView={ticketBusy.view}
         busyPrint={ticketBusy.print}
         busyThermalPrint={ticketBusy.thermalPrint}
+        busyVoucherReprint={ticketBusy.voucherReprint}
         busyDownload={ticketBusy.download}
         busyWhatsapp={ticketBusy.whatsapp}
+        voucherReprintAvailable={ticketFlow.netpayVoucherAvailable}
         printConfig={postPaymentPrintConfig}
         customerSummary={customerSummary}
         ticket={postPaymentTicket}

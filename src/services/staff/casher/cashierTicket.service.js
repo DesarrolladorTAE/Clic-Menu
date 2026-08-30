@@ -12,6 +12,10 @@ const DEFAULT_VIEW_FEATURES =
 const DEFAULT_PRINT_FEATURES =
   "popup=yes,width=420,height=640,left=160,top=80,resizable=yes,scrollbars=yes";
 
+const PRINTER_RESULT_EVENT = "clicmenu:printer-result";
+const PAX_PRINT_RESULT_OPERATION = "clic_ticket_print_result";
+const PAX_PRINT_RESULT_TIMEOUT_MS = 60_000;
+
 export async function fetchCashierTicketBySale(saleId) {
   const res = await staffApi.get(`/staff/cashier/sales/${saleId}/ticket`, {
     params: { _t: Date.now() },
@@ -181,28 +185,138 @@ function injectPrintScript(html) {
   return `${html}${printScript}`;
 }
 
+/*
+ * Impresión térmica del Ticket Clic Menu.
+ *
+ * Conserva los transportes Windows USB/TCP y Android USB/TCP.
+ * Para android_pax_internal / pax_internal utiliza AndroidBridge.printTicket()
+ * y espera el resultado definitivo clicmenu:printer-result antes de confirmar
+ * que la impresión interna PAX terminó correctamente.
+ *
+ * Este flujo es independiente del voucher bancario NetPay y nunca utiliza
+ * NetpayBridge.reprint().
+ */
 
-//Impresiones Windows/Android
 export function isWindowsPrintTarget(code) {
   const normalizedCode = String(code || "").trim().toLowerCase();
-
   return normalizedCode === "windows_usb" || normalizedCode === "windows_tcp";
 }
 
 export function isAndroidPrintTarget(code) {
   const normalizedCode = String(code || "").trim().toLowerCase();
 
-  return normalizedCode === "android_usb" || normalizedCode === "android_tcp";
+  return [
+    "android_usb",
+    "android_tcp",
+    "android_pax_internal",
+  ].includes(normalizedCode);
 }
 
 export function resolveCashierThermalPrintTarget(config) {
   return String(config?.app_type?.code || "").trim().toLowerCase();
 }
 
-export async function sendCashierThermalPrintPayloadToWindows(payload) {
-  if (!payload) {
-    throw new Error("No se recibió payload de impresión.");
+function isPaxInternalPrintTarget(code, payload, config) {
+  const normalizedCode = String(code || "").trim().toLowerCase();
+  const payloadTransport = String(payload?.transport || "").trim().toLowerCase();
+  const configTransport = String(config?.transport || "").trim().toLowerCase();
+
+  return normalizedCode === "android_pax_internal" ||
+    payloadTransport === "pax_internal" ||
+    configTransport === "pax_internal";
+}
+
+function createPrintError(code, message, data = null) {
+  const error = new Error(message);
+  error.code = code;
+  error.data = data;
+  return error;
+}
+
+function parseAndroidPrintResponse(response) {
+  if (typeof response !== "string") return response;
+
+  try {
+    return JSON.parse(response);
+  } catch {
+    return response;
   }
+}
+
+function createPaxPrinterResultWaiter(timeoutMs = PAX_PRINT_RESULT_TIMEOUT_MS) {
+  if (typeof window === "undefined") {
+    throw createPrintError(
+      "CLIC_TICKET_PAX_WINDOW_NOT_AVAILABLE",
+      "No se puede esperar el resultado de impresión PAX fuera de la aplicación."
+    );
+  }
+
+  let settled = false;
+  let timeoutId = null;
+  let handler = null;
+
+  const cleanup = () => {
+    if (handler) window.removeEventListener(PRINTER_RESULT_EVENT, handler);
+    if (timeoutId) clearTimeout(timeoutId);
+    handler = null;
+    timeoutId = null;
+  };
+
+  const promise = new Promise((resolve, reject) => {
+    handler = (event) => {
+      const result = event?.detail;
+
+      if (!result || typeof result !== "object" || Array.isArray(result)) return;
+
+      const operation = String(result.operation || "").trim().toLowerCase();
+      if (operation !== PAX_PRINT_RESULT_OPERATION || settled) return;
+
+      settled = true;
+      cleanup();
+
+      const success = result.ok === true && result?.data?.success === true;
+
+      if (!success) {
+        reject(createPrintError(
+          "CLIC_TICKET_PAX_PRINT_FAILED",
+          result.message ||
+            result?.data?.message ||
+            "La impresora interna PAX no confirmó la impresión del Ticket Clic Menu.",
+          result
+        ));
+        return;
+      }
+
+      resolve(result);
+    };
+
+    window.addEventListener(PRINTER_RESULT_EVENT, handler);
+
+    timeoutId = setTimeout(() => {
+      if (settled) return;
+
+      settled = true;
+      cleanup();
+
+      reject(createPrintError(
+        "CLIC_TICKET_PAX_PRINT_TIMEOUT",
+        "La impresión fue enviada a la PAX, pero no se recibió su resultado dentro del tiempo esperado."
+      ));
+    }, timeoutMs);
+  });
+
+  return {
+    promise,
+    cancel() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+    },
+  };
+}
+
+export async function sendCashierThermalPrintPayloadToWindows(payload) {
+  if (!payload) throw new Error("No se recibió payload de impresión.");
 
   if (
     typeof window === "undefined" ||
@@ -213,15 +327,14 @@ export async function sendCashierThermalPrintPayloadToWindows(payload) {
     );
   }
 
-  const response = await window.sendPrintPayloadToWindows(payload);
-
-  return response;
+  return await window.sendPrintPayloadToWindows(payload);
 }
 
-export async function sendCashierThermalPrintPayloadToAndroid(payload) {
-  if (!payload) {
-    throw new Error("No se recibió payload de impresión.");
-  }
+export async function sendCashierThermalPrintPayloadToAndroid(
+  payload,
+  { waitForPaxResult = false } = {}
+) {
+  if (!payload) throw new Error("No se recibió payload de impresión.");
 
   if (
     typeof window === "undefined" ||
@@ -233,36 +346,74 @@ export async function sendCashierThermalPrintPayloadToAndroid(payload) {
     );
   }
 
-  const payloadJson = JSON.stringify(payload);
-  const response = await window.AndroidBridge.printTicket(payloadJson);
+  const payloadTransport = String(payload?.transport || "").trim().toLowerCase();
+  const shouldWaitForPaxResult =
+    waitForPaxResult || payloadTransport === "pax_internal";
 
-  if (typeof response === "string") {
-    try {
-      const parsed = JSON.parse(response);
+  /*
+   * Para PAX el listener debe existir ANTES de ejecutar printTicket(),
+   * ya que Android emite el resultado cuando regresa PrintResponse.
+   */
+  const waiter = shouldWaitForPaxResult
+    ? createPaxPrinterResultWaiter()
+    : null;
 
-      if (parsed && parsed.ok === false) {
-        throw new Error(parsed.message || "Android no pudo imprimir el ticket.");
-      }
+  try {
+    const rawResponse = await window.AndroidBridge.printTicket(
+      JSON.stringify(payload)
+    );
 
-      return parsed;
-    } catch (error) {
-      if (error?.message && error.message !== "Unexpected token") {
-        throw error;
-      }
+    const response = parseAndroidPrintResponse(rawResponse);
 
+    if (response && typeof response === "object" && response.ok === false) {
+      throw createPrintError(
+        response.code || "CLIC_TICKET_ANDROID_PRINT_FAILED",
+        response.message || "Android no pudo imprimir el ticket.",
+        response
+      );
+    }
+
+    if (!shouldWaitForPaxResult) return response;
+
+    if (!response || typeof response !== "object" || Array.isArray(response)) {
+      throw createPrintError(
+        "CLIC_TICKET_PAX_START_RESPONSE_INVALID",
+        "Android no devolvió una respuesta válida al iniciar la impresión interna PAX.",
+        response
+      );
+    }
+
+    /*
+     * Si Android respondió asynchronous=false, la operación terminó
+     * síncronamente. Esto conserva además el modo de simulación actual.
+     */
+    if (response.asynchronous !== true) {
+      waiter?.cancel();
       return response;
     }
-  }
 
-  return response;
+    const printerResult = await waiter.promise;
+
+    return {
+      ...response,
+      printer_result: printerResult,
+    };
+  } catch (error) {
+    waiter?.cancel();
+    throw error;
+  }
 }
 
 export async function sendCashierThermalPrintPayload(payload, config) {
-  if (!payload) {
-    throw new Error("No se recibió payload de impresión.");
-  }
+  if (!payload) throw new Error("No se recibió payload de impresión.");
 
   const code = resolveCashierThermalPrintTarget(config);
+
+  if (isPaxInternalPrintTarget(code, payload, config)) {
+    return await sendCashierThermalPrintPayloadToAndroid(payload, {
+      waitForPaxResult: true,
+    });
+  }
 
   if (isWindowsPrintTarget(code)) {
     return await sendCashierThermalPrintPayloadToWindows(payload);
@@ -278,7 +429,6 @@ export async function sendCashierThermalPrintPayload(payload, config) {
       : "No se pudo identificar el tipo de aplicación de impresión configurado."
   );
 }
-
 
 function ensurePopupWindow(win, fallbackMessage) {
   if (!win) {

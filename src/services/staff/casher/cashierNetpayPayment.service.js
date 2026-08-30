@@ -753,11 +753,8 @@ async function processRecoveryNormalizedResult({
 }
 
 function normalizePendingOperation(operation) {
-  if (
-    !operation ||
-    typeof operation !== "object" ||
-    Array.isArray(operation)
-  ) {
+  if (!operation || typeof operation !== "object" || Array.isArray(operation))
+  {
     return null;
   }
 
@@ -775,10 +772,7 @@ function normalizePendingOperation(operation) {
   };
 
   const transactionId = Number(
-    value(
-      "netpay_transaction_id",
-      "netpayTransactionId"
-    ) || 0
+    value( "netpay_transaction_id", "netpayTransactionId") || 0
   );
 
   const saleId = Number(
@@ -788,25 +782,19 @@ function normalizePendingOperation(operation) {
   return {
     raw: operation,
     netpayTransactionId:
-      Number.isInteger(transactionId) &&
-      transactionId > 0
+      Number.isInteger(transactionId) && transactionId > 0
         ? transactionId
         : null,
     saleId:
       Number.isInteger(saleId) && saleId > 0
         ? saleId
         : null,
-    operationUuid:
-      value("operation_uuid", "operationUuid") ||
-      null,
-    operationType:
-      value("operation_type", "operationType") ||
-      null,
-    localState:
-      value("local_state", "localState") ||
-      null,
-    normalizedResult:
-      resolvePendingNormalizedResult(operation),
+    operationUuid: value("operation_uuid", "operationUuid") || null,
+    operationType: value("operation_type", "operationType") || null,
+    netpayOrderId: value("netpay_order_id", "netpayOrderId") || null,
+    environment: value("environment", "environment") || null,
+    localState: value("local_state", "localState") || null,
+    normalizedResult: resolvePendingNormalizedResult(operation),
   };
 }
 
@@ -820,10 +808,8 @@ function resolvePendingNormalizedResult(operation) {
 
   if (!raw) return null;
 
-  if (
-    typeof raw === "object" &&
-    !Array.isArray(raw)
-  ) {
+  if (typeof raw === "object" && !Array.isArray(raw)) 
+  {
     return raw;
   }
 

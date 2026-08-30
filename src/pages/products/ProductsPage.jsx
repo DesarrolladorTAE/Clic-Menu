@@ -5,6 +5,7 @@ import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
+import { getMenuSections } from "../../services/menu/menuSections.service";
 import { getCategories } from "../../services/menu/categories.service";
 
 import {
@@ -97,12 +98,38 @@ function defaultInventoryType(allowedProducts, productType = "simple") {
   return allowed.includes("none") ? "none" : allowed[0] || "none";
 }
 
+function resolveMenuSelection(sections, categories, currentSectionId = "", currentCategoryId = "") {
+  const sectionExists = sections.some((s) => String(s.id) === String(currentSectionId));
+  const nextSectionId = sectionExists
+    ? String(currentSectionId)
+    : sections?.[0]?.id
+    ? String(sections[0].id)
+    : "";
+
+  const sectionCategories = categories.filter(
+    (c) => nextSectionId && String(c.section_id ?? "") === nextSectionId
+  );
+
+  const categoryExists = sectionCategories.some(
+    (c) => String(c.id) === String(currentCategoryId)
+  );
+
+  const nextCategoryId = categoryExists
+    ? String(currentCategoryId)
+    : sectionCategories?.[0]?.id
+    ? String(sectionCategories[0].id)
+    : "";
+
+  return { sectionId: nextSectionId, categoryId: nextCategoryId };
+}
+
 export default function ProductsPage() {
   const nav = useNavigate();
   const { restaurantId } = useParams();
 
   const [loading, setLoading] = useState(true);
   const [pageBusy, setPageBusy] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [err, setErr] = useState("");
 
   const [alertState, setAlertState] = useState({
@@ -126,8 +153,20 @@ export default function ProductsPage() {
     return branchId ? Number(branchId) : null;
   }, [requiresBranch, branchId]);
 
+  const [sections, setSections] = useState([]);
+  const [sectionId, setSectionId] = useState("");
+
   const [categories, setCategories] = useState([]);
   const [categoryId, setCategoryId] = useState("");
+
+  const sectionCategories = useMemo(() => {
+    if (!sectionId) return [];
+
+    return categories.filter(
+      (c) => String(c.section_id ?? "") === String(sectionId)
+    );
+  }, [categories, sectionId]);
+
   const [products, setProducts] = useState([]);
 
   const [statusFilter, setStatusFilter] = useState("active");
@@ -177,6 +216,14 @@ export default function ProductsPage() {
   const loadProducts = async ({ silent = false } = {}) => {
     const myReq = ++reqRef.current;
 
+    if (!categoryId) {
+      setProducts([]);
+      setProductsLoading(false);
+      setPageBusy(false);
+      return;
+    }
+
+    setProductsLoading(true);
     if (!silent) setPageBusy(true);
 
     try {
@@ -190,6 +237,7 @@ export default function ProductsPage() {
       setErr(apiErrorToMessage(e, "No se pudieron cargar los productos"));
     } finally {
       if (myReq !== reqRef.current) return;
+      setProductsLoading(false);
       setPageBusy(false);
     }
   };
@@ -223,26 +271,43 @@ export default function ProductsPage() {
         setBranchId("");
       }
 
-      const catQuery =
+      const catalogQuery =
         st?.products_mode === "branch" && chosenBranchId
           ? { status: "active", branch_id: chosenBranchId }
           : { status: "active" };
 
-      const cats = await getCategories(restaurantId, catQuery);
-      setCategories(cats || []);
+      const [secRes, catRes] = await Promise.all([
+        getMenuSections(restaurantId, catalogQuery),
+        getCategories(restaurantId, catalogQuery),
+      ]);
 
-      const firstCatId = cats?.[0]?.id ? String(cats[0].id) : "";
-      const nextCategoryId = categoryId || firstCatId || "";
+      const secs = Array.isArray(secRes) ? secRes : [];
+      const cats = Array.isArray(catRes) ? catRes : [];
 
-      if (!categoryId && firstCatId) {
-        setCategoryId(firstCatId);
+      const selection = resolveMenuSelection(
+        secs,
+        cats,
+        sectionId,
+        categoryId
+      );
+
+      setSections(secs);
+      setCategories(cats);
+      setSectionId(selection.sectionId);
+      setCategoryId(selection.categoryId);
+
+      const nextCategoryId = selection.categoryId;
+
+      if (!nextCategoryId) {
+        setProducts([]);
+        return;
       }
 
       const prodQuery =
         st?.products_mode === "branch" && chosenBranchId
           ? {
               branch_id: chosenBranchId,
-              category_id: nextCategoryId || undefined,
+              category_id: nextCategoryId,
               include_inactive:
                 statusFilter === "all" || statusFilter === "inactive",
               status:
@@ -251,7 +316,7 @@ export default function ProductsPage() {
                   : undefined,
             }
           : {
-              category_id: nextCategoryId || undefined,
+              category_id: nextCategoryId,
               include_inactive:
                 statusFilter === "all" || statusFilter === "inactive",
               status:
@@ -279,31 +344,39 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (requiresBranch && !effectiveBranchId) return;
+    if (!requiresBranch || !effectiveBranchId) return;
 
     (async () => {
       try {
-        if (requiresBranch && effectiveBranchId) {
-          const cats = await getCategories(restaurantId, {
-            status: "active",
-            branch_id: effectiveBranchId,
-          });
+        setProductsLoading(true);
+        setProducts([]);
 
-          setCategories(cats || []);
+        const query = {
+          status: "active",
+          branch_id: effectiveBranchId,
+        };
 
-          const exists = (cats || []).some(
-            (c) => String(c.id) === String(categoryId)
-          );
+        const [secRes, catRes] = await Promise.all([
+          getMenuSections(restaurantId, query),
+          getCategories(restaurantId, query),
+        ]);
 
-          if (!exists) {
-            const first = cats?.[0]?.id ? String(cats[0].id) : "";
-            setCategoryId(first);
-            return;
-          }
-        }
+        const secs = Array.isArray(secRes) ? secRes : [];
+        const cats = Array.isArray(catRes) ? catRes : [];
 
-        await loadProducts({ silent: true });
+        const selection = resolveMenuSelection(
+          secs,
+          cats,
+          sectionId,
+          categoryId
+        );
+
+        setSections(secs);
+        setCategories(cats);
+        setSectionId(selection.sectionId);
+        setCategoryId(selection.categoryId);
       } catch {
+        setProductsLoading(false);
         // silencio administrativo
       }
     })();
@@ -322,6 +395,38 @@ export default function ProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listParams, restaurantId]);
 
+  const onSectionChange = (nextSectionId) => {
+    const nextValue = String(nextSectionId || "");
+
+    const nextCategories = categories.filter(
+      (c) => nextValue && String(c.section_id ?? "") === nextValue
+    );
+
+    const firstCategoryId = nextCategories?.[0]?.id
+      ? String(nextCategories[0].id)
+      : "";
+
+    setProductsLoading(true);
+    setProducts([]);
+    setSectionId(nextValue);
+    setCategoryId(firstCategoryId);
+  };
+
+  const onCategoryChange = (nextCategoryId) => {
+    const nextValue = String(nextCategoryId || "");
+    if (nextValue === categoryId) return;
+
+    setProductsLoading(true);
+    setCategoryId(nextValue);
+  };
+
+  const onStatusFilterChange = (nextStatus) => {
+    if (nextStatus === statusFilter) return;
+
+    setProductsLoading(true);
+    setStatusFilter(nextStatus);
+  };
+
   const openCreateModal = () => {
     setErr("");
 
@@ -330,7 +435,7 @@ export default function ProductsPage() {
 
     setModalProduct({
       id: null,
-      category_id: categoryId || categories?.[0]?.id || "",
+      category_id: categoryId || sectionCategories?.[0]?.id || "",
       name: "",
       description: "",
       status: "active",
@@ -530,7 +635,6 @@ export default function ProductsPage() {
           pageBusy={pageBusy}
           allowedProducts={allowedProducts}
           onBack={() => nav(`/owner/restaurants/${restaurantId}/operation/menu`)}
-          onCreate={openCreateModal}
         />
 
         <ProductsPageFilters
@@ -539,16 +643,20 @@ export default function ProductsPage() {
           branchId={branchId}
           onBranchChange={setBranchId}
           err={err}
-          categories={categories}
+          sections={sections}
+          sectionId={sectionId}
+          onSectionChange={onSectionChange}
+          categories={sectionCategories}
           categoryId={categoryId}
-          onCategoryChange={setCategoryId}
+          onCategoryChange={onCategoryChange}
           statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
+          onStatusFilterChange={onStatusFilterChange}
           productsCount={products.length}
         />
 
         <ProductsPageList
           products={products}
+          productsLoading={productsLoading}
           productsMode={productsMode}
           allowedProducts={allowedProducts}
           pagination={pagination}
@@ -572,7 +680,7 @@ export default function ProductsPage() {
         productsMode={productsMode}
         requiresBranch={requiresBranch}
         effectiveBranchId={effectiveBranchId}
-        categories={categories}
+        categories={sectionCategories}
         initialData={modalProduct}
         allowedProducts={allowedProducts}
         getProduct={getProduct}
@@ -584,12 +692,26 @@ export default function ProductsPage() {
         uploadProductImage={uploadProductImage}
         deleteProductImage={deleteProductImage}
         reorderProductImages={reorderProductImages}
-        onSaved={async () => {
+        onSaved={async (saved) => {
+          const wasEdit = Boolean(modalProduct?.id);
+
+          if (saved?.id) {
+            setModalProduct((prev) => ({
+              ...prev,
+              ...saved,
+              id: saved.id,
+              category_id: String(
+                saved.category_id ?? prev?.category_id ?? categoryId
+              ),
+            }));
+          }
+
           await loadProducts({ silent: true });
+
           showAlert({
             severity: "success",
             title: "Hecho",
-            message: modalProduct?.id
+            message: wasEdit
               ? "Producto actualizado correctamente."
               : "Producto creado correctamente.",
           });

@@ -2,7 +2,6 @@ import {
   Box, Button, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 
-import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import LocalDiningOutlinedIcon from "@mui/icons-material/LocalDiningOutlined";
@@ -30,7 +29,6 @@ export default function ProductsPageHeader({
   pageBusy,
   allowedProducts,
   onBack,
-  onCreate,
 }) {
   return (
     <>
@@ -117,19 +115,6 @@ export default function ProductsPageHeader({
             Volver al menú
           </Button>
 
-          <Button
-            onClick={onCreate}
-            variant="contained"
-            startIcon={<AddIcon />}
-            sx={{
-              minWidth: { xs: "100%", sm: 210 },
-              height: 44,
-              borderRadius: 2,
-              fontWeight: 800,
-            }}
-          >
-            Nuevo producto
-          </Button>
         </Stack>
       </Stack>
 

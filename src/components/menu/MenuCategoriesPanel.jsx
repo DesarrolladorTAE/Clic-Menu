@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch, Table, TableBody, TableCell,
@@ -22,7 +22,8 @@ import usePagination from "../../hooks/usePagination";
 import PaginationFooter from "../../components/common/PaginationFooter";
 import MenuCategoryUpsertModal from "./MenuCategoryUpsertModal";
 
-const PAGE_SIZE = 5;
+const CATEGORY_PAGE_SIZE = 5;
+const SECTION_PAGE_SIZE = 2;
 
 export default function MenuCategoriesPanel({
   restaurantId,
@@ -141,21 +142,44 @@ export default function MenuCategoriesPanel({
     return sortedCategories.filter((c) => c.status === "active").length;
   }, [sortedCategories]);
 
+  const groupedCategorySections = useMemo(() => {
+    const groups = [];
+    const groupIndex = new Map();
+
+    sortedCategories.forEach((category) => {
+      const sectionId = category.section_id ? Number(category.section_id) : null;
+      const key = sectionId ? `section-${sectionId}` : "without-section";
+
+      if (!groupIndex.has(key)) {
+        groupIndex.set(key, groups.length);
+        groups.push({
+          key,
+          sectionId,
+          categories: [],
+        });
+      }
+
+      groups[groupIndex.get(key)].categories.push(category);
+    });
+
+    return groups;
+  }, [sortedCategories]);
+
   const {
-    page,
-    nextPage,
-    prevPage,
-    total,
-    totalPages,
-    startItem,
-    endItem,
-    hasPrev,
-    hasNext,
-    paginatedItems,
+    page: sectionsPage,
+    nextPage: nextSectionsPage,
+    prevPage: prevSectionsPage,
+    total: totalSections,
+    totalPages: totalSectionPages,
+    startItem: startSectionItem,
+    endItem: endSectionItem,
+    hasPrev: hasPrevSection,
+    hasNext: hasNextSection,
+    paginatedItems: paginatedSectionGroups,
   } = usePagination({
-    items: sortedCategories,
+    items: groupedCategorySections,
     initialPage: 1,
-    pageSize: PAGE_SIZE,
+    pageSize: SECTION_PAGE_SIZE,
     mode: "frontend",
   });
 
@@ -364,375 +388,33 @@ export default function MenuCategoriesPanel({
           </Box>
         ) : (
           <>
-            {isMobile ? (
-              <Stack spacing={1.5} sx={{ p: 2 }}>
-                {paginatedItems.map((c, index) => {
-                  const active = c.status === "active";
-                  const busy = isSaving(c.id);
-                  const isLastActive = active && activeCategoriesCount <= 1;
-                  const prev = paginatedItems[index - 1];
-                  const sectionChanged =
-                    !prev || prev.section_id !== c.section_id;
-
-                  return (
-                    <Fragment key={c.id}>
-                      {sectionChanged && (
-                        <Box
-                          sx={{
-                            px: 0.5,
-                            pt: index === 0 ? 0 : 1,
-                            pb: 0.25,
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              fontSize: 13,
-                              fontWeight: 800,
-                              color: "primary.main",
-                              textTransform: "uppercase",
-                              letterSpacing: 0.4,
-                            }}
-                          >
-                            {getSectionLabel(c.section_id)}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      <Card
-                        sx={{
-                          borderRadius: 1,
-                          boxShadow: "none",
-                          border: "1px solid",
-                          borderColor: "divider",
-                          backgroundColor: "#fff",
-                        }}
-                      >
-                        <Box sx={{ p: 2 }}>
-                          <Stack spacing={1.5}>
-                            <Stack
-                              direction="row"
-                              justifyContent="space-between"
-                              alignItems="flex-start"
-                              spacing={1}
-                            >
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                  sx={{
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    color: "text.primary",
-                                    lineHeight: 1.3,
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {c.name}
-                                </Typography>
-
-                                {c.description ? (
-                                  <Typography
-                                    sx={{
-                                      mt: 0.5,
-                                      fontSize: 13,
-                                      color: "text.secondary",
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
-                                    {c.description}
-                                  </Typography>
-                                ) : null}
-
-                                {isLastActive ? (
-                                  <Typography
-                                    sx={{
-                                      mt: 0.75,
-                                      fontSize: 12,
-                                      color: "warning.dark",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    Esta es la única categoría activa.
-                                  </Typography>
-                                ) : null}
-                              </Box>
-
-                              <Chip
-                                label={`Orden ${c.sort_order ?? 0}`}
-                                size="small"
-                                sx={{
-                                  fontWeight: 800,
-                                  bgcolor: "#FFF3E0",
-                                  color: "#A75A00",
-                                }}
-                              />
-                            </Stack>
-
-                            <Box>
-                              <Typography sx={mobileLabelSx}>Sección</Typography>
-                              <Typography sx={mobileValueSx}>
-                                {getSectionLabel(c.section_id)}
-                              </Typography>
-                            </Box>
-
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                gap: 1,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <Tooltip
-                                title={
-                                  isLastActive
-                                    ? "Debe existir al menos una categoría activa."
-                                    : ""
-                                }
-                              >
-                                <span>
-                                  <FormControlLabel
-                                    sx={{ m: 0 }}
-                                    control={
-                                      <Switch
-                                        checked={active}
-                                        onChange={() => onToggleStatus(c)}
-                                        disabled={busy || isLastActive}
-                                        color="primary"
-                                      />
-                                    }
-                                    label={
-                                      <Typography sx={switchLabelSx}>
-                                        {active ? "Activo" : "Inactivo"}
-                                      </Typography>
-                                    }
-                                  />
-                                </span>
-                              </Tooltip>
-
-                              <Stack direction="row" spacing={1}>
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    onClick={() => openEdit(c)}
-                                    sx={iconEditSx}
-                                    disabled={busy}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-
-                                <Tooltip
-                                  title={
-                                    isLastActive
-                                      ? "Debe existir al menos una categoría activa."
-                                      : "Eliminar"
-                                  }
-                                >
-                                  <span>
-                                    <IconButton
-                                      onClick={() => onDelete(c)}
-                                      sx={iconDeleteSx}
-                                      disabled={busy || isLastActive}
-                                    >
-                                      <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              </Stack>
-                            </Box>
-                          </Stack>
-                        </Box>
-                      </Card>
-                    </Fragment>
-                  );
-                })}
-              </Stack>
-            ) : (
-              <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                <Table sx={{ minWidth: 980 }}>
-                  <TableHead>
-                    <TableRow
-                      sx={{
-                        "& th": {
-                          backgroundColor: "primary.main",
-                          color: "#fff",
-                          fontWeight: 800,
-                          fontSize: 13,
-                          borderBottom: "none",
-                          whiteSpace: "nowrap",
-                        },
-                      }}
-                    >
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Descripción</TableCell>
-                      <TableCell>Sección</TableCell>
-                      <TableCell>Orden</TableCell>
-                      <TableCell align="center">Estado</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {paginatedItems.map((c, index) => {
-                      const active = c.status === "active";
-                      const busy = isSaving(c.id);
-                      const isLastActive = active && activeCategoriesCount <= 1;
-                      const prev = paginatedItems[index - 1];
-                      const sectionChanged =
-                        !prev || prev.section_id !== c.section_id;
-
-                      return (
-                        <Fragment key={c.id}>
-                          {sectionChanged && (
-                            <TableRow>
-                              <TableCell
-                                colSpan={6}
-                                sx={{
-                                  bgcolor: "#FFF7ED",
-                                  color: "primary.main",
-                                  fontWeight: 800,
-                                  fontSize: 13,
-                                  borderBottom: "1px solid",
-                                  borderColor: "divider",
-                                  textTransform: "uppercase",
-                                  letterSpacing: 0.4,
-                                }}
-                              >
-                                {getSectionLabel(c.section_id)}
-                              </TableCell>
-                            </TableRow>
-                          )}
-
-                          <TableRow
-                            hover
-                            sx={{
-                              "& td": {
-                                borderBottom: "1px solid",
-                                borderColor: "divider",
-                                fontSize: 14,
-                                color: "text.primary",
-                                whiteSpace: "nowrap",
-                              },
-                            }}
-                          >
-                            <TableCell>
-                              <Stack spacing={0.5}>
-                                <Typography sx={{ fontWeight: 800 }}>
-                                  {c.name}
-                                </Typography>
-
-                                {isLastActive ? (
-                                  <Typography
-                                    sx={{
-                                      fontSize: 12,
-                                      color: "warning.dark",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    Única categoría activa
-                                  </Typography>
-                                ) : null}
-                              </Stack>
-                            </TableCell>
-
-                            <TableCell
-                              sx={{
-                                whiteSpace: "normal !important",
-                                minWidth: 260,
-                              }}
-                            >
-                              {c.description || "—"}
-                            </TableCell>
-
-                            <TableCell>{getSectionLabel(c.section_id)}</TableCell>
-
-                            <TableCell>{c.sort_order ?? 0}</TableCell>
-
-                            <TableCell align="center">
-                              <Tooltip
-                                title={
-                                  isLastActive
-                                    ? "Debe existir al menos una categoría activa."
-                                    : ""
-                                }
-                              >
-                                <span>
-                                  <FormControlLabel
-                                    sx={{ m: 0 }}
-                                    control={
-                                      <Switch
-                                        checked={active}
-                                        onChange={() => onToggleStatus(c)}
-                                        disabled={busy || isLastActive}
-                                        color="primary"
-                                      />
-                                    }
-                                    label={
-                                      <Typography sx={switchLabelSx}>
-                                        {active ? "Activo" : "Inactivo"}
-                                      </Typography>
-                                    }
-                                  />
-                                </span>
-                              </Tooltip>
-                            </TableCell>
-
-                            <TableCell align="right">
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                justifyContent="flex-end"
-                                alignItems="center"
-                                flexWrap="nowrap"
-                              >
-                                <Tooltip title="Editar">
-                                  <IconButton
-                                    onClick={() => openEdit(c)}
-                                    sx={iconEditSx}
-                                    disabled={busy}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-
-                                <Tooltip
-                                  title={
-                                    isLastActive
-                                      ? "Debe existir al menos una categoría activa."
-                                      : "Eliminar"
-                                  }
-                                >
-                                  <span>
-                                    <IconButton
-                                      onClick={() => onDelete(c)}
-                                      sx={iconDeleteSx}
-                                      disabled={busy || isLastActive}
-                                    >
-                                      <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        </Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
+            <Stack spacing={2.5} sx={{ p: 2 }}>
+              {paginatedSectionGroups.map((group) => (
+                <CategorySectionBlock
+                  key={group.key}
+                  group={group}
+                  isMobile={isMobile}
+                  activeCategoriesCount={activeCategoriesCount}
+                  isSaving={isSaving}
+                  onToggleStatus={onToggleStatus}
+                  openEdit={openEdit}
+                  onDelete={onDelete}
+                  getSectionLabel={getSectionLabel}
+                />
+              ))}
+            </Stack>
 
             <PaginationFooter
-              page={page}
-              totalPages={totalPages}
-              startItem={startItem}
-              endItem={endItem}
-              total={total}
-              hasPrev={hasPrev}
-              hasNext={hasNext}
-              onPrev={prevPage}
-              onNext={nextPage}
-              itemLabel="categorías"
+              page={sectionsPage}
+              totalPages={totalSectionPages}
+              startItem={startSectionItem}
+              endItem={endSectionItem}
+              total={totalSections}
+              hasPrev={hasPrevSection}
+              hasNext={hasNextSection}
+              onPrev={prevSectionsPage}
+              onNext={nextSectionsPage}
+              itemLabel="secciones"
             />
           </>
         )}
@@ -769,25 +451,372 @@ export default function MenuCategoriesPanel({
   );
 }
 
+function CategorySectionBlock({
+  group,
+  isMobile,
+  activeCategoriesCount,
+  isSaving,
+  onToggleStatus,
+  openEdit,
+  onDelete,
+  getSectionLabel,
+}) {
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: group.categories,
+    initialPage: 1,
+    pageSize: CATEGORY_PAGE_SIZE,
+    mode: "frontend",
+  });
+
+    return (
+    <Box>
+      <Typography
+        sx={{
+          mb: 1,
+          px: 0.25,
+          fontSize: { xs: 15, sm: 16 },
+          fontWeight: 700,
+          color: "text.secondary",
+          lineHeight: 1.3,
+        }}
+      >
+        Sección:{" "}
+        <Box component="span" sx={{ fontWeight: 800, color: "#B85C38" }}>
+          {getSectionLabel(group.sectionId)}
+        </Box>
+      </Typography>
+
+      <Box
+        sx={{
+          overflow: "hidden",
+          border: "1px solid",
+          borderColor: "divider",
+          backgroundColor: "background.paper",
+        }}
+      >
+        {isMobile ? (
+          <Stack spacing={1.5} sx={{ p: 2 }}>
+            {paginatedItems.map((c) => {
+              const active = c.status === "active";
+              const busy = isSaving(c.id);
+              const isLastActive = active && activeCategoriesCount <= 1;
+
+              return (
+                <Card
+                  key={c.id}
+                  sx={{
+                    borderRadius: 1,
+                    boxShadow: "none",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <Box sx={{ p: 2 }}>
+                    <Stack spacing={1.5}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            sx={{
+                              fontSize: 15,
+                              fontWeight: 800,
+                              color: "text.primary",
+                              lineHeight: 1.3,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {c.name}
+                          </Typography>
+
+                          {c.description ? (
+                            <Typography
+                              sx={{
+                                mt: 0.5,
+                                fontSize: 13,
+                                color: "text.secondary",
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {c.description}
+                            </Typography>
+                          ) : null}
+
+                          {isLastActive ? (
+                            <Typography
+                              sx={{
+                                mt: 0.75,
+                                fontSize: 12,
+                                color: "warning.dark",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Esta es la única categoría activa.
+                            </Typography>
+                          ) : null}
+                        </Box>
+
+                        <Chip
+                          label={`Orden ${c.sort_order ?? 0}`}
+                          size="small"
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "#FFF3E0",
+                            color: "#A75A00",
+                          }}
+                        />
+                      </Stack>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 1,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <Tooltip
+                          title={
+                            isLastActive
+                              ? "Debe existir al menos una categoría activa."
+                              : ""
+                          }
+                        >
+                          <span>
+                            <FormControlLabel
+                              sx={{ m: 0 }}
+                              control={
+                                <Switch
+                                  checked={active}
+                                  onChange={() => onToggleStatus(c)}
+                                  disabled={busy || isLastActive}
+                                  color="primary"
+                                />
+                              }
+                              label={
+                                <Typography sx={switchLabelSx}>
+                                  {active ? "Activo" : "Inactivo"}
+                                </Typography>
+                              }
+                            />
+                          </span>
+                        </Tooltip>
+
+                        <Stack direction="row" spacing={1}>
+                          <Tooltip title="Editar">
+                            <IconButton
+                              onClick={() => openEdit(c)}
+                              sx={iconEditSx}
+                              disabled={busy}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip
+                            title={
+                              isLastActive
+                                ? "Debe existir al menos una categoría activa."
+                                : "Eliminar"
+                            }
+                          >
+                            <span>
+                              <IconButton
+                                onClick={() => onDelete(c)}
+                                sx={iconDeleteSx}
+                                disabled={busy || isLastActive}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Card>
+              );
+            })}
+          </Stack>
+        ) : (
+          <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+            <Table sx={{ minWidth: 850 }}>
+              <TableHead>
+                <TableRow
+                  sx={{
+                    "& th": {
+                      backgroundColor: "primary.main",
+                      color: "#fff",
+                      fontWeight: 800,
+                      fontSize: 13,
+                      borderBottom: "none",
+                      whiteSpace: "nowrap",
+                    },
+                  }}
+                >
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Descripción</TableCell>
+                  <TableCell>Orden</TableCell>
+                  <TableCell align="center">Estado</TableCell>
+                  <TableCell align="right">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {paginatedItems.map((c) => {
+                  const active = c.status === "active";
+                  const busy = isSaving(c.id);
+                  const isLastActive = active && activeCategoriesCount <= 1;
+
+                  return (
+                    <TableRow
+                      key={c.id}
+                      hover
+                      sx={{
+                        "& td": {
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          fontSize: 14,
+                          color: "text.primary",
+                          whiteSpace: "nowrap",
+                        },
+                      }}
+                    >
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Typography sx={{ fontWeight: 800 }}>{c.name}</Typography>
+
+                          {isLastActive ? (
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                color: "warning.dark",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Única categoría activa
+                            </Typography>
+                          ) : null}
+                        </Stack>
+                      </TableCell>
+
+                      <TableCell
+                        sx={{
+                          whiteSpace: "normal !important",
+                          minWidth: 260,
+                        }}
+                      >
+                        {c.description || "—"}
+                      </TableCell>
+
+                      <TableCell>{c.sort_order ?? 0}</TableCell>
+
+                      <TableCell align="center">
+                        <Tooltip
+                          title={
+                            isLastActive
+                              ? "Debe existir al menos una categoría activa."
+                              : ""
+                          }
+                        >
+                          <span>
+                            <FormControlLabel
+                              sx={{ m: 0 }}
+                              control={
+                                <Switch
+                                  checked={active}
+                                  onChange={() => onToggleStatus(c)}
+                                  disabled={busy || isLastActive}
+                                  color="primary"
+                                />
+                              }
+                              label={
+                                <Typography sx={switchLabelSx}>
+                                  {active ? "Activo" : "Inactivo"}
+                                </Typography>
+                              }
+                            />
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          justifyContent="flex-end"
+                          alignItems="center"
+                          flexWrap="nowrap"
+                        >
+                          <Tooltip title="Editar">
+                            <IconButton
+                              onClick={() => openEdit(c)}
+                              sx={iconEditSx}
+                              disabled={busy}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+                          <Tooltip
+                            title={
+                              isLastActive
+                                ? "Debe existir al menos una categoría activa."
+                                : "Eliminar"
+                            }
+                          >
+                            <span>
+                              <IconButton
+                                onClick={() => onDelete(c)}
+                                sx={iconDeleteSx}
+                                disabled={busy || isLastActive}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          startItem={startItem}
+          endItem={endItem}
+          total={total}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+          onPrev={prevPage}
+          onNext={nextPage}
+          itemLabel="categorías"
+        />
+      </Box>
+    </Box>
+  );
+}
+
 const switchLabelSx = {
   fontSize: 14,
   fontWeight: 700,
   color: "text.primary",
-};
-
-const mobileLabelSx = {
-  fontSize: 11,
-  fontWeight: 800,
-  color: "text.secondary",
-  textTransform: "uppercase",
-  letterSpacing: 0.3,
-};
-
-const mobileValueSx = {
-  mt: 0.25,
-  fontSize: 14,
-  color: "text.primary",
-  wordBreak: "break-word",
 };
 
 const iconEditSx = {

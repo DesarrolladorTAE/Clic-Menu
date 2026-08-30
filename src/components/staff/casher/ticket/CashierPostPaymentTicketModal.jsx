@@ -16,12 +16,15 @@ export default function CashierPostPaymentTicketModal({
   onViewTicket,
   onPrintTicket,
   onThermalPrintTicket,
+  onReprintNetpayVoucher,
   onDownloadTicket,
   busyView = false,
   busyPrint = false,
   busyThermalPrint = false,
+  busyVoucherReprint = false,
   busyDownload = false,
   busyWhatsapp = false,
+  voucherReprintAvailable = false,
   onSendWhatsapp,
   showWhatsapp = true,
   printConfig = null,
@@ -70,7 +73,28 @@ export default function CashierPostPaymentTicketModal({
     printConfig?.app_type?.name ||
     "la aplicación de impresión térmica";
 
+  const printAppCode = String(
+    printConfig?.app_type?.code || ""
+  ).trim().toLowerCase();
+
+  const printTransport = String(
+    printConfig?.transport || ""
+  ).trim().toLowerCase();
+
+  const paxInternalPrint =
+    printAppCode === "android_pax_internal" ||
+    printTransport === "pax_internal";
+
+  const asyncOperationBusy =
+    busyVoucherReprint ||
+    (busyThermalPrint && paxInternalPrint);
+
+  const thermalPrintDescription = paxInternalPrint
+    ? "El Ticket Clic Menu se imprimirá directamente mediante la impresora interna de la terminal PAX."
+    : `El Ticket Clic Menu se enviará directamente mediante ${thermalPrintAppName}.`;
+
   const handleExit = () => {
+    if (asyncOperationBusy) return;
     onContinue?.();
   };
 
@@ -157,6 +181,7 @@ export default function CashierPostPaymentTicketModal({
 
             <IconButton
               onClick={handleExit}
+              disabled={asyncOperationBusy}
               sx={{
                 borderRadius: 2,
                 border: "1px solid",
@@ -208,7 +233,7 @@ export default function CashierPostPaymentTicketModal({
                     color: "text.primary",
                   }}
                 >
-                  Impresión térmica habilitada
+                  Ticket Clic Menu — impresión térmica
                 </Typography>
 
                 <Typography
@@ -219,7 +244,41 @@ export default function CashierPostPaymentTicketModal({
                     lineHeight: 1.5,
                   }}
                 >
-                  {`Esta sucursal tiene habilitada la impresión directa mediante ${thermalPrintAppName}.`}
+                  {thermalPrintDescription}
+                </Typography>
+              </Box>
+            ) : null}
+
+            {voucherReprintAvailable ? (
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderRadius: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.default",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  Voucher NetPay
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize: 13,
+                    color: "text.secondary",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  La reimpresión del voucher bancario NetPay es independiente de la impresión del Ticket Clic Menu.
                 </Typography>
               </Box>
             ) : null}
@@ -228,14 +287,18 @@ export default function CashierPostPaymentTicketModal({
               onView={onViewTicket}
               onPrint={onPrintTicket}
               onThermalPrint={onThermalPrintTicket}
+              onReprintNetpayVoucher={onReprintNetpayVoucher}
               onDownload={onDownloadTicket}
               onContinue={handleExit}
               loadingView={busyView}
               loadingPrint={busyPrint}
               loadingThermalPrint={busyThermalPrint}
+              loadingVoucherReprint={busyVoucherReprint}
               loadingDownload={busyDownload}
+              asyncOperationBusy={asyncOperationBusy}
               ticketAvailable={ticketAvailable}
               thermalPrintEnabled={thermalPrintEnabled}
+              voucherReprintAvailable={voucherReprintAvailable}
             />
           </Stack>
         </Box>

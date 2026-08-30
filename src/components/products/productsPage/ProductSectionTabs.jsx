@@ -1,7 +1,9 @@
 import { Box, Tab, Tabs, Typography } from "@mui/material";
 
-export default function ProductCategoryTabs({
-  categories = [],
+const TERRACOTTA = "#B85C38";
+
+export default function ProductSectionTabs({
+  sections = [],
   value = "",
   onChange,
 }) {
@@ -9,48 +11,48 @@ export default function ProductCategoryTabs({
     onChange?.(newValue);
   };
 
-  if (!categories.length) {
+  if (!sections.length) {
     return (
       <Box
         sx={{
-          minHeight: 50,
+          minHeight: 54,
           display: "flex",
           alignItems: "center",
-          px: 1.5,
+          px: 0.5,
           borderBottom: "1px solid",
           borderColor: "divider",
         }}
       >
         <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
-          No hay categorías disponibles para esta sección.
+          No hay secciones disponibles.
         </Typography>
       </Box>
     );
   }
 
   const tabSx = {
-    minHeight: 50,
-    px: { xs: 1.75, sm: 2.25 },
-    py: 0.75,
-    fontSize: { xs: 14, sm: 16 },
+    minHeight: 54,
+    px: { xs: 2, sm: 2.5 },
+    py: 1,
+    fontSize: { xs: 15, sm: 16 },
     fontWeight: 800,
     textTransform: "none",
     color: "text.secondary",
-    borderRadius: "10px 10px 0 0",
-    transition: "background-color 0.18s ease, color 0.18s ease, transform 0.12s ease",
+    transition: "color 0.18s ease, background-color 0.18s ease, transform 0.12s ease",
     "&.Mui-selected": {
-      color: "primary.main",
-      bgcolor: "rgba(255, 152, 0, 0.06)",
+      color: TERRACOTTA,
+      bgcolor: "transparent",
     },
     "&:hover": {
-      bgcolor: "rgba(255, 152, 0, 0.06)",
+      color: TERRACOTTA,
+      bgcolor: "rgba(184, 92, 56, 0.05)",
     },
     "&:active": {
-      bgcolor: "rgba(255, 152, 0, 0.12)",
+      bgcolor: "rgba(184, 92, 56, 0.09)",
       transform: "scale(0.98)",
     },
     "&.Mui-focusVisible": {
-      bgcolor: "rgba(255, 152, 0, 0.09)",
+      bgcolor: "rgba(184, 92, 56, 0.07)",
     },
   };
 
@@ -73,27 +75,27 @@ export default function ProductCategoryTabs({
         slotProps={{
           indicator: {
             sx: {
-              height: 3,
+              height: 4,
               borderRadius: "999px 999px 0 0",
-              backgroundColor: "primary.main",
+              backgroundColor: TERRACOTTA,
             },
           },
         }}
         sx={{
-          minHeight: 50,
+          minHeight: 54,
           "& .MuiTabs-flexContainer": {
-            gap: { xs: 0.5, sm: 1 },
+            gap: { xs: 0.5, sm: 1.5 },
           },
           "& .MuiTabs-scrollButtons": {
             color: "text.secondary",
           },
         }}
       >
-        {categories.map((c) => (
+        {sections.map((section) => (
           <Tab
-            key={c.id}
-            value={String(c.id)}
-            label={c.name}
+            key={section.id}
+            value={String(section.id)}
+            label={section.name}
             disableRipple
             sx={tabSx}
           />

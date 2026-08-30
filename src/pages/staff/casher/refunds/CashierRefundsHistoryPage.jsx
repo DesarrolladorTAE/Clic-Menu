@@ -22,6 +22,16 @@ import {
 } from "../../../../services/staff/casher/cashierNetpayCancellation.service";
 
 import {
+  executeCashierNetpayVoucherReprint,
+  getCashierNetpayVoucherReprintError,
+  resumeCashierPendingNetpayVoucherReprint,
+} from "../../../../services/staff/casher/cashierNetpayVoucherReprint.service";
+
+import {
+  getCashierPendingNetpayOperation,
+} from "../../../../services/staff/casher/cashierNetpayPayment.service";
+
+import {
   sendCashierSaleTicketWhatsapp,
   fetchCashierSaleTicketPrintConfig,
   fetchCashierSaleTicketPrintPayload,
@@ -49,6 +59,7 @@ export default function CashierRefundsHistoryPage() {
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
   const [thermalPrintSaleId, setThermalPrintSaleId] = useState(null);
+  const [voucherReprintSaleId, setVoucherReprintSaleId] = useState(null);
   const [thermalConfig, setThermalConfig] = useState(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -72,7 +83,7 @@ export default function CashierRefundsHistoryPage() {
   });
 
   const pollRef = useRef(null);
-  const pendingCancellationResumeRef = useRef(false);
+  const pendingNetpayResumeRef = useRef(false);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -122,6 +133,12 @@ export default function CashierRefundsHistoryPage() {
       const total = Number(row?.total || 0);
       const refundedTotal = Number(row?.refunded_total || 0);
 
+      const rawNetpayTransactionId = Number(row?.netpay_transaction_id || 0);
+      const netpayTransactionId =
+        Number.isInteger(rawNetpayTransactionId) && rawNetpayTransactionId > 0
+          ? rawNetpayTransactionId
+          : null;
+
       const backendAvailable = Number(row?.available_to_refund);
       const availableToRefund = Number.isFinite(backendAvailable)
         ? Math.max(backendAvailable, 0)
@@ -136,6 +153,7 @@ export default function CashierRefundsHistoryPage() {
       return {
         sale_id: saleId,
         order_id: orderId || null,
+        netpay_transaction_id: netpayTransactionId,
         ticket_folio: ticketFolio,
         customer_name: customerName,
         status,
@@ -273,6 +291,51 @@ export default function CashierRefundsHistoryPage() {
     return false;
   };
 
+  const handleResolvedNetpayVoucherReprint = async (
+    result,
+    { resumed = false } = {}
+  ) => {
+    const outcome = String(result?.outcome || "").toLowerCase();
+
+    if (outcome === "none") return false;
+
+    if (result?.reprintSuccess === true || outcome === "reprinted") {
+      showAlert({
+        severity: "success",
+        title: resumed ? "Voucher recuperado" : "Voucher NetPay",
+        message:
+          result?.backendResponse?.message ||
+          "El voucher NetPay fue reimpreso correctamente.",
+      });
+
+      return true;
+    }
+
+    const messages = {
+      communication_error:
+        "No fue posible confirmar la reimpresión del voucher por un problema de comunicación.",
+      not_sent:
+        "La solicitud de reimpresión no llegó a ejecutarse en Smart PinPad.",
+      invalid_response:
+        "NetPay devolvió una respuesta que no permite confirmar correctamente la reimpresión del voucher.",
+      voucher_in_progress:
+        "La reimpresión del voucher NetPay continúa en proceso.",
+      not_reprinted:
+        "NetPay procesó la solicitud, pero no confirmó una reimpresión exitosa del voucher.",
+    };
+
+    showAlert({
+      severity: "warning",
+      title: resumed ? "Reimpresión recuperada" : "Voucher NetPay",
+      message:
+        result?.backendResponse?.message ||
+        messages[outcome] ||
+        "La reimpresión del voucher NetPay no pudo confirmarse.",
+    });
+
+    return false;
+  };
+
   useEffect(() => {
     load();
 
@@ -289,46 +352,88 @@ export default function CashierRefundsHistoryPage() {
   }, []);
 
   useEffect(() => {
-    if (
-      loading ||
-      pendingCancellationResumeRef.current
-    ) {
-      return;
-    }
+    if (loading || pendingNetpayResumeRef.current) return;
 
-    pendingCancellationResumeRef.current =
-      true;
-
+    pendingNetpayResumeRef.current = true;
     let active = true;
 
-    const resumePendingCancellation =
-      async () => {
-        try {
-          const result =
-            await resumeCashierPendingNetpayCancellation();
+    const resumePendingNetpayOperation = async () => {
+      try {
+        const pending = getCashierPendingNetpayOperation();
 
-          if (!active) return;
-
-          await handleResolvedNetpayCancellation(
-            result,
-            { resumed: true }
-          );
-        } catch (e) {
-          if (!active) return;
-
-          showAlert({
-            severity: "error",
-            title:
-              "No se pudo recuperar NetPay",
-            message: pickErr(
-              e,
-              "No se pudo continuar la cancelación NetPay pendiente."
-            ),
-          });
+        if (
+          !pending?.hasPendingOperation ||
+          !pending?.operation
+        ) {
+          return;
         }
-      };
 
-    resumePendingCancellation();
+        const operationType = String(
+          pending.operation.operationType || ""
+        ).trim().toLowerCase();
+
+        if (operationType === "cancellation") {
+          const result = await resumeCashierPendingNetpayCancellation();
+          if (!active) return;
+
+          await handleResolvedNetpayCancellation(result, { resumed: true });
+          return;
+        }
+
+        if (operationType === "voucher_reprint") {
+          const saleId = Number(pending.operation.saleId || 0);
+          const netpayTransactionId = Number(
+            pending.operation.netpayTransactionId || 0
+          );
+
+          if (
+            !Number.isInteger(saleId) ||
+            saleId <= 0 ||
+            !Number.isInteger(netpayTransactionId) ||
+            netpayTransactionId <= 0
+          ) {
+            throw new Error(
+              "La reimpresión NetPay pendiente no conserva una referencia válida de venta y transacción."
+            );
+          }
+
+          setVoucherReprintSaleId(saleId);
+
+          try {
+            const result = await resumeCashierPendingNetpayVoucherReprint({
+              saleId,
+              netpayTransactionId,
+            });
+
+            if (!active) return;
+
+            await handleResolvedNetpayVoucherReprint(result, {
+              resumed: true,
+            });
+          } finally {
+            if (active) setVoucherReprintSaleId(null);
+          }
+        }
+
+        /*
+         * sale y recovery pertenecen al flujo de cobro.
+         * Esta pantalla no debe consumirlos ni limpiarlos.
+         */
+      } catch (e) {
+        if (!active) return;
+
+        showAlert({
+          severity: "error",
+          title: "No se pudo recuperar NetPay",
+          message: pickErr(
+            e,
+            "No se pudo continuar la operación NetPay pendiente."
+          ),
+        });
+      }
+    };
+
+    resumePendingNetpayOperation();
 
     return () => {
       active = false;
@@ -686,6 +791,57 @@ export default function CashierRefundsHistoryPage() {
     }
   };
 
+  const handleReprintNetpayVoucher = async (sale) => {
+    const saleId = Number(sale?.sale_id || 0);
+    const netpayTransactionId = Number(
+      sale?.netpay_transaction_id || 0
+    );
+
+    if (!saleId) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "No se pudo identificar la venta.",
+      });
+      return;
+    }
+
+    if (
+      !Number.isInteger(netpayTransactionId) ||
+      netpayTransactionId <= 0
+    ) {
+      showAlert({
+        severity: "warning",
+        title: "Voucher NetPay",
+        message:
+          "Esta venta no tiene una operación NetPay disponible para reimprimir su voucher.",
+      });
+      return;
+    }
+
+    setVoucherReprintSaleId(saleId);
+
+    try {
+      const result = await executeCashierNetpayVoucherReprint({
+        saleId,
+        netpayTransactionId,
+      });
+
+      await handleResolvedNetpayVoucherReprint(result);
+    } catch (e) {
+      const netpayError = getCashierNetpayVoucherReprintError(e);
+      const status = Number(e?.response?.status || 0);
+
+      showAlert({
+        severity: [409, 422].includes(status) ? "warning" : "error",
+        title: "No se pudo reimprimir",
+        message: netpayError.message,
+      });
+    } finally {
+      setVoucherReprintSaleId(null);
+    }
+  };
+
   const handleOpenTicketActions = async (sale) => {
     if (!sale?.sale_id) return;
 
@@ -710,7 +866,7 @@ export default function CashierRefundsHistoryPage() {
   };
 
   const handleCloseTicketActions = () => {
-    if (sendingWhatsapp || thermalPrintSaleId) return;
+    if (sendingWhatsapp || thermalPrintSaleId || voucherReprintSaleId) return;
 
     setTicketActionsSale(null);
     setThermalConfig(null);
@@ -823,6 +979,14 @@ export default function CashierRefundsHistoryPage() {
         onThermalPrint={handleThermalPrintTicket}
         thermalPrinting={
           Number(thermalPrintSaleId || 0) ===
+          Number(ticketActionsSale?.sale_id || 0)
+        }
+        voucherReprintAvailable={
+          Number(ticketActionsSale?.netpay_transaction_id || 0) > 0
+        }
+        onReprintNetpayVoucher={handleReprintNetpayVoucher}
+        voucherReprinting={
+          Number(voucherReprintSaleId || 0) ===
           Number(ticketActionsSale?.sale_id || 0)
         }
       />

@@ -1,5 +1,5 @@
 import {
-  Alert, Box, Button, Card, Chip, FormControlLabel, IconButton, Paper, Stack, Switch, Tooltip, Typography,
+  Alert, Box, Button, Card, Chip, CircularProgress, FormControlLabel, IconButton, Paper, Stack, Switch, Tooltip, Typography,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
@@ -95,6 +95,7 @@ function buttonsRules(productType, inventoryType, allowedProducts, planMeta = nu
 
 export default function ProductsPageList({
   products,
+  productsLoading,
   productsMode,
   allowedProducts,
   pagination,
@@ -138,6 +139,11 @@ export default function ProductsPageList({
             borderBottom: "1px solid",
             borderColor: "divider",
             backgroundColor: "#fff",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
           }}
         >
           <Typography
@@ -149,9 +155,47 @@ export default function ProductsPageList({
           >
             Lista de productos
           </Typography>
+
+          <Button
+            onClick={onCreate}
+            variant="contained"
+            startIcon={<AddIcon />}
+            sx={{
+              minWidth: { xs: "100%", sm: 180 },
+              height: 42,
+              borderRadius: 2,
+              fontWeight: 800,
+            }}
+          >
+            Nuevo producto
+          </Button>
         </Box>
 
-        {products.length === 0 ? (
+        {productsLoading ? (
+          <Box
+            sx={{
+              px: 3,
+              py: 5,
+              minHeight: 210,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <Stack spacing={1.5} alignItems="center">
+              <CircularProgress size={32} color="primary" />
+
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "text.secondary",
+                }}
+              >
+                Cargando productos…
+              </Typography>
+            </Stack>
+          </Box>
+        ) : products.length === 0 ? (
           <Box
             sx={{
               px: 3,

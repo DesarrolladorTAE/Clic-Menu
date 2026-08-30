@@ -19,6 +19,8 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
 import { changeProductType } from "../../services/products/catalog/productType.service";
 import { changeInventoryType } from "../../services/products/catalog/productInventoryType.service";
+import ProductFormTabs from "./ProductFormTabs";
+import ProductTypeModeCards from "./ProductTypeModeCards";
 
 const DEFAULT_ALLOWED_PRODUCTS = {
   allowed_product_types: ["simple"],
@@ -29,12 +31,6 @@ const DEFAULT_ALLOWED_PRODUCTS = {
 const PRODUCT_TYPES = [
   { value: "simple", label: "Simple" },
   { value: "composite", label: "Compuesto" },
-];
-
-const INVENTORY_TYPES = [
-  { value: "ingredients", label: "Ingredientes" },
-  { value: "product", label: "Producto" },
-  { value: "none", label: "Sin inventario" },
 ];
 
 function allowedCombinations(allowedProducts) {
@@ -180,12 +176,13 @@ export default function ProductFormModal({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  const isEdit = !!initialData?.id;
   const fileInputRef = useRef(null);
   const imageReqRef = useRef(0);
   const satReqRef = useRef(0);
 
   const [saving, setSaving] = useState(false);
+  const [modeSaving, setModeSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("product");
   const [err, setErr] = useState("");
 
   const [form, setForm] = useState({
@@ -201,6 +198,8 @@ export default function ProductFormModal({
     plan_meta: null,
   });
 
+  const isEdit = Boolean(initialData?.id || form.id);
+
   const [images, setImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(false);
   const [satLoading, setSatLoading] = useState(false);
@@ -214,18 +213,10 @@ export default function ProductFormModal({
   const isBlockedByPlan = Boolean(planMeta?.blocked_by_plan);
   const canEditTypeInventory = !isEdit || planMeta?.can_edit_type_inventory !== false;
 
-  const productTypeOptions = useMemo(() => {
-    return allowedProductTypesForPlan(allowedProducts);
-  }, [allowedProducts]);
-
-  const inventoryOptions = useMemo(() => {
-    const allowed = allowedInventoryTypesForProductType(
-      form.product_type,
-      allowedProducts
-    );
-
-    return INVENTORY_TYPES.filter((x) => allowed.includes(x.value));
-  }, [form.product_type, allowedProducts]);
+  useEffect(() => {
+    if (!open) return;
+    setActiveTab("product");
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -266,8 +257,7 @@ export default function ProductFormModal({
       fileInputRef.current.value = "";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id, categories, allowedProducts]);
-
+  }, [open, initialData?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -275,7 +265,7 @@ export default function ProductFormModal({
     satReqRef.current += 1;
     const reqId = satReqRef.current;
 
-    const productId = currentInitialId;
+    const productId = currentInitialId || form.id || null;
 
     if (!productId) {
       setSatLoading(false);
@@ -315,7 +305,7 @@ export default function ProductFormModal({
         setSatLoading(false);
       }
     })();
-  }, [open, currentInitialId, restaurantId, getProductSatMapping]);
+  }, [open, currentInitialId, form.id, restaurantId, getProductSatMapping]);
 
   useEffect(() => {
     if (!open) return;
@@ -369,20 +359,20 @@ export default function ProductFormModal({
     return true;
   }, [requiresBranch, effectiveBranchId, form.category_id, form.name]);
 
-  const handleProductTypeChange = async (nextType) => {
-    if (!canEditTypeInventory) return;
+  const handleModeChange = async ({ product_type: nextType, inventory_type: nextInventory }) => {
+    if (!canEditTypeInventory || modeSaving) return;
 
-    setErr("");
+    if (!planAllowsCombination(allowedProducts, nextType, nextInventory)) {
+      setErr("Tu plan actual no permite esta configuración de producto.");
+      return;
+    }
 
     const prevType = form.product_type || "simple";
     const prevInventory = form.inventory_type || "none";
 
-    const nextInventory = normalizeInventoryForProductType(
-      nextType,
-      prevInventory,
-      allowedProducts
-    );
+    if (prevType === nextType && prevInventory === nextInventory) return;
 
+    setErr("");
     setForm((prev) => ({
       ...prev,
       product_type: nextType,
@@ -391,86 +381,62 @@ export default function ProductFormModal({
 
     if (!form.id) return;
 
+    setModeSaving(true);
+
     try {
-      const res = await changeProductType(restaurantId, form.id, nextType);
-      const updated = res?.data || res || null;
+      let updated = null;
+
+      if (prevType !== nextType) {
+        const res = await changeProductType(restaurantId, form.id, nextType);
+        updated = res?.data || res || null;
+      }
+
+      const effectiveType = updated?.product_type || nextType;
+      const effectiveInventory =
+        updated?.inventory_type ||
+        normalizeInventoryForProductType(
+          effectiveType,
+          prevInventory,
+          allowedProducts
+        );
+
+      if (effectiveInventory !== nextInventory) {
+        const res = await changeInventoryType(
+          restaurantId,
+          form.id,
+          nextInventory
+        );
+
+        updated = res?.data || res || updated;
+      }
+
+      const fresh = await getProduct(restaurantId, form.id);
 
       setForm((prev) => ({
         ...prev,
-        product_type: updated?.product_type || nextType,
+        product_type: fresh?.product_type || nextType,
         inventory_type:
-          updated?.inventory_type ||
+          fresh?.inventory_type ||
           normalizeInventoryForProductType(
-            updated?.product_type || nextType,
-            prev.inventory_type,
+            fresh?.product_type || nextType,
+            nextInventory,
             allowedProducts
           ),
-        status: updated?.status || prev.status,
-        plan_meta: updated?.plan_meta || prev.plan_meta,
+        status: fresh?.status || prev.status,
+        plan_meta: fresh?.plan_meta || prev.plan_meta,
       }));
 
-      await onSaved?.(updated || { id: form.id });
+      await onSaved?.(fresh || updated || { id: form.id });
     } catch (e) {
       setForm((prev) => ({
         ...prev,
         product_type: prevType,
         inventory_type: prevInventory,
       }));
-      setErr(apiErrorToMessage(e, "No se pudo cambiar el tipo de producto"));
-    }
-  };
 
-  const handleInventoryTypeChange = async (nextInventory) => {
-    if (!canEditTypeInventory) return;
-
-    setErr("");
-
-    const prevInventory = form.inventory_type || "none";
-    const productType = form.product_type || "simple";
-
-    const allowed = allowedInventoryTypesForProductType(
-      productType,
-      allowedProducts
-    );
-
-    if (!allowed.includes(nextInventory)) {
-      const forced = allowed[0] || "none";
-      setForm((prev) => ({
-        ...prev,
-        inventory_type: forced,
-      }));
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      inventory_type: nextInventory,
-    }));
-
-    if (!form.id) return;
-
-    try {
-      const res = await changeInventoryType(
-        restaurantId,
-        form.id,
-        nextInventory
-      );
-      const updated = res?.data || res || null;
-
-      setForm((prev) => ({
-        ...prev,
-        inventory_type: updated?.inventory_type || nextInventory,
-        status: updated?.status || prev.status,
-        plan_meta: updated?.plan_meta || prev.plan_meta,
-      }));
-
-      await onSaved?.(updated || { id: form.id });
-    } catch (e) {
-      setForm((prev) => ({
-        ...prev,
-        inventory_type: prevInventory,
-      }));
-      setErr(apiErrorToMessage(e, "No se pudo cambiar el tipo de inventario"));
+      setErr(apiErrorToMessage(e, "No se pudo cambiar la configuración del producto"));
+    } finally {
+      setModeSaving(false);
     }
   };
 
@@ -493,6 +459,7 @@ export default function ProductFormModal({
     }
 
     if (hasIncompleteSatPair(form)) {
+      setActiveTab("tax");
       setErr(
         "Completa ambos campos fiscales: clave producto/servicio SAT y clave unidad SAT, o deja ambos vacíos."
       );
@@ -687,7 +654,7 @@ export default function ProductFormModal({
   return (
     <Dialog
       open={open}
-      onClose={saving ? undefined : onClose}
+      onClose={saving || modeSaving ? undefined : onClose}
       fullWidth
       maxWidth="lg"
       fullScreen={isMobile}
@@ -742,7 +709,7 @@ export default function ProductFormModal({
 
           <IconButton
             onClick={onClose}
-            disabled={saving}
+            disabled={saving || modeSaving}
             sx={{
               color: "#fff",
               bgcolor: "rgba(255,255,255,0.08)",
@@ -803,266 +770,302 @@ export default function ProductFormModal({
             </Alert>
           ) : null}
 
-          <Card
-            sx={{
-              borderRadius: 0,
-              backgroundColor: "background.paper",
-            }}
-          >
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Stack spacing={2.5}>
-                <Typography
-                  sx={{
-                    fontWeight: 800,
-                    fontSize: { xs: 18, sm: 20 },
-                    color: "text.primary",
-                  }}
-                >
-                  Datos principales
-                </Typography>
+          <ProductFormTabs
+            value={activeTab}
+            onChange={setActiveTab}
+          />
 
-                <Stack spacing={2}>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Categoría *"
-                      input={
-                        <FormControl fullWidth>
-                          <Select
-                            value={form.category_id}
+          {activeTab === "product" ? (
+            <>
+              <Card
+                sx={{
+                  borderRadius: 0,
+                  backgroundColor: "background.paper",
+                }}
+              >
+                <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Stack spacing={2.5}>
+                    <Typography
+                      sx={{
+                        fontWeight: 800,
+                        fontSize: { xs: 18, sm: 20 },
+                        color: "text.primary",
+                      }}
+                    >
+                      Datos principales
+                    </Typography>
+
+                    <Stack spacing={2}>
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                        <FieldBlock
+                          label="Categoría *"
+                          help="La categoría corresponde al filtro seleccionado en la página de productos."
+                          input={
+                            <FormControl fullWidth disabled>
+                              <Select
+                                value={form.category_id}
+                                displayEmpty
+                                disabled
+                                IconComponent={KeyboardArrowDownIcon}
+                                sx={{
+                                  ...selectSx,
+                                  bgcolor: "#ECECEC",
+                                  "&.Mui-disabled .MuiSelect-select": {
+                                    color: "text.primary",
+                                    WebkitTextFillColor: "inherit",
+                                  },
+                                }}
+                              >
+                                <MenuItem value="">
+                                  {categories?.length
+                                    ? "Categoría no seleccionada"
+                                    : "No hay categorías disponibles"}
+                                </MenuItem>
+
+                                {categories.map((c) => (
+                                  <MenuItem key={c.id} value={String(c.id)}>
+                                    {c.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          }
+                        />
+
+                        <FieldBlock
+                          label="Nombre *"
+                          input={
+                            <TextField
+                              value={form.name}
+                              onChange={(e) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  name: e.target.value,
+                                }))
+                              }
+                              placeholder="Ej. Hamburguesa especial"
+                            />
+                          }
+                        />
+                      </Stack>
+
+                      <FieldBlock
+                        label="Descripción"
+                        input={
+                          <TextField
+                            value={form.description}
                             onChange={(e) =>
                               setForm((prev) => ({
                                 ...prev,
-                                category_id: e.target.value,
+                                description: e.target.value,
                               }))
                             }
-                            displayEmpty
-                            IconComponent={KeyboardArrowDownIcon}
-                            sx={selectSx}
-                          >
-                            <MenuItem value="">
-                              {categories?.length
-                                ? "Selecciona una categoría"
-                                : "No hay categorías disponibles"}
-                            </MenuItem>
-
-                            {categories.map((c) => (
-                              <MenuItem key={c.id} value={String(c.id)}>
-                                {c.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      }
-                    />
-
-                    <FieldBlock
-                      label="Nombre *"
-                      input={
-                        <TextField
-                          value={form.name}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              name: e.target.value,
-                            }))
-                          }
-                          placeholder="Ej. Hamburguesa especial"
-                        />
-                      }
-                    />
-                  </Stack>
-
-                  <FieldBlock
-                    label="Descripción"
-                    input={
-                      <TextField
-                        value={form.description}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            description: e.target.value,
-                          }))
+                            placeholder="Describe brevemente este producto"
+                            multiline
+                            minRows={3}
+                          />
                         }
-                        placeholder="Describe brevemente este producto"
-                        multiline
-                        minRows={3}
                       />
-                    }
-                  />
 
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Tipo de producto *"
-                      help={
-                        !canEditTypeInventory
-                          ? "Bloqueado por plan: este campo no puede modificarse."
-                          : ""
-                      }
-                      input={
-                        <FormControl fullWidth disabled={!canEditTypeInventory}>
-                          <Select
-                            value={form.product_type}
-                            onChange={(e) =>
-                              handleProductTypeChange(e.target.value)
-                            }
-                            IconComponent={KeyboardArrowDownIcon}
-                            disabled={!canEditTypeInventory}
-                            sx={{
-                              ...selectSx,
-                              bgcolor: !canEditTypeInventory
-                                ? "#ECECEC"
-                                : "#F4F4F4",
-                              "&.Mui-disabled .MuiSelect-select": {
-                                color: "text.secondary",
-                                WebkitTextFillColor: "inherit",
-                              },
-                            }}
-                          >
-                            {productTypeOptions.map((op) => (
-                              <MenuItem key={op.value} value={op.value}>
-                                {op.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      }
-                    />
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: "text.primary",
+                            mb: 1,
+                          }}
+                        >
+                          Tipo de producto *
+                        </Typography>
 
-                    <FieldBlock
-                      label="Tipo de inventario *"
-                      help={
-                        !canEditTypeInventory
-                          ? "Bloqueado por plan: este campo no puede modificarse."
-                          : ""
-                      }
-                      input={
-                        <FormControl fullWidth disabled={!canEditTypeInventory}>
-                          <Select
-                            value={form.inventory_type}
-                            onChange={(e) =>
-                              handleInventoryTypeChange(e.target.value)
-                            }
-                            IconComponent={KeyboardArrowDownIcon}
-                            disabled={!canEditTypeInventory}
-                            sx={{
-                              ...selectSx,
-                              bgcolor: !canEditTypeInventory
-                                ? "#ECECEC"
-                                : "#F4F4F4",
-                              "&.Mui-disabled .MuiSelect-select": {
-                                color: "text.secondary",
-                                WebkitTextFillColor: "inherit",
-                              },
-                            }}
-                          >
-                            {inventoryOptions.map((op) => (
-                              <MenuItem key={op.value} value={op.value}>
-                                {op.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      }
-                    />
-                  </Stack>
+                        <ProductTypeModeCards
+                          allowedProducts={allowedProducts}
+                          productType={form.product_type}
+                          inventoryType={form.inventory_type}
+                          disabled={!canEditTypeInventory || saving || modeSaving}
+                          onChange={handleModeChange}
+                        />
 
-                  <Alert
-                    severity={isBlockedByPlan ? "warning" : "info"}
-                    sx={{
-                      borderRadius: 1,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <Typography variant="body2">
-                      {isBlockedByPlan
-                        ? "La lógica de inventario/tipo queda protegida para no perder recetas, componentes, costos, inventario ni historial."
-                        : modeHelp(form.product_type, form.inventory_type)}
-                    </Typography>
-                  </Alert>
-
-                  <Box
-                    sx={{
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1,
-                      backgroundColor: "background.default",
-                      borderLeft: "5px solid",
-                      borderLeftColor: "primary.main",
-                      p: { xs: 1.5, sm: 2 },
-                    }}
-                  >
-                    <Stack spacing={1.75}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        spacing={1}
-                      >
-                        <Box>
-                          <SectionTitle title="Claves fiscales" />
-
+                        {!canEditTypeInventory ? (
                           <Typography
                             sx={{
-                              mt: 0.5,
-                              fontSize: 13,
+                              mt: 0.75,
+                              fontSize: 12,
                               color: "text.secondary",
                               lineHeight: 1.45,
                             }}
                           >
-                            Configura las claves SAT que se usarán cuando el producto se facture
-                            de forma individual.
+                            Bloqueado por plan: esta configuración no puede modificarse.
                           </Typography>
-                        </Box>
-
-                        {satLoading ? (
-                          <Chip
-                            label="Cargando claves..."
-                            size="small"
-                            sx={{ fontWeight: 800 }}
-                          />
                         ) : null}
-                      </Stack>
+                      </Box>
+
+                      <Alert
+                        severity={isBlockedByPlan ? "warning" : "info"}
+                        sx={{
+                          borderRadius: 1,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <Typography variant="body2">
+                          {isBlockedByPlan
+                            ? "La lógica de inventario/tipo queda protegida para no perder recetas, componentes, costos, inventario ni historial."
+                            : modeHelp(form.product_type, form.inventory_type)}
+                        </Typography>
+                      </Alert>
 
                       <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                         <FieldBlock
-                          label="Clave producto/servicio SAT"
-                          help="Ejemplo común para consumo de alimentos: 90101501."
+                          label="Alcance del catálogo"
                           input={
-                            <TextField
-                              fullWidth
-                              value={form.sat_product_service}
-                              disabled={saving || satLoading}
-                              onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  sat_product_service: e.target.value,
-                                }))
-                              }
-                              placeholder="Ej. 90101501"
-                            />
+                            <Box
+                              sx={{
+                                minHeight: 44,
+                                display: "flex",
+                                alignItems: "center",
+                                px: 1.5,
+                                bgcolor: "#F4F4F4",
+                                borderRadius: 0,
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize: 14,
+                                  color: "text.primary",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {productsMode === "global"
+                                  ? "Global (catálogo base)"
+                                  : "Sucursal (catálogo base)"}
+                              </Typography>
+                            </Box>
                           }
                         />
 
-                        <FieldBlock
-                          label="Clave unidad SAT"
-                          help="Ejemplo común: E48."
-                          input={
-                            <TextField
-                              fullWidth
-                              value={form.sat_unit}
-                              disabled={saving || satLoading}
-                              onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  sat_unit: e.target.value,
-                                }))
+                        {!isEdit ? (
+                          <Box sx={{ flex: 1, width: "100%" }}>
+                            <Typography
+                              sx={{
+                                fontSize: 14,
+                                fontWeight: 800,
+                                color: "text.primary",
+                                mb: 1,
+                              }}
+                            >
+                              Estado inicial
+                            </Typography>
+
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={form.status === "active"}
+                                  onChange={(e) =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      status: e.target.checked
+                                        ? "active"
+                                        : "inactive",
+                                    }))
+                                  }
+                                  color="primary"
+                                />
                               }
-                              placeholder="Ej. E48"
+                              label={
+                                <Typography
+                                  sx={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "text.primary",
+                                  }}
+                                >
+                                  {form.status === "active"
+                                    ? "Activo al guardar"
+                                    : "Inactivo al guardar"}
+                                </Typography>
+                              }
+                              sx={{ m: 0 }}
                             />
-                          }
-                        />
+                          </Box>
+                        ) : (
+                          <Box sx={{ flex: 1, width: "100%" }}>
+                            <Typography
+                              sx={{
+                                fontSize: 14,
+                                fontWeight: 800,
+                                color: "text.primary",
+                                mb: 1,
+                              }}
+                            >
+                              Estado
+                            </Typography>
+
+                            <Alert
+                              severity={isBlockedByPlan ? "warning" : "info"}
+                              sx={{ borderRadius: 1, alignItems: "flex-start" }}
+                            >
+                              <Typography variant="body2">
+                                {isBlockedByPlan
+                                  ? "Este producto no puede activarse con el plan actual."
+                                  : "El estado activo o inactivo se controla desde la página principal."}
+                              </Typography>
+                            </Alert>
+                          </Box>
+                        )}
                       </Stack>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
 
+              <Card
+                sx={{
+                  borderRadius: 0,
+                  backgroundColor: "background.paper",
+                }}
+              >
+                <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                  <Stack spacing={2}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      spacing={2}
+                    >
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: { xs: 18, sm: 20 },
+                            color: "text.primary",
+                          }}
+                        >
+                          Imágenes
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            mt: 0.5,
+                            fontSize: 13,
+                            color: "text.secondary",
+                          }}
+                        >
+                          Máximo {maxImages} imágenes por producto.
+                        </Typography>
+                      </Box>
+
+                      {imagesLoading ? (
+                        <Chip
+                          icon={<ImageIcon />}
+                          label="Cargando..."
+                          size="small"
+                          sx={{ fontWeight: 800 }}
+                        />
+                      ) : null}
+                    </Stack>
+
+                    {!form.id ? (
                       <Alert
                         severity="info"
                         sx={{
@@ -1071,166 +1074,297 @@ export default function ProductFormModal({
                         }}
                       >
                         <Typography variant="body2">
-                          Si capturas claves fiscales, debes llenar ambos campos. También puedes
-                          dejarlos vacíos y completarlos después.
+                          Guarda el producto primero para poder subir y ordenar imágenes.
                         </Typography>
                       </Alert>
-                    </Stack>
-                  </Box>
-
-                  
-
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Alcance del catálogo"
-                      input={
-                        <Box
-                          sx={{
-                            minHeight: 44,
-                            display: "flex",
-                            alignItems: "center",
-                            px: 1.5,
-                            bgcolor: "#F4F4F4",
-                            borderRadius: 0,
-                          }}
+                    ) : (
+                      <>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1.5}
+                          alignItems={{ xs: "stretch", sm: "center" }}
                         >
-                          <Typography
+                          <Button
+                            component="label"
+                            variant="outlined"
+                            startIcon={<ImageIcon />}
+                            disabled={!canUploadMore}
                             sx={{
-                              fontSize: 14,
-                              color: "text.primary",
-                              fontWeight: 700,
+                              minWidth: { xs: "100%", sm: 220 },
+                              height: 44,
+                              borderRadius: 2,
                             }}
                           >
-                            {productsMode === "global"
-                              ? "Global (catálogo base)"
-                              : "Sucursal (catálogo base)"}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-
-                    {!isEdit ? (
-                      <Box sx={{ flex: 1, width: "100%" }}>
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-                            fontWeight: 800,
-                            color: "text.primary",
-                            mb: 1,
-                          }}
-                        >
-                          Estado inicial
-                        </Typography>
-
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={form.status === "active"}
-                              onChange={(e) =>
-                                setForm((prev) => ({
-                                  ...prev,
-                                  status: e.target.checked
-                                    ? "active"
-                                    : "inactive",
-                                }))
-                              }
-                              color="primary"
+                            Subir imagen
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              hidden
+                              accept="image/*"
+                              onChange={(e) => onUpload(e.target.files?.[0])}
                             />
-                          }
-                          label={
+                          </Button>
+
+                          {!canUploadMore ? (
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                color: "error.main",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Ya tienes {maxImages} imágenes cargadas.
+                            </Typography>
+                          ) : null}
+                        </Stack>
+
+                        {imagesLoading ? (
+                          <Box
+                            sx={{
+                              p: 3,
+                              border: "1px dashed",
+                              borderColor: "divider",
+                              borderRadius: 1,
+                              textAlign: "center",
+                              bgcolor: "#fff",
+                            }}
+                          >
                             <Typography
                               sx={{
                                 fontSize: 14,
-                                fontWeight: 700,
-                                color: "text.primary",
+                                color: "text.secondary",
                               }}
                             >
-                              {form.status === "active"
-                                ? "Activo al guardar"
-                                : "Inactivo al guardar"}
+                              Cargando imágenes…
                             </Typography>
-                          }
-                          sx={{ m: 0 }}
-                        />
-                      </Box>
-                    ) : (
-                      <Box sx={{ flex: 1, width: "100%" }}>
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-                            fontWeight: 800,
-                            color: "text.primary",
-                            mb: 1,
-                          }}
-                        >
-                          Estado
-                        </Typography>
+                          </Box>
+                        ) : images.length === 0 ? (
+                          <Box
+                            sx={{
+                              p: 3,
+                              border: "1px dashed",
+                              borderColor: "divider",
+                              borderRadius: 1,
+                              textAlign: "center",
+                              bgcolor: "#fff",
+                            }}
+                          >
+                            <Inventory2OutlinedIcon
+                              sx={{
+                                fontSize: 34,
+                                color: "text.secondary",
+                              }}
+                            />
+                            <Typography
+                              sx={{
+                                mt: 1,
+                                fontSize: 14,
+                                color: "text.secondary",
+                              }}
+                            >
+                              Aún no hay imágenes para este producto.
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: {
+                                xs: "repeat(2, minmax(0, 1fr))",
+                                sm: "repeat(3, minmax(0, 1fr))",
+                                md: "repeat(4, minmax(0, 1fr))",
+                              },
+                              gap: 2,
+                            }}
+                          >
+                            {images.map((img, idx) => (
+                              <Card
+                                key={img.id}
+                                sx={{
+                                  borderRadius: 1,
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  boxShadow: "none",
+                                  backgroundColor: "#fff",
+                                }}
+                              >
+                                <Box sx={{ p: 1.25 }}>
+                                  <Box
+                                    sx={{
+                                      width: "100%",
+                                      aspectRatio: "1 / 1",
+                                      overflow: "hidden",
+                                      borderRadius: 1,
+                                      border: "1px solid",
+                                      borderColor: "divider",
+                                      backgroundColor: "#F7F7F7",
+                                    }}
+                                  >
+                                    <img
+                                      src={imageSrc(img)}
+                                      alt=""
+                                      loading="lazy"
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                        display: "block",
+                                      }}
+                                      onError={(ev) => {
+                                        ev.currentTarget.style.display = "none";
+                                        const parent = ev.currentTarget.parentElement;
+                                        if (
+                                          parent &&
+                                          !parent.querySelector(".img-fallback")
+                                        ) {
+                                          const d = document.createElement("div");
+                                          d.className = "img-fallback";
+                                          d.style.height = "100%";
+                                          d.style.display = "grid";
+                                          d.style.placeItems = "center";
+                                          d.style.fontSize = "12px";
+                                          d.style.color = "#6E6A6A";
+                                          d.innerText = "Sin imagen";
+                                          parent.appendChild(d);
+                                        }
+                                      }}
+                                    />
+                                  </Box>
 
-                        <Alert
-                          severity={isBlockedByPlan ? "warning" : "info"}
-                          sx={{ borderRadius: 1, alignItems: "flex-start" }}
-                        >
-                          <Typography variant="body2">
-                            {isBlockedByPlan
-                              ? "Este producto no puede activarse con el plan actual."
-                              : "El estado activo o inactivo se controla desde la página principal."}
-                          </Typography>
-                        </Alert>
-                      </Box>
+                                  <Stack direction="row" spacing={1} mt={1.25}>
+                                    <Tooltip title="Subir posición">
+                                      <span style={{ display: "inline-flex", flex: 1 }}>
+                                        <IconButton
+                                          onClick={() => moveImage(idx, -1)}
+                                          disabled={idx === 0}
+                                          sx={imageActionSx}
+                                        >
+                                          <ArrowUpwardIcon fontSize="small" />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+
+                                    <Tooltip title="Bajar posición">
+                                      <span style={{ display: "inline-flex", flex: 1 }}>
+                                        <IconButton
+                                          onClick={() => moveImage(idx, 1)}
+                                          disabled={idx === images.length - 1}
+                                          sx={imageActionSx}
+                                        >
+                                          <ArrowDownwardIcon fontSize="small" />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+
+                                    <Tooltip title="Eliminar imagen">
+                                      <IconButton
+                                        onClick={() => onRemoveImage(img.id)}
+                                        sx={imageDeleteSx}
+                                      >
+                                        <DeleteOutlineIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </Stack>
+                                </Box>
+                              </Card>
+                            ))}
+                          </Box>
+                        )}
+                      </>
                     )}
                   </Stack>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
 
-          <Card
-            sx={{
-              borderRadius: 0,
-              backgroundColor: "background.paper",
-            }}
-          >
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Stack spacing={2}>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  spacing={2}
-                >
-                  <Box>
-                    <Typography
-                      sx={{
-                        fontWeight: 800,
-                        fontSize: { xs: 18, sm: 20 },
-                        color: "text.primary",
-                      }}
-                    >
-                      Imágenes
-                    </Typography>
+          {activeTab === "tax" ? (
+            <Card
+              sx={{
+                borderRadius: 0,
+                backgroundColor: "background.paper",
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={2.5}>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    spacing={1}
+                  >
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontWeight: 800,
+                          fontSize: { xs: 18, sm: 20 },
+                          color: "text.primary",
+                        }}
+                      >
+                        Claves fiscales
+                      </Typography>
 
-                    <Typography
-                      sx={{
-                        mt: 0.5,
-                        fontSize: 13,
-                        color: "text.secondary",
-                      }}
-                    >
-                      Máximo {maxImages} imágenes por producto.
-                    </Typography>
-                  </Box>
+                      <Typography
+                        sx={{
+                          mt: 0.5,
+                          fontSize: 13,
+                          color: "text.secondary",
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Configura las claves SAT que se usarán cuando el producto se facture de forma individual.
+                      </Typography>
+                    </Box>
 
-                  {imagesLoading ? (
-                    <Chip
-                      icon={<ImageIcon />}
-                      label="Cargando..."
-                      size="small"
-                      sx={{ fontWeight: 800 }}
+                    {satLoading ? (
+                      <Chip
+                        label="Cargando claves..."
+                        size="small"
+                        sx={{ fontWeight: 800 }}
+                      />
+                    ) : null}
+                  </Stack>
+
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                    <FieldBlock
+                      label="Clave producto/servicio SAT"
+                      help="Ejemplo común para consumo de alimentos: 90101501."
+                      input={
+                        <TextField
+                          fullWidth
+                          value={form.sat_product_service}
+                          disabled={saving || satLoading}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              sat_product_service: e.target.value,
+                            }))
+                          }
+                          placeholder="Ej. 90101501"
+                        />
+                      }
                     />
-                  ) : null}
-                </Stack>
 
-                {!form.id ? (
+                    <FieldBlock
+                      label="Clave unidad SAT"
+                      help="Ejemplo común: E48."
+                      input={
+                        <TextField
+                          fullWidth
+                          value={form.sat_unit}
+                          disabled={saving || satLoading}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              sat_unit: e.target.value,
+                            }))
+                          }
+                          placeholder="Ej. E48"
+                        />
+                      }
+                    />
+                  </Stack>
+
                   <Alert
                     severity="info"
                     sx={{
@@ -1239,207 +1373,13 @@ export default function ProductFormModal({
                     }}
                   >
                     <Typography variant="body2">
-                      Guarda el producto primero para poder subir y ordenar imágenes.
+                      Si capturas claves fiscales, debes llenar ambos campos. También puedes dejarlos vacíos y completarlos después.
                     </Typography>
                   </Alert>
-                ) : (
-                  <>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={1.5}
-                      alignItems={{ xs: "stretch", sm: "center" }}
-                    >
-                      <Button
-                        component="label"
-                        variant="outlined"
-                        startIcon={<ImageIcon />}
-                        disabled={!canUploadMore}
-                        sx={{
-                          minWidth: { xs: "100%", sm: 220 },
-                          height: 44,
-                          borderRadius: 2,
-                        }}
-                      >
-                        Subir imagen
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          hidden
-                          accept="image/*"
-                          onChange={(e) => onUpload(e.target.files?.[0])}
-                        />
-                      </Button>
-
-                      {!canUploadMore ? (
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            color: "error.main",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Ya tienes {maxImages} imágenes cargadas.
-                        </Typography>
-                      ) : null}
-                    </Stack>
-
-                    {imagesLoading ? (
-                      <Box
-                        sx={{
-                          p: 3,
-                          border: "1px dashed",
-                          borderColor: "divider",
-                          borderRadius: 1,
-                          textAlign: "center",
-                          bgcolor: "#fff",
-                        }}
-                      >
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-                            color: "text.secondary",
-                          }}
-                        >
-                          Cargando imágenes…
-                        </Typography>
-                      </Box>
-                    ) : images.length === 0 ? (
-                      <Box
-                        sx={{
-                          p: 3,
-                          border: "1px dashed",
-                          borderColor: "divider",
-                          borderRadius: 1,
-                          textAlign: "center",
-                          bgcolor: "#fff",
-                        }}
-                      >
-                        <Inventory2OutlinedIcon
-                          sx={{
-                            fontSize: 34,
-                            color: "text.secondary",
-                          }}
-                        />
-                        <Typography
-                          sx={{
-                            mt: 1,
-                            fontSize: 14,
-                            color: "text.secondary",
-                          }}
-                        >
-                          Aún no hay imágenes para este producto.
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: {
-                            xs: "repeat(2, minmax(0, 1fr))",
-                            sm: "repeat(3, minmax(0, 1fr))",
-                            md: "repeat(4, minmax(0, 1fr))",
-                          },
-                          gap: 2,
-                        }}
-                      >
-                        {images.map((img, idx) => (
-                          <Card
-                            key={img.id}
-                            sx={{
-                              borderRadius: 1,
-                              border: "1px solid",
-                              borderColor: "divider",
-                              boxShadow: "none",
-                              backgroundColor: "#fff",
-                            }}
-                          >
-                            <Box sx={{ p: 1.25 }}>
-                              <Box
-                                sx={{
-                                  width: "100%",
-                                  aspectRatio: "1 / 1",
-                                  overflow: "hidden",
-                                  borderRadius: 1,
-                                  border: "1px solid",
-                                  borderColor: "divider",
-                                  backgroundColor: "#F7F7F7",
-                                }}
-                              >
-                                <img
-                                  src={imageSrc(img)}
-                                  alt=""
-                                  loading="lazy"
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                    display: "block",
-                                  }}
-                                  onError={(ev) => {
-                                    ev.currentTarget.style.display = "none";
-                                    const parent = ev.currentTarget.parentElement;
-                                    if (
-                                      parent &&
-                                      !parent.querySelector(".img-fallback")
-                                    ) {
-                                      const d = document.createElement("div");
-                                      d.className = "img-fallback";
-                                      d.style.height = "100%";
-                                      d.style.display = "grid";
-                                      d.style.placeItems = "center";
-                                      d.style.fontSize = "12px";
-                                      d.style.color = "#6E6A6A";
-                                      d.innerText = "Sin imagen";
-                                      parent.appendChild(d);
-                                    }
-                                  }}
-                                />
-                              </Box>
-
-                              <Stack direction="row" spacing={1} mt={1.25}>
-                                <Tooltip title="Subir posición">
-                                  <span style={{ display: "inline-flex", flex: 1 }}>
-                                    <IconButton
-                                      onClick={() => moveImage(idx, -1)}
-                                      disabled={idx === 0}
-                                      sx={imageActionSx}
-                                    >
-                                      <ArrowUpwardIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-
-                                <Tooltip title="Bajar posición">
-                                  <span style={{ display: "inline-flex", flex: 1 }}>
-                                    <IconButton
-                                      onClick={() => moveImage(idx, 1)}
-                                      disabled={idx === images.length - 1}
-                                      sx={imageActionSx}
-                                    >
-                                      <ArrowDownwardIcon fontSize="small" />
-                                    </IconButton>
-                                  </span>
-                                </Tooltip>
-
-                                <Tooltip title="Eliminar imagen">
-                                  <IconButton
-                                    onClick={() => onRemoveImage(img.id)}
-                                    sx={imageDeleteSx}
-                                  >
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Stack>
-                            </Box>
-                          </Card>
-                        ))}
-                      </Box>
-                    )}
-                  </>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Stack
             direction={{ xs: "column-reverse", sm: "row" }}
@@ -1449,7 +1389,7 @@ export default function ProductFormModal({
             <Button
               type="button"
               onClick={onClose}
-              disabled={saving}
+              disabled={saving || modeSaving}
               variant="outlined"
               sx={{
                 minWidth: { xs: "100%", sm: 150 },
@@ -1463,7 +1403,7 @@ export default function ProductFormModal({
             <Button
               type="button"
               onClick={handleSave}
-              disabled={!canSave || saving}
+              disabled={!canSave || saving || modeSaving}
               variant="contained"
               startIcon={<SaveIcon />}
               sx={{
@@ -1473,26 +1413,12 @@ export default function ProductFormModal({
                 fontWeight: 800,
               }}
             >
-              {saving ? "Guardando…" : "Guardar"}
+              {saving || modeSaving ? "Guardando…" : "Guardar"}
             </Button>
           </Stack>
         </Stack>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SectionTitle({ title }) {
-  return (
-    <Typography
-      sx={{
-        fontSize: 15,
-        fontWeight: 900,
-        color: "primary.main",
-      }}
-    >
-      {title}
-    </Typography>
   );
 }
 

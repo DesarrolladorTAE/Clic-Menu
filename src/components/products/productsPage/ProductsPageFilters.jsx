@@ -5,6 +5,7 @@ import {
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 import ProductCategoryTabs from "../ProductCategoryTabs";
+import ProductSectionTabs from "./ProductSectionTabs";
 
 export default function ProductsPageFilters({
   requiresBranch,
@@ -12,6 +13,9 @@ export default function ProductsPageFilters({
   branchId,
   onBranchChange,
   err,
+  sections,
+  sectionId,
+  onSectionChange,
   categories,
   categoryId,
   onCategoryChange,
@@ -84,10 +88,41 @@ export default function ProductsPageFilters({
             <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
               Ocurrió un problema
             </Typography>
+
             <Typography variant="body2">{err}</Typography>
           </Box>
         </Alert>
       ) : null}
+
+      <Paper
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          borderRadius: 1,
+          backgroundColor: "background.paper",
+          border: "1px solid",
+          borderColor: "divider",
+          boxShadow: "none",
+        }}
+      >
+        <Typography sx={fieldLabelSx}>Secciones</Typography>
+
+        <ProductSectionTabs
+          sections={sections}
+          value={sectionId}
+          onChange={onSectionChange}
+        />
+
+        <Typography
+          sx={{
+            mt: 1,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.5,
+          }}
+        >
+          Selecciona una sección para consultar únicamente sus categorías.
+        </Typography>
+      </Paper>
 
       <Paper
         sx={{
@@ -107,7 +142,7 @@ export default function ProductsPageFilters({
             justifyContent="space-between"
           >
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={fieldLabelSx}>Categorías</Typography>
+              <Typography sx={fieldLabelSx}>Categorías de la sección</Typography>
 
               <ProductCategoryTabs
                 categories={categories}
@@ -120,9 +155,10 @@ export default function ProductsPageFilters({
                   mt: 1,
                   fontSize: 12,
                   color: "text.secondary",
+                  lineHeight: 1.5,
                 }}
               >
-                Toca una categoría para mostrar únicamente los productos relacionados.
+                Selecciona una categoría para mostrar únicamente sus productos relacionados.
               </Typography>
             </Box>
 

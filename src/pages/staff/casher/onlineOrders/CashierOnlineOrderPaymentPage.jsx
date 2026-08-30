@@ -122,9 +122,11 @@ export default function CashierOnlineOrderPaymentPage() {
     postPaymentSale,
     postPaymentOrder,
     ticketBusy,
+    voucherReprintAvailable,
     handleViewTicket,
     handlePrintTicket,
     handleThermalPrintTicket,
+    handleReprintNetpayVoucher,
     handleDownloadTicket,
     handleSendTicketWhatsapp,
     openNormalPaymentResult,
@@ -467,14 +469,17 @@ export default function CashierOnlineOrderPaymentPage() {
         onViewTicket={handleViewTicket}
         onPrintTicket={handlePrintTicket}
         onThermalPrintTicket={handleThermalPrintTicket}
+        onReprintNetpayVoucher={handleReprintNetpayVoucher}
         onDownloadTicket={handleDownloadTicket}
         onSendWhatsapp={handleSendTicketWhatsapp}
         showWhatsapp={false}
         busyView={ticketBusy.view}
         busyPrint={ticketBusy.print}
         busyThermalPrint={ticketBusy.thermalPrint}
+        busyVoucherReprint={ticketBusy.voucherReprint}
         busyDownload={ticketBusy.download}
         busyWhatsapp={ticketBusy.whatsapp}
+        voucherReprintAvailable={voucherReprintAvailable}
         printConfig={postPaymentPrintConfig}
         customerSummary={customerSummary}
         ticket={postPaymentTicket}
