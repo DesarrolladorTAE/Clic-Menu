@@ -1,21 +1,15 @@
 import {
-  Box,
-  Card,
-  FormControlLabel,
-  Paper,
-  Stack,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
+  Box, Card, FormControlLabel, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import PaginationFooter from "../common/PaginationFooter";
+
+function productStatusLabel(status) {
+  if (status === "active") return "Activo";
+  if (status === "inactive") return "Inactivo";
+  return status || "—";
+}
 
 export default function CatalogProductsPanel({
   rows = [],
@@ -139,7 +133,7 @@ export default function CatalogProductsPanel({
                                 fontWeight: 700,
                               }}
                             >
-                              {enabled ? "Enabled" : "Disabled"}
+                              {enabled ? "Habilitado" : "Deshabilitado"}
                             </Typography>
                           </Box>
 
@@ -160,7 +154,7 @@ export default function CatalogProductsPanel({
                           label="Categoría"
                           value={p.category?.name || "—"}
                         />
-                        <InfoRow label="Estado base" value={p.status} />
+                        <InfoRow label="Estado base" value={productStatusLabel(p.status)} />
                         <InfoRow
                           label="Descripción"
                           value={p.description || "Sin descripción"}
@@ -265,7 +259,7 @@ export default function CatalogProductsPanel({
                                 fontWeight: 800,
                               }}
                             >
-                              {enabled ? "Enabled" : "Disabled"}
+                              {enabled ? "Habilitado" : "Deshabilitado"}
                             </Typography>
 
                             {busy ? (
@@ -283,7 +277,7 @@ export default function CatalogProductsPanel({
                         </TableCell>
 
                         <TableCell>{p.category?.name || "—"}</TableCell>
-                        <TableCell>{p.status}</TableCell>
+                        <TableCell>{productStatusLabel(p.status)}</TableCell>
 
                         <TableCell
                           sx={{

@@ -1,13 +1,6 @@
-import { Box, Button, Stack, Typography } from "@mui/material";
-import SaveIcon from "@mui/icons-material/Save";
+import { Box, Stack, Typography } from "@mui/material";
 
-export default function TicketSettingsHeader({
-  selectedBranch,
-  saving = false,
-  onSave,
-  canSave = true,
-  activeTab = "ticket",
-}) {
+export default function WhasapoConnectionHeader({ selectedBranch }) {
   return (
     <Stack
       direction={{ xs: "column", md: "row" }}
@@ -24,7 +17,7 @@ export default function TicketSettingsHeader({
             lineHeight: 1.1,
           }}
         >
-          Configuración de tickets
+          Conexión de Whasapo
         </Typography>
 
         <Typography
@@ -32,32 +25,16 @@ export default function TicketSettingsHeader({
             mt: 1,
             color: "text.secondary",
             fontSize: { xs: 14, md: 17 },
+            lineHeight: 1.5,
           }}
         >
-          Define cómo se generarán los tickets de{" "}
+          Configura la cuenta de Whasapo utilizada para enviar tickets desde{" "}
           <Box component="span" sx={{ color: "primary.main", fontWeight: 800 }}>
             {selectedBranch?.name || "la sucursal seleccionada"}
           </Box>
           .
         </Typography>
       </Box>
-
-      {activeTab === "ticket" ? (
-        <Button
-          onClick={onSave}
-          variant="contained"
-          startIcon={<SaveIcon />}
-          disabled={!canSave || saving}
-          sx={{
-            minWidth: { xs: "100%", sm: 210 },
-            height: 44,
-            borderRadius: 2,
-            fontWeight: 800,
-          }}
-        >
-          {saving ? "Guardando…" : "Guardar cambios"}
-        </Button>
-      ) : null}
     </Stack>
   );
 }

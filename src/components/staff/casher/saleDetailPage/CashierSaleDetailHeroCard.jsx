@@ -1,11 +1,13 @@
 // src/components/staff/casher/saleDetailPage/CashierSaleDetailHeroCard.jsx
-import React from "react";
+import React, { useState } from "react";
 import {
   Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import FormatListNumberedRoundedIcon from "@mui/icons-material/FormatListNumberedRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import TableRestaurantRoundedIcon from "@mui/icons-material/TableRestaurantRounded";
@@ -23,6 +25,8 @@ export default function CashierSaleDetailHeroCard({
   canOperate = false,
   preparing = false,
 }) {
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+
   const check =
     preparedCheck?.check ||
     selectedCheck ||
@@ -294,9 +298,31 @@ export default function CashierSaleDetailHeroCard({
             ) : null}
           </Stack>
 
+          <Box sx={{ display: { xs: "block", md: "none" } }}>
+            <Button
+              type="button"
+              variant="outlined"
+              fullWidth
+              onClick={() => setMobileDetailsOpen((previous) => !previous)}
+              endIcon={mobileDetailsOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+              aria-expanded={mobileDetailsOpen}
+              sx={{
+                minHeight: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+                textTransform: "none",
+              }}
+            >
+              {mobileDetailsOpen ? "Ocultar detalles de la cuenta" : "Ver detalles de la cuenta"}
+            </Button>
+          </Box>
+
           <Box
             sx={{
-              display: "grid",
+              display: {
+                xs: mobileDetailsOpen ? "grid" : "none",
+                md: "grid",
+              },
               gap: 2,
               gridTemplateColumns: {
                 xs: "repeat(1, minmax(0, 1fr))",
@@ -329,11 +355,7 @@ export default function CashierSaleDetailHeroCard({
 
             <MetricCard
               icon={<FormatListNumberedRoundedIcon />}
-              label={
-                orderRows.length === 1
-                  ? "Orden relacionada"
-                  : "Órdenes relacionadas"
-              }
+              label={orderRows.length === 1 ? "Orden relacionada" : "Órdenes relacionadas"}
               value={ordersLabel}
               helper={
                 orderRows.length > 0
@@ -344,11 +366,7 @@ export default function CashierSaleDetailHeroCard({
 
             <MetricCard
               icon={<TableRestaurantRoundedIcon />}
-              label={
-                tableRows.length === 1
-                  ? "Mesa relacionada"
-                  : "Mesas relacionadas"
-              }
+              label={tableRows.length === 1 ? "Mesa relacionada" : "Mesas relacionadas"}
               value={tablesLabel}
               helper={
                 tableRows.length > 0
@@ -357,65 +375,6 @@ export default function CashierSaleDetailHeroCard({
               }
             />
           </Box>
-
-          <Stack
-            direction="row"
-            flexWrap="wrap"
-            useFlexGap
-            sx={{
-              columnGap: { xs: 1, sm: 1.25 },
-              rowGap: { xs: 1.25, sm: 1 },
-              alignItems: "center",
-              "& .MuiChip-root": {
-                maxWidth: "100%",
-                height: "auto",
-                minHeight: 24,
-              },
-              "& .MuiChip-label": {
-                display: "block",
-                whiteSpace: "normal",
-                lineHeight: 1.3,
-                py: 0.35,
-              },
-            }}
-          >
-            <Chip
-              label={`Subtotal ${formatCurrency(exactSale?.subtotal)}`}
-              size="small"
-            />
-
-            <Chip
-              label={`Promociones ${formatCurrency(
-                exactSale?.promotion_discount_total
-              )}`}
-              size="small"
-            />
-
-            <Chip
-              label={`Descuento manual ${formatCurrency(
-                exactSale?.manual_discount_total
-              )}`}
-              size="small"
-            />
-
-            <Chip
-              label={`Propina ${formatCurrency(exactSale?.tip)}`}
-              size="small"
-            />
-
-            <Chip
-              label={`Total sincronizado ${formatCurrency(
-                exactSale?.payable_total ??
-                  exactSale?.total
-              )}`}
-              size="small"
-              sx={{
-                fontWeight: 800,
-                bgcolor: "#FFF3E0",
-                color: "#A75A00",
-              }}
-            />
-          </Stack>
 
           {availableForEditing ? (
             <Box
@@ -689,19 +648,4 @@ function positiveInt(value) {
   return Number.isInteger(normalized) && normalized > 0
     ? normalized
     : 0;
-}
-
-function formatCurrency(value) {
-  const normalized = Number(value);
-  const safe = Number.isFinite(normalized) ? normalized : 0;
-
-  try {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 2,
-    }).format(safe);
-  } catch {
-    return `$${safe.toFixed(2)}`;
-  }
 }

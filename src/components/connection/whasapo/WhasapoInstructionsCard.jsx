@@ -1,6 +1,6 @@
 import { Box, Paper, Stack, Typography } from "@mui/material";
 
-export default function CatalogInstructionsCard() {
+export default function WhasapoInstructionsCard() {
   return (
     <Paper
       sx={{
@@ -13,34 +13,28 @@ export default function CatalogInstructionsCard() {
       }}
     >
       <Stack spacing={1.25}>
-        <Typography
-          sx={{
-            fontSize: 16,
-            fontWeight: 800,
-            color: "text.primary",
-          }}
-        >
+        <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
           Antes de comenzar
         </Typography>
 
         <InstructionRow
           step="1"
-          text="Selecciona la sucursal que deseas administrar para visualizar únicamente su catálogo."
+          text="La configuración de Whasapo se guarda por sucursal. Primero selecciona la sucursal que deseas configurar."
         />
 
         <InstructionRow
           step="2"
-          text="Puedes filtrar por sección y categoría para localizar más fácilmente los productos que deseas habilitar o deshabilitar en la sucursal."
+          text="Si no utilizas un token personalizado, los tickets se enviarán utilizando la conexión principal de WhatsApp configurada en el sistema."
         />
 
         <InstructionRow
           step="3"
-          text="Si un producto está inactivo a nivel general, primero debes activarlo en Administrar productos."
+          text="Si activas el token personalizado, la sucursal utilizará su propia conexión de Whasapo para el envío de tickets."
         />
 
         <InstructionRow
           step="4"
-          text="La tabla muestra el estado efectivo del producto en la sucursal, considerando la configuración global o por sucursal."
+          text="El token debe corresponder a una conexión válida de Whasapo. Si la sesión se desconecta, deberás volver a vincularla desde tu cuenta de Whasapo."
         />
       </Stack>
     </Paper>
@@ -66,13 +60,7 @@ function InstructionRow({ step, text }) {
         {step}
       </Box>
 
-      <Typography
-        sx={{
-          fontSize: 14,
-          color: "text.primary",
-          lineHeight: 1.6,
-        }}
-      >
+      <Typography sx={{ fontSize: 14, color: "text.primary", lineHeight: 1.6 }}>
         {text}
       </Typography>
     </Stack>

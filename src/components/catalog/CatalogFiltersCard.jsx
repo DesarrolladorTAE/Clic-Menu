@@ -1,15 +1,18 @@
 import {
-  Paper,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  FormControlLabel,
+  FormControlLabel, MenuItem, Paper, Stack, Switch, TextField, Typography,
 } from "@mui/material";
+
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 export default function CatalogFiltersCard({
   search,
   onChangeSearch,
+  sections = [],
+  sectionId,
+  onChangeSection,
+  categories = [],
+  categoryId,
+  onChangeCategory,
   onlyActiveProducts,
   onChangeOnlyActiveProducts,
   filteredCount,
@@ -33,43 +36,25 @@ export default function CatalogFiltersCard({
           alignItems={{ xs: "stretch", lg: "center" }}
         >
           <Stack spacing={1} sx={{ flex: 1 }}>
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Buscar
-            </Typography>
+            <Typography sx={fieldLabelSx}>Buscar</Typography>
 
             <TextField
               fullWidth
               value={search}
               onChange={(e) => onChangeSearch(e.target.value)}
-              placeholder="Buscar por nombre, descripción o categoría..."
+              placeholder="Buscar por nombre, descripción, categoría o sección..."
             />
           </Stack>
 
           <Stack spacing={1}>
-            <Typography
-              sx={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Filtro rápido
-            </Typography>
+            <Typography sx={fieldLabelSx}>Filtro rápido</Typography>
 
             <FormControlLabel
               sx={{ m: 0 }}
               control={
                 <Switch
                   checked={onlyActiveProducts}
-                  onChange={(e) =>
-                    onChangeOnlyActiveProducts(e.target.checked)
-                  }
+                  onChange={(e) => onChangeOnlyActiveProducts(e.target.checked)}
                   color="primary"
                 />
               }
@@ -85,6 +70,48 @@ export default function CatalogFiltersCard({
                 </Typography>
               }
             />
+          </Stack>
+        </Stack>
+
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Stack spacing={1} sx={{ flex: 1 }}>
+            <Typography sx={fieldLabelSx}>Sección</Typography>
+
+            <TextField
+              select
+              fullWidth
+              value={sectionId}
+              onChange={(e) => onChangeSection(e.target.value)}
+              SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+            >
+              <MenuItem value="">Todas las secciones</MenuItem>
+
+              {sections.map((section) => (
+                <MenuItem key={section.id} value={String(section.id)}>
+                  {section.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+
+          <Stack spacing={1} sx={{ flex: 1 }}>
+            <Typography sx={fieldLabelSx}>Categoría</Typography>
+
+            <TextField
+              select
+              fullWidth
+              value={categoryId}
+              onChange={(e) => onChangeCategory(e.target.value)}
+              SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+            >
+              <MenuItem value="">Todas las categorías</MenuItem>
+
+              {categories.map((category) => (
+                <MenuItem key={category.id} value={String(category.id)}>
+                  {category.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Stack>
         </Stack>
 
@@ -115,3 +142,9 @@ export default function CatalogFiltersCard({
     </Paper>
   );
 }
+
+const fieldLabelSx = {
+  fontSize: 14,
+  fontWeight: 800,
+  color: "text.primary",
+};

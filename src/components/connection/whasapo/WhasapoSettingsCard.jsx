@@ -9,7 +9,7 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import KeyOutlinedIcon from "@mui/icons-material/KeyOutlined";
 
-export default function TicketWhasapoSettingsCard({
+export default function WhasapoSettingsCard({
   form,
   onChange,
   onSave,
@@ -18,10 +18,7 @@ export default function TicketWhasapoSettingsCard({
   disabled = false,
 }) {
   const canSave = useMemo(() => {
-    if (!form?.use_custom_token) {
-      return true;
-    }
-
+    if (!form?.use_custom_token) return true;
     return String(form?.custom_token || "").trim() !== "";
   }, [form]);
 
@@ -54,13 +51,7 @@ export default function TicketWhasapoSettingsCard({
           </Box>
 
           <Box>
-            <Typography
-              sx={{
-                fontSize: 18,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
+            <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
               Conexión de WhatsApp
             </Typography>
 
@@ -92,33 +83,19 @@ export default function TicketWhasapoSettingsCard({
               control={
                 <Switch
                   checked={!!form?.use_custom_token}
-                  onChange={(e) =>
-                    onChange("use_custom_token", e.target.checked)
-                  }
+                  onChange={(e) => onChange("use_custom_token", e.target.checked)}
                   disabled={disabled || saving}
                   color="success"
                 />
               }
               label={
-                <Typography
-                  sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
-                  }}
-                >
+                <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
                   Usar token personalizado
                 </Typography>
               }
             />
 
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: "text.secondary",
-                lineHeight: 1.6,
-              }}
-            >
+            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.6 }}>
               Si está desactivado, se utilizará el WhatsApp principal del sistema.
             </Typography>
           </Stack>
@@ -199,13 +176,7 @@ export default function TicketWhasapoSettingsCard({
             p: 1.75,
           }}
         >
-          <Typography
-            sx={{
-              fontSize: 12.5,
-              color: "text.secondary",
-              lineHeight: 1.7,
-            }}
-          >
+          <Typography sx={{ fontSize: 12.5, color: "text.secondary", lineHeight: 1.7 }}>
             Importante: si tu sesión de WhatsApp se desconecta en Whasapo,
             deberás volver a escanear el QR desde tu cuenta de Whasapo. El token
             normalmente seguirá siendo el mismo.

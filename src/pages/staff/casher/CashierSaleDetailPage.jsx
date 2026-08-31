@@ -19,6 +19,7 @@ import CashierDiscountCard from "../../../components/staff/casher/saleDetailPage
 import CashierAdjustmentCard from "../../../components/staff/casher/saleDetailPage/CashierAdjustmentCard";
 import CashierCustomerCard from "../../../components/staff/casher/saleDetailPage/CashierCustomerCard";
 import CashierSaleOptionalActionsBar from "../../../components/staff/casher/saleDetailPage/CashierSaleOptionalActionsBar";
+import CashierPaymentTabs from "../../../components/staff/casher/saleDetailPage/CashierPaymentTabs";
 import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
 import CashierDiscountAuthorizationDialog from "../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
 import CashierOperationalAuthorizationDialog from "../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
@@ -47,6 +48,7 @@ export default function CashierSaleDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [activeTool, setActiveTool] = useState(null);
+  const [paymentTab, setPaymentTab] = useState("payment");
 
   const [detailData, setDetailData] = useState(null);
   const [saleCheckContext, setSaleCheckContext] = useState(null);
@@ -691,108 +693,125 @@ export default function CashierSaleDetailPage() {
           onBack={handleReturnToMySales}
         />
 
-        <CashierSaleOptionalActionsBar
-          adjustmentSummary={adjustmentSummary}
-          customerSummary={customerSummary}
-          discountSummary={discountSummary}
-          disabled={financialDisabled}
-          adjustmentsDisabled={!canManageAdjustments}
-          customerDisabled={!canManageCustomer}
-          discountsDisabled={!canManageDiscounts}
-          onOpenAdjustments={() => setActiveTool("adjustments")}
-          onOpenCustomer={() => setActiveTool("customer")}
-          onOpenDiscounts={() => setActiveTool("discounts")}
-        />
+        <Box sx={{ display: { xs: "block", md: "none" } }}>
+          <CashierPaymentTabs value={paymentTab} onChange={setPaymentTab} />
+        </Box>
 
         <Box
           sx={{
-            display: "grid",
-            gap: 3,
-            gridTemplateColumns: {
-              xs: "1fr",
-              xl: "1.15fr 0.85fr",
+            display: {
+              xs: paymentTab === "tools" ? "block" : "none",
+              md: "block",
             },
-            alignItems: "stretch",
           }}
         >
-          <Box sx={{ height: "100%", minWidth: 0 }}>
-            <CashierOrderItemsCard
-              itemsTree={itemsTree}
-              itemsSummary={itemsSummary}
-              selectedCheck={selectedCheck}
-            />
-          </Box>
-
-          <Box
-            sx={{
-              minWidth: 0,
-              height: "100%",
-              display: "grid",
-              gap: 3,
-              gridTemplateRows: {
-                xs: "auto auto",
-                xl: "minmax(0, 1fr) auto",
-              },
-              alignItems: "stretch",
-            }}
-          >
-            <CashierSaleSummaryCard
-              sale={sale}
-              check={selectedCheck}
-              liveTip={Number(tip || 0)}
-              preview={preview}
-              previewMode={paymentFlow.previewMode}
-              selectedTaxOption={selectedTaxOption}
-            />
-
-            <CashierTaxSelectorCard
-              taxOptions={taxOptions}
-              value={taxOptionCode}
-              onChange={paymentFlow.handleTaxOptionChange}
-              disabled={
-                !canOperate ||
-                financialDisabled
-              }
-            />
-          </Box>
+          <CashierSaleOptionalActionsBar
+            adjustmentSummary={adjustmentSummary}
+            customerSummary={customerSummary}
+            discountSummary={discountSummary}
+            disabled={financialDisabled}
+            adjustmentsDisabled={!canManageAdjustments}
+            customerDisabled={!canManageCustomer}
+            discountsDisabled={!canManageDiscounts}
+            onOpenAdjustments={() => setActiveTool("adjustments")}
+            onOpenCustomer={() => setActiveTool("customer")}
+            onOpenDiscounts={() => setActiveTool("discounts")}
+          />
         </Box>
 
-        <CashierPaymentFormCard
-          methods={paymentMethods}
-          initialAmount={paymentFlow.paymentInitialAmount}
-          preview={preview}
-          previewMode={paymentFlow.previewMode}
-          tip={tip}
-          onTipChange={paymentFlow.handleTipChange}
-          payments={payments}
-          onAddPayment={paymentFlow.handleAddPayment}
-          onRemovePayment={paymentFlow.handleRemovePayment}
-          onPaymentChange={paymentFlow.handlePaymentChange}
-          onPreview={paymentFlow.handlePreview}
-          previewing={previewing}
-          paying={paying}
-          hasPreview={Boolean(preview)}
-          onPay={paymentFlow.handlePay}
-          disabled={
-            !canOperate ||
-            postPaymentOpen ||
-            paymentFlow.netpayPendingBlocked
-          }
-          maxPayments={paymentFlow.netpayMode ? 1 : 3}
-          showAddPayment={!paymentFlow.netpayMode}
-          showRemovePayment={!paymentFlow.netpayMode}
-          netpayAvailable={paymentFlow.netpayBridgeAvailable}
-          netpayMode={paymentFlow.netpayMode}
-          onNetpayModeChange={paymentFlow.handleNetpayModeChange}
-          netpayBusy={paymentFlow.netpayBusy}
-          netpayStatus={paymentFlow.netpayStatus}
-          netpayStatusLabel={paymentFlow.netpayStatusLabel}
-          netpayTerminal={paymentFlow.netpayTerminal}
-          netpayRecoveryRequired={paymentFlow.netpayPendingBlocked}
-          onRetryNetpayRecovery={paymentFlow.retryPendingNetpayRecovery}
-          paymentAmountLocked={paymentFlow.netpayMode}
-          bankFieldsLocked={paymentFlow.netpayMode}
-        />
+        <Box
+          sx={{
+            display: {
+              xs: paymentTab === "payment" ? "block" : "none",
+              md: "block",
+            },
+          }}
+        >
+          <Stack spacing={3}>
+            <Box
+              sx={{
+                display: "grid",
+                gap: 3,
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  xl: "1.15fr 0.85fr",
+                },
+                alignItems: "stretch",
+              }}
+            >
+              <Box sx={{ height: "100%", minWidth: 0 }}>
+                <CashierOrderItemsCard
+                  itemsTree={itemsTree}
+                  itemsSummary={itemsSummary}
+                  selectedCheck={selectedCheck}
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  minWidth: 0,
+                  height: "100%",
+                  display: "grid",
+                  gap: 3,
+                  gridTemplateRows: {
+                    xs: "auto auto",
+                    xl: "minmax(0, 1fr) auto",
+                  },
+                  alignItems: "stretch",
+                }}
+              >
+                <CashierSaleSummaryCard
+                  sale={sale}
+                  check={selectedCheck}
+                  liveTip={Number(tip || 0)}
+                  preview={preview}
+                  previewMode={paymentFlow.previewMode}
+                  selectedTaxOption={selectedTaxOption}
+                />
+
+                <CashierTaxSelectorCard
+                  taxOptions={taxOptions}
+                  value={taxOptionCode}
+                  onChange={paymentFlow.handleTaxOptionChange}
+                  disabled={!canOperate || financialDisabled}
+                />
+              </Box>
+            </Box>
+
+            <CashierPaymentFormCard
+              methods={paymentMethods}
+              initialAmount={paymentFlow.paymentInitialAmount}
+              preview={preview}
+              previewMode={paymentFlow.previewMode}
+              tip={tip}
+              onTipChange={paymentFlow.handleTipChange}
+              payments={payments}
+              onAddPayment={paymentFlow.handleAddPayment}
+              onRemovePayment={paymentFlow.handleRemovePayment}
+              onPaymentChange={paymentFlow.handlePaymentChange}
+              onPreview={paymentFlow.handlePreview}
+              previewing={previewing}
+              paying={paying}
+              hasPreview={Boolean(preview)}
+              onPay={paymentFlow.handlePay}
+              disabled={!canOperate || postPaymentOpen || paymentFlow.netpayPendingBlocked}
+              maxPayments={paymentFlow.netpayMode ? 1 : 3}
+              showAddPayment={!paymentFlow.netpayMode}
+              showRemovePayment={!paymentFlow.netpayMode}
+              netpayAvailable={paymentFlow.netpayBridgeAvailable}
+              netpayMode={paymentFlow.netpayMode}
+              onNetpayModeChange={paymentFlow.handleNetpayModeChange}
+              netpayBusy={paymentFlow.netpayBusy}
+              netpayStatus={paymentFlow.netpayStatus}
+              netpayStatusLabel={paymentFlow.netpayStatusLabel}
+              netpayTerminal={paymentFlow.netpayTerminal}
+              netpayRecoveryRequired={paymentFlow.netpayPendingBlocked}
+              onRetryNetpayRecovery={paymentFlow.retryPendingNetpayRecovery}
+              paymentAmountLocked={paymentFlow.netpayMode}
+              bankFieldsLocked={paymentFlow.netpayMode}
+            />
+          </Stack>
+        </Box>
       </Stack>
 
       <CashierSaleToolDialog

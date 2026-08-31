@@ -37,6 +37,7 @@ import SettingsSuggestRoundedIcon from "@mui/icons-material/SettingsSuggestRound
 import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 import WebAssetOutlinedIcon from "@mui/icons-material/WebAssetOutlined";
 import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED = 78;
@@ -196,6 +197,11 @@ export default function RestaurantOperationSidebar({
         label: "Conexiones",
         icon: <SettingsSuggestRoundedIcon />,
         items: [
+          {
+            key: "whasapo",
+            label: "Whasapo",
+            icon: <WhatsAppIcon />,
+          },
           {
             key: "taeconta",
             label: "Taeconta",

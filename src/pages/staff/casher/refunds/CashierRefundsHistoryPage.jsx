@@ -133,11 +133,19 @@ export default function CashierRefundsHistoryPage() {
       const total = Number(row?.total || 0);
       const refundedTotal = Number(row?.refunded_total || 0);
 
-      const rawNetpayTransactionId = Number(row?.netpay_transaction_id || 0);
+      const netpay = row?.netpay && typeof row.netpay === "object" ? row.netpay : null;
+      const rawNetpayTransactionId = Number(netpay?.netpay_transaction_id || 0);
       const netpayTransactionId =
-        Number.isInteger(rawNetpayTransactionId) && rawNetpayTransactionId > 0
+        netpay?.is_netpay === true &&
+        Number.isInteger(rawNetpayTransactionId) &&
+        rawNetpayTransactionId > 0
           ? rawNetpayTransactionId
           : null;
+
+      const canReprintNetpayVoucher =
+        netpay?.is_netpay === true &&
+        netpayTransactionId !== null &&
+        netpay?.can_reprint_voucher === true;
 
       const backendAvailable = Number(row?.available_to_refund);
       const availableToRefund = Number.isFinite(backendAvailable)
@@ -154,6 +162,7 @@ export default function CashierRefundsHistoryPage() {
         sale_id: saleId,
         order_id: orderId || null,
         netpay_transaction_id: netpayTransactionId,
+        can_reprint_netpay_voucher: canReprintNetpayVoucher,
         ticket_folio: ticketFolio,
         customer_name: customerName,
         status,
@@ -982,6 +991,7 @@ export default function CashierRefundsHistoryPage() {
           Number(ticketActionsSale?.sale_id || 0)
         }
         voucherReprintAvailable={
+          ticketActionsSale?.can_reprint_netpay_voucher === true &&
           Number(ticketActionsSale?.netpay_transaction_id || 0) > 0
         }
         onReprintNetpayVoucher={handleReprintNetpayVoucher}

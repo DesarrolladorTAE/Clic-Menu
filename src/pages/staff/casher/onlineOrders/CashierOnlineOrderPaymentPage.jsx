@@ -14,6 +14,7 @@ import CashierTaxSelectorCard from "../../../../components/staff/casher/saleDeta
 import CashierPaymentFormCard from "../../../../components/staff/casher/saleDetailPage/CashierPaymentFormCard";
 import CashierDiscountCard from "../../../../components/staff/casher/saleDetailPage/CashierDiscountCard";
 import CashierSaleOptionalActionsBar from "../../../../components/staff/casher/saleDetailPage/CashierSaleOptionalActionsBar";
+import CashierPaymentTabs from "../../../../components/staff/casher/saleDetailPage/CashierPaymentTabs";
 import CashierSaleToolDialog from "../../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
 import CashierDiscountAuthorizationDialog from "../../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
 import CashierPostPaymentTicketModal from "../../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
@@ -37,6 +38,7 @@ export default function CashierOnlineOrderPaymentPage() {
   const { clearStaff } = useStaffAuth() || {};
 
   const [activeTool, setActiveTool] = useState(null);
+  const [paymentTab, setPaymentTab] = useState("payment");
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -330,95 +332,119 @@ export default function CashierOnlineOrderPaymentPage() {
           onBack={() => goToMyOrders()}
         />
 
-        <CashierSaleOptionalActionsBar
-          discountSummary={discountSummary || { sale }}
-          disabled={financialLocked || postPaymentOpen}
-          adjustmentsDisabled
-          customerDisabled
-          discountsDisabled={!actions.includes("discount") || discountBusy || financialLocked}
-          showAdjustments={false}
-          showCustomer={false}
-          showDiscounts
-          onOpenDiscounts={handleOpenDiscounts}
-        />
+        <Box sx={{ display: { xs: "block", md: "none" } }}>
+          <CashierPaymentTabs value={paymentTab} onChange={setPaymentTab} />
+        </Box>
 
         <Box
           sx={{
-            display: "grid",
-            gap: 3,
-            gridTemplateColumns: {
-              xs: "minmax(0, 1fr)",
-              xl: "1.15fr 0.85fr",
+            display: {
+              xs: paymentTab === "tools" ? "block" : "none",
+              md: "block",
             },
-            alignItems: "stretch",
           }}
         >
-          <Box sx={{ minWidth: 0, height: "100%" }}>
-            <CashierOrderItemsCard
-              itemsTree={itemsTree}
-              itemsSummary={onlineOrder?.products_summary || null}
-              selectedCheck={selectedCheck}
-            />
-          </Box>
+          <CashierSaleOptionalActionsBar
+            discountSummary={discountSummary || { sale }}
+            disabled={financialLocked || postPaymentOpen}
+            adjustmentsDisabled
+            customerDisabled
+            discountsDisabled={!actions.includes("discount") || discountBusy || financialLocked}
+            showAdjustments={false}
+            showCustomer={false}
+            showDiscounts
+            onOpenDiscounts={handleOpenDiscounts}
+          />
+        </Box>
 
-          <Stack spacing={3} sx={{ minWidth: 0, height: "100%" }}>
-            <CashierSaleSummaryCard
-              sale={sale}
-              check={selectedCheck}
-              liveTip={Number(tip || 0)}
+        <Box
+          sx={{
+            display: {
+              xs: paymentTab === "payment" ? "block" : "none",
+              md: "block",
+            },
+          }}
+        >
+          <Stack spacing={3}>
+            <Box
+              sx={{
+                display: "grid",
+                gap: 3,
+                gridTemplateColumns: {
+                  xs: "minmax(0, 1fr)",
+                  xl: "1.15fr 0.85fr",
+                },
+                alignItems: "stretch",
+              }}
+            >
+              <Box sx={{ minWidth: 0, height: "100%" }}>
+                <CashierOrderItemsCard
+                  itemsTree={itemsTree}
+                  itemsSummary={onlineOrder?.products_summary || null}
+                  selectedCheck={selectedCheck}
+                />
+              </Box>
+
+              <Stack spacing={3} sx={{ minWidth: 0, height: "100%" }}>
+                <CashierSaleSummaryCard
+                  sale={sale}
+                  check={selectedCheck}
+                  liveTip={Number(tip || 0)}
+                  preview={preview}
+                  previewMode={isNetpayPayment ? "netpay" : "normal"}
+                  selectedTaxOption={selectedTaxOption}
+                />
+
+                <CashierTaxSelectorCard
+                  taxOptions={taxOptions}
+                  value={taxOptionCode}
+                  onChange={(nextValue) => {
+                    if (financialLocked) return;
+
+                    setTaxOptionCode(nextValue);
+                    setPreview(null);
+                  }}
+                  disabled={!paymentAvailable || financialLocked || postPaymentOpen}
+                />
+              </Stack>
+            </Box>
+
+            <CashierPaymentFormCard
+              methods={onlinePaymentMethods}
+              initialAmount={paymentInitialAmount}
               preview={preview}
               previewMode={isNetpayPayment ? "netpay" : "normal"}
-              selectedTaxOption={selectedTaxOption}
-            />
-
-            <CashierTaxSelectorCard
-              taxOptions={taxOptions}
-              value={taxOptionCode}
-              onChange={(nextValue) => {
-                if (financialLocked) return;
-
-                setTaxOptionCode(nextValue);
-                setPreview(null);
-              }}
-              disabled={!paymentAvailable || financialLocked || postPaymentOpen}
+              tip={tip}
+              onTipChange={handleTipChange}
+              payments={payments}
+              onPaymentChange={handlePaymentChange}
+              onPreview={handlePreview}
+              previewing={previewing}
+              paying={paying}
+              hasPreview={Boolean(preview)}
+              onPay={handlePay}
+              disabled={!paymentAvailable || postPaymentOpen || netpayPending}
+              maxPayments={1}
+              showAddPayment={false}
+              showRemovePayment={false}
+              paymentMethodLocked={paymentMethodLocked}
+              netpayMode={isNetpayPayment}
+              netpayBusy={isNetpayPayment && (previewing || paying)}
+              netpayStatus={netpayStatus?.status || ""}
+              netpayRecoveryRequired={netpayPending}
+              amountLocked={isNetpayPayment}
+              hideManualCardFields={isNetpayPayment}
+              description="Registra el método de pago correspondiente a este Pedido en línea."
+              helperText={
+                isNetpayPayment
+                  ? netpayPending
+                    ? "Existe una operación NetPay pendiente. Debe resolverse antes de iniciar otro cobro."
+                    : "Este Pedido en línea se procesará en la terminal PAX. Selecciona tarjeta de crédito o débito; la referencia y los últimos 4 serán obtenidos directamente de NetPay."
+                  : "Este Pedido en línea permite un solo método de pago y fue definido al realizar el pedido."
+              }
             />
           </Stack>
         </Box>
-
-        <CashierPaymentFormCard
-          methods={onlinePaymentMethods}
-          initialAmount={paymentInitialAmount}
-          preview={preview}
-          previewMode={isNetpayPayment ? "netpay" : "normal"}
-          tip={tip}
-          onTipChange={handleTipChange}
-          payments={payments}
-          onPaymentChange={handlePaymentChange}
-          onPreview={handlePreview}
-          previewing={previewing}
-          paying={paying}
-          hasPreview={Boolean(preview)}
-          onPay={handlePay}
-          disabled={!paymentAvailable || postPaymentOpen || netpayPending}
-          maxPayments={1}
-          showAddPayment={false}
-          showRemovePayment={false}
-          paymentMethodLocked={paymentMethodLocked}
-          netpayMode={isNetpayPayment}
-          netpayBusy={isNetpayPayment && (previewing || paying)}
-          netpayStatus={netpayStatus?.status || ""}
-          netpayRecoveryRequired={netpayPending}
-          amountLocked={isNetpayPayment}
-          hideManualCardFields={isNetpayPayment}
-          description="Registra el método de pago correspondiente a este Pedido en línea."
-          helperText={
-            isNetpayPayment
-              ? netpayPending
-                ? "Existe una operación NetPay pendiente. Debe resolverse antes de iniciar otro cobro."
-                : "Este Pedido en línea se procesará en la terminal PAX. Selecciona tarjeta de crédito o débito; la referencia y los últimos 4 serán obtenidos directamente de NetPay."
-              : "Este Pedido en línea permite un solo método de pago y fue definido al realizar el pedido."
-          }
-        />
       </Stack>
 
       <CashierSaleToolDialog

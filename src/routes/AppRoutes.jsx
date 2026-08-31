@@ -131,6 +131,7 @@ import SalesReportPage from "../pages/reports/sales/SalesReportPage";
 import ProfitReportPage from "../pages/reports/profit/ProfitReportPage";
 
 //Conexiones
+import WhasapoConnectionPage from "../pages/connection/whasapo/WhasapoConnectionPage";
 import TaecontaAccountPage from "../pages/connection/tae/TaecontaAccountPage";
 import NetpayConnectionPage from "../pages/connection/netpay/NetpayConnectionPage";
 
@@ -286,6 +287,7 @@ export default function AppRoutes() {
           <Route path="reports/sales" element={<SalesReportPage />} />
           <Route path="reports/profit" element={<ProfitReportPage />} />
           
+          <Route path="connections/whasapo" element={<WhasapoConnectionPage />} />
           <Route path="connections/taeconta" element={<TaecontaAccountPage />} />
           <Route path="connections/netpay" element={<NetpayConnectionPage />} />
         </Route>

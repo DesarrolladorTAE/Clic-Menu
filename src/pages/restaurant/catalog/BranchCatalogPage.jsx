@@ -16,6 +16,8 @@ import CatalogProductsPanel from "../../../components/catalog/CatalogProductsPan
 import { getRestaurantSubscriptionStatus } from "../../../services/restaurant/restaurant.service";
 import { getRestaurantSettings } from "../../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../../services/restaurant/branch.service";
+import { getMenuSections } from "../../../services/menu/menuSections.service";
+import { getCategories } from "../../../services/menu/categories.service";
 import {
   getBranchCatalog,
   upsertProductOverride,
@@ -31,6 +33,11 @@ export default function BranchCatalogPage() {
 
   const [branches, setBranches] = useState([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
+
+  const [sections, setSections] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [sectionId, setSectionId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
 
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
@@ -74,10 +81,26 @@ export default function BranchCatalogPage() {
     );
   }, [branches, selectedBranchId]);
 
+  const visibleCategories = useMemo(() => {
+    if (!sectionId) return categories;
+
+    return categories.filter(
+      (category) => String(category.section_id ?? "") === String(sectionId)
+    );
+  }, [categories, sectionId]);
+
+  const categoryMap = useMemo(() => {
+    return new Map(categories.map((category) => [String(category.id), category]));
+  }, [categories]);
+
+  const sectionMap = useMemo(() => {
+    return new Map(sections.map((section) => [String(section.id), section]));
+  }, [sections]);
+
   const modeHelp =
     mode === "global"
-      ? "Modo GLOBAL: esta sucursal decide qué productos del catálogo global vende."
-      : "Modo BRANCH: esta sucursal decide qué productos de su propio catálogo vende.";
+      ? "Modo global: esta sucursal decide qué productos del catálogo global vende."
+      : "Modo por sucursal: esta sucursal decide qué productos de su propio catálogo vende.";
 
   const loadBranchesAndMode = async () => {
     const st = await getRestaurantSubscriptionStatus(effectiveRestaurantId);
@@ -101,9 +124,36 @@ export default function BranchCatalogPage() {
     };
   };
 
+  const loadCatalogStructure = async (branchIdToLoad, catalogMode = mode) => {
+    if (!branchIdToLoad) {
+      setSections([]);
+      setCategories([]);
+      setSectionId("");
+      setCategoryId("");
+      return;
+    }
+
+    const query =
+      catalogMode === "branch"
+        ? { status: "active", branch_id: Number(branchIdToLoad) }
+        : { status: "active" };
+
+    const [sectionsResponse, categoriesResponse] = await Promise.all([
+      getMenuSections(effectiveRestaurantId, query),
+      getCategories(effectiveRestaurantId, query),
+    ]);
+
+    setSections(Array.isArray(sectionsResponse) ? sectionsResponse : []);
+    setCategories(Array.isArray(categoriesResponse) ? categoriesResponse : []);
+  };
+
   const loadCatalog = async (branchIdToLoad) => {
     if (!branchIdToLoad) {
       setRows([]);
+      setSections([]);
+      setCategories([]);
+      setSectionId("");
+      setCategoryId("");
       return;
     }
 
@@ -112,8 +162,11 @@ export default function BranchCatalogPage() {
       Number(branchIdToLoad)
     );
 
-    setMode(res?.mode || mode || "global");
+    const nextMode = res?.mode || mode || "global";
+
+    setMode(nextMode);
     setRows(Array.isArray(res?.data) ? res.data : []);
+    await loadCatalogStructure(branchIdToLoad, nextMode);
   };
 
   const loadAll = async () => {
@@ -122,28 +175,41 @@ export default function BranchCatalogPage() {
     try {
       const data = await loadBranchesAndMode();
 
-      if (!selectedBranchId) {
+      const firstBranchId = data.branches?.[0]?.id
+        ? String(data.branches[0].id)
+        : "";
+
+      setSectionId("");
+      setCategoryId("");
+
+      if (!firstBranchId) {
         setSelectedBranchId("");
         setRows([]);
-      } else {
-        const exists = data.branches.some(
-          (b) => String(b.id) === String(selectedBranchId)
-        );
-
-        if (!exists) {
-          setSelectedBranchId("");
-          setRows([]);
-        } else {
-          await loadCatalog(selectedBranchId);
-        }
+        setSections([]);
+        setCategories([]);
+        setLoading(false);
+        return;
       }
+
+      if (String(selectedBranchId) === firstBranchId) {
+        await loadCatalog(firstBranchId);
+        setLoading(false);
+        return;
+      }
+
+      setSelectedBranchId(firstBranchId);
     } catch (e) {
       showAlert({
         severity: "error",
         title: "Error",
         message: e?.response?.data?.message || e?.message || "No se pudo cargar el catálogo",
       });
-    } finally {
+
+      setRows([]);
+      setSections([]);
+      setCategories([]);
+      setSectionId("");
+      setCategoryId("");
       setLoading(false);
     }
   };
@@ -156,6 +222,10 @@ export default function BranchCatalogPage() {
   useEffect(() => {
     if (!selectedBranchId) {
       setRows([]);
+      setSections([]);
+      setCategories([]);
+      setSectionId("");
+      setCategoryId("");
       return;
     }
 
@@ -177,21 +247,48 @@ export default function BranchCatalogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranchId]);
 
+  const handleSectionChange = (nextSectionId) => {
+    const nextValue = String(nextSectionId || "");
+    setSectionId(nextValue);
+
+    if (!nextValue || !categoryId) return;
+
+    const categoryStillExists = categories.some(
+      (category) =>
+        String(category.id) === String(categoryId) &&
+        String(category.section_id ?? "") === nextValue
+    );
+
+    if (!categoryStillExists) setCategoryId("");
+  };
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return rows
       .filter((r) => {
         const p = r.product;
+        const productCategoryId = String(p?.category_id ?? p?.category?.id ?? "");
+        const productCategory = categoryMap.get(productCategoryId) || p?.category || null;
+        const productSectionId = String(productCategory?.section_id ?? "");
+        const productSection = sectionMap.get(productSectionId) || null;
 
         if (onlyActiveProducts && p?.status !== "active") return false;
+        if (sectionId && productSectionId !== String(sectionId)) return false;
+        if (categoryId && productCategoryId !== String(categoryId)) return false;
         if (!q) return true;
 
         const name = (p?.name || "").toLowerCase();
         const desc = (p?.description || "").toLowerCase();
-        const cat = (p?.category?.name || "").toLowerCase();
+        const cat = (productCategory?.name || p?.category?.name || "").toLowerCase();
+        const section = (productSection?.name || "").toLowerCase();
 
-        return name.includes(q) || desc.includes(q) || cat.includes(q);
+        return (
+          name.includes(q) ||
+          desc.includes(q) ||
+          cat.includes(q) ||
+          section.includes(q)
+        );
       })
       .sort((a, b) => {
         const ea = a?.effective?.is_enabled ? 1 : 0;
@@ -202,7 +299,15 @@ export default function BranchCatalogPage() {
           sensitivity: "base",
         });
       });
-  }, [rows, search, onlyActiveProducts]);
+  }, [
+    rows,
+    search,
+    onlyActiveProducts,
+    sectionId,
+    categoryId,
+    categoryMap,
+    sectionMap,
+  ]);
 
   const {
     page,
@@ -356,7 +461,7 @@ export default function BranchCatalogPage() {
       <Stack spacing={3}>
         <CatalogHeader
           selectedBranch={selectedBranch}
-          mode={mode}
+          mode={mode === "branch" ? "Por sucursal" : "Global"}
           modeHelp={modeHelp}
         />
 
@@ -366,6 +471,8 @@ export default function BranchCatalogPage() {
           branches={branches}
           branchId={selectedBranchId}
           onChangeBranch={(nextBranchId) => {
+            setSectionId("");
+            setCategoryId("");
             setSelectedBranchId(String(nextBranchId));
           }}
           selectedBranch={selectedBranch}
@@ -379,6 +486,12 @@ export default function BranchCatalogPage() {
         <CatalogFiltersCard
           search={search}
           onChangeSearch={setSearch}
+          sections={sections}
+          sectionId={sectionId}
+          onChangeSection={handleSectionChange}
+          categories={visibleCategories}
+          categoryId={categoryId}
+          onChangeCategory={setCategoryId}
           onlyActiveProducts={onlyActiveProducts}
           onChangeOnlyActiveProducts={setOnlyActiveProducts}
           filteredCount={filtered.length}

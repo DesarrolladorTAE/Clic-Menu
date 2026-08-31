@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
@@ -28,6 +30,8 @@ export default function CashierOnlineOrderPaymentHeroCard({
   paymentMethodsCount = 0,
   onBack,
 }) {
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+
   const publicNumber = cleanText(order?.public_number);
   const customerName = cleanText(order?.order_name) || "Cliente sin nombre";
   const customerPhone = cleanText(order?.customer_phone) || "Teléfono no disponible";
@@ -185,9 +189,31 @@ export default function CashierOnlineOrderPaymentHeroCard({
             ) : null}
           </Stack>
 
+          <Box sx={{ display: { xs: "block", md: "none" } }}>
+            <Button
+              type="button"
+              variant="outlined"
+              fullWidth
+              onClick={() => setMobileDetailsOpen((previous) => !previous)}
+              endIcon={mobileDetailsOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+              aria-expanded={mobileDetailsOpen}
+              sx={{
+                minHeight: 44,
+                borderRadius: 2,
+                fontWeight: 800,
+                textTransform: "none",
+              }}
+            >
+              {mobileDetailsOpen ? "Ocultar detalles del pedido" : "Ver detalles del pedido"}
+            </Button>
+          </Box>
+
           <Box
             sx={{
-              display: "grid",
+              display: {
+                xs: mobileDetailsOpen ? "grid" : "none",
+                md: "grid",
+              },
               gap: 2,
               gridTemplateColumns: {
                 xs: "minmax(0, 1fr)",

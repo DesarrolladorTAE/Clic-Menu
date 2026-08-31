@@ -90,6 +90,7 @@ export default function RestaurantOperationLayout() {
       return "customer-loyalty-settings";
     }
 
+    if (pathname.includes("/connections/whasapo")) return "whasapo";
     if (pathname.includes("/connections/taeconta")) return "taeconta";
     if (pathname.includes("/connections/netpay")) return "netpay";
 
@@ -280,6 +281,12 @@ export default function RestaurantOperationLayout() {
 
       case "profit-report":
         nav(`${base}/reports/profit`, { state: { restaurantName } });
+        break;
+
+      case "whasapo":
+        nav(`${base}/connections/whasapo`, {
+          state: { restaurantName },
+        });
         break;
 
       case "taeconta":

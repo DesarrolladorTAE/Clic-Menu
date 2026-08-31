@@ -8,6 +8,11 @@ export default function CatalogContextCard({
   selectedBranch,
   contextData,
 }) {
+  const modeLabel =
+    contextData?.mode === "branch"
+      ? "Por sucursal"
+      : "Global";
+
   return (
     <Paper
       sx={{
@@ -47,7 +52,7 @@ export default function CatalogContextCard({
           <ContextMiniCard
             icon={<CheckCircleOutlineOutlinedIcon fontSize="small" />}
             title="Productos habilitados"
-            value={`${contextData?.enabledCount || 0} activo(s)`}
+            value={`${contextData?.enabledCount || 0} habilitado(s)`}
             chipLabel="Disponibles"
             chipColor="success"
           />
@@ -63,7 +68,7 @@ export default function CatalogContextCard({
           <ContextMiniCard
             icon={<SettingsSuggestOutlinedIcon fontSize="small" />}
             title="Modo del catálogo"
-            value={String(contextData?.mode || "global").toUpperCase()}
+            value={modeLabel}
             chipLabel="Operación"
             chipColor="primary"
           />
