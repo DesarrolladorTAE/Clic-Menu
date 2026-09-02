@@ -30,10 +30,19 @@ import {
   markCashierReadyNotificationRead,
 } from "../../../../services/staff/casher/cashierReadyNotifications.service";
 
+import { reopenCashierCheck } from "../../../../services/staff/casher/cashierOrderCheck.service";
+import { fetchCashierOperationalAuthorizers } from "../../../../services/staff/casher/cashierOperationalAuthorizer.service";
+
+import {
+  getCashierPendingNetpayOperation,
+  resumeCashierPendingNetpayOperation,
+} from "../../../../services/staff/casher/cashierNetpayPayment.service";
+
 import CashierOnlineOrdersHeroCard from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersHeroCard";
 import CashierOnlineOrdersTabs from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersTabs";
 import CashierOnlineOrdersPanel from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersPanel";
 import CashierOnlineOrderActionDialog from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrderActionDialog";
+import CashierOperationalAuthorizationDialog from "../../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
 import CashierReadyNotificationsDrawer from "../../../../components/staff/casher/queuePage/CashierReadyNotificationsDrawer";
 
 const PAGE_SIZE = 5;
@@ -55,6 +64,13 @@ export default function CashierOnlineOrdersPage() {
   const [dialogAction, setDialogAction] = useState("");
   const [dialogOrder, setDialogOrder] = useState(null);
 
+  const [reopenAuthorizationOpen, setReopenAuthorizationOpen] = useState(false);
+  const [reopenAuthorizationLoading, setReopenAuthorizationLoading] = useState(false);
+  const [reopenAuthorizationSubmitting, setReopenAuthorizationSubmitting] = useState(false);
+  const [reopenAuthorizers, setReopenAuthorizers] = useState([]);
+  const [reopenOrder, setReopenOrder] = useState(null);
+  const [netpayResumeBusy, setNetpayResumeBusy] = useState(false);
+
   const [readyNotifications, setReadyNotifications] = useState([]);
   const [readyBusyId, setReadyBusyId] = useState(null);
   const [onlineOrderNotifications, setOnlineOrderNotifications] = useState([]);
@@ -71,6 +87,7 @@ export default function CashierOnlineOrdersPage() {
   const pollRef = useRef(null);
   const wsRefreshFastRef = useRef(null);
   const wsRefreshSlowRef = useRef(null);
+  const netpayResumeRef = useRef(null);
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -237,6 +254,110 @@ export default function CashierOnlineOrdersPage() {
     [data]
   );
 
+  useEffect(() => {
+    if (myOrders.length === 0) return;
+
+    let pending;
+
+    try {
+      pending = getCashierPendingNetpayOperation();
+    } catch {
+      return;
+    }
+
+    const operation = pending?.operation;
+
+    if (!pending?.hasPendingOperation || !operation?.normalizedResult) return;
+
+    const pendingSaleId = Number(operation.saleId || 0);
+    const transactionId = Number(operation.netpayTransactionId || 0);
+    const localState = String(operation.localState || "").toLowerCase();
+    const operationType = String(operation.operationType || "").toLowerCase();
+    const resultType = String(operation.normalizedResult?.operation || "").toLowerCase();
+    const eventUuid = String(
+      operation.normalizedResult?.event_uuid ||
+      operation.normalizedResult?.eventUuid ||
+      ""
+    ).trim();
+
+    if (
+      !pendingSaleId ||
+      !transactionId ||
+      !eventUuid ||
+      localState !== "result_pending_backend" ||
+      operationType !== "recovery" ||
+      resultType !== "recovery_result"
+    ) {
+      return;
+    }
+
+    const belongsToMyOrders = myOrders.some(
+      (order) => Number(order?.sale_id || 0) === pendingSaleId
+    );
+
+    if (!belongsToMyOrders) return;
+
+    const resumeKey = `${transactionId}:${eventUuid}`;
+    if (netpayResumeRef.current === resumeKey) return;
+
+    netpayResumeRef.current = resumeKey;
+
+    const resumePendingResult = async () => {
+      try {
+        setNetpayResumeBusy(true);
+
+        const result = await resumeCashierPendingNetpayOperation({
+          saleId: pendingSaleId,
+        });
+
+        await load({ silent: true });
+
+        const outcome = String(result?.outcome || "").toLowerCase();
+
+        if (outcome === "no_record") {
+          showAlert({
+            severity: "info",
+            title: "NetPay",
+            message:
+              result?.backendResponse?.message ||
+              result?.normalizedResult?.message ||
+              "NetPay no encontró registro bancario para la operación pendiente.",
+          });
+        } else if (
+          [
+            "pending_recovery",
+            "pending_reversal",
+            "approved_local_error",
+            "recovery_pending_local",
+            "operation_pending_local",
+          ].includes(outcome)
+        ) {
+          showAlert({
+            severity: "warning",
+            title: "NetPay pendiente",
+            message:
+              result?.backendResponse?.message ||
+              "La operación NetPay continúa pendiente y no se modificará la cuenta.",
+          });
+        }
+      } catch (error) {
+        showAlert({
+          severity: "warning",
+          title: "NetPay pendiente",
+          message:
+            error?.response?.data?.message ||
+            error?.message ||
+            "No se pudo procesar el resultado NetPay pendiente. La operación permanecerá protegida.",
+        });
+      } finally {
+        setNetpayResumeBusy(false);
+      }
+    };
+
+    resumePendingResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myOrders]);
+
   const counts = data?.counts || {};
   const availableCount = Number(counts?.available ?? availableOrders.length);
   const myCount = Number(counts?.mine ?? myOrders.length);
@@ -345,9 +466,97 @@ export default function CashierOnlineOrdersPage() {
     });
   };
 
+  const handleRequestReopen = async (order) => {
+    const checkId = Number(order?.order_check_id || order?.check_id || 0);
+
+    if (!checkId) {
+      showAlert({ severity: "warning", message: "No se pudo identificar la cuenta que deseas reabrir." });
+      return;
+    }
+
+    setReopenOrder(order);
+    setReopenAuthorizationOpen(true);
+    setReopenAuthorizationLoading(true);
+    setReopenAuthorizers([]);
+
+    try {
+      const response = await fetchCashierOperationalAuthorizers();
+      setReopenAuthorizers(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      handleRequestError(error, "No se pudieron consultar los autorizadores operativos.");
+    } finally {
+      setReopenAuthorizationLoading(false);
+    }
+  };
+
+  const handleCloseReopenAuthorization = () => {
+    if (reopenAuthorizationSubmitting) return;
+
+    setReopenAuthorizationOpen(false);
+    setReopenOrder(null);
+    setReopenAuthorizers([]);
+  };
+
+  const handleReopenAuthorizationSubmit = async (authorization) => {
+    const onlineOrderId = Number(reopenOrder?.id || 0);
+    const checkId = Number(reopenOrder?.order_check_id || reopenOrder?.check_id || 0);
+
+    if (!onlineOrderId || !checkId || reopenAuthorizationSubmitting) return;
+
+    setReopenAuthorizationSubmitting(true);
+    setBusyOrderId(onlineOrderId);
+    setBusyAction("reopen_check");
+
+    try {
+      const response = await reopenCashierCheck(checkId, {
+        authorization_user_id: authorization.authorization_user_id,
+        authorization_pin: authorization.authorization_pin,
+        reason: authorization.reason,
+        meta_json: {
+          source: "cashier_online_orders",
+          operation: "reopen_check",
+          online_order_id: onlineOrderId,
+          order_check_id: checkId,
+          sale_id: Number(reopenOrder?.sale_id || 0) || null,
+        },
+      });
+
+      setReopenAuthorizationOpen(false);
+      setReopenOrder(null);
+      setReopenAuthorizers([]);
+
+      showAlert({
+        severity: "success",
+        message: response?.message || "Cuenta reabierta correctamente.",
+      });
+
+      await load({ silent: true });
+      return response;
+    } catch (error) {
+      const status = Number(error?.response?.status || 0);
+      const code = error?.response?.data?.code;
+
+      if (status === 401 || ["NO_OPEN_CASH_SESSION", "NO_ACTIVE_STAFF_CONTEXT"].includes(code)) {
+        handleRequestError(error, "No se pudo reabrir la cuenta.");
+        return;
+      }
+
+      throw error;
+    } finally {
+      setReopenAuthorizationSubmitting(false);
+      setBusyOrderId(null);
+      setBusyAction("");
+    }
+  };
+
   const handleOrderAction = (action, order) => {
     const onlineOrderId = Number(order?.id || 0);
-    if (!onlineOrderId || busyOrderId) return;
+    if (!onlineOrderId || busyOrderId || netpayResumeBusy) return;
+
+    if (action === "reopen_check") {
+      handleRequestReopen(order);
+      return;
+    }
 
     if (["prepare_payment", "pay"].includes(action)) {
       handleOpenPayment(order);
@@ -365,7 +574,7 @@ export default function CashierOnlineOrdersPage() {
 
   const executeOrderAction = async (action, order, payload = {}) => {
     const onlineOrderId = Number(order?.id || 0);
-    if (!onlineOrderId || busyOrderId) return;
+    if (!onlineOrderId || busyOrderId || netpayResumeBusy) return;
 
     setBusyOrderId(onlineOrderId);
     setBusyAction(action);
@@ -489,6 +698,7 @@ export default function CashierOnlineOrdersPage() {
           orders={paginatedItems}
           busyOrderId={busyOrderId}
           busyAction={busyAction}
+          actionsDisabled={netpayResumeBusy}
           page={page}
           totalPages={totalPages}
           startItem={startItem}
@@ -510,6 +720,17 @@ export default function CashierOnlineOrdersPage() {
         submitting={Boolean(dialogOrder) && Number(busyOrderId || 0) === Number(dialogOrder?.id || 0) && busyAction === dialogAction}
         onClose={handleDialogClose}
         onConfirm={handleDialogConfirm}
+      />
+
+      <CashierOperationalAuthorizationDialog
+        open={reopenAuthorizationOpen}
+        title="Autorizar reapertura"
+        description="Selecciona un autorizador para reabrir esta cuenta."
+        authorizers={reopenAuthorizers}
+        loadingAuthorizers={reopenAuthorizationLoading}
+        submitting={reopenAuthorizationSubmitting}
+        onClose={handleCloseReopenAuthorization}
+        onSubmit={handleReopenAuthorizationSubmit}
       />
 
       <CashierReadyNotificationsDrawer

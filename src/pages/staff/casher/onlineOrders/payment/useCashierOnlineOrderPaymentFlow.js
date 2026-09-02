@@ -11,6 +11,8 @@ import {
   resumeCashierPendingNetpayOperation,
 } from "../../../../../services/staff/casher/cashierNetpayPayment.service";
 
+import { isNetpayBridgeAvailable } from "../../../../../services/native/netpayBridge.service";
+
 import {
   createPageError,
   formatPaymentAmountValue,
@@ -50,13 +52,17 @@ export default function useCashierOnlineOrderPaymentFlow({
 }) {
   const [previewing, setPreviewing] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [netpayMode, setNetpayMode] = useState(false);
   const [netpayPending, setNetpayPending] = useState(false);
   const [netpayStatus, setNetpayStatus] = useState(null);
+  const [netpayTerminal, setNetpayTerminal] = useState(null);
 
   const resumeAttemptRef = useRef(null);
 
   const paymentType = String(onlineOrder?.payment_type || "").toLowerCase();
-  const isNetpayPayment = paymentType === "terminal";
+  const isTerminalPayment = paymentType === "terminal";
+  const netpayBridgeAvailable = isNetpayBridgeAvailable();
+  const isNetpayPayment = isTerminalPayment && netpayMode;
 
   const selectedPaymentMethod = useMemo(() => {
     if (payments.length !== 1) return null;
@@ -97,14 +103,9 @@ export default function useCashierOnlineOrderPaymentFlow({
     };
   }, [paymentMethods, payments, taxOptionCode, tip]);
 
-  const financialLocked =
-    previewing ||
-    paying ||
-    (isNetpayPayment && netpayPending);
+  const financialLocked = previewing || paying || netpayPending;
 
-  const netpayLocked =
-    isNetpayPayment &&
-    (previewing || paying || netpayPending);
+  const netpayLocked = isNetpayPayment && (previewing || paying || netpayPending);
 
   const handleNetpayStatus = ({ status, data }) => {
     setNetpayStatus({ status, data });
@@ -137,6 +138,67 @@ export default function useCashierOnlineOrderPaymentFlow({
     if (!Number.isFinite(parsed) || parsed < 0) return;
 
     syncSinglePaymentAmount(sale, parsed);
+  };
+
+  const handleNetpayModeChange = (enabled) => {
+    if (!isTerminalPayment || previewing || paying || netpayPending) return;
+
+    const next = Boolean(enabled);
+
+    if (next && !netpayBridgeAvailable) {
+      showAlert({
+        severity: "warning",
+        title: "NetPay",
+        message: "NetPay solamente está disponible desde una terminal PAX compatible.",
+      });
+      return;
+    }
+
+    if (!next) {
+      setNetpayMode(false);
+      setNetpayStatus(null);
+      setNetpayTerminal(null);
+      setPreview(null);
+      return;
+    }
+
+    const currentCode = String(selectedPaymentMethod?.code || "").toLowerCase();
+
+    const cardMethod = TERMINAL_METHOD_CODES.includes(currentCode)
+      ? selectedPaymentMethod
+      : paymentMethods.find((method) =>
+          TERMINAL_METHOD_CODES.includes(String(method?.code || "").toLowerCase())
+        );
+
+    if (!cardMethod) {
+      showAlert({
+        severity: "warning",
+        message: "No hay un método Crédito o Débito activo para utilizar NetPay.",
+      });
+      return;
+    }
+
+    const expectedTotal = paymentTotalForSale(sale, tip);
+
+    setPayments((previous) => {
+      if (!Array.isArray(previous) || previous.length !== 1) return previous;
+
+      return [{
+        ...previous[0],
+        payment_method_id: String(cardMethod.id),
+        amount: expectedTotal !== null
+          ? formatPaymentAmountValue(expectedTotal)
+          : previous[0].amount,
+        reference: "",
+        last4: "",
+        received: "",
+      }];
+    });
+
+    setNetpayMode(true);
+    setNetpayStatus(null);
+    setNetpayTerminal(null);
+    setPreview(null);
   };
 
   const handlePaymentChange = (localId, field, value) => {
@@ -370,6 +432,7 @@ export default function useCashierOnlineOrderPaymentFlow({
     });
 
     const netpayPreview = result?.preview || null;
+    setNetpayTerminal(result?.terminal || null);
 
     if (!netpayPreview?.preview_valid) {
       throw createPageError(
@@ -623,7 +686,11 @@ export default function useCashierOnlineOrderPaymentFlow({
     try {
       const pending = getCashierPendingNetpayOperation();
 
-      if (pending?.hasPendingOperation) {
+      if (
+        pending?.hasPendingOperation &&
+        pending?.operation?.saleId === Number(selectedSaleId)
+      ) {
+        setNetpayMode(true);
         setNetpayPending(true);
         paymentInProgressRef.current = true;
         return true;
@@ -768,7 +835,22 @@ export default function useCashierOnlineOrderPaymentFlow({
   };
 
   useEffect(() => {
-    if (!isNetpayPayment || !selectedSaleId || paymentCompletedRef.current) return;
+    setNetpayMode(false);
+    setNetpayPending(false);
+    setNetpayStatus(null);
+    setNetpayTerminal(null);
+    resumeAttemptRef.current = null;
+  }, [selectedSaleId]);
+
+  useEffect(() => {
+    if (
+      !isTerminalPayment ||
+      !netpayBridgeAvailable ||
+      !selectedSaleId ||
+      paymentCompletedRef.current
+    ) {
+      return;
+    }
 
     const resumeKey = `${selectedSaleId}`;
 
@@ -781,7 +863,10 @@ export default function useCashierOnlineOrderPaymentFlow({
       try {
         const pending = getCashierPendingNetpayOperation();
 
-        if (!pending?.hasPendingOperation) {
+        if (
+          !pending?.hasPendingOperation ||
+          pending?.operation?.saleId !== Number(selectedSaleId)
+        ) {
           if (!cancelled) {
             setNetpayPending(false);
             paymentInProgressRef.current = false;
@@ -791,6 +876,7 @@ export default function useCashierOnlineOrderPaymentFlow({
 
         if (cancelled) return;
 
+        setNetpayMode(true);
         setNetpayPending(true);
         paymentInProgressRef.current = true;
 
@@ -809,6 +895,7 @@ export default function useCashierOnlineOrderPaymentFlow({
         const stillPending = detectLocalPendingOperation();
 
         if (stillPending || netpayError.bankApproved) {
+          setNetpayMode(true);
           setNetpayPending(true);
           paymentInProgressRef.current = true;
 
@@ -834,11 +921,15 @@ export default function useCashierOnlineOrderPaymentFlow({
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNetpayPayment, selectedSaleId]);
+  }, [isTerminalPayment, netpayBridgeAvailable, selectedSaleId]);
 
   return {
     paymentType,
+    isTerminalPayment,
     isNetpayPayment,
+    netpayMode,
+    netpayBridgeAvailable,
+    netpayTerminal,
     selectedPaymentMethod,
     normalizedPayload,
 
@@ -850,8 +941,10 @@ export default function useCashierOnlineOrderPaymentFlow({
     financialLocked,
 
     handleTipChange,
+    handleNetpayModeChange,
     handlePaymentChange,
     handlePreview,
     handlePay,
   };
+
 }

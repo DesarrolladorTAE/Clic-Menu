@@ -13,6 +13,7 @@ import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import WhereToVoteRoundedIcon from "@mui/icons-material/WhereToVoteRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
@@ -59,6 +60,11 @@ export default function CashierOnlineOrderCard({
   const backendActions = Array.isArray(order?.actions) ? order.actions : [];
   const canCancelOrder = backendActions.includes("cancel");
   const menuOpen = Boolean(menuAnchorEl);
+
+  const orderCheckId = Number(order?.order_check_id || order?.check_id || 0);
+  const orderCheckStatus = String(order?.order_check_status || order?.check_status || "").toLowerCase();
+  const canReopenCheck = backendActions.includes("reopen_check") || (orderCheckId > 0 && orderCheckStatus === "paying");
+
   const paymentAction = backendActions.includes("pay")
     ? "pay"
     : backendActions.includes("prepare_payment")
@@ -68,6 +74,7 @@ export default function CashierOnlineOrderCard({
   const actions = [
     ...backendActions.filter((action) => CARD_ACTIONS.includes(action)),
     ...(paymentAction ? [paymentAction] : []),
+    ...(canReopenCheck ? ["reopen_check"] : []),
   ];
 
   const handleOpenMenu = (event) => {
@@ -465,6 +472,13 @@ function actionConfig(action) {
       color: "secondary",
       variant: "contained",
       icon: <PaymentsRoundedIcon />,
+    },
+    reopen_check: {
+      label: "Reabrir cuenta",
+      loadingLabel: "Reabriendo…",
+      color: "secondary",
+      variant: "outlined",
+      icon: <LockOpenRoundedIcon />,
     },
     deliver: {
       label: "Marcar entregado",

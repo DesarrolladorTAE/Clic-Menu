@@ -171,6 +171,8 @@ export default function CashierOnlineOrderPaymentPage() {
   const {
     paymentType,
     isNetpayPayment,
+    netpayBridgeAvailable,
+    netpayTerminal,
     previewing,
     paying,
     netpayPending,
@@ -178,6 +180,7 @@ export default function CashierOnlineOrderPaymentPage() {
     netpayLocked,
     financialLocked,
     handleTipChange,
+    handleNetpayModeChange,
     handlePaymentChange,
     handlePreview,
     handlePay,
@@ -428,9 +431,16 @@ export default function CashierOnlineOrderPaymentPage() {
               showAddPayment={false}
               showRemovePayment={false}
               paymentMethodLocked={paymentMethodLocked}
+              netpayAvailable={paymentType === "terminal" && netpayBridgeAvailable}
               netpayMode={isNetpayPayment}
+              onNetpayModeChange={
+                paymentType === "terminal"
+                  ? handleNetpayModeChange
+                  : undefined
+              }
               netpayBusy={isNetpayPayment && (previewing || paying)}
               netpayStatus={netpayStatus?.status || ""}
+              netpayTerminal={netpayTerminal}
               netpayRecoveryRequired={netpayPending}
               amountLocked={isNetpayPayment}
               hideManualCardFields={isNetpayPayment}
@@ -439,7 +449,9 @@ export default function CashierOnlineOrderPaymentPage() {
                 isNetpayPayment
                   ? netpayPending
                     ? "Existe una operación NetPay pendiente. Debe resolverse antes de iniciar otro cobro."
-                    : "Este Pedido en línea se procesará en la terminal PAX. Selecciona tarjeta de crédito o débito; la referencia y los últimos 4 serán obtenidos directamente de NetPay."
+                    : "Este Pedido en línea se procesará en la terminal PAX. La referencia y los últimos 4 serán obtenidos directamente de NetPay."
+                  : paymentType === "terminal"
+                  ? "Este Pedido en línea se pagará con tarjeta. Puedes registrar el cobro con una terminal externa o activar NetPay para procesarlo en la terminal PAX."
                   : "Este Pedido en línea permite un solo método de pago y fue definido al realizar el pedido."
               }
             />

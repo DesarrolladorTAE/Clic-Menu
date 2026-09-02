@@ -9,6 +9,7 @@ export default function CashierOnlineOrdersPanel({
   orders = [],
   busyOrderId = null,
   busyAction = "",
+  actionsDisabled = false,
   page,
   totalPages,
   startItem,
@@ -83,7 +84,7 @@ export default function CashierOnlineOrdersPanel({
                 <CashierOnlineOrderCard
                   key={`online-order:${orderId}`}
                   order={order}
-                  disabled={anotherOrderBusy}
+                  disabled={actionsDisabled || anotherOrderBusy}
                   busyAction={isBusyOrder ? busyAction : ""}
                   onOpenDetail={onOpenDetail}
                   onAction={onAction}
