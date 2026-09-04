@@ -12,7 +12,7 @@ import PlansCarouselControls from "../../components/owner/PlansCarouselControls"
 import PlanCard from "../../components/owner/PlanCard";
 
 import SubscriptionHistoryShortcut from "../../components/owner/subscription-history/SubscriptionHistoryShortcut";
-
+import AddonHistoryShortcut from "../../components/owner/addon-history/AddonHistoryShortcut";
 
 import { getPlans } from "../../services/owner/plan.service";
 
@@ -468,6 +468,11 @@ export default function RestaurantPlans() {
         <SubscriptionHistoryShortcut
           disabled={busyPlanId !== null || confirmingPayPal}
           onOpen={() => nav(`/owner/restaurants/${restaurantId}/subscriptions`)}
+        />
+
+        <AddonHistoryShortcut
+          disabled={busyPlanId !== null || confirmingPayPal}
+          onOpen={() => nav(`/owner/restaurants/${restaurantId}/addons`)}
         />
 
         <Box

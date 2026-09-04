@@ -15,6 +15,7 @@ import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
@@ -62,14 +63,19 @@ export default function SystemAdminSidebar({
         ],
       },
       {
-        key: "subscriptions",
-        label: "Suscripciones",
+        key: "sales",
+        label: "Ventas",
         icon: <PaymentsRoundedIcon />,
         items: [
           {
             key: "subscription-sales",
-            label: "Ventas mensuales",
+            label: "Suscripciones",
             icon: <ReceiptLongRoundedIcon />,
+          },
+          {
+            key: "addon-sales",
+            label: "Complementos",
+            icon: <ExtensionOutlinedIcon />,
           },
         ],
       },

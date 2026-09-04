@@ -13,7 +13,9 @@ export default function SystemAdminLayout() {
 
   let currentKey = "dashboard";
 
-  if (pathname.includes("/subscription-sales")) {
+  if (pathname.includes("/addon-sales")) {
+    currentKey = "addon-sales";
+  } else if (pathname.includes("/subscription-sales")) {
     currentKey = "subscription-sales";
   } else if (pathname.includes("/owners")) {
     currentKey = "owners";
@@ -33,6 +35,10 @@ export default function SystemAdminLayout() {
 
       case "subscription-sales":
         nav("/system-admin/subscription-sales");
+        break;
+
+      case "addon-sales":
+        nav("/system-admin/addon-sales");
         break;
 
       default:

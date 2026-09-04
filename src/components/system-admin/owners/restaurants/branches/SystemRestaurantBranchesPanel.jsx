@@ -10,6 +10,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
 
 import PaginationFooter from "../../../../common/PaginationFooter";
 
@@ -24,10 +25,12 @@ export default function SystemRestaurantBranchesPanel({
   onChangeQ,
   onChangeStatus,
   onCreate,
+  onManageAddons,
   onEdit,
   onDelete,
   onToggleStatus,
 }) {
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -47,7 +50,7 @@ export default function SystemRestaurantBranchesPanel({
           <Stack
             direction={{ xs: "column", md: "row" }}
             spacing={2}
-            alignItems={{ xs: "stretch", md: "flex-end" }}
+            alignItems={{ xs: "stretch", md: "flex-start" }}
           >
             <Box sx={{ flex: 1 }}>
               <Typography sx={fieldLabelSx}>Buscar sucursal</Typography>
@@ -55,7 +58,7 @@ export default function SystemRestaurantBranchesPanel({
               <TextField
                 value={q}
                 onChange={(e) => onChangeQ(e.target.value)}
-                placeholder="Buscar por nombre, dirección o teléfono…"
+                placeholder="Buscar por nombre o teléfono…"
                 fullWidth
               />
 
@@ -152,18 +155,20 @@ export default function SystemRestaurantBranchesPanel({
               <BranchesMobileCards
                 branches={branches}
                 busyId={busyId}
+                onManageAddons={onManageAddons}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleStatus={onToggleStatus}
               />
             ) : (
               <BranchesDesktopTable
-                branches={branches}
-                busyId={busyId}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onToggleStatus={onToggleStatus}
-              />
+              branches={branches}
+              busyId={busyId}
+              onManageAddons={onManageAddons}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onToggleStatus={onToggleStatus}
+            />
             )}
 
             <PaginationFooter
@@ -188,13 +193,14 @@ export default function SystemRestaurantBranchesPanel({
 function BranchesDesktopTable({
   branches,
   busyId,
+  onManageAddons,
   onEdit,
   onDelete,
   onToggleStatus,
 }) {
   return (
     <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-      <Table sx={{ minWidth: 980 }}>
+      <Table sx={{ minWidth: 760 }}>
         <TableHead>
           <TableRow
             sx={{
@@ -209,7 +215,6 @@ function BranchesDesktopTable({
             }}
           >
             <TableCell>Sucursal</TableCell>
-            <TableCell>Dirección</TableCell>
             <TableCell>Teléfono</TableCell>
             <TableCell>Horario</TableCell>
             <TableCell>Logo</TableCell>
@@ -247,7 +252,6 @@ function BranchesDesktopTable({
                   </Stack>
                 </TableCell>
 
-                <TableCell>{row.address || "—"}</TableCell>
                 <TableCell>{row.phone || "—"}</TableCell>
                 <TableCell>
                   {formatHour(row.open_time)} - {formatHour(row.close_time)}
@@ -282,24 +286,28 @@ function BranchesDesktopTable({
                 </TableCell>
 
                 <TableCell align="right">
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Tooltip title="Editar">
-                      <IconButton disabled={disabled} onClick={() => onEdit(row)} sx={iconEditSx}>
-                        <EditIcon fontSize="small" />
+                  <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                    <Tooltip title="Complementos">
+                      <IconButton disabled={disabled} onClick={() => onManageAddons(row)} sx={iconAddonsSx}>
+                        <ExtensionOutlinedIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
 
-                    <Tooltip title="Eliminar">
-                      <span>
-                        <IconButton
-                          disabled={disabled}
-                          onClick={() => onDelete(row)}
-                          sx={iconDeleteSx}
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
+                    <Stack direction="row" spacing={0.75}>
+                      <Tooltip title="Editar">
+                        <IconButton disabled={disabled} onClick={() => onEdit(row)} sx={iconEditSx}>
+                          <EditIcon fontSize="small" />
                         </IconButton>
-                      </span>
-                    </Tooltip>
+                      </Tooltip>
+
+                      <Tooltip title="Eliminar">
+                        <span>
+                          <IconButton disabled={disabled} onClick={() => onDelete(row)} sx={iconDeleteSx}>
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -314,6 +322,7 @@ function BranchesDesktopTable({
 function BranchesMobileCards({
   branches,
   busyId,
+  onManageAddons,
   onEdit,
   onDelete,
   onToggleStatus,
@@ -354,7 +363,6 @@ function BranchesMobileCards({
                   />
                 </Stack>
 
-                <InfoBlock label="Dirección" value={row.address || "—"} />
                 <InfoBlock label="Teléfono" value={row.phone || "—"} />
                 <InfoBlock
                   label="Horario"
@@ -382,24 +390,28 @@ function BranchesMobileCards({
                   />
                 </Box>
 
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  <Tooltip title="Editar">
-                    <IconButton disabled={disabled} onClick={() => onEdit(row)} sx={iconEditSx}>
-                      <EditIcon fontSize="small" />
+                <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                  <Tooltip title="Complementos">
+                    <IconButton disabled={disabled} onClick={() => onManageAddons(row)} sx={iconAddonsSx}>
+                      <ExtensionOutlinedIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
 
-                  <Tooltip title="Eliminar">
-                    <span>
-                      <IconButton
-                        disabled={disabled}
-                        onClick={() => onDelete(row)}
-                        sx={iconDeleteSx}
-                      >
-                        <DeleteOutlineIcon fontSize="small" />
+                  <Stack direction="row" spacing={0.75}>
+                    <Tooltip title="Editar">
+                      <IconButton disabled={disabled} onClick={() => onEdit(row)} sx={iconEditSx}>
+                        <EditIcon fontSize="small" />
                       </IconButton>
-                    </span>
-                  </Tooltip>
+                    </Tooltip>
+
+                    <Tooltip title="Eliminar">
+                      <span>
+                        <IconButton disabled={disabled} onClick={() => onDelete(row)} sx={iconDeleteSx}>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
                 </Stack>
               </Stack>
             </Box>
@@ -452,6 +464,19 @@ const mobileValueSx = {
   fontSize: 14,
   color: "text.primary",
   wordBreak: "break-word",
+};
+
+const iconAddonsSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#C46F4E",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": { bgcolor: "#A95A3D" },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
+  },
 };
 
 const iconEditSx = {

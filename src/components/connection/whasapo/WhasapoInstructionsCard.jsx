@@ -13,28 +13,34 @@ export default function WhasapoInstructionsCard() {
       }}
     >
       <Stack spacing={1.25}>
-        <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 800,
+            color: "text.primary",
+          }}
+        >
           Antes de comenzar
         </Typography>
 
         <InstructionRow
           step="1"
-          text="La configuración de Whasapo se guarda por sucursal. Primero selecciona la sucursal que deseas configurar."
+          text="La configuración de WhatsApp se administra por sucursal. Primero selecciona la sucursal que deseas consultar o modificar."
         />
 
         <InstructionRow
           step="2"
-          text="Si no utilizas un token personalizado, los tickets se enviarán utilizando la conexión principal de WhatsApp configurada en el sistema."
+          text="En Whasapo puedes utilizar la conexión principal del sistema o configurar un token propio para que la sucursal envíe mensajes desde su conexión personalizada."
         />
 
         <InstructionRow
           step="3"
-          text="Si activas el token personalizado, la sucursal utilizará su propia conexión de Whasapo para el envío de tickets."
+          text="WhatsApp QR estará disponible únicamente en las sucursales que tengan vigente el complemento correspondiente y una conexión vinculada correctamente."
         />
 
         <InstructionRow
           step="4"
-          text="El token debe corresponder a una conexión válida de Whasapo. Si la sesión se desconecta, deberás volver a vincularla desde tu cuenta de Whasapo."
+          text="Cuando Whasapo personalizado y WhatsApp QR estén disponibles al mismo tiempo, podrás indicar cuál deseas utilizar como canal preferido."
         />
       </Stack>
     </Paper>
@@ -43,7 +49,11 @@ export default function WhasapoInstructionsCard() {
 
 function InstructionRow({ step, text }) {
   return (
-    <Stack direction="row" spacing={1.25} alignItems="flex-start">
+    <Stack
+      direction="row"
+      spacing={1.25}
+      alignItems="flex-start"
+    >
       <Box
         sx={{
           minWidth: 28,
@@ -60,7 +70,13 @@ function InstructionRow({ step, text }) {
         {step}
       </Box>
 
-      <Typography sx={{ fontSize: 14, color: "text.primary", lineHeight: 1.6 }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          color: "text.primary",
+          lineHeight: 1.6,
+        }}
+      >
         {text}
       </Typography>
     </Stack>

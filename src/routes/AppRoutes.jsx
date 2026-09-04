@@ -44,7 +44,9 @@ import SystemAdminDashboard from "../pages/system-admin/SystemAdminDashboard";
 import SystemOwnersPage from "../pages/system-admin/owners/SystemOwnersPage";
 import SystemOwnerDetailPage from "../pages/system-admin/owners/SystemOwnerDetailPage";
 import SystemOwnerRestaurantDetailPage from "../pages/system-admin/owners/restaurants/SystemOwnerRestaurantDetailPage";
+import SystemBranchAddonsPage from "../pages/system-admin/owners/restaurants/addons/SystemBranchAddonsPage";
 import SystemSubscriptionSalesPage from "../pages/system-admin/subscription-sales/SystemSubscriptionSalesPage";
+import SystemAddonSalesPage from "../pages/system-admin/addon-sales/SystemAddonSalesPage";
 
 //Menu:Cajero
 import CashierLayout from "../layouts/CashierLayout";
@@ -138,6 +140,7 @@ import NetpayConnectionPage from "../pages/connection/netpay/NetpayConnectionPag
 //Planes
 import RestaurantPlans from "../pages/owner/RestaurantPlans";
 import RestaurantSubscriptionHistoryPage from "../pages/owner/subscription-history/RestaurantSubscriptionHistoryPage";
+import RestaurantAddonHistoryPage from "../pages/owner/addon-history/RestaurantAddonHistoryPage";
 
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
@@ -163,16 +166,13 @@ export default function AppRoutes() {
       <Route path="/invoice/:token" element={<PublicInvoicePage />} />
 
       <Route path="/test-mui" element={<TestMui />} />
-
       <Route path="/test-event" element={<TestEventPage />} />
 
-         {/* BLOGS */}
-         <Route path="/blog" element={<BlogPostsPage />} />
-         <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
-         <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}
-          />
-          <Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}
-          />
+      {/* BLOGS */}
+      <Route path="/blog" element={<BlogPostsPage />} />
+      <Route path="/blog/:postSlug" element={<BlogPostDetailPage />} />
+      <Route path="/blog/categorias/:categorySlug" element={<BlogFilteredPostsPage type="category" />}/>
+      <Route path="/blog/etiquetas/:tagSlug" element={<BlogFilteredPostsPage type="tag" />}/>
 
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />
@@ -294,11 +294,8 @@ export default function AppRoutes() {
 
         <Route path="/owner/restaurants/:restaurantId/plans" element={<RestaurantPlans />} />
         <Route path="/owner/restaurants/:restaurantId/subscriptions" element={<RestaurantSubscriptionHistoryPage />} />
-
+        <Route path="/owner/restaurants/:restaurantId/addons" element={<RestaurantAddonHistoryPage />} />
       </Route>
-
-      {/* SYSTEM ADMIN AUTH */}
-      <Route path="/system-admin/login" element={<SystemAdminLogin />} />
 
       {/* SYSTEM ADMIN PROTECTED */}
       <Route element={<SystemAdminProtectedRoute />}>
@@ -308,9 +305,10 @@ export default function AppRoutes() {
           <Route path="owners" element={<SystemOwnersPage />} />
           <Route path="owners/:ownerId" element={<SystemOwnerDetailPage />} />
           <Route path="owners/:ownerId/restaurants/:restaurantId" element={<SystemOwnerRestaurantDetailPage />} />
+          <Route path="owners/:ownerId/restaurants/:restaurantId/branches/:branchId/addons" element={<SystemBranchAddonsPage />} />
 
           <Route path="subscription-sales" element={<SystemSubscriptionSalesPage />} />
-
+          <Route path="addon-sales" element={<SystemAddonSalesPage />} />
         </Route>
       </Route>
 

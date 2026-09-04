@@ -26,7 +26,7 @@ export default function SystemOwnersFiltersCard({
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={2}
-          alignItems={{ xs: "stretch", md: "flex-end" }}
+          alignItems={{ xs: "stretch", md: "flex-start" }}
         >
           <Box sx={{ flex: 1 }}>
             <Typography sx={fieldLabelSx}>Buscar propietario</Typography>

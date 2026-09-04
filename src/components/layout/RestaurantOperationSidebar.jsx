@@ -199,7 +199,7 @@ export default function RestaurantOperationSidebar({
         items: [
           {
             key: "whasapo",
-            label: "Whasapo",
+            label: "WhatsApp",
             icon: <WhatsAppIcon />,
           },
           {

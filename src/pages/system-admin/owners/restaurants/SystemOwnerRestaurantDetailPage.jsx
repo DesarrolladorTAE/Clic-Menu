@@ -173,6 +173,11 @@ export default function SystemOwnerRestaurantDetailPage() {
     setModalOpen(true);
   };
 
+  const openAddons = (row) => {
+    if (!row?.id) return;
+    navigate(`/system-admin/owners/${ownerId}/restaurants/${restaurantId}/branches/${row.id}/addons`);
+  };
+
   const handleSaveBranch = async (
     { payload, logoFile, removeCurrentLogo },
     editing,
@@ -499,6 +504,7 @@ export default function SystemOwnerRestaurantDetailPage() {
             onChangeQ={setQ}
             onChangeStatus={setStatus}
             onCreate={openCreate}
+            onManageAddons={openAddons}
             onEdit={openEdit}
             onDelete={handleDelete}
             onToggleStatus={handleToggleStatus}
