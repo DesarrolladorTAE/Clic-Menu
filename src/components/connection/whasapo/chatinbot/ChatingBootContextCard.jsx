@@ -23,6 +23,14 @@ function connectionState(connection, reconnectRequired) {
     };
   }
 
+  if (status === "opening") {
+    return {
+      value: "WhatsApp está terminando de vincular el dispositivo",
+      chip: "Vinculando",
+      color: "warning",
+    };
+  }
+
   if (status === "pending") {
     return {
       value: "La conexión se está preparando",

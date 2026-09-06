@@ -12,7 +12,6 @@ function channelLabel(channel) {
 }
 
 export default function WhasapoChannelPreferenceCard({
-  selectedBranch,
   preferredChannel,
   effectiveChannel = "whasapo",
   canChooseChannel = false,
@@ -64,7 +63,6 @@ export default function WhasapoChannelPreferenceCard({
 
   const handleChannelChange = (_, value) => {
     if (!value || value === preferredChannel) return;
-
     onChangePreferredChannel(value);
   };
 
@@ -94,11 +92,7 @@ export default function WhasapoChannelPreferenceCard({
           justifyContent="space-between"
           alignItems={{ xs: "flex-start", sm: "center" }}
         >
-          <Stack
-            direction="row"
-            spacing={1.25}
-            alignItems="center"
-          >
+          <Stack direction="row" spacing={1.25} alignItems="center">
             <Box
               sx={{
                 width: 40,
@@ -133,8 +127,7 @@ export default function WhasapoChannelPreferenceCard({
                   lineHeight: 1.5,
                 }}
               >
-                Define cómo se enviarán los mensajes de WhatsApp
-                de esta sucursal.
+                Define cómo se enviarán los mensajes de WhatsApp de esta sucursal.
               </Typography>
             </Box>
           </Stack>
@@ -160,10 +153,11 @@ export default function WhasapoChannelPreferenceCard({
           sx={{
             display: "grid",
             gridTemplateColumns: {
-              xs: "1fr",
+              xs: "minmax(0, 1fr)",
               md: "repeat(2, minmax(0, 1fr))",
             },
             gap: 1.5,
+            minWidth: 0,
           }}
         >
           <AvailabilityCard
@@ -187,135 +181,109 @@ export default function WhasapoChannelPreferenceCard({
           />
         </Box>
 
-        <Box
-          sx={{
-            p: 1.75,
-            borderRadius: 1,
-            border: "1px solid",
-            borderColor: "divider",
-            backgroundColor: "background.default",
-          }}
-        >
-          <Stack spacing={1.5}>
-            <FormControlLabel
-              sx={{ m: 0 }}
-              control={
-                <Switch
-                  checked={manualPreference}
-                  onChange={handleManualModeChange}
-                  disabled={switchDisabled}
-                  color="primary"
+        {canChooseChannel ? (
+          <>
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.default",
+              }}
+            >
+              <Stack spacing={1.5}>
+                <FormControlLabel
+                  sx={{ m: 0 }}
+                  control={
+                    <Switch
+                      checked={manualPreference}
+                      onChange={handleManualModeChange}
+                      disabled={switchDisabled}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "text.primary",
+                      }}
+                    >
+                      Elegir un canal preferido
+                    </Typography>
+                  }
                 />
-              }
-              label={
+
                 <Typography
                   sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
+                    fontSize: 12,
+                    color: "text.secondary",
+                    lineHeight: 1.6,
                   }}
                 >
-                  Elegir un canal preferido
+                  Si está desactivado, Clic Menu seleccionará automáticamente el
+                  canal disponible de acuerdo con la configuración de la sucursal.
                 </Typography>
-              }
-            />
+
+                {manualPreference ? (
+                  <ToggleButtonGroup
+                    exclusive
+                    value={preferredChannel}
+                    onChange={handleChannelChange}
+                    disabled={selectionDisabled}
+                    fullWidth
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(2, minmax(0, 1fr))",
+                      },
+                      gap: 1,
+                      "& .MuiToggleButtonGroup-grouped": {
+                        m: 0,
+                        border: "1px solid !important",
+                        borderColor: "divider !important",
+                        borderRadius: "4px !important",
+                      },
+                    }}
+                  >
+                    <ToggleButton
+                      value="whasapo"
+                      disabled={!whasapoAvailable}
+                      sx={toggleSx}
+                    >
+                      <WhatsAppIcon fontSize="small" />
+                      Whasapo
+                    </ToggleButton>
+
+                    <ToggleButton
+                      value="chatingboot"
+                      disabled={!qrAvailable}
+                      sx={toggleSx}
+                    >
+                      <QrCode2RoundedIcon fontSize="small" />
+                      WhatsApp QR
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                ) : null}
+              </Stack>
+            </Box>
 
             <Typography
               sx={{
-                fontSize: 12,
-                color: "text.secondary",
+                fontSize: 13,
+                color: hasPendingWhasapoChanges ? "warning.dark" : "text.secondary",
                 lineHeight: 1.6,
+                fontWeight: hasPendingWhasapoChanges ? 700 : 400,
               }}
             >
-              Si está desactivado, Clic Menu seleccionará
-              automáticamente el canal disponible de acuerdo con la
-              configuración de la sucursal.
+              {hasPendingWhasapoChanges
+                ? "Guarda o restablece primero los cambios pendientes de Whasapo para poder modificar el canal preferido."
+                : currentExplanation}
             </Typography>
-
-            {manualPreference ? (
-              <ToggleButtonGroup
-                exclusive
-                value={preferredChannel}
-                onChange={handleChannelChange}
-                disabled={selectionDisabled}
-                fullWidth
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0, 1fr))",
-                  },
-                  gap: 1,
-                  "& .MuiToggleButtonGroup-grouped": {
-                    m: 0,
-                    border: "1px solid !important",
-                    borderColor: "divider !important",
-                    borderRadius: "4px !important",
-                  },
-                }}
-              >
-                <ToggleButton
-                  value="whasapo"
-                  disabled={!whasapoAvailable}
-                  sx={toggleSx}
-                >
-                  <WhatsAppIcon fontSize="small" />
-                  Whasapo
-                </ToggleButton>
-
-                <ToggleButton
-                  value="chatingboot"
-                  disabled={!qrAvailable}
-                  sx={toggleSx}
-                >
-                  <QrCode2RoundedIcon fontSize="small" />
-                  WhatsApp QR
-                </ToggleButton>
-              </ToggleButtonGroup>
-            ) : null}
-          </Stack>
-        </Box>
-
-        <Typography
-          sx={{
-            fontSize: 13,
-            color:
-              reconnectRequired || hasPendingWhasapoChanges
-                ? "warning.dark"
-                : "text.secondary",
-            lineHeight: 1.6,
-            fontWeight:
-              reconnectRequired || hasPendingWhasapoChanges
-                ? 700
-                : 400,
-          }}
-        >
-          {hasPendingWhasapoChanges
-            ? "Guarda o restablece primero los cambios pendientes de Whasapo para poder modificar el canal preferido."
-            : !canChooseChannel && !manualPreference
-            ? "La selección manual estará disponible cuando Whasapo personalizado y WhatsApp QR puedan utilizarse al mismo tiempo."
-            : currentExplanation}
-        </Typography>
-
-        {selectedBranch ? (
-          <Typography
-            sx={{
-              fontSize: 12,
-              color: "text.secondary",
-            }}
-          >
-            Esta preferencia se aplica únicamente a{" "}
-            <Box
-              component="span"
-              sx={{
-                color: "primary.main",
-                fontWeight: 800,
-              }}
-            >
-              {selectedBranch.name}
-            </Box>
-            .
-          </Typography>
+          </>
         ) : null}
       </Stack>
     </Paper>
@@ -332,6 +300,9 @@ function AvailabilityCard({
   return (
     <Box
       sx={{
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
         p: 1.5,
         border: "1px solid",
         borderColor: "divider",
@@ -340,16 +311,17 @@ function AvailabilityCard({
       }}
     >
       <Stack
-        direction="row"
-        spacing={1.25}
-        alignItems="center"
+        direction={{ xs: "column", sm: "row" }}
+        spacing={{ xs: 1, sm: 1.25 }}
+        alignItems={{ xs: "stretch", sm: "center" }}
         justifyContent="space-between"
+        sx={{ minWidth: 0 }}
       >
         <Stack
           direction="row"
           spacing={1}
           alignItems="center"
-          sx={{ minWidth: 0 }}
+          sx={{ minWidth: 0, width: "100%" }}
         >
           <Box
             sx={{
@@ -358,9 +330,7 @@ function AvailabilityCard({
               display: "grid",
               placeItems: "center",
               borderRadius: 1,
-              color: available
-                ? "primary.main"
-                : "text.disabled",
+              color: available ? "primary.main" : "text.disabled",
               flexShrink: 0,
             }}
           >
@@ -369,10 +339,12 @@ function AvailabilityCard({
 
           <Typography
             sx={{
+              minWidth: 0,
               fontSize: 13,
               fontWeight: 800,
               color: "text.primary",
               lineHeight: 1.3,
+              overflowWrap: "anywhere",
             }}
           >
             {title}
@@ -385,8 +357,15 @@ function AvailabilityCard({
           color={available ? "success" : "default"}
           variant={available ? "filled" : "outlined"}
           sx={{
+            maxWidth: "100%",
+            alignSelf: { xs: "flex-start", sm: "center" },
             fontWeight: 800,
             flexShrink: 0,
+            "& .MuiChip-label": {
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            },
           }}
         />
       </Stack>

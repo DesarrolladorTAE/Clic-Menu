@@ -21,15 +21,15 @@ function connectionSignature(connection, reconnectRequired) {
   ].join("|");
 }
 
-function pollMilliseconds(connection) {
+function pollMilliseconds(connection, preparingQr = false) {
   if (!connection) return 0;
-  if (connection.connected) return 30000;
+  if (preparingQr) return 2500;
+  if (connection.connected) return 10000;
 
   const status = String(connection.status || "").toLowerCase();
 
-  if (status === "qr" || status === "qrcode" || status === "pending") {
-    return 5000;
-  }
+  if (status === "opening") return 2500;
+  if (status === "qr" || status === "qrcode" || status === "pending") return 5000;
 
   return 15000;
 }
@@ -44,12 +44,14 @@ export default function ChatingBootPanel({
 }) {
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
+  const [preparingQr, setPreparingQr] = useState(false);
   const [connection, setConnection] = useState(null);
   const [reconnectRequired, setReconnectRequired] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const requestRef = useRef(0);
   const lastSignatureRef = useRef("");
+  const preparingTimeoutRef = useRef(null);
 
   const notify = ({
     severity = "error",
@@ -61,20 +63,33 @@ export default function ChatingBootPanel({
     }
   };
 
+  const clearPreparingQr = () => {
+    if (preparingTimeoutRef.current) {
+      window.clearTimeout(preparingTimeoutRef.current);
+      preparingTimeoutRef.current = null;
+    }
+
+    setPreparingQr(false);
+  };
+
   const applyResponse = (payload, emitChange = true) => {
     const nextConnection = payload?.connection ?? null;
     const nextReconnectRequired = Boolean(payload?.reconnect_required);
+    const nextStatus = String(nextConnection?.status || "").toLowerCase();
+
+    if (
+      nextConnection?.connected ||
+      ["qr", "qrcode", "opening"].includes(nextStatus)
+    ) {
+      clearPreparingQr();
+    }
 
     setConnection(nextConnection);
     setReconnectRequired(nextReconnectRequired);
 
     if (!emitChange || typeof onConnectionChange !== "function") return;
 
-    const signature = connectionSignature(
-      nextConnection,
-      nextReconnectRequired
-    );
-
+    const signature = connectionSignature(nextConnection, nextReconnectRequired);
     if (signature === lastSignatureRef.current) return;
 
     lastSignatureRef.current = signature;
@@ -89,7 +104,6 @@ export default function ChatingBootPanel({
     }
 
     const requestId = ++requestRef.current;
-
     if (!silent) setLoading(true);
 
     try {
@@ -150,6 +164,7 @@ export default function ChatingBootPanel({
     requestRef.current += 1;
     lastSignatureRef.current = "";
     setConfirmingDelete(false);
+    clearPreparingQr();
     setConnection(null);
     setReconnectRequired(false);
 
@@ -161,7 +176,7 @@ export default function ChatingBootPanel({
   useEffect(() => {
     if (!branchId || !connection || !addonAvailable) return undefined;
 
-    const interval = pollMilliseconds(connection);
+    const interval = pollMilliseconds(connection, preparingQr);
     if (!interval) return undefined;
 
     const timer = window.setInterval(() => {
@@ -176,6 +191,7 @@ export default function ChatingBootPanel({
     restaurantId,
     branchId,
     addonAvailable,
+    preparingQr,
     connection?.id,
     connection?.status,
     connection?.connected,
@@ -203,6 +219,14 @@ export default function ChatingBootPanel({
     connection?.id,
   ]);
 
+  useEffect(() => {
+    return () => {
+      if (preparingTimeoutRef.current) {
+        window.clearTimeout(preparingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleCreate = async () => {
     if (!branchId) {
       notify({
@@ -224,24 +248,40 @@ export default function ChatingBootPanel({
     }
 
     setWorking(true);
+    setPreparingQr(true);
     setConfirmingDelete(false);
 
     try {
-      const result = await createBranchWhatsappQrConnection(
-        restaurantId,
-        branchId
-      );
+      const result = await createBranchWhatsappQrConnection(restaurantId, branchId);
 
       applyResponse(result);
+
+      const resultStatus = String(result?.connection?.status || "").toLowerCase();
+      const qrReady =
+        result?.connection?.connected ||
+        ["qr", "qrcode", "opening"].includes(resultStatus);
+
+      if (!qrReady) {
+        if (preparingTimeoutRef.current) {
+          window.clearTimeout(preparingTimeoutRef.current);
+        }
+
+        preparingTimeoutRef.current = window.setTimeout(() => {
+          setPreparingQr(false);
+          preparingTimeoutRef.current = null;
+        }, 60000);
+      }
 
       notify({
         severity: "success",
         title: "Hecho",
         message:
           result?.message ||
-          "Conexión de WhatsApp QR generada correctamente.",
+          "Conexión de WhatsApp QR creada correctamente.",
       });
     } catch (e) {
+      clearPreparingQr();
+
       notify({
         severity: "error",
         title: "Error",
@@ -265,6 +305,7 @@ export default function ChatingBootPanel({
         branchId
       );
 
+      clearPreparingQr();
       setConnection(null);
       setReconnectRequired(false);
       setConfirmingDelete(false);
@@ -298,19 +339,26 @@ export default function ChatingBootPanel({
     }
   };
 
+  const displayConnection =
+    preparingQr && connection && !connection.connected
+      ? { ...connection, status: "pending", qrcode: null }
+      : connection;
+
+  const displayReconnectRequired = preparingQr ? false : reconnectRequired;
+
   return (
     <Stack spacing={3}>
       <ChatingBootContextCard
         selectedBranch={selectedBranch}
         addonAvailable={addonAvailable}
-        connection={connection}
-        reconnectRequired={reconnectRequired}
+        connection={displayConnection}
+        reconnectRequired={displayReconnectRequired}
       />
 
       <ChatingBootConnectionCard
         addonAvailable={addonAvailable}
-        connection={connection}
-        reconnectRequired={reconnectRequired}
+        connection={displayConnection}
+        reconnectRequired={displayReconnectRequired}
         loading={loading}
         working={working}
         confirmingDelete={confirmingDelete}
