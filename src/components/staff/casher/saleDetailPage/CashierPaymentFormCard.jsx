@@ -42,7 +42,10 @@ export default function CashierPaymentFormCard({
   netpayStatus = "",
   netpayStatusLabel = "",
   netpayTerminal = null,
-  netpayRecoveryRequired = false,
+  netpayFinancialPending = false,
+  netpayDevicePending = false,
+  netpayRecoveryAvailable = false,
+  netpayPendingMessage = "",
   onRetryNetpayRecovery,
 
   paymentAmountLocked = false,
@@ -74,13 +77,19 @@ export default function CashierPaymentFormCard({
 
   const operationLocked =
     Boolean(netpayBusy) ||
-    Boolean(netpayRecoveryRequired);
+    Boolean(netpayFinancialPending) ||
+    Boolean(netpayDevicePending);
 
   const financialInteractionLocked =
     disabled ||
     previewing ||
     paying ||
     operationLocked;
+
+  const canRetryNetpayRecovery =
+    Boolean(netpayRecoveryAvailable) &&
+    !netpayDevicePending &&
+    typeof onRetryNetpayRecovery === "function";
 
   const isAmountLocked =
     isNetpay ||
@@ -162,7 +171,10 @@ export default function CashierPaymentFormCard({
       previewing,
       paying,
       netpayBusy,
-      recoveryRequired: netpayRecoveryRequired,
+      financialPending: netpayFinancialPending,
+      devicePending: netpayDevicePending,
+      recoveryAvailable: netpayRecoveryAvailable,
+      pendingMessage: netpayPendingMessage,
     });
 
   const canToggleNetpay =
@@ -172,7 +184,8 @@ export default function CashierPaymentFormCard({
     previewing ||
     paying ||
     netpayBusy ||
-    netpayRecoveryRequired ||
+    netpayFinancialPending ||
+    netpayDevicePending ||
     (!netpayMode && !netpayAvailable);
 
   return (
@@ -328,7 +341,10 @@ export default function CashierPaymentFormCard({
             <Box
               sx={{
                 border: "1px solid",
-                borderColor: netpayRecoveryRequired ? "warning.main" : "divider",
+                borderColor:
+                  netpayFinancialPending || netpayDevicePending
+                    ? "warning.main"
+                    : "divider",
                 borderRadius: 1,
                 backgroundColor: "#FCFCFC",
                 p: 1.5,
@@ -340,14 +356,8 @@ export default function CashierPaymentFormCard({
                 alignItems={{ xs: "stretch", sm: "center" }}
                 spacing={1.25}
               >
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: "text.primary",
-                    }}
-                  >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 800, color: "text.primary" }}>
                     Estado NetPay
                   </Typography>
 
@@ -355,7 +365,10 @@ export default function CashierPaymentFormCard({
                     sx={{
                       mt: 0.35,
                       fontSize: 13,
-                      color: netpayRecoveryRequired ? "warning.main" : "text.secondary",
+                      color:
+                        netpayFinancialPending || netpayDevicePending
+                          ? "warning.main"
+                          : "text.secondary",
                       lineHeight: 1.5,
                     }}
                   >
@@ -363,28 +376,23 @@ export default function CashierPaymentFormCard({
                   </Typography>
 
                   {netpayTerminal ? (
-                    <Typography
-                      sx={{
-                        mt: 0.35,
-                        fontSize: 12,
-                        color: "text.secondary",
-                      }}
-                    >
+                    <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
                       Terminal PAX sincronizada con Clic Menu.
                     </Typography>
                   ) : null}
                 </Box>
 
-                {netpayRecoveryRequired && typeof onRetryNetpayRecovery === "function" ? (
+                {canRetryNetpayRecovery ? (
                   <Button
                     variant="outlined"
                     onClick={onRetryNetpayRecovery}
-                    disabled={netpayBusy || paying}
+                    disabled={netpayBusy || previewing || paying}
                     sx={{
                       minWidth: { xs: "100%", sm: 190 },
                       height: 42,
                       borderRadius: 2,
                       fontWeight: 800,
+                      flexShrink: 0,
                     }}
                   >
                     Recuperar operación
@@ -502,8 +510,7 @@ export default function CashierPaymentFormCard({
                               disabled ||
                               previewing ||
                               paying ||
-                              netpayBusy ||
-                              netpayRecoveryRequired ||
+                              operationLocked ||
                               paymentMethodLocked
                             }
                           >
@@ -549,8 +556,7 @@ export default function CashierPaymentFormCard({
                               disabled ||
                               previewing ||
                               paying ||
-                              netpayBusy ||
-                              netpayRecoveryRequired ||
+                              operationLocked ||
                               isAmountLocked
                             }
                           />
@@ -646,27 +652,23 @@ export default function CashierPaymentFormCard({
             </Box>
           ) : null}
 
-          <Box
-            sx={{
-              border: "1px dashed",
-              borderColor: "divider",
-              borderRadius: 1,
-              p: 1.5,
-            }}
-          >
-            <Typography
+          {!(isNetpay && (netpayFinancialPending || netpayDevicePending)) ? (
+            <Box
               sx={{
-                fontSize: 13,
-                color: "text.secondary",
-                lineHeight: 1.55,
+                border: "1px dashed",
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 1.5,
               }}
             >
-              {helperText ||
-                (isNetpay
-                  ? "NetPay permite exactamente un método de pago: tarjeta de crédito o débito. El importe será validado por Clic Menu antes de enviarse a la terminal."
-                  : "Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo método en la misma operación.")}
-            </Typography>
-          </Box>
+              <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
+                {helperText ||
+                  (isNetpay
+                    ? "NetPay permite exactamente un método de pago: tarjeta de crédito o débito. El importe será validado por Clic Menu antes de enviarse a la terminal."
+                    : "Máximo 3 métodos de pago por cuenta. No se puede repetir el mismo método en la misma operación.")}
+              </Typography>
+            </Box>
+          ) : null}
 
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -700,8 +702,7 @@ export default function CashierPaymentFormCard({
                 !hasPreview ||
                 previewing ||
                 paying ||
-                netpayBusy ||
-                netpayRecoveryRequired
+                operationLocked
               }
               startIcon={<PaymentsRoundedIcon />}
               sx={{
@@ -883,12 +884,11 @@ function resolveNetpayStatusLabel({
   previewing,
   paying,
   netpayBusy,
-  recoveryRequired,
+  financialPending,
+  devicePending,
+  recoveryAvailable,
+  pendingMessage,
 }) {
-  if (recoveryRequired && !status) {
-    return "Existe una operación NetPay pendiente de resolución.";
-  }
-
   const labels = {
     resolving_terminal: "Validando NetPay…",
     creating_intent: "Preparando y enviando la operación a la terminal…",
@@ -896,18 +896,31 @@ function resolveNetpayStatusLabel({
     waiting_sale_result: "Esperando respuesta de la terminal…",
     sending_sale_result: "Procesando resultado NetPay…",
     finalizing: "Procesando resultado y finalizando el cobro…",
-    requesting_recovery: "Recuperando operación…",
+    requesting_recovery: "Preparando recuperación NetPay…",
     starting_recovery: "Recuperando operación por folio…",
     waiting_recovery_result: "Esperando respuesta de recuperación…",
     sending_recovery_result: "Procesando resultado de recuperación…",
     recovery_required: "La operación requiere recuperación…",
-    resuming_pending_operation: "Recuperando operación pendiente…",
+    resuming_pending_operation: "Recuperando operación NetPay pendiente…",
     completed: "Operación NetPay completada.",
   };
 
   if (status && labels[status]) return labels[status];
   if (previewing) return "Validando NetPay…";
   if (paying || netpayBusy) return "Procesando operación NetPay…";
+  if (pendingMessage) return pendingMessage;
+
+  if (recoveryAvailable) {
+    return "La operación NetPay pendiente ya puede volver a verificarse.";
+  }
+
+  if (financialPending) {
+    return "Esta cuenta conserva una operación NetPay financieramente pendiente.";
+  }
+
+  if (devicePending) {
+    return "La terminal PAX conserva una operación NetPay pendiente.";
+  }
 
   return "NetPay listo para validar el cobro.";
 }

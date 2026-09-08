@@ -308,29 +308,42 @@ function markAndroidOperationForRecovery({
   );
 }
 
-function pendingOperationForTransaction(
-  netpayTransactionId
-) {
-  const pending =
-    getCashierPendingNetpayOperation();
+function pendingOperationForTransaction(netpayTransactionId) {
+  const pending = getCashierPendingNetpayOperation();
 
-  if (
-    !pending.hasPendingOperation ||
-    !pending.operation
-  ) {
+  if (!pending.hasPendingOperation || !pending.operation) {
     return null;
   }
 
-  if (
-    pending.operation
-      .netpayTransactionId !==
-    netpayTransactionId
-  ) {
+  if ( pending.operation .netpayTransactionId !== netpayTransactionId) {
     return null;
   }
 
   return pending.operation;
 }
+
+function pendingCancellationForExecution(saleId, netpayTransactionId) {
+  const pending = getCashierPendingNetpayOperation();
+
+  if (!pending?.hasPendingOperation || !pending?.operation) return null;
+
+  const operation = pending.operation;
+  const sameCancellation =
+    operation.netpayTransactionId === netpayTransactionId &&
+    operation.saleId === saleId &&
+    String(operation.operationType || "").toLowerCase() === "cancellation";
+
+  if (!sameCancellation) {
+    throw createFlowError(
+      "NETPAY_OTHER_OPERATION_PENDING",
+      "Existe otra operación NetPay pendiente en esta terminal. Debe resolverse antes de iniciar la cancelación.",
+      operation.raw
+    );
+  }
+
+  return operation;
+}
+
 
 async function finalizeCancelledLocally({
   saleId,
@@ -401,27 +414,41 @@ async function recoverCancellationVerification({
         signal,
       });
 
-    if (recovered?.requiresRecovery) {
+    const bankStatus = transactionBankStatus(recovered?.transaction);
+
+    /*
+     * PRV no significa que la cancelación haya fallado ni que debamos
+     * consultar nuevamente de inmediato.
+     *
+     * Backend conserva la operación pendiente, Android ya puede quedar libre
+     * y una transacción bancaria posterior deberá disparar el reverso.
+     */
+    if (bankStatus === "pending_reversal") {
+      return {
+        ...recovered,
+        outcome: "pending_reversal",
+        requiresRecovery: false,
+        financiallyPending: true,
+        message:
+          recovered?.backendResponse?.message ||
+          "NetPay reportó un reverso pendiente. Debe realizarse otra transacción en la terminal antes de volver a consultar esta operación.",
+      };
+    }
+
+    if (recovered?.requiresRecovery || bankStatus === "pending_recovery") {
       return {
         ...recovered,
         outcome: "recovery_required",
+        requiresRecovery: true,
         message:
-          recovered?.backendResponse
-            ?.message ||
+          recovered?.backendResponse?.message ||
           "La cancelación NetPay continúa pendiente de verificación.",
       };
     }
 
-    const purpose = String(
-      recovered?.backendResponse
-        ?.purpose || ""
-    ).toLowerCase();
+    const purpose = String(recovered?.backendResponse?.purpose || "").toLowerCase();
 
-    if (
-      purpose &&
-      purpose !==
-        "cancellation_verification"
-    ) {
+    if (purpose && purpose !== "cancellation_verification") {
       throw createFlowError(
         "NETPAY_RECOVERY_PURPOSE_MISMATCH",
         "Backend devolvió una recuperación que no corresponde a la verificación de cancelación.",
@@ -429,18 +456,12 @@ async function recoverCancellationVerification({
       );
     }
 
-    const bankStatus =
-      transactionBankStatus(
-        recovered?.transaction
-      );
-
     if (bankStatus !== "cancelled") {
       return {
         ...recovered,
         outcome: "not_cancelled",
         message:
-          recovered?.backendResponse
-            ?.message ||
+          recovered?.backendResponse?.message ||
           "La recuperación no confirmó una cancelación bancaria.",
       };
     }
@@ -609,14 +630,26 @@ async function processCancellationNormalizedResult({
       transaction
     );
 
-  if (
-    backendResponse
-      ?.recovery_required === true ||
-    bankStatus ===
-      "pending_recovery" ||
-    bankStatus ===
-      "pending_reversal"
-  ) {
+  if (bankStatus === "pending_reversal") {
+    acknowledgeAndroidOperation({
+      netpayTransactionId,
+      operationUuid,
+    });
+
+    return {
+      outcome: "pending_reversal",
+      requiresRecovery: false,
+      financiallyPending: true,
+      transaction,
+      backendResponse,
+      normalizedResult,
+      message:
+        backendResponse?.message ||
+        "NetPay reportó un reverso pendiente. La operación seguirá bloqueada en Backend hasta que pueda verificarse nuevamente.",
+    };
+  }
+
+  if (backendResponse?.recovery_required === true || bankStatus === "pending_recovery") {
     markAndroidOperationForRecovery({
       netpayTransactionId,
       operationUuid,
@@ -684,187 +717,134 @@ export async function executeCashierNetpayCancellation({
   onStatus = null,
   signal = null,
 }) {
-  const normalizedSaleId =
-    positiveInteger(
-      saleId,
-      "sale_id"
-    );
+  const normalizedSaleId = positiveInteger(saleId, "sale_id");
 
-  const transactionId =
-    positiveInteger(
-      netpayTransactionId,
-      "netpay_transaction_id"
-    );
+  const transactionId = positiveInteger(netpayTransactionId, "netpay_transaction_id");
 
-  const normalizedReason =
-    requiredText(
-      reason,
-      "reason"
-    );
+  const normalizedReason = requiredText(reason, "reason");
 
-  notifyStatus(
-    onStatus,
-    "resolving_terminal"
+  /*
+   * Preflight Android ANTES de pedir una nueva autorización Backend.
+   *
+   * Si existe una operación local, no debemos crear otra operación bancaria
+   * que esta PAX no pueda ejecutar.
+   */
+  const existingCancellation = pendingCancellationForExecution(
+    normalizedSaleId,
+    transactionId
   );
 
-  const resolved =
-    await resolveCashierNetpayTerminal();
+  let cancellationResponse = null;
+  let cancellation = null;
 
-  notifyStatus(
-    onStatus,
-    "requesting_cancellation",
-    {
-      netpay_transaction_id:
-        transactionId,
+  if (existingCancellation) {
+    const existingOperationUuid = requiredText(
+      existingCancellation.operationUuid,
+      "operation_uuid"
+    );
+
+    if (existingCancellation.normalizedResult) {
+      return processCancellationNormalizedResult({
+        saleId: normalizedSaleId,
+        netpayTransactionId: transactionId,
+        operationUuid: existingOperationUuid,
+        normalizedResult: existingCancellation.normalizedResult,
+        onStatus,
+        signal,
+      });
     }
-  );
 
-  const cancellationResponse =
-    await requestNetpayCancellation(
+    const localState = String(existingCancellation.localState || "").toLowerCase();
+
+    if (localState === "pending_recovery") {
+      return recoverCancellationVerification({
+        saleId: normalizedSaleId,
+        netpayTransactionId: transactionId,
+        onStatus,
+        signal,
+      });
+    }
+
+    if (localState !== "prepared") {
+      return {
+        outcome: "operation_pending_local",
+        pendingOperation: existingCancellation,
+        message: "La cancelación NetPay ya se encuentra pendiente en Android.",
+      };
+    }
+
+    /*
+     * La operación estaba preparada localmente pero Smart SDK todavía no había
+     * sido iniciado. No pedimos otra autorización Backend: reutilizamos la ya
+     * persistida en Android.
+     */
+    cancellation = {
+      netpay_transaction_id: transactionId,
+      operation_uuid: existingOperationUuid,
+      netpay_order_id: requiredText(existingCancellation.netpayOrderId, "netpay_order_id"),
+      environment: requiredText(existingCancellation.environment, "environment"),
+    };
+  } else {
+    notifyStatus(onStatus, "resolving_terminal");
+
+    const resolved = await resolveCashierNetpayTerminal();
+
+    notifyStatus(onStatus, "requesting_cancellation", {
+      netpay_transaction_id: transactionId,
+    });
+
+    cancellationResponse = await requestNetpayCancellation(
       normalizedSaleId,
       transactionId,
       {
-        netpay_terminal_id:
-          resolved.terminal
-            .netpay_terminal_id,
+        netpay_terminal_id: resolved.terminal.netpay_terminal_id,
         reason: normalizedReason,
       }
     );
 
-  responseOrThrow(
-    cancellationResponse,
-    "Backend no pudo autorizar la cancelación NetPay."
-  );
-
-  if (
-    cancellationResponse
-      ?.already_cancelled === true
-  ) {
-    return finalizeCancelledLocally({
-      saleId: normalizedSaleId,
-      netpayTransactionId:
-        transactionId,
-      onStatus,
-    });
-  }
-
-  const cancellation =
-    cancellationResponse?.data || null;
-
-  const responseTransactionId =
-    positiveInteger(
-      cancellation
-        ?.netpay_transaction_id,
-      "netpay_transaction_id"
+    responseOrThrow(
+      cancellationResponse,
+      "Backend no pudo autorizar la cancelación NetPay."
     );
 
-  if (
-    responseTransactionId !==
-    transactionId
-  ) {
+    if (cancellationResponse?.already_cancelled === true) {
+      return finalizeCancelledLocally({
+        saleId: normalizedSaleId,
+        netpayTransactionId: transactionId,
+        onStatus,
+      });
+    }
+
+    cancellation = cancellationResponse?.data || null;
+  }
+
+  const responseTransactionId = positiveInteger(
+    cancellation?.netpay_transaction_id,
+    "netpay_transaction_id"
+  );
+
+  if (responseTransactionId !== transactionId) {
     throw createFlowError(
       "NETPAY_CANCELLATION_TRANSACTION_MISMATCH",
       "Backend devolvió una cancelación para otra operación NetPay.",
-      cancellationResponse
+      cancellationResponse || cancellation
     );
   }
 
-  const operationUuid =
-    requiredText(
-      cancellation?.operation_uuid,
-      "operation_uuid"
-    );
+  const operationUuid = requiredText(
+    cancellation?.operation_uuid,
+    "operation_uuid"
+  );
 
-  const netpayOrderId =
-    requiredText(
-      cancellation?.netpay_order_id,
-      "netpay_order_id"
-    );
+  const netpayOrderId = requiredText(
+    cancellation?.netpay_order_id,
+    "netpay_order_id"
+  );
 
-  const environment =
-    requiredText(
-      cancellation?.environment,
-      "environment"
-    );
-
-  const pending =
-    getCashierPendingNetpayOperation();
-
-  if (
-    pending.hasPendingOperation &&
-    pending.operation
-  ) {
-    const operation =
-      pending.operation;
-
-    const sameCancellation =
-      operation
-        .netpayTransactionId ===
-        transactionId &&
-      operation.saleId ===
-        normalizedSaleId &&
-      String(
-        operation.operationType || ""
-      ).toLowerCase() ===
-        "cancellation" &&
-      operation.operationUuid ===
-        operationUuid;
-
-    if (!sameCancellation) {
-      throw createFlowError(
-        "NETPAY_OTHER_OPERATION_PENDING",
-        "Existe otra operación NetPay pendiente en esta terminal. Debe resolverse antes de iniciar la cancelación.",
-        operation.raw
-      );
-    }
-
-    if (
-      operation.normalizedResult
-    ) {
-      return processCancellationNormalizedResult({
-        saleId:
-          normalizedSaleId,
-        netpayTransactionId:
-          transactionId,
-        operationUuid,
-        normalizedResult:
-          operation.normalizedResult,
-        onStatus,
-        signal,
-      });
-    }
-
-    const localState = String(
-      operation.localState || ""
-    ).toLowerCase();
-
-    if (
-      localState ===
-      "pending_recovery"
-    ) {
-      return recoverCancellationVerification({
-        saleId:
-          normalizedSaleId,
-        netpayTransactionId:
-          transactionId,
-        onStatus,
-        signal,
-      });
-    }
-
-    if (
-      localState !== "prepared"
-    ) {
-      return {
-        outcome:
-          "operation_pending_local",
-        pendingOperation:
-          operation,
-        message:
-          "La cancelación NetPay ya se encuentra pendiente en Android.",
-      };
-    }
-  }
+  const environment = requiredText(
+    cancellation?.environment,
+    "environment"
+  );
 
   const waiter =
     createNetpayResultWaiter({
@@ -1033,10 +1013,8 @@ export async function resumeCashierPendingNetpayCancellation({
   }
 
   return {
-    outcome:
-      "operation_pending_local",
-    pendingOperation:
-      operation,
+    outcome: "operation_pending_local",
+    pendingOperation: operation,
     message:
       localState ===
       "requires_review"

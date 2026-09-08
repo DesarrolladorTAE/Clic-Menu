@@ -176,6 +176,9 @@ export default function CashierOnlineOrderPaymentPage() {
     previewing,
     paying,
     netpayPending,
+    netpayDevicePending,
+    netpayRecoveryAvailable,
+    netpayPendingMessage,
     netpayStatus,
     netpayLocked,
     financialLocked,
@@ -184,6 +187,7 @@ export default function CashierOnlineOrderPaymentPage() {
     handlePaymentChange,
     handlePreview,
     handlePay,
+    retryPendingNetpayRecovery,
   } = paymentFlow;
 
   const discounts = useCashierOnlineOrderDiscounts({
@@ -426,7 +430,7 @@ export default function CashierOnlineOrderPaymentPage() {
               paying={paying}
               hasPreview={Boolean(preview)}
               onPay={handlePay}
-              disabled={!paymentAvailable || postPaymentOpen || netpayPending}
+              disabled={!paymentAvailable || postPaymentOpen || netpayPending || (isNetpayPayment && netpayDevicePending)}
               maxPayments={1}
               showAddPayment={false}
               showRemovePayment={false}
@@ -441,14 +445,20 @@ export default function CashierOnlineOrderPaymentPage() {
               netpayBusy={isNetpayPayment && (previewing || paying)}
               netpayStatus={netpayStatus?.status || ""}
               netpayTerminal={netpayTerminal}
-              netpayRecoveryRequired={netpayPending}
+              netpayFinancialPending={netpayPending}
+              netpayDevicePending={netpayDevicePending}
+              netpayRecoveryAvailable={netpayRecoveryAvailable}
+              netpayPendingMessage={netpayPendingMessage}
+              onRetryNetpayRecovery={retryPendingNetpayRecovery}
               amountLocked={isNetpayPayment}
               hideManualCardFields={isNetpayPayment}
               description="Registra el método de pago correspondiente a este Pedido en línea."
               helperText={
                 isNetpayPayment
                   ? netpayPending
-                    ? "Existe una operación NetPay pendiente. Debe resolverse antes de iniciar otro cobro."
+                    ? netpayPendingMessage || "Existe una operación NetPay financieramente pendiente."
+                    : netpayDevicePending
+                    ? "La terminal PAX conserva otra operación NetPay pendiente y no puede iniciar un nuevo cobro todavía."
                     : "Este Pedido en línea se procesará en la terminal PAX. La referencia y los últimos 4 serán obtenidos directamente de NetPay."
                   : paymentType === "terminal"
                   ? "Este Pedido en línea se pagará con tarjeta. Puedes registrar el cobro con una terminal externa o activar NetPay para procesarlo en la terminal PAX."

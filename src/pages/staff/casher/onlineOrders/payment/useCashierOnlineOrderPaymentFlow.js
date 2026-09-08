@@ -7,8 +7,10 @@ import {
   executeCashierNetpayPayment,
   getCashierNetpayError,
   getCashierPendingNetpayOperation,
+  getCashierUnresolvedNetpayPayment,
   previewCashierNetpayPayment,
   resumeCashierPendingNetpayOperation,
+  resumeCashierUnresolvedNetpayPayment,
 } from "../../../../../services/staff/casher/cashierNetpayPayment.service";
 
 import { isNetpayBridgeAvailable } from "../../../../../services/native/netpayBridge.service";
@@ -54,6 +56,9 @@ export default function useCashierOnlineOrderPaymentFlow({
   const [paying, setPaying] = useState(false);
   const [netpayMode, setNetpayMode] = useState(false);
   const [netpayPending, setNetpayPending] = useState(false);
+  const [netpayDevicePending, setNetpayDevicePending] = useState(false);
+  const [netpayRecoveryAvailable, setNetpayRecoveryAvailable] = useState(false);
+  const [netpayPendingMessage, setNetpayPendingMessage] = useState("");
   const [netpayStatus, setNetpayStatus] = useState(null);
   const [netpayTerminal, setNetpayTerminal] = useState(null);
 
@@ -103,9 +108,9 @@ export default function useCashierOnlineOrderPaymentFlow({
     };
   }, [paymentMethods, payments, taxOptionCode, tip]);
 
-  const financialLocked = previewing || paying || netpayPending;
+  const financialLocked = previewing || paying || netpayPending || (isNetpayPayment && netpayDevicePending);
 
-  const netpayLocked = isNetpayPayment && (previewing || paying || netpayPending);
+  const netpayLocked = isNetpayPayment && (previewing || paying || netpayPending || netpayDevicePending);
 
   const handleNetpayStatus = ({ status, data }) => {
     setNetpayStatus({ status, data });
@@ -126,6 +131,29 @@ export default function useCashierOnlineOrderPaymentFlow({
     ];
 
     if (bankingStates.includes(status)) paymentInProgressRef.current = true;
+  };
+
+  const readLocalNetpayPendingOperation = () => {
+    try {
+      const pending = getCashierPendingNetpayOperation();
+      const operation = pending?.hasPendingOperation ? pending?.operation || null : null;
+
+      return {
+        hasPendingOperation: Boolean(pending?.hasPendingOperation && operation),
+        operation,
+        sameSale: Boolean(operation?.saleId && operation.saleId === Number(selectedSaleId)),
+      };
+    } catch (error) {
+      console.error("No se pudo consultar la operación NetPay pendiente.", error);
+      return { hasPendingOperation: false, operation: null, sameSale: false };
+    }
+  };
+
+  const syncLocalNetpayPendingOperation = () => {
+    const pending = readLocalNetpayPendingOperation();
+    setNetpayDevicePending(pending.hasPendingOperation);
+    paymentInProgressRef.current = pending.hasPendingOperation;
+    return pending;
   };
 
   const handleTipChange = (value) => {
@@ -258,8 +286,16 @@ export default function useCashierOnlineOrderPaymentFlow({
       showAlert({
         severity: "warning",
         title: "Operación NetPay pendiente",
-        message:
-          "Existe una operación NetPay sin resolver. Debe recuperarse antes de iniciar otro cobro.",
+        message: "Esta cuenta tiene una operación NetPay financieramente pendiente y debe resolverse antes de cobrarla nuevamente.",
+      });
+      return false;
+    }
+
+    if (isNetpayPayment && netpayDevicePending) {
+      showAlert({
+        severity: "warning",
+        title: "Terminal NetPay ocupada",
+        message: "La terminal PAX conserva una operación NetPay pendiente. Finalízala antes de iniciar otra operación NetPay.",
       });
       return false;
     }
@@ -521,6 +557,9 @@ export default function useCashierOnlineOrderPaymentFlow({
     paymentCompletedRef.current = true;
     paymentInProgressRef.current = false;
     setNetpayPending(false);
+    setNetpayDevicePending(false);
+    setNetpayRecoveryAvailable(false);
+    setNetpayPendingMessage("");
     stopLiveRefresh();
   };
 
@@ -580,11 +619,67 @@ export default function useCashierOnlineOrderPaymentFlow({
     });
   };
 
+  const resolveNetpayPendingMessage = (result, localPending = null) => {
+    const outcome = String(result?.outcome || "").toLowerCase();
+    const recoveryAvailable = result?.recoveryAvailable === true || result?.requiresRecovery === true;
+
+    if (outcome === "pending_reversal") {
+      if (recoveryAvailable) {
+        return "La transacción necesaria para detonar el reverso ya fue completada en esta PAX. Ya puedes recuperar nuevamente la operación NetPay pendiente.";
+      }
+
+      if (localPending?.hasPendingOperation) {
+        return "NetPay confirmó un reverso pendiente. La cuenta seguirá bloqueada y la terminal todavía conserva una operación local pendiente.";
+      }
+
+      return "NetPay confirmó un reverso pendiente. La cuenta seguirá bloqueada, pero la PAX está libre. Realiza otra transacción NetPay en esta misma terminal y después vuelve a este pedido.";
+    }
+
+    if (outcome === "pending_recovery") {
+      return recoveryAvailable
+        ? "La operación NetPay está pendiente y ya puede recuperarse por folio."
+        : "La operación NetPay todavía necesita resolverse antes de continuar.";
+    }
+
+    if (outcome === "approved_local_error") {
+      return "El banco aprobó el cobro, pero Clic Menu todavía no pudo finalizarlo localmente.";
+    }
+
+    if (outcome === "recovery_pending_local") {
+      return "La recuperación NetPay sigue pendiente localmente en la terminal PAX.";
+    }
+
+    if (outcome === "operation_pending_local") {
+      return "La terminal PAX conserva esta operación NetPay pendiente.";
+    }
+
+    return "La operación NetPay permanece pendiente y esta cuenta seguirá bloqueada hasta resolverla.";
+  };
+
   const handleResolvedNetpayOutcome = async (result, { fromResume = false } = {}) => {
     const outcome = String(result?.outcome || "").toLowerCase();
 
     if (outcome === "finalized") {
       await finishNetpayPayment(result);
+      return;
+    }
+
+    const localPending = syncLocalNetpayPendingOperation();
+
+    if (outcome === "different_sale") {
+      setNetpayPending(false);
+      setNetpayRecoveryAvailable(false);
+      setNetpayPendingMessage("");
+      setPreview(null);
+
+      showAlert({
+        severity: "warning",
+        title: "Terminal NetPay ocupada",
+        message: localPending.operation?.saleId
+          ? `La terminal PAX conserva una operación pendiente de la venta ${localPending.operation.saleId}. Finaliza primero esa operación.`
+          : "La terminal PAX conserva otra operación NetPay pendiente.",
+      });
+
       return;
     }
 
@@ -594,17 +689,21 @@ export default function useCashierOnlineOrderPaymentFlow({
       "recovery_pending_local",
       "operation_pending_local",
       "approved_local_error",
-      "different_sale",
+      "pending",
     ].includes(outcome)) {
-      setNetpayPending(true);
-      paymentInProgressRef.current = true;
+      const recoveryAvailable =
+        result?.recoveryAvailable === true ||
+        result?.requiresRecovery === true;
 
-      const message =
-        outcome === "different_sale"
-          ? "La terminal PAX tiene otra operación NetPay pendiente. Debe resolverse antes de iniciar este cobro."
-          : outcome === "pending_reversal"
-          ? "NetPay reportó un reverso pendiente. No se iniciará otro cobro hasta resolverlo."
-          : "La operación NetPay permanece pendiente y debe resolverse antes de iniciar otro cobro.";
+      const message = resolveNetpayPendingMessage({
+        ...result,
+        recoveryAvailable,
+      }, localPending);
+
+      setNetpayPending(true);
+      setNetpayRecoveryAvailable(recoveryAvailable);
+      setNetpayPendingMessage(message);
+      setPreview(null);
 
       showAlert({
         severity: "warning",
@@ -616,7 +715,8 @@ export default function useCashierOnlineOrderPaymentFlow({
     }
 
     setNetpayPending(false);
-    paymentInProgressRef.current = false;
+    setNetpayRecoveryAvailable(false);
+    setNetpayPendingMessage("");
     setPreview(null);
 
     if (outcome === "declined") {
@@ -648,9 +748,9 @@ export default function useCashierOnlineOrderPaymentFlow({
 
     if (outcome === "reversed") {
       showAlert({
-        severity: "warning",
+        severity: "info",
         title: "Operación reversada",
-        message: "NetPay confirmó que la operación fue reversada.",
+        message: "NetPay confirmó que la operación fue reversada. Esta cuenta ya no conserva un cobro bancario pendiente.",
       });
       return;
     }
@@ -659,8 +759,7 @@ export default function useCashierOnlineOrderPaymentFlow({
       showAlert({
         severity: "warning",
         title: "Operación no encontrada",
-        message:
-          "NetPay no encontró registro bancario para el folio. El cobro no quedó aplicado.",
+        message: "NetPay no encontró registro bancario para el folio. El cobro no quedó aplicado.",
       });
       return;
     }
@@ -680,26 +779,6 @@ export default function useCashierOnlineOrderPaymentFlow({
         message: "NetPay terminó en un estado que requiere revisar la operación antes de continuar.",
       });
     }
-  };
-
-  const detectLocalPendingOperation = () => {
-    try {
-      const pending = getCashierPendingNetpayOperation();
-
-      if (
-        pending?.hasPendingOperation &&
-        pending?.operation?.saleId === Number(selectedSaleId)
-      ) {
-        setNetpayMode(true);
-        setNetpayPending(true);
-        paymentInProgressRef.current = true;
-        return true;
-      }
-    } catch (error) {
-      console.error("No se pudo consultar la operación NetPay pendiente.", error);
-    }
-
-    return false;
   };
 
   const handleNormalPay = async () => {
@@ -752,7 +831,16 @@ export default function useCashierOnlineOrderPaymentFlow({
       showAlert({
         severity: "warning",
         title: "Operación NetPay pendiente",
-        message: "No puedes iniciar otro cobro hasta resolver la operación NetPay pendiente.",
+        message: "Esta cuenta tiene una operación NetPay financieramente pendiente. Debes resolverla antes de volver a cobrar esta misma cuenta.",
+      });
+      return;
+    }
+
+    if (isNetpayPayment && netpayDevicePending) {
+      showAlert({
+        severity: "warning",
+        title: "Terminal NetPay ocupada",
+        message: "La terminal PAX conserva una operación NetPay pendiente. Finalízala antes de iniciar otro cobro NetPay.",
       });
       return;
     }
@@ -766,26 +854,47 @@ export default function useCashierOnlineOrderPaymentFlow({
     } catch (error) {
       if (isNetpayPayment) {
         const netpayError = getCashierNetpayError(error);
-        const hasPending = detectLocalPendingOperation();
+        const localPending = syncLocalNetpayPendingOperation();
 
-        if (netpayError.bankApproved || hasPending) {
+        let unresolved = null;
+
+        try {
+          unresolved = await getCashierUnresolvedNetpayPayment({ saleId: selectedSaleId });
+        } catch {
+          // El error original del cobro conserva prioridad.
+        }
+
+        if (unresolved?.financiallyUnresolved || netpayError.bankApproved) {
           setNetpayPending(true);
-          paymentInProgressRef.current = true;
 
+          if (unresolved?.financiallyUnresolved) {
+            const recoveryAvailable = unresolved?.recoveryAvailable === true;
+
+            setNetpayRecoveryAvailable(recoveryAvailable);
+            setNetpayPendingMessage(
+              resolveNetpayPendingMessage({
+                outcome: unresolved.outcome,
+                financiallyUnresolved: true,
+                recoveryAvailable,
+                recoveryReason: unresolved.recoveryReason,
+              }, localPending)
+            );
+          }
+        }
+
+        if (localPending.hasPendingOperation || unresolved?.financiallyUnresolved || netpayError.bankApproved) {
           showAlert({
             severity: "warning",
             title: netpayError.bankApproved
               ? "Pago aprobado pendiente de finalizar"
               : "Operación NetPay pendiente",
             message: netpayError.bankApproved
-              ? "El banco aprobó el cobro, pero Clic Menu todavía debe resolver su finalización local. No inicies otro cobro."
+              ? "El banco aprobó el cobro, pero Clic Menu todavía debe resolver su finalización local."
               : netpayError.message,
           });
 
           return;
         }
-
-        paymentInProgressRef.current = false;
 
         showAlert({
           severity: "error",
@@ -826,17 +935,119 @@ export default function useCashierOnlineOrderPaymentFlow({
         message: pickErr(error, "No se pudo registrar el cobro."),
       });
     } finally {
-      if (!netpayPending && !paymentCompletedRef.current) {
-        paymentInProgressRef.current = false;
+      if (!paymentCompletedRef.current) {
+        const localPending = readLocalNetpayPendingOperation();
+        setNetpayDevicePending(localPending.hasPendingOperation);
+        paymentInProgressRef.current = localPending.hasPendingOperation;
       }
 
       setPaying(false);
     }
   };
 
-  useEffect(() => {
+  const retryPendingNetpayRecovery = async () => {
+    if (!selectedSaleId || paying) return;
+
+    try {
+      setPaying(true);
+
+      const localPending = readLocalNetpayPendingOperation();
+      let result;
+
+      if (localPending.hasPendingOperation) {
+        if (!localPending.sameSale) {
+          setNetpayDevicePending(true);
+          paymentInProgressRef.current = true;
+
+          showAlert({
+            severity: "warning",
+            title: "Terminal NetPay ocupada",
+            message: localPending.operation?.saleId
+              ? `La terminal PAX conserva una operación pendiente de la venta ${localPending.operation.saleId}. Finalízala primero.`
+              : "La terminal PAX conserva otra operación NetPay pendiente.",
+          });
+
+          return;
+        }
+
+        result = await resumeCashierPendingNetpayOperation({
+          saleId: selectedSaleId,
+          onStatus: handleNetpayStatus,
+        });
+      } else {
+        result = await resumeCashierUnresolvedNetpayPayment({
+          saleId: selectedSaleId,
+          onStatus: handleNetpayStatus,
+        });
+      }
+
+      if (result?.outcome === "none") {
+        setNetpayPending(false);
+        setNetpayDevicePending(false);
+        setNetpayRecoveryAvailable(false);
+        setNetpayPendingMessage("");
+        paymentInProgressRef.current = false;
+
+        showAlert({
+          severity: "info",
+          title: "NetPay",
+          message: "Esta cuenta ya no tiene una operación NetPay pendiente de resolución.",
+        });
+
+        return;
+      }
+
+      await handleResolvedNetpayOutcome(result);
+    } catch (error) {
+      const netpayError = getCashierNetpayError(error);
+      const localPending = syncLocalNetpayPendingOperation();
+
+      let unresolved = null;
+
+      try {
+        unresolved = await getCashierUnresolvedNetpayPayment({ saleId: selectedSaleId });
+      } catch {
+        // Conservamos el error original.
+      }
+
+      if (unresolved?.financiallyUnresolved) {
+        const recoveryAvailable = unresolved?.recoveryAvailable === true;
+
+        setNetpayPending(true);
+        setNetpayRecoveryAvailable(recoveryAvailable);
+        setNetpayPendingMessage(
+          resolveNetpayPendingMessage({
+            outcome: unresolved.outcome,
+            financiallyUnresolved: true,
+            recoveryAvailable,
+            recoveryReason: unresolved.recoveryReason,
+          }, localPending)
+        );
+      }
+
+      showAlert({
+        severity: localPending.hasPendingOperation || unresolved?.financiallyUnresolved ? "warning" : "error",
+        title: "NetPay",
+        message: netpayError.message,
+      });
+    } finally {
+      if (!paymentCompletedRef.current) {
+        const localPending = readLocalNetpayPendingOperation();
+        setNetpayDevicePending(localPending.hasPendingOperation);
+        paymentInProgressRef.current = localPending.hasPendingOperation;
+      }
+
+      setPaying(false);
+      setNetpayStatus(null);
+    }
+  };
+
+   useEffect(() => {
     setNetpayMode(false);
     setNetpayPending(false);
+    setNetpayDevicePending(false);
+    setNetpayRecoveryAvailable(false);
+    setNetpayPendingMessage("");
     setNetpayStatus(null);
     setNetpayTerminal(null);
     resumeAttemptRef.current = null;
@@ -853,64 +1064,148 @@ export default function useCashierOnlineOrderPaymentFlow({
     }
 
     const resumeKey = `${selectedSaleId}`;
-
     if (resumeAttemptRef.current === resumeKey) return;
-    resumeAttemptRef.current = resumeKey;
 
+    resumeAttemptRef.current = resumeKey;
     let cancelled = false;
 
     const resume = async () => {
       try {
-        const pending = getCashierPendingNetpayOperation();
+        const localPending = readLocalNetpayPendingOperation();
 
-        if (
-          !pending?.hasPendingOperation ||
-          pending?.operation?.saleId !== Number(selectedSaleId)
-        ) {
-          if (!cancelled) {
-            setNetpayPending(false);
-            paymentInProgressRef.current = false;
+        /*
+         * Primero manda Android si conserva ESTA Sale.
+         * El resultado durable debe entregarse antes de consultar otra cosa.
+         */
+        if (localPending.hasPendingOperation && localPending.sameSale) {
+          if (cancelled) return;
+
+          setNetpayMode(true);
+          setNetpayPending(true);
+          setNetpayDevicePending(true);
+          setNetpayRecoveryAvailable(false);
+          setNetpayPendingMessage("Esta cuenta conserva una operación NetPay local pendiente que Clic Menu está intentando resolver.");
+          paymentInProgressRef.current = true;
+
+          const operationType = String(localPending.operation?.operationType || "").toLowerCase();
+
+          if (!["sale", "recovery"].includes(operationType)) {
+            showAlert({
+              severity: "warning",
+              title: "Operación NetPay pendiente",
+              message: "Esta cuenta conserva una operación NetPay local que debe resolverse desde su flujo correspondiente.",
+            });
+
+            return;
           }
+
+          const result = await resumeCashierPendingNetpayOperation({
+            saleId: selectedSaleId,
+            onStatus: handleNetpayStatus,
+          });
+
+          if (cancelled) return;
+
+          await handleResolvedNetpayOutcome(result, { fromResume: true });
           return;
         }
 
-        if (cancelled) return;
+        /*
+         * Si Android conserva otra Sale, la actual no adquiere un estado
+         * financiero pendiente; solamente la PAX está ocupada.
+         */
+        if (localPending.hasPendingOperation && !localPending.sameSale) {
+          if (cancelled) return;
 
-        setNetpayMode(true);
-        setNetpayPending(true);
-        paymentInProgressRef.current = true;
-
-        const result = await resumeCashierPendingNetpayOperation({
-          saleId: selectedSaleId,
-          onStatus: handleNetpayStatus,
-        });
-
-        if (cancelled) return;
-
-        await handleResolvedNetpayOutcome(result, { fromResume: true });
-      } catch (error) {
-        if (cancelled) return;
-
-        const netpayError = getCashierNetpayError(error);
-        const stillPending = detectLocalPendingOperation();
-
-        if (stillPending || netpayError.bankApproved) {
-          setNetpayMode(true);
-          setNetpayPending(true);
+          setNetpayDevicePending(true);
           paymentInProgressRef.current = true;
 
           showAlert({
             severity: "warning",
-            title: "Operación NetPay pendiente",
-            message:
-              netpayError.message ||
-              "Existe una operación NetPay pendiente que debe resolverse antes de continuar.",
+            title: "Terminal NetPay ocupada",
+            message: localPending.operation?.saleId
+              ? `La terminal PAX conserva una operación pendiente de la venta ${localPending.operation.saleId}.`
+              : "La terminal PAX conserva otra operación NetPay pendiente.",
           });
+        } else {
+          setNetpayDevicePending(false);
+          paymentInProgressRef.current = false;
+        }
+
+        /*
+         * Aunque Android esté vacío, Backend puede conservar:
+         * pending_recovery, pending_reversal o approved + local pendiente/error.
+         */
+        const unresolved = await getCashierUnresolvedNetpayPayment({
+          saleId: selectedSaleId,
+        });
+
+        if (cancelled || !unresolved?.hasUnresolvedTransaction || !unresolved?.transaction) {
+          if (!cancelled) {
+            setNetpayPending(false);
+            setNetpayRecoveryAvailable(false);
+            setNetpayPendingMessage("");
+          }
+
+          return;
+        }
+
+        setNetpayMode(true);
+        setNetpayPending(true);
+
+        await handleResolvedNetpayOutcome({
+          outcome: unresolved.outcome,
+          financiallyUnresolved: unresolved.financiallyUnresolved,
+          recoveryRequired: unresolved.recoveryRequired,
+          recoveryAvailable: unresolved.recoveryAvailable,
+          recoveryReason: unresolved.recoveryReason,
+          triggerTransactionId: unresolved.triggerTransactionId,
+          transaction: unresolved.transaction,
+          backendResponse: unresolved.response,
+        }, { fromResume: true });
+      } catch (error) {
+        if (cancelled) return;
+
+        const netpayError = getCashierNetpayError(error);
+        const localPending = syncLocalNetpayPendingOperation();
+
+        let unresolved = null;
+
+        try {
+          unresolved = await getCashierUnresolvedNetpayPayment({ saleId: selectedSaleId });
+        } catch {
+          // La revisión Backend es secundaria respecto al error original.
+        }
+
+        if (unresolved?.financiallyUnresolved) {
+          const recoveryAvailable = unresolved?.recoveryAvailable === true;
+
+          setNetpayMode(true);
+          setNetpayPending(true);
+          setNetpayRecoveryAvailable(recoveryAvailable);
+          setNetpayPendingMessage(
+            resolveNetpayPendingMessage({
+              outcome: unresolved.outcome,
+              financiallyUnresolved: true,
+              recoveryAvailable,
+              recoveryReason: unresolved.recoveryReason,
+            }, localPending)
+          );
+        }
+
+        if (localPending.hasPendingOperation || unresolved?.financiallyUnresolved || netpayError.bankApproved) {
+          showAlert({
+            severity: "warning",
+            title: "Operación NetPay pendiente",
+            message: netpayError.message || "Existe una operación NetPay pendiente que debe resolverse antes de continuar.",
+          });
+
           return;
         }
 
         setNetpayPending(false);
-        paymentInProgressRef.current = false;
+        setNetpayRecoveryAvailable(false);
+        setNetpayPendingMessage("");
       }
     };
 
@@ -936,6 +1231,9 @@ export default function useCashierOnlineOrderPaymentFlow({
     previewing,
     paying,
     netpayPending,
+    netpayDevicePending,
+    netpayRecoveryAvailable,
+    netpayPendingMessage,
     netpayStatus,
     netpayLocked,
     financialLocked,
@@ -945,6 +1243,7 @@ export default function useCashierOnlineOrderPaymentFlow({
     handlePaymentChange,
     handlePreview,
     handlePay,
+    retryPendingNetpayRecovery,
   };
 
 }

@@ -1,5 +1,18 @@
 // src/services/staff/casher/cashierNetpayPayment.service.js
 
+/*
+ * Orquesta el flujo NetPay de caja entre Backend, React y Android:
+ * cobro, persistencia de resultados, recovery por folio y reanudación segura.
+ *
+ * Usa:
+ * - src/services/native/netpayBridge.service.js
+ * - src/services/staff/casher/netpayTransaction.service.js
+ * - src/services/staff/casher/netpayTerminal.service.js
+ *
+ * Lo usan:
+ * - src/pages/staff/casher/saleDetail/useCashierSalePaymentFlow.js
+ * - src/pages/staff/casher/onlineOrders/payment/useCashierOnlineOrderPaymentFlow.js
+ */
 import {
   acknowledgeNetpayPendingOperation,
   createNetpayResultWaiter,
@@ -13,6 +26,7 @@ import {
 
 import {
   createNetpayTransaction,
+  fetchUnresolvedNetpayTransaction,
   finalizeApprovedNetpayTransaction,
   previewNetpayTransaction,
   requestNetpayRecovery,
@@ -97,14 +111,8 @@ const FIELD_ALIASES = {
   netpay_amount: ["netpay_amount", "netpayAmount"],
   auth_amount: ["auth_amount", "authAmount"],
   netpay_tip_amount: ["netpay_tip_amount", "netpayTipAmount"],
-  netpay_tip_less_amount: [
-    "netpay_tip_less_amount",
-    "netpayTipLessAmount",
-  ],
-  netpay_transaction_at: [
-    "netpay_transaction_at",
-    "netpayTransactionAt",
-  ],
+  netpay_tip_less_amount: ["netpay_tip_less_amount", "netpayTipLessAmount",],
+  netpay_transaction_at: ["netpay_transaction_at", "netpayTransactionAt", ],
   card_type: ["card_type", "cardType"],
   card_brand: ["card_brand", "cardBrand"],
   last4: ["last4"],
@@ -379,15 +387,64 @@ function transactionFromResponse(response) {
     : null;
 }
 
-function transactionRequiresRecovery(transaction) {
-  const bankStatus = String(
-    transaction?.bank_status || ""
-  ).toLowerCase();
+function normalizeUnresolvedRecovery(response, transaction) {
+  const rawRecovery =
+    response?.recovery &&
+    typeof response.recovery === "object" &&
+    !Array.isArray(response.recovery)
+      ? response.recovery
+      : null;
 
-  return [
-    "pending_recovery",
-    "pending_reversal",
-  ].includes(bankStatus);
+  const bankStatus = String(transaction?.bank_status || "").toLowerCase();
+  const localStatus = String(transaction?.local_status || "").toLowerCase();
+  const pendingReversal = bankStatus === "pending_reversal";
+  const pendingRecovery = bankStatus === "pending_recovery";
+  const createdPending = bankStatus === "created" && localStatus === "pending";
+
+  const triggerId = Number(
+    rawRecovery?.trigger_transaction_id ??
+    rawRecovery?.triggerTransactionId ??
+    0
+  );
+
+  /*
+   * Si Backend ya envió recovery, su decisión es autoritativa.
+   * El fallback existe únicamente para estados anteriores que ya eran
+   * recuperables; pending_reversal NUNCA se habilita por fallback.
+   */
+  const recoveryRequired = rawRecovery
+    ? rawRecovery.required === true
+    : pendingReversal || pendingRecovery || createdPending;
+
+  const recoveryAvailable = rawRecovery
+    ? rawRecovery.allowed === true
+    : !pendingReversal && (pendingRecovery || createdPending);
+
+  return {
+    recoveryRequired,
+    recoveryAvailable,
+    recoveryReason: String(rawRecovery?.reason || "").trim() || null,
+    triggerTransactionId: Number.isInteger(triggerId) && triggerId > 0 ? triggerId : null,
+    recovery: rawRecovery,
+  };
+}
+
+function transactionRequiresImmediateRecovery(transaction) {
+  return String(transaction?.bank_status || "").toLowerCase() === "pending_recovery";
+}
+
+function transactionIsPendingReversal(transaction) {
+  return String(transaction?.bank_status || "").toLowerCase() === "pending_reversal";
+}
+
+function transactionIsFinanciallyUnresolved(transaction) {
+  const bankStatus = String(transaction?.bank_status || "").toLowerCase();
+  const localStatus = String(transaction?.local_status || "").toLowerCase();
+
+  return bankStatus === "pending_recovery" ||
+    bankStatus === "pending_reversal" ||
+    (bankStatus === "created" && localStatus === "pending") ||
+    (bankStatus === "approved" && ["pending", "error"].includes(localStatus));
 }
 
 function transactionIsFinalized(transaction) {
@@ -485,6 +542,78 @@ function markAndroidOperationForRecovery({
     response,
     "Android no pudo marcar la operación NetPay como pendiente de recuperación."
   );
+}
+
+async function executeAuthorizedRecoveryOnAndroid({
+  saleId,
+  netpayTransactionId,
+  recovery,
+  onStatus = null,
+  signal = null,
+}) {
+  const operationUuid = String(recovery?.operation_uuid || "").trim();
+  const folio = String(recovery?.folio || "").trim();
+  const environment = String(recovery?.environment || "").trim();
+
+  if (!operationUuid || !folio || !environment) {
+    throw createFlowError(
+      "NETPAY_RECOVERY_DATA_INCOMPLETE",
+      "No existen datos completos para ejecutar la recuperación NetPay en Android.",
+      recovery
+    );
+  }
+
+  const waiter = createNetpayResultWaiter({
+    netpayTransactionId,
+    operationUuid,
+    signal,
+  });
+
+  notifyStatus(onStatus, "starting_recovery", recovery);
+
+  const androidStart = startNetpayRecoveryByFolio({
+    netpay_transaction_id: netpayTransactionId,
+    sale_id: saleId,
+    operation_uuid: operationUuid,
+    folio,
+    environment,
+  });
+
+  if (androidStart?.ok === false) {
+    waiter.cancel();
+
+    try {
+      await waiter.promise;
+    } catch {
+      // Se cancela únicamente el listener local.
+    }
+
+    throw createFlowError(
+      androidStart.code || "NETPAY_RECOVERY_START_FAILED",
+      androidStart.message || "Android no pudo iniciar la recuperación NetPay.",
+      androidStart
+    );
+  }
+
+  notifyStatus(onStatus, "waiting_recovery_result", recovery);
+
+  const normalizedResult = await waiter.promise;
+
+  if (normalizedResult?.ok === false && !readResultField(normalizedResult, "success").found) {
+    throw createFlowError(
+      normalizedResult.code || "NETPAY_RECOVERY_RESULT_NOT_AVAILABLE",
+      normalizedResult.message || "Smart PinPad no devolvió una respuesta bancaria válida de recuperación.",
+      normalizedResult
+    );
+  }
+
+  return processRecoveryNormalizedResult({
+    saleId,
+    netpayTransactionId,
+    operationUuid,
+    normalizedResult,
+    onStatus,
+  });
 }
 
 async function finalizeApprovedIfNeeded({
@@ -587,16 +716,15 @@ async function processSaleNormalizedResult({
     transactionFromResponse(backendResponse);
 
   if (
-    transactionRequiresRecovery(transaction) ||
+    transactionRequiresImmediateRecovery(transaction) ||
     payload.execution_result === "communication_error"
   ) {
-    markAndroidOperationForRecovery({
-      netpayTransactionId,
-    });
+    markAndroidOperationForRecovery({ netpayTransactionId });
 
     return {
       outcome: "recovery_required",
       requiresRecovery: true,
+      financiallyUnresolved: true,
       transaction,
       backendResponse,
       normalizedResult,
@@ -622,8 +750,8 @@ async function processSaleNormalizedResult({
 
   return {
     outcome: resolveOutcome(transaction),
-    requiresRecovery:
-      transactionRequiresRecovery(transaction),
+    requiresRecovery: transactionRequiresImmediateRecovery(transaction),
+    financiallyUnresolved: transactionIsFinanciallyUnresolved(transaction),
     transaction,
     backendResponse,
     normalizedResult,
@@ -690,15 +818,13 @@ async function processRecoveryNormalizedResult({
   transaction = finalized.transaction;
   backendResponse = finalized.backendResponse;
 
-  if (transactionRequiresRecovery(transaction)) {
-    markAndroidOperationForRecovery({
-      netpayTransactionId,
-      operationUuid,
-    });
+  if (transactionRequiresImmediateRecovery(transaction)) {
+    markAndroidOperationForRecovery({ netpayTransactionId, operationUuid });
 
     return {
       outcome: resolveOutcome(transaction),
       requiresRecovery: true,
+      financiallyUnresolved: true,
       transaction,
       backendResponse,
       normalizedResult,
@@ -706,7 +832,26 @@ async function processRecoveryNormalizedResult({
     };
   }
 
-    const recoveryPurpose = String(
+  /*
+   * PRV ya fue recibido por Android y persistido correctamente en Backend.
+   * La Sale continúa pendiente de reverso, pero la PAX debe quedar libre
+   * para permitir la siguiente transacción que disparará dicho reverso.
+   */
+  if (transactionIsPendingReversal(transaction)) {
+    acknowledgeAndroidOperation({ netpayTransactionId, operationUuid });
+
+    return {
+      outcome: "pending_reversal",
+      requiresRecovery: false,
+      financiallyUnresolved: true,
+      transaction,
+      backendResponse,
+      normalizedResult,
+      operationUuid,
+    };
+  }
+
+  const recoveryPurpose = String(
     backendResponse?.purpose || ""
   ).toLowerCase();
 
@@ -745,6 +890,7 @@ async function processRecoveryNormalizedResult({
   return {
     outcome: resolveOutcome(transaction),
     requiresRecovery: false,
+    financiallyUnresolved: transactionIsFinanciallyUnresolved(transaction),
     transaction,
     backendResponse,
     normalizedResult,
@@ -791,6 +937,7 @@ function normalizePendingOperation(operation) {
         : null,
     operationUuid: value("operation_uuid", "operationUuid") || null,
     operationType: value("operation_type", "operationType") || null,
+    folio: value("folio", "folio") || null,
     netpayOrderId: value("netpay_order_id", "netpayOrderId") || null,
     environment: value("environment", "environment") || null,
     localState: value("local_state", "localState") || null,
@@ -940,43 +1087,70 @@ export async function recoverCashierNetpayPayment({
   onStatus = null,
   signal = null,
 }) {
-  const normalizedSaleId = positiveInteger(
-    saleId,
-    "sale_id"
-  );
+  const normalizedSaleId = positiveInteger(saleId, "sale_id");
+  const transactionId = positiveInteger(netpayTransactionId, "netpay_transaction_id");
 
-  const transactionId = positiveInteger(
-    netpayTransactionId,
-    "netpay_transaction_id"
-  );
+  /*
+   * Antes de crear una nueva solicitud Backend revisamos Android.
+   * Así no generamos operation_uuid que la PAX no pueda ejecutar.
+   */
+  const localPending = getCashierPendingNetpayOperation();
 
-  notifyStatus(
-    onStatus,
-    "requesting_recovery",
-    {
-      netpay_transaction_id: transactionId,
+  if (localPending.hasPendingOperation) {
+    const operation = localPending.operation;
+
+    if (!operation || operation.netpayTransactionId !== transactionId) {
+      throw createFlowError(
+        "NETPAY_ANDROID_PENDING_OPERATION",
+        "La terminal PAX tiene otra operación NetPay pendiente. Debe resolverse antes de iniciar esta recuperación.",
+        operation?.raw || localPending.response
+      );
     }
-  );
 
-  const recoveryResponse =
-    await requestNetpayRecovery(
-      normalizedSaleId,
-      transactionId
-    );
+    const operationType = String(operation.operationType || "").toLowerCase();
+    const localState = String(operation.localState || "").toLowerCase();
+
+    if (
+      operation.normalizedResult ||
+      (operationType === "recovery" && localState === "requires_review")
+    ) {
+      return resumeCashierPendingNetpayOperation({
+        saleId: normalizedSaleId,
+        onStatus,
+        signal,
+      });
+    }
+
+    const canRequestNewRecovery =
+      localState === "pending_recovery" &&
+      ["sale", "recovery", "cancellation"].includes(operationType);
+
+    if (!canRequestNewRecovery) {
+      throw createFlowError(
+        "NETPAY_ANDROID_OPERATION_NOT_READY_FOR_RECOVERY",
+        "La operación NetPay local todavía no permite iniciar una nueva recuperación.",
+        operation.raw
+      );
+    }
+  }
+
+  notifyStatus(onStatus, "requesting_recovery", {
+    netpay_transaction_id: transactionId,
+  });
+
+  const recoveryResponse = await requestNetpayRecovery(
+    normalizedSaleId,
+    transactionId
+  );
 
   responseOrThrow(
     recoveryResponse,
     "Backend no pudo autorizar la recuperación NetPay."
   );
 
-  const recovery =
-    recoveryResponse?.data || null;
+  const recovery = recoveryResponse?.data || null;
 
-  if (
-    !recovery?.operation_uuid ||
-    !recovery?.folio ||
-    !recovery?.environment
-  ) {
+  if (!recovery?.operation_uuid || !recovery?.folio || !recovery?.environment) {
     throw createFlowError(
       "NETPAY_RECOVERY_DATA_INCOMPLETE",
       "Backend no devolvió los datos completos para recuperar la operación NetPay.",
@@ -984,79 +1158,12 @@ export async function recoverCashierNetpayPayment({
     );
   }
 
-  const waiter = createNetpayResultWaiter({
-    netpayTransactionId: transactionId,
-    operationUuid: recovery.operation_uuid,
-    signal,
-  });
-
-  notifyStatus(
-    onStatus,
-    "starting_recovery",
-    recovery
-  );
-
-  const androidStart =
-    startNetpayRecoveryByFolio({
-      netpay_transaction_id:
-        transactionId,
-      sale_id: normalizedSaleId,
-      operation_uuid:
-        recovery.operation_uuid,
-      folio: recovery.folio,
-      environment: recovery.environment,
-    });
-
-  if (androidStart?.ok === false) {
-    waiter.cancel();
-
-    try {
-      await waiter.promise;
-    } catch {
-      // Se cancela únicamente el listener local.
-    }
-
-    throw createFlowError(
-      androidStart.code ||
-        "NETPAY_RECOVERY_START_FAILED",
-      androidStart.message ||
-        "Android no pudo iniciar la recuperación NetPay.",
-      androidStart
-    );
-  }
-
-  notifyStatus(
-    onStatus,
-    "waiting_recovery_result",
-    recovery
-  );
-
-  const normalizedResult =
-    await waiter.promise;
-
-  if (
-    normalizedResult?.ok === false &&
-    !readResultField(
-      normalizedResult,
-      "success"
-    ).found
-  ) {
-    throw createFlowError(
-      normalizedResult.code ||
-        "NETPAY_RECOVERY_RESULT_NOT_AVAILABLE",
-      normalizedResult.message ||
-        "Smart PinPad no devolvió una respuesta bancaria válida de recuperación.",
-      normalizedResult
-    );
-  }
-
-  return processRecoveryNormalizedResult({
+  return executeAuthorizedRecoveryOnAndroid({
     saleId: normalizedSaleId,
     netpayTransactionId: transactionId,
-    operationUuid:
-      recovery.operation_uuid,
-    normalizedResult,
+    recovery,
     onStatus,
+    signal,
   });
 }
 
@@ -1086,13 +1193,50 @@ export async function executeCashierNetpayPayment({
     );
   }
 
-  notifyStatus(
-    onStatus,
-    "resolving_terminal"
-  );
+  /*
+   * Preflight Android obligatorio antes de crear el intento Backend.
+   * Una operación durable pendiente en la PAX tiene prioridad.
+   */
+  const localPending = getCashierPendingNetpayOperation();
 
-  const resolved =
-    await resolveCashierNetpayTerminal();
+  if (localPending.hasPendingOperation) {
+    const operation = localPending.operation;
+
+    if (!operation) {
+      throw createFlowError(
+        "NETPAY_ANDROID_PENDING_OPERATION_INVALID",
+        "Android reportó una operación NetPay pendiente que no pudo interpretarse.",
+        localPending.response
+      );
+    }
+
+    const operationType = String(operation.operationType || "").toLowerCase();
+
+    if (
+      operation.saleId === normalizedSaleId &&
+      ["sale", "recovery"].includes(operationType)
+    ) {
+      notifyStatus(onStatus, "resuming_pending_operation", operation);
+
+      return resumeCashierPendingNetpayOperation({
+        saleId: normalizedSaleId,
+        onStatus,
+        signal,
+      });
+    }
+
+    throw createFlowError(
+      "NETPAY_ANDROID_PENDING_OPERATION",
+      operation.saleId && operation.saleId !== normalizedSaleId
+        ? `La terminal PAX tiene una operación NetPay pendiente de la venta ${operation.saleId}. Debe resolverse antes de iniciar otro cobro.`
+        : "La terminal PAX tiene otra operación NetPay pendiente. Debe resolverse antes de iniciar un nuevo cobro.",
+      operation.raw
+    );
+  }
+
+  notifyStatus(onStatus, "resolving_terminal");
+
+  const resolved = await resolveCashierNetpayTerminal();
 
   notifyStatus(
     onStatus,
@@ -1310,6 +1454,125 @@ export function getCashierPendingNetpayOperation() {
   };
 }
 
+export async function getCashierUnresolvedNetpayPayment({ saleId }) {
+  const normalizedSaleId = positiveInteger(saleId, "sale_id");
+  const response = await fetchUnresolvedNetpayTransaction(normalizedSaleId);
+
+  responseOrThrow(
+    response,
+    "No fue posible consultar la operación NetPay pendiente de la venta."
+  );
+
+  const transaction = transactionFromResponse(response);
+  const recovery = normalizeUnresolvedRecovery(response, transaction);
+
+  return {
+    hasUnresolvedTransaction: Boolean(transaction),
+    transaction,
+    outcome: transaction ? resolveOutcome(transaction) : "none",
+    financiallyUnresolved: transactionIsFinanciallyUnresolved(transaction),
+    recoveryRequired: recovery.recoveryRequired,
+    recoveryAvailable: recovery.recoveryAvailable,
+    recoveryReason: recovery.recoveryReason,
+    triggerTransactionId: recovery.triggerTransactionId,
+    recovery: recovery.recovery,
+    response,
+  };
+}
+
+export async function resumeCashierUnresolvedNetpayPayment({
+  saleId,
+  onStatus = null,
+  signal = null,
+}) {
+  const normalizedSaleId = positiveInteger(saleId, "sale_id");
+
+  const unresolved = await getCashierUnresolvedNetpayPayment({
+    saleId: normalizedSaleId,
+  });
+
+  if (!unresolved.transaction) {
+    return {
+      outcome: "none",
+      requiresRecovery: false,
+      recoveryRequired: false,
+      recoveryAvailable: false,
+      recoveryReason: null,
+      triggerTransactionId: null,
+      financiallyUnresolved: false,
+      transaction: null,
+      backendResponse: unresolved.response,
+    };
+  }
+
+  const transaction = unresolved.transaction;
+  const transactionId = positiveInteger(transaction.netpay_transaction_id, "netpay_transaction_id");
+  const bankStatus = String(transaction.bank_status || "").toLowerCase();
+  const localStatus = String(transaction.local_status || "").toLowerCase();
+
+  /*
+   * PRV significa que el banco todavía espera una transacción posterior
+   * en la misma PAX. Backend decide cuándo esa evidencia ya existe.
+   *
+   * requiresRecovery permanece false porque NO debemos ejecutar recovery
+   * automáticamente mientras recoveryAvailable sea false.
+   */
+  if (bankStatus === "pending_reversal" && !unresolved.recoveryAvailable) {
+    return {
+      outcome: "pending_reversal",
+      requiresRecovery: false,
+      recoveryRequired: unresolved.recoveryRequired,
+      recoveryAvailable: false,
+      recoveryReason: unresolved.recoveryReason,
+      triggerTransactionId: unresolved.triggerTransactionId,
+      financiallyUnresolved: true,
+      transaction,
+      backendResponse: unresolved.response,
+    };
+  }
+
+  /*
+   * Una aprobación pendiente/error primero intenta finalizarse localmente.
+   * Solo un error de conciliación justifica volver a consultar al banco.
+   */
+  if (bankStatus === "approved" && ["pending", "error"].includes(localStatus)) {
+    try {
+      const finalized = await finalizeApprovedIfNeeded({
+        saleId: normalizedSaleId,
+        transaction,
+        backendResponse: unresolved.response,
+        onStatus,
+      });
+
+      return {
+        outcome: resolveOutcome(finalized.transaction),
+        requiresRecovery: false,
+        recoveryRequired: false,
+        recoveryAvailable: false,
+        recoveryReason: null,
+        triggerTransactionId: null,
+        financiallyUnresolved: transactionIsFinanciallyUnresolved(finalized.transaction),
+        transaction: finalized.transaction,
+        backendResponse: finalized.backendResponse,
+      };
+    } catch (error) {
+      if (apiErrorCode(error) !== "NETPAY_AMOUNT_RECONCILIATION_FAILED") throw error;
+    }
+  }
+
+  /*
+   * pending_reversal solamente llega aquí cuando Backend ya indicó
+   * recoveryAvailable=true. Los demás estados recuperables conservan
+   * su flujo existente. Backend sigue siendo la última barrera.
+   */
+  return recoverCashierNetpayPayment({
+    saleId: normalizedSaleId,
+    netpayTransactionId: transactionId,
+    onStatus,
+    signal,
+  });
+}
+
 export async function resumeCashierPendingNetpayOperation({
   saleId,
   onStatus = null,
@@ -1336,10 +1599,7 @@ export async function resumeCashierPendingNetpayOperation({
   const operation =
     pending.operation;
 
-  if (
-    operation.saleId &&
-    operation.saleId !== normalizedSaleId
-  ) {
+  if (operation.saleId && operation.saleId !== normalizedSaleId) {
     return {
       outcome: "different_sale",
       pendingOperation: operation,
@@ -1360,14 +1620,9 @@ export async function resumeCashierPendingNetpayOperation({
     operation
   );
 
-  const operationType = String(
-    operation.operationType || ""
-  ).toLowerCase();
+  const operationType = String(operation.operationType || "").toLowerCase();
 
-  if (
-    operationType !== "sale" &&
-    operationType !== "recovery"
-  ) {
+  if (operationType !== "sale" && operationType !== "recovery") {
     return {
       outcome: "different_operation_type",
       pendingOperation: operation,
@@ -1411,14 +1666,31 @@ export async function resumeCashierPendingNetpayOperation({
     return processed;
   }
 
-  const localState = String(
-    operation.localState || ""
-  ).toLowerCase();
+  const localState = String(operation.localState || "").toLowerCase();
 
-  if (
-    localState === "pending_recovery" &&
-    operationType !== "recovery"
-  ) {
+  if (operationType === "recovery" && localState === "requires_review") {
+    if (!operation.operationUuid || !operation.folio || !operation.environment) {
+      throw createFlowError(
+        "NETPAY_RECOVERY_REVIEW_DATA_INCOMPLETE",
+        "La recuperación pendiente no conserva los datos necesarios para reintentarse.",
+        operation.raw
+      );
+    }
+
+    return executeAuthorizedRecoveryOnAndroid({
+      saleId: normalizedSaleId,
+      netpayTransactionId: operation.netpayTransactionId,
+      recovery: {
+        operation_uuid: operation.operationUuid,
+        folio: operation.folio,
+        environment: operation.environment,
+      },
+      onStatus,
+      signal,
+    });
+  }
+
+  if (localState === "pending_recovery" && operationType !== "recovery") {
     return recoverCashierNetpayPayment({
       saleId: normalizedSaleId,
       netpayTransactionId:

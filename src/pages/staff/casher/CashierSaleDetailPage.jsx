@@ -805,7 +805,9 @@ export default function CashierSaleDetailPage() {
               netpayStatus={paymentFlow.netpayStatus}
               netpayStatusLabel={paymentFlow.netpayStatusLabel}
               netpayTerminal={paymentFlow.netpayTerminal}
-              netpayRecoveryRequired={paymentFlow.netpayPendingBlocked}
+              netpayFinancialPending={paymentFlow.netpayPendingBlocked}
+              netpayRecoveryAvailable={paymentFlow.netpayRecoveryAvailable}
+              netpayPendingMessage={paymentFlow.netpayPendingMessage}
               onRetryNetpayRecovery={paymentFlow.retryPendingNetpayRecovery}
               paymentAmountLocked={paymentFlow.netpayMode}
               bankFieldsLocked={paymentFlow.netpayMode}

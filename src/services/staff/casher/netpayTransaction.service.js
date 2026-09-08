@@ -1,8 +1,16 @@
 // src/services/staff/casher/netpayTransaction.service.js
 
 /*
- * Endpoints de operaciones NetPay asociadas a una Sale.
- * Centraliza venta, recuperación, cancelación bancaria y reimpresión de voucher.
+ * Centraliza los endpoints Backend de operaciones NetPay asociadas a una Sale:
+ * cobro, consulta pendiente, recuperación, cancelación y reimpresión de voucher.
+ *
+ * Usa:
+ * - src/services/staffApi.js
+ *
+ * Lo usan:
+ * - src/services/staff/casher/cashierNetpayPayment.service.js
+ * - src/services/staff/casher/cashierNetpayCancellation.service.js
+ * - src/services/staff/casher/cashierNetpayVoucherReprint.service.js
  */
 import staffApi from "../../staffApi";
 
@@ -39,6 +47,18 @@ export async function fetchNetpayTransaction(
 ) {
   const res = await staffApi.get(
     `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
+export async function fetchUnresolvedNetpayTransaction(saleId) {
+  const res = await staffApi.get(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/unresolved`,
     {
       params: { _t: Date.now() },
       headers: NO_CACHE_HEADERS,
