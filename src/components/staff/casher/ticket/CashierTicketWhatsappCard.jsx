@@ -1,15 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  FormControlLabel,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, Card, CardContent, Checkbox,FormControlLabel, Stack, TextField, Typography,
 } from "@mui/material";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
@@ -86,6 +77,9 @@ export default function CashierTicketWhatsappCard({
   return (
     <Card
       sx={{
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
@@ -93,7 +87,7 @@ export default function CashierTicketWhatsappCard({
         backgroundColor: "background.paper",
       }}
     >
-      <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+      <CardContent sx={{ p: { xs: 2, sm: 3 }, minWidth: 0 }}>
         <Stack spacing={2}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -101,7 +95,7 @@ export default function CashierTicketWhatsappCard({
             justifyContent="space-between"
             alignItems={{ xs: "flex-start", sm: "center" }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%", minWidth: 0 }}>
               <Box
                 sx={{
                   width: 42,
@@ -117,7 +111,7 @@ export default function CashierTicketWhatsappCard({
                 <WhatsAppIcon />
               </Box>
 
-              <Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography
                   sx={{
                     fontSize: 21,
@@ -135,6 +129,7 @@ export default function CashierTicketWhatsappCard({
                     fontSize: 14,
                     color: "text.secondary",
                     lineHeight: 1.5,
+                    overflowWrap: "anywhere",
                   }}
                 >
                   Envía el PDF del ticket al número del cliente.
@@ -153,15 +148,24 @@ export default function CashierTicketWhatsappCard({
             <Alert
               severity={hasSimpleContactPhone ? "info" : "warning"}
               sx={{
+                width: "100%",
+                minWidth: 0,
+                boxSizing: "border-box",
                 borderRadius: 1,
                 alignItems: "flex-start",
+                "& .MuiAlert-message": { minWidth: 0, width: "100%" },
               }}
             >
               <Typography
                 sx={{
+                  width: "100%",
+                  minWidth: 0,
                   fontSize: 13,
                   fontWeight: 800,
-                  lineHeight: 1.35,
+                  lineHeight: 1.4,
+                  whiteSpace: "normal",
+                  overflowWrap: "anywhere",
+                  wordBreak: "break-word",
                 }}
               >
                 {helperText}
@@ -169,7 +173,7 @@ export default function CashierTicketWhatsappCard({
             </Alert>
           ) : null}
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ minWidth: 0 }}>
             <FieldBlock
               label="Teléfono"
               input={
@@ -284,7 +288,7 @@ export default function CashierTicketWhatsappCard({
 
 function FieldBlock({ label, input }) {
   return (
-    <Box sx={{ flex: 1, width: "100%" }}>
+    <Box sx={{ flex: 1, width: "100%", minWidth: 0 }}>
       <Typography sx={fieldLabelSx}>{label}</Typography>
       {input}
     </Box>
