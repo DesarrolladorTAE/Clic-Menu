@@ -10,6 +10,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 
 export default function CashierPaymentFormCard({
   methods = [],
@@ -23,6 +24,9 @@ export default function CashierPaymentFormCard({
   onRemovePayment,
   onPaymentChange,
   onPreview,
+  showPrebill = false,
+  onPrebill,
+  prebillDisabled = false,
   previewing = false,
   paying = false,
   hasPreview = false,
@@ -675,6 +679,23 @@ export default function CashierPaymentFormCard({
             spacing={1.5}
             justifyContent="flex-end"
           >
+            {showPrebill ? (
+              <Button
+                variant="outlined"
+                onClick={onPrebill}
+                disabled={prebillDisabled || previewing || paying || operationLocked}
+                startIcon={<ReceiptLongRoundedIcon />}
+                sx={{
+                  minWidth: { xs: "100%", sm: 160 },
+                  height: 44,
+                  borderRadius: 2,
+                  fontWeight: 800,
+                }}
+              >
+                Precuenta
+              </Button>
+            ) : null}
+
             <Button
               variant="outlined"
               onClick={onPreview}

@@ -24,6 +24,7 @@ import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPa
 import CashierDiscountAuthorizationDialog from "../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
 import CashierOperationalAuthorizationDialog from "../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
 import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
+import CashierPrebillDialog from "../../../components/staff/casher/prebill/CashierPrebillDialog";
 
 import useCashierSaleDetailLoad from "./saleDetail/useCashierSaleDetailLoad";
 import useCashierSalePaymentFlow from "./saleDetail/useCashierSalePaymentFlow";
@@ -31,6 +32,7 @@ import useCashierSaleDiscounts from "./saleDetail/useCashierSaleDiscounts";
 import useCashierSaleAdjustments from "./saleDetail/useCashierSaleAdjustments";
 import useCashierSaleCustomer from "./saleDetail/useCashierSaleCustomer";
 import useCashierSaleTicket from "./saleDetail/useCashierSaleTicket";
+import useCashierSalePrebill from "./saleDetail/useCashierSalePrebill";
 
 import {
   MY_SALES_PATH,
@@ -310,6 +312,65 @@ export default function CashierSaleDetailPage() {
     selectedSaleId,
   ]);
 
+  const canUsePrebill = useMemo(() => {
+    if (isLegacySale || !selectedCheckId || !hasExactCheckOwnership) return false;
+
+    const checkStatus = String(selectedCheck?.status || "").toLowerCase();
+    const groupStatus = String(
+      saleCheckContext?.billing_group_status ??
+      saleCheckContext?.billing_group?.status ??
+      ""
+    ).toLowerCase();
+
+    const orderSource = String(
+      sale?.order?.source ??
+      sale?.order_source ??
+      ""
+    ).trim().toLowerCase();
+
+    const isCashierDirect =
+      saleCheckContext?.operational?.is_cashier_direct === true ||
+      orderSource === "cashier_direct";
+
+    const isOnlineOrder = orderSource === "online_order";
+
+    const hasTable =
+      saleCheckContext?.operational?.has_table === true ||
+      Number(selectedCheck?.primary_table_id || sale?.table_id || sale?.order?.table_id || 0) > 0;
+
+    const hasPaymentEvidence =
+      selectedCheck?.paid_at != null ||
+      selectedCheck?.flags?.has_payments === true ||
+      selectedCheck?.flags?.has_ticket === true ||
+      selectedCheckPolicy?.flags?.has_payments === true ||
+      selectedCheckPolicy?.flags?.has_ticket === true ||
+      selectedCheckPolicy?.flags?.has_paid_sale === true ||
+      selectedCheckPolicy?.flags?.has_refunds === true ||
+      sale?.paid_at != null ||
+      sale?.has_payments === true ||
+      sale?.has_ticket === true ||
+      ["paid", "partially_refunded", "refunded"].includes(
+        String(sale?.status || "").toLowerCase()
+      );
+
+    return (
+      ["open", "locked", "paying"].includes(checkStatus) &&
+      (!groupStatus || ["open", "partially_paid"].includes(groupStatus)) &&
+      hasTable &&
+      !isCashierDirect &&
+      !isOnlineOrder &&
+      !hasPaymentEvidence
+    );
+  }, [
+    hasExactCheckOwnership,
+    isLegacySale,
+    sale,
+    saleCheckContext,
+    selectedCheck,
+    selectedCheckId,
+    selectedCheckPolicy,
+  ]);
+
   const isEqualPartsAccount = useMemo(() => {
     if (isLegacySale) return false;
 
@@ -498,6 +559,19 @@ export default function CashierSaleDetailPage() {
     pickErr,
     pickCode,
     pickData,
+  });
+
+  const prebillFlow = useCashierSalePrebill({
+    selectedCheckId,
+    taxOptionCode,
+    canUsePrebill,
+    operationBlocked:
+      paying ||
+      paymentFlow.netpayBusy ||
+      paymentFlow.netpayPendingBlocked ||
+      postPaymentOpen,
+    showAlert,
+    pickErr,
   });
 
   const discountFlow = useCashierSaleDiscounts({
@@ -811,6 +885,15 @@ export default function CashierSaleDetailPage() {
               onRetryNetpayRecovery={paymentFlow.retryPendingNetpayRecovery}
               paymentAmountLocked={paymentFlow.netpayMode}
               bankFieldsLocked={paymentFlow.netpayMode}
+              showPrebill={canUsePrebill}
+              onPrebill={prebillFlow.handleOpenPrebill}
+              prebillDisabled={
+                previewing ||
+                paying ||
+                paymentFlow.netpayBusy ||
+                paymentFlow.netpayPendingBlocked ||
+                postPaymentOpen
+              }
             />
           </Stack>
         </Box>
@@ -946,6 +1029,23 @@ export default function CashierSaleDetailPage() {
         title="Autorizar cancelación"
         message={operationalAuthorizationMessage}
         submitLabel="Autorizar y continuar"
+      />
+
+      <CashierPrebillDialog
+        open={prebillFlow.prebillOpen}
+        onClose={prebillFlow.handleClosePrebill}
+        customerSummary={customerSummary}
+        onSendWhatsapp={prebillFlow.handleSendPrebillWhatsapp}
+        sendingWhatsapp={prebillFlow.prebillWhatsappSending}
+        onThermalPrint={prebillFlow.handleThermalPrintPrebill}
+        thermalPrinting={prebillFlow.prebillPrinting}
+        disabled={
+          !canUsePrebill ||
+          paying ||
+          paymentFlow.netpayBusy ||
+          paymentFlow.netpayPendingBlocked ||
+          postPaymentOpen
+        }
       />
 
       <CashierPostPaymentTicketModal
