@@ -771,7 +771,7 @@ export default function StaffSelectContext() {
                   minHeight: 46,
                 }}
               >
-                {loggingOut ? "Cerrando sesión..." : "Cerrar sesión (Logout)"}
+                {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
               </Button>
             </Stack>
           </Box>
