@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import RestaurantFormModal from "../../components/restaurant/RestaurantFormModal";
 import OwnerProfileModal from "../../components/owner/profile/OwnerProfileModal";
+import OwnerTaxProfileModal from "../../components/owner/tax/OwnerTaxProfileModal";
 import OwnerUserMenu from "../../components/layout/OwnerUserMenu";
 import AppAlert from "../../components/common/AppAlert";
 
@@ -96,6 +97,7 @@ export default function MyRestaurantsHome() {
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [taxProfileOpen, setTaxProfileOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
 
   const [referralModalOpen, setReferralModalOpen] = useState(false);
@@ -235,6 +237,22 @@ export default function MyRestaurantsHome() {
     });
   };
 
+  const onTaxProfileSaved = (res) => {
+    showAlert({
+      severity: "success",
+      title: "Datos fiscales actualizados",
+      message: res?.message || "Tus datos fiscales se guardaron correctamente.",
+    });
+  };
+
+  const onTaxProfileError = (message) => {
+    showAlert({
+      severity: "error",
+      title: "No se pudieron procesar los datos fiscales",
+      message: message || "Intenta nuevamente.",
+    });
+  };
+
   const onGoPlans = (restaurantId) => {
     nav(`/owner/restaurants/${restaurantId}/plans`);
   };
@@ -361,6 +379,13 @@ export default function MyRestaurantsHome() {
         onSaved={onProfileSaved}
       />
 
+      <OwnerTaxProfileModal
+        open={taxProfileOpen}
+        onClose={() => setTaxProfileOpen(false)}
+        onSaved={onTaxProfileSaved}
+        onError={onTaxProfileError}
+      />
+
       <OwnerUserMenu
         anchorEl={userMenuAnchor}
         open={userMenuOpen}
@@ -368,6 +393,7 @@ export default function MyRestaurantsHome() {
         user={user}
         ownerName={ownerName}
         onEditProfile={() => setProfileOpen(true)}
+        onOpenTaxProfile={() => setTaxProfileOpen(true)}
         onLogout={onLogout}
       />
 

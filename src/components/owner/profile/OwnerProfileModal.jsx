@@ -1,17 +1,7 @@
 // src/components/owner/profile/OwnerProfileModal.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Alert, Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
