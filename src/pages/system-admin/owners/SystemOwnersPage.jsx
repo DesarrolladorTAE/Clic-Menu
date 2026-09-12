@@ -159,38 +159,49 @@ export default function SystemOwnersPage() {
 
       const updated = res?.data;
 
-      setOwners((prev) =>
-        prev.map((item) =>
-          Number(item.id) === Number(updated.id) ? updated : item
-        )
-      );
-
-      showAlert({
-        severity: "success",
-        title: "Hecho",
-        message: "Propietario actualizado correctamente.",
-      });
-    } else {
-      const res = await createSystemOwner(payload);
-      const created = res?.data;
-
-      if (created) {
-        setOwners((prev) => [created, ...prev].slice(0, PAGE_SIZE));
-        setMeta((prev) => ({
-          ...prev,
-          total: Number(prev.total || 0) + 1,
-        }));
+      if (updated) {
+        setOwners((prev) =>
+          prev.map((item) =>
+            Number(item.id) === Number(updated.id) ? updated : item
+          )
+        );
       }
 
       showAlert({
         severity: "success",
-        title: "Hecho",
-        message: "Propietario creado correctamente.",
+        title: "Propietario actualizado",
+        message: "Los datos de la cuenta se guardaron correctamente.",
       });
+
+      return;
     }
 
-    setModalOpen(false);
-    setEditingOwner(null);
+    const res = await createSystemOwner(payload);
+    const created = res?.data;
+
+    if (created) {
+      setOwners((prev) => [created, ...prev].slice(0, PAGE_SIZE));
+      setMeta((prev) => ({
+        ...prev,
+        total: Number(prev.total || 0) + 1,
+      }));
+    }
+
+    showAlert({
+      severity: "success",
+      title: "Propietario creado",
+      message: "La cuenta del propietario se creó correctamente.",
+    });
+  };
+
+  const handleTaxProfileSaved = (res) => {
+    showAlert({
+      severity: "success",
+      title: "Datos fiscales actualizados",
+      message:
+        res?.message ||
+        "Los datos fiscales del propietario se guardaron correctamente.",
+    });
   };
 
   const handleToggleStatus = async (row) => {
@@ -347,6 +358,7 @@ export default function SystemOwnersPage() {
           setEditingOwner(null);
         }}
         onSave={handleSaveOwner}
+        onTaxProfileSaved={handleTaxProfileSaved}
       />
 
       <AppAlert

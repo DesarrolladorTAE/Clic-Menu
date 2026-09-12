@@ -253,6 +253,10 @@ export default function MyRestaurantsHome() {
     });
   };
 
+  const onGoBilling = () => {
+    nav("/owner/billing");
+  };
+
   const onGoPlans = (restaurantId) => {
     nav(`/owner/restaurants/${restaurantId}/plans`);
   };
@@ -394,6 +398,7 @@ export default function MyRestaurantsHome() {
         ownerName={ownerName}
         onEditProfile={() => setProfileOpen(true)}
         onOpenTaxProfile={() => setTaxProfileOpen(true)}
+        onGoBilling={onGoBilling}
         onLogout={onLogout}
       />
 

@@ -48,6 +48,9 @@ import SystemBranchAddonsPage from "../pages/system-admin/owners/restaurants/add
 import SystemSubscriptionSalesPage from "../pages/system-admin/subscription-sales/SystemSubscriptionSalesPage";
 import SystemAddonSalesPage from "../pages/system-admin/addon-sales/SystemAddonSalesPage";
 
+import SystemPlatformPurchasesPage from "../pages/system-admin/billing/purchases/SystemPlatformPurchasesPage";
+import SystemPlatformInvoicesPage from "../pages/system-admin/billing/invoices/SystemPlatformInvoicesPage";
+
 //Menu:Cajero
 import CashierLayout from "../layouts/CashierLayout";
 import CashierHomePage from "../pages/staff/casher/CashierHomePage";
@@ -142,6 +145,9 @@ import RestaurantPlans from "../pages/owner/RestaurantPlans";
 import RestaurantSubscriptionHistoryPage from "../pages/owner/subscription-history/RestaurantSubscriptionHistoryPage";
 import RestaurantAddonHistoryPage from "../pages/owner/addon-history/RestaurantAddonHistoryPage";
 
+//Facturación propietario
+import OwnerBillingPage from "../pages/owner/billing/OwnerBillingPage";
+
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
 import PublicInvoicePage from "../pages/public/invoice/PublicInvoicePage";
@@ -177,6 +183,9 @@ export default function AppRoutes() {
       {/* OWNER AUTH */}
       <Route path="/auth/register" element={<Register />} />
       <Route path="/auth/login" element={<Login />} />
+
+      {/* SYSTEM ADMIN AUTH */}
+      <Route path="/system-admin/login" element={<SystemAdminLogin />} />
 
       {/* STAFF AUTH */}
       <Route path="/staff/login" element={<StaffLogin />} />
@@ -215,7 +224,8 @@ export default function AppRoutes() {
 
       {/* OWNER ROUTES */}
       <Route element={<OwnerRoute />}>
-        <Route path="/owner/restaurants-home" element={<MyRestaurantsHome />} /> 
+        <Route path="/owner/restaurants-home" element={<MyRestaurantsHome />} />
+        <Route path="/owner/billing" element={<OwnerBillingPage />} />
 
         {/* Menu 1: Principal */}
         <Route path="/owner/restaurants/:restaurantId" element={<RestaurantAdminLayout />}>
@@ -309,6 +319,9 @@ export default function AppRoutes() {
 
           <Route path="subscription-sales" element={<SystemSubscriptionSalesPage />} />
           <Route path="addon-sales" element={<SystemAddonSalesPage />} />
+
+          <Route path="billing/purchases" element={<SystemPlatformPurchasesPage />} />
+          <Route path="billing/invoices" element={<SystemPlatformInvoicesPage />} />
         </Route>
       </Route>
 

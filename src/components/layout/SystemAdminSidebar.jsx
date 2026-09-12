@@ -16,6 +16,9 @@ import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import ExtensionOutlinedIcon from "@mui/icons-material/ExtensionOutlined";
+import RequestQuoteRoundedIcon from "@mui/icons-material/RequestQuoteRounded";
+import ListAltRoundedIcon from "@mui/icons-material/ListAltRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
@@ -76,6 +79,23 @@ export default function SystemAdminSidebar({
             key: "addon-sales",
             label: "Complementos",
             icon: <ExtensionOutlinedIcon />,
+          },
+        ],
+      },
+      {
+        key: "billing",
+        label: "Facturación",
+        icon: <RequestQuoteRoundedIcon />,
+        items: [
+          {
+            key: "billing-purchases",
+            label: "Movimientos facturables",
+            icon: <ListAltRoundedIcon />,
+          },
+          {
+            key: "billing-invoices",
+            label: "Facturas emitidas",
+            icon: <DescriptionRoundedIcon />,
           },
         ],
       },

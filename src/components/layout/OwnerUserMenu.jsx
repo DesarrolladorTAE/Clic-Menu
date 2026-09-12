@@ -17,6 +17,7 @@ export default function OwnerUserMenu({
   ownerName,
   onEditProfile,
   onOpenTaxProfile,
+  onGoBilling,
   onLogout,
 }) {
 
@@ -140,43 +141,17 @@ export default function OwnerUserMenu({
       </MenuItem>
 
       <MenuItem
-        disabled
-        sx={{
-          ...menuItemSx,
-          "&.Mui-disabled": {
-            opacity: 1,
-            bgcolor: "#fafafa",
-            cursor: "default",
-          },
+        onClick={() => {
+          onClose?.();
+          onGoBilling?.();
         }}
+        sx={menuItemSx}
       >
-        <ReceiptLongRoundedIcon sx={{ ...menuIconSx, color: "text.disabled" }} />
+        <ReceiptLongRoundedIcon sx={menuIconSx} />
 
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-            <Typography sx={{ ...menuTextSx, color: "text.disabled" }}>
-              Facturación
-            </Typography>
-
-            <Typography
-              sx={{
-                px: 1,
-                py: 0.3,
-                borderRadius: 999,
-                bgcolor: "rgba(255,152,0,0.10)",
-                color: "primary.main",
-                fontSize: 10,
-                lineHeight: 1.2,
-                fontWeight: 900,
-              }}
-            >
-              Próximamente
-            </Typography>
-          </Stack>
-
-          <Typography sx={{ ...menuSecondaryTextSx, color: "text.disabled" }}>
-            Compras y facturas de Clic Menu
-          </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={menuTextSx}>Facturación</Typography>
+          <Typography sx={menuSecondaryTextSx}>Compras y facturas de Clic Menu</Typography>
         </Box>
       </MenuItem>
 
