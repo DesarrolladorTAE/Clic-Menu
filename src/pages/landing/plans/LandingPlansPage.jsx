@@ -42,13 +42,13 @@ const billingOptions = [
     key: "semester",
     label: "Semestral",
     helper: "Pagas 5 y recibes 6",
-    visible: false,
+    visible: true,
   },
   {
     key: "annual",
     label: "Anual",
     helper: "Pagas 10 y recibes 12",
-    visible: false,
+    visible: true,
   },
 ];
 
