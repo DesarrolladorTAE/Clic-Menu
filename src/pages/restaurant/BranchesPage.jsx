@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, IconButton, Stack, Tooltip, Typography,
+  Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, IconButton, Stack, Tooltip, Typography,
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
@@ -20,9 +20,19 @@ import {
   getRestaurant,
   setRestaurantMainBranch,
 } from "../../services/restaurant/restaurant.service";
+
+import {
+  deleteDemoContent,
+  getDemoContentStatus,
+} from "../../services/restaurant/demoContent.service";
+
 import { handleRestaurantApiError } from "../../utils/subscriptionGuards";
 
 import BranchUpsertModal from "../../components/restaurant/BranchUpsertModal";
+import DemoContentCard from "../../components/restaurant/DemoContentCard";
+
+import AppAlert from "../../components/common/AppAlert";
+import PageContainer from "../../components/common/PageContainer";
 
 function getBranchStatusConfig(status) {
   const value = String(status || "").toLowerCase();
@@ -78,26 +88,54 @@ export default function BranchesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   const [deletingBranchId, setDeletingBranchId] = useState(null);
+  const [eliminandoContenidoDemo, setEliminandoContenidoDemo] = useState(false);
 
   const [items, setItems] = useState([]);
   const [mainBranchId, setMainBranchId] = useState(null);
+  const [contenidoDemo, setContenidoDemo] = useState({
+    has_demo_content: false,
+    branch: null,
+  });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
+  const [alerta, setAlerta] = useState({
+    open: false,
+    severity: "success",
+    title: "",
+    message: "",
+  });
+
   const title = useMemo(() => "Sucursales del restaurante", []);
 
-  const load = async () => {
-    setErr("");
-    setLoading(true);
+  const mostrarAlerta = (severity, title, message) => {
+    setAlerta({
+      open: true,
+      severity,
+      title,
+      message,
+    });
+  };
+
+  const cerrarAlerta = () => {
+    setAlerta((prev) => ({
+      ...prev,
+      open: false,
+    }));
+  };
+
+  const load = async (mostrarCarga = true) => {
+    if (mostrarCarga) {
+      setLoading(true);
+    }
 
     try {
-      const [branchesRes, restaurantRes] = await Promise.all([
+      const [branchesRes, restaurantRes, demoRes] = await Promise.all([
         getBranchesByRestaurant(restaurantId),
         getRestaurant(restaurantId),
+        getDemoContentStatus(restaurantId),
       ]);
 
       const rows = Array.isArray(branchesRes) ? branchesRes : [];
@@ -105,25 +143,34 @@ export default function BranchesPage() {
 
       setItems(rows);
       setMainBranchId(restaurant?.main_branch_id ?? null);
+      setContenidoDemo(
+        demoRes?.has_demo_content
+          ? demoRes
+          : {
+              has_demo_content: false,
+              branch: null,
+            }
+      );
     } catch (e) {
       const redirected = handleRestaurantApiError(e, nav, restaurantId);
+
       if (!redirected) {
-        setErr(e?.response?.data?.message || "No se pudieron cargar las sucursales.");
+        mostrarAlerta(
+          "error",
+          "Error",
+          e?.response?.data?.message || "No se pudieron cargar las sucursales."
+        );
       }
     } finally {
-      setLoading(false);
+      if (mostrarCarga) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    load();
+    load(true);
   }, [restaurantId]);
-
-  useEffect(() => {
-    if (!successMsg) return;
-    const t = setTimeout(() => setSuccessMsg(""), 3000);
-    return () => clearTimeout(t);
-  }, [successMsg]);
 
   const onCreate = () => {
     setEditing(null);
@@ -147,8 +194,7 @@ export default function BranchesPage() {
     if (!branchId) return;
     if (saving || deletingBranchId !== null) return;
 
-    setErr("");
-    setSuccessMsg("");
+    cerrarAlerta();
     setSaving(true);
     setDeletingBranchId(branchId);
 
@@ -156,7 +202,9 @@ export default function BranchesPage() {
       const dryRunResult = await dryRunDeleteBranch(restaurantId, branchId);
 
       if (dryRunResult?.ok === false) {
-        setErr(
+        mostrarAlerta(
+          "error",
+          "No se puede eliminar",
           dryRunResult?.message ||
             "Esta sucursal no puede eliminarse por la información relacionada que tiene registrada."
         );
@@ -180,18 +228,21 @@ export default function BranchesPage() {
         setMainBranchId(null);
       }
 
-      setSuccessMsg(
+      mostrarAlerta(
+        "success",
+        "Listo",
         result?.message || "La sucursal se eliminó correctamente."
       );
+
+      await load(false);
     } catch (e) {
       const redirected = handleRestaurantApiError(e, nav, restaurantId);
 
       if (!redirected) {
-        const responseData = e?.response?.data;
-
-        setErr(
-          responseData?.message ||
-            "No se pudo eliminar la sucursal."
+        mostrarAlerta(
+          "error",
+          "Error",
+          e?.response?.data?.message || "No se pudo eliminar la sucursal."
         );
       }
     } finally {
@@ -200,27 +251,77 @@ export default function BranchesPage() {
     }
   };
 
+  const onDeleteDemoContent = async (branch) => {
+    if (!branch?.id || eliminandoContenidoDemo) {
+      return false;
+    }
+
+    cerrarAlerta();
+    setEliminandoContenidoDemo(true);
+
+    try {
+      const result = await deleteDemoContent(restaurantId, branch.id);
+
+      setContenidoDemo({
+        has_demo_content: false,
+        branch: null,
+      });
+
+      mostrarAlerta(
+        "success",
+        "Listo",
+        result?.message || "El contenido de demostración fue eliminado correctamente."
+      );
+
+      return true;
+    } catch (e) {
+      const redirected = handleRestaurantApiError(e, nav, restaurantId);
+
+      if (!redirected) {
+        mostrarAlerta(
+          "error",
+          "Error",
+          e?.response?.data?.message || "No se pudo eliminar el contenido de demostración."
+        );
+      }
+
+      return false;
+    } finally {
+      setEliminandoContenidoDemo(false);
+    }
+  };
+
   const onSetMain = async (branch) => {
-    if (!branch?.id) return;
+    if (!branch?.id) {
+      return;
+    }
 
-    setErr("");
-    setSuccessMsg("");
+    const previousMainBranchId = mainBranchId;
 
+    cerrarAlerta();
     setMainBranchId(branch.id);
     setSaving(true);
 
     try {
       await setRestaurantMainBranch(restaurantId, branch.id);
-      setSuccessMsg("La sucursal principal se actualizó correctamente.");
-      await load();
+
+      mostrarAlerta(
+        "success",
+        "Listo",
+        "La sucursal principal se actualizó correctamente."
+      );
     } catch (e) {
+      setMainBranchId(previousMainBranchId);
+
       const redirected = handleRestaurantApiError(e, nav, restaurantId);
+
       if (!redirected) {
-        setErr(
+        mostrarAlerta(
+          "error",
+          "Error",
           e?.response?.data?.message || "No se pudo actualizar la sucursal principal."
         );
       }
-      await load();
     } finally {
       setSaving(false);
     }
@@ -228,33 +329,34 @@ export default function BranchesPage() {
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          minHeight: "60vh",
-          display: "grid",
-          placeItems: "center",
-          px: { xs: 2, sm: 3, md: 4 },
-        }}
-      >
-        <Stack spacing={2} alignItems="center">
-          <CircularProgress color="primary" />
-          <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
-            Cargando sucursales...
-          </Typography>
-        </Stack>
-      </Box>
+      <PageContainer>
+        <Box
+          sx={{
+            minHeight: "60vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress color="primary" />
+            <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+              Cargando sucursales...
+            </Typography>
+          </Stack>
+        </Box>
+      </PageContainer>
     );
   }
 
   return (
-    <Box
-      sx={{
-        px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 8, md: 4 },
-      }}
-    >
-      <Box sx={{ maxWidth: 1180, mx: "auto" }}>
-        <Stack spacing={3}>
+    <>
+      <PageContainer>
+          <Stack
+            spacing={3}
+            sx={{
+              minHeight: { xs: "auto", md: "calc(100dvh - 48px)" },
+            }}
+          >
           <Stack
             direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
@@ -299,36 +401,6 @@ export default function BranchesPage() {
               Nueva sucursal
             </Button>
           </Stack>
-
-          {err && (
-            <Alert
-              severity="error"
-              sx={{
-                borderRadius: 1,
-                alignItems: "flex-start",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Error</Typography>
-                <Typography variant="body2">{err}</Typography>
-              </Box>
-            </Alert>
-          )}
-
-          {successMsg && (
-            <Alert
-              severity="success"
-              sx={{
-                borderRadius: 1,
-                alignItems: "flex-start",
-              }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Listo</Typography>
-                <Typography variant="body2">{successMsg}</Typography>
-              </Box>
-            </Alert>
-          )}
 
           {items.length === 0 ? (
             <Card
@@ -604,8 +676,19 @@ export default function BranchesPage() {
               })}
             </Box>
           )}
+
+          {contenidoDemo?.has_demo_content && contenidoDemo?.branch ? (
+            <Box sx={{ mt: "auto !important" }}>
+              <DemoContentCard
+                branch={contenidoDemo.branch}
+                eliminando={eliminandoContenidoDemo}
+                onConfirmDelete={onDeleteDemoContent}
+              />
+            </Box>
+          ) : null}
+
         </Stack>
-      </Box>
+      </PageContainer>
 
       <BranchUpsertModal
         open={modalOpen}
@@ -613,16 +696,28 @@ export default function BranchesPage() {
         restaurantId={restaurantId}
         editing={editing}
         onSaved={async () => {
-          setSuccessMsg(
+          mostrarAlerta(
+            "success",
+            "Listo",
             editing
               ? "La sucursal se actualizó correctamente."
               : "La sucursal se creó correctamente."
           );
-          await load();
+
+          await load(false);
         }}
         nav={nav}
       />
-    </Box>
+
+      <AppAlert
+        open={alerta.open}
+        onClose={cerrarAlerta}
+        severity={alerta.severity}
+        title={alerta.title}
+        message={alerta.message}
+        autoHideDuration={3000}
+      />
+    </>
   );
 }
 
