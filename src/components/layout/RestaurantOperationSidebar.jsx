@@ -20,6 +20,7 @@ import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import TableRestaurantIcon from "@mui/icons-material/TableRestaurant";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import PercentIcon from "@mui/icons-material/Percent";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -151,6 +152,11 @@ export default function RestaurantOperationSidebar({
             label: "Pedidos en línea",
             icon: <ShoppingBagRoundedIcon />,
             feature: "online_orders",
+          },
+          {
+            key: "prepared-items",
+            label: "Preparación rápida",
+            icon: <BoltRoundedIcon />,
           },
           {
             key: "billing-settings",
@@ -601,7 +607,7 @@ export default function RestaurantOperationSidebar({
               position: "fixed",
               top: 14,
               left: 14,
-              zIndex: 1400,
+              zIndex: theme.zIndex.drawer + 1,
               bgcolor: "#111",
               color: "#fff",
               boxShadow: 3,

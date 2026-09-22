@@ -127,6 +127,7 @@ import PublicMenuSettingsPage from "../pages/public-menu/PublicMenuSettingsPage"
 import DiscountsPage from "../pages/operation/discounts/DiscountsPage";
 import BillingSettingsPage from "../pages/operation/billing-settings/BillingSettingsPage";
 import OnlineOrdersPage from "../pages/operation/online-orders/OnlineOrdersPage";
+import PreparedItemSettingsPage from "../pages/operation/prepared-items/PreparedItemSettingsPage";
 
 //Piso
 import BranchFloorPlanPage from "../pages/floor/BranchFloorPlanPage";
@@ -288,6 +289,7 @@ export default function AppRoutes() {
 
           <Route path="cash-registers" element={<CashRegistersPage />} />
           <Route path="online-orders" element={<OnlineOrdersPage />} />
+          <Route path="prepared-items" element={<PreparedItemSettingsPage />} />
           <Route path="billing-settings" element={<BillingSettingsPage />} />
           <Route path="discounts" element={<DiscountsPage />} />
           <Route path="ticket-settings" element={<TicketSettingsPage />} />

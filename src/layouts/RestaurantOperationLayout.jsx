@@ -66,6 +66,7 @@ export default function RestaurantOperationLayout() {
 
     if (isBranchSalesChannelsSection) return "branch-sales-channels";
     if (pathname.includes("/online-orders")) return "online-orders";
+    if (pathname.includes("/prepared-items")) return "prepared-items";
     if (pathname.includes("/reports/sales")) return "sales-report";
     if (pathname.includes("/reports/profit")) return "profit-report";
     if (pathname.includes("/purchases")) return "purchases";
@@ -253,6 +254,10 @@ export default function RestaurantOperationLayout() {
 
       case "online-orders":
         nav(`${base}/online-orders`, { state: { restaurantName } });
+        break;
+
+      case "prepared-items":
+        nav(`${base}/prepared-items`, { state: { restaurantName } });
         break;
 
       case "billing-settings":
