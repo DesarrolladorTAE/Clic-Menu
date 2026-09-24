@@ -1,5 +1,5 @@
 // src/pages/public/public-menu-entry/PublicMenuModals.jsx
-// Modales del flujo de envío, productos compuestos, extras y variantes.
+// Modales del flujo de envío, cancelaciones, productos compuestos, extras y variantes.
 
 import React from "react";
 
@@ -8,6 +8,7 @@ import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasMod
 import ProductVariantsModal from "../../../components/menu/shared/ProductVariantsModal";
 import PublicOnlineOrderCheckoutModal from "../../../components/menu/public/PublicOnlineOrderCheckoutModal";
 import PublicSendOrderModal from "../../../components/menu/public/PublicSendOrderModal";
+import PublicCancellationRequestDialog from "./PublicCancellationRequestDialog";
 
 export default function PublicMenuModals({
   cartOrder,
@@ -20,6 +21,10 @@ export default function PublicMenuModals({
   pending,
   canAppend,
   themeColor,
+
+  cancellationRequestOpen = false,
+  onCloseCancellationRequest,
+  onSubmitCancellationRequest,
 
   composite,
   compositeModalOpen,
@@ -95,6 +100,17 @@ export default function PublicMenuModals({
           onSubmit={confirmAndCreateOrder}
         />
       )}
+
+      <PublicCancellationRequestDialog
+        open={cancellationRequestOpen}
+        type={cartOrder.cancellationSummary?.type}
+        selectedItems={cartOrder.selectedCancellationItems}
+        loading={cartOrder.cancellationSubmitting}
+        error={cartOrder.cancellationError}
+        themeColor={themeColor}
+        onClose={onCloseCancellationRequest}
+        onConfirm={onSubmitCancellationRequest}
+      />
 
       <CompositeProductModal
         open={compositeModalOpen}

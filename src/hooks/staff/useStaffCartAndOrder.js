@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendWaiterOrderItems,
+  cancelOrderItems,
   createWaiterOrder,
+  fetchCancellationContext,
   getCurrentTableOrder,
   getOrderById,
 } from "../../services/staff/waiter/staffOrders.service";
@@ -26,13 +28,33 @@ import {
   reconcilePendingCartAvailability,
 } from "../menu/menuAvailability.utils";
 
+import {
+  buildPreparedItemCartLine,
+  getPreparedItemCartKey,
+  getPreparedItemId,
+  isPreparedItemAlreadySelected,
+  isPreparedItemLine,
+  serializePreparedItemLine,
+} from "../menu/preparedItem.utils";
+
+import { buildOrderCancellationSelectionPayload } from "../../components/menu/shared/cancellation/OrderCancellationSelection";
+
 const INVALID_CART_MESSAGE =
   "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
+
+function getCancellationEffectiveQuantity(item) {
+  const quantity = Number(item?.effective_quantity || 0);
+  if (!Number.isFinite(quantity)) return 0;
+
+  return Math.max(0, Math.floor(quantity));
+}
 
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
   return arr.map((it) => {
+    if (isPreparedItemLine(it)) return serializePreparedItemLine(it);
+
     const out = {
       product_id: Number(it.product_id),
       variant_id: it.variant_id ? Number(it.variant_id) : null,
@@ -273,9 +295,17 @@ export function useStaffCartAndOrder({ tableId }) {
   const [customerName, setCustomerName] = useState("");
   const [sending, setSending] = useState(false);
   const [sendToast, setSendToast] = useState("");
+  const [preparedCartMessage, setPreparedCartMessage] = useState("");
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [oldItems, setOldItems] = useState([]);
+
+  const [cancellationContext, setCancellationContext] = useState(null);
+  const [cancellationSelection, setCancellationSelection] = useState({});
+  const [cancellationActive, setCancellationActive] = useState(false);
+  const [cancellationLoading, setCancellationLoading] = useState(false);
+  const [cancellationSubmitting, setCancellationSubmitting] = useState(false);
+  const [cancellationError, setCancellationError] = useState("");
 
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
   const [warehouseSelectionContext, setWarehouseSelectionContext] = useState(null);
@@ -285,6 +315,47 @@ export function useStaffCartAndOrder({ tableId }) {
 
   const invalidCartItemsCount = useMemo(() => countInvalidCartItems(cart), [cart]);
   const hasInvalidCartItems = invalidCartItemsCount > 0;
+
+  const cancellationSummary = useMemo(() => {
+    return buildOrderCancellationSelectionPayload(
+      cancellationContext?.items || [],
+      cancellationSelection,
+    );
+  }, [cancellationContext, cancellationSelection]);
+
+  const selectedCancellationItems = useMemo(() => {
+    const selectedById = new Map(
+      cancellationSummary.items.map((item) => [
+        Number(item.order_item_id),
+        Number(item.quantity),
+      ]),
+    );
+
+    return (Array.isArray(cancellationContext?.items) ? cancellationContext.items : [])
+      .filter((item) => selectedById.has(Number(item?.order_item_id || 0)))
+      .map((item) => ({
+        ...item,
+        selected_quantity: selectedById.get(Number(item.order_item_id)),
+      }));
+  }, [cancellationContext, cancellationSummary.items]);
+
+  const cancellationRequiresAuthorization = useMemo(() => {
+    if (!cancellationSummary.can_continue) return false;
+
+    if (
+      cancellationSummary.is_full &&
+      Boolean(cancellationContext?.order?.full_cancellation_requires_authorization)
+    ) {
+      return true;
+    }
+
+    return selectedCancellationItems.some((item) => Boolean(item?.requires_authorization));
+  }, [
+    cancellationContext,
+    cancellationSummary.can_continue,
+    cancellationSummary.is_full,
+    selectedCancellationItems,
+  ]);
 
   const reconcileCartAvailability = useCallback((menuSource) => {
     if (!menuSource) return;
@@ -454,7 +525,7 @@ export function useStaffCartAndOrder({ tableId }) {
 
     setCart((prev) =>
       prev.map((x) =>
-        x.key === itemKey
+        x.key === itemKey && !isPreparedItemLine(x)
           ? {
               ...x,
               components: normalized,
@@ -471,9 +542,111 @@ export function useStaffCartAndOrder({ tableId }) {
     setCart((prev) => prev.filter((x) => x.key !== key));
   }
 
+  function addPreparedItem(preparedItem) {
+    const line = buildPreparedItemCartLine(preparedItem);
+
+    if (!line) {
+      const message = "⚠️ La unidad de Preparación rápida no es válida.";
+      setPreparedCartMessage(message);
+      return { ok: false, message };
+    }
+
+    if (isPreparedItemAlreadySelected(cart, line)) {
+      const message = "⚠️ Esta unidad de Preparación rápida ya está en la comanda.";
+      setPreparedCartMessage(message);
+
+      return {
+        ok: false,
+        code: "PREPARED_ITEM_ALREADY_SELECTED",
+        message,
+        prepared_item_id: getPreparedItemId(line),
+      };
+    }
+
+    setCart((prev) => [...prev, line]);
+    setPreparedCartMessage("");
+
+    return {
+      ok: true,
+      prepared_item_id: getPreparedItemId(line),
+      key: line.key,
+    };
+  }
+
+  function removePreparedItem(preparedItemOrId) {
+    const preparedKey = getPreparedItemCartKey(preparedItemOrId);
+    if (!preparedKey) return;
+
+    setCart((prev) => prev.filter((item) => {
+      return !isPreparedItemLine(item) || getPreparedItemCartKey(item) !== preparedKey;
+    }));
+  }
+
+  const reconcilePreparedItems = useCallback((availablePreparedItems = []) => {
+    const availableIds = new Set(
+      (Array.isArray(availablePreparedItems) ? availablePreparedItems : [])
+        .map(getPreparedItemId)
+        .filter(Boolean),
+    );
+
+    const missingLines = cart.filter((item) => {
+      if (!isPreparedItemLine(item)) return false;
+
+      const preparedItemId = getPreparedItemId(item);
+      return preparedItemId && !availableIds.has(preparedItemId);
+    });
+
+    if (missingLines.length === 0) {
+      return {
+        ok: true,
+        removed_prepared_item_ids: [],
+        message: "",
+      };
+    }
+
+    const missingIds = new Set(missingLines.map(getPreparedItemId).filter(Boolean));
+
+    setCart((prev) => prev.filter((item) => {
+      if (!isPreparedItemLine(item)) return true;
+      return !missingIds.has(getPreparedItemId(item));
+    }));
+
+    const message = missingLines.length === 1
+      ? `⚠️ ${String(missingLines[0]?.name || "El producto")} de Preparación rápida ya no está disponible y se quitó de la comanda.`
+      : `⚠️ ${missingLines.length} productos de Preparación rápida dejaron de estar disponibles y se quitaron de la comanda.`;
+
+    setPreparedCartMessage(message);
+
+    return {
+      ok: false,
+      code: "PREPARED_ITEMS_REMOVED_FROM_CART",
+      removed_prepared_item_ids: Array.from(missingIds),
+      message,
+    };
+  }, [cart]);
+
+  function clearPreparedCartMessage() {
+    setPreparedCartMessage("");
+  }
+
+  const selectedPreparedItemIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        cart
+          .map(getPreparedItemId)
+          .filter(Boolean),
+      ),
+    );
+  }, [cart]);
+
   function setCartQty(key, qty) {
     const qn = Math.max(1, Math.min(99, Number(qty || 1)));
-    setCart((prev) => prev.map((x) => (x.key === key ? { ...x, quantity: qn } : x)));
+
+    setCart((prev) => prev.map((x) => {
+      if (x.key !== key || isPreparedItemLine(x)) return x;
+
+      return { ...x, quantity: qn };
+    }));
   }
 
   function setCartNotes(key, notes) {
@@ -620,6 +793,265 @@ export function useStaffCartAndOrder({ tableId }) {
     },
     [tableId, oldItems, activeOrder],
   );
+
+  const startCancellation = useCallback(async () => {
+    const orderId = Number(activeOrder?.id || 0);
+
+    if (!orderId) {
+      const message = "No hay una comanda activa para cancelar.";
+      setCancellationError(message);
+      return { ok: false, message };
+    }
+
+    if (cancellationLoading || cancellationSubmitting) {
+      return { ok: false, message: "La cancelación ya se está procesando." };
+    }
+
+    setCancellationLoading(true);
+    setCancellationError("");
+    setCancellationActive(false);
+    setCancellationContext(null);
+    setCancellationSelection({});
+
+    try {
+      const res = await fetchCancellationContext(orderId);
+
+      if (!res?.ok) {
+        const message = res?.message || "No fue posible cargar el contexto de cancelación.";
+        setCancellationError(message);
+        return { ok: false, message };
+      }
+
+      const context = res?.data && typeof res.data === "object" ? res.data : null;
+
+      if (!context?.order?.can_cancel) {
+        const message = "La comanda ya no permite cancelaciones.";
+        setCancellationError(message);
+        return { ok: false, message, data: context };
+      }
+
+      const hasCancelableItems = (Array.isArray(context?.items) ? context.items : [])
+        .some((item) => Boolean(item?.can_cancel) && getCancellationEffectiveQuantity(item) > 0);
+
+      if (!hasCancelableItems) {
+        const message = "La comanda ya no tiene productos disponibles para cancelar.";
+        setCancellationError(message);
+        return { ok: false, message, data: context };
+      }
+
+      setCancellationContext(context);
+      setCancellationActive(true);
+
+      return {
+        ok: true,
+        data: context,
+      };
+    } catch (error) {
+      const apiError = extractApiErrorInfo(error);
+      const message = apiError?.message || "No fue posible cargar el contexto de cancelación.";
+
+      setCancellationError(message);
+
+      return {
+        ok: false,
+        code: apiError?.code || null,
+        message,
+        data: apiError?.data || null,
+      };
+    } finally {
+      setCancellationLoading(false);
+    }
+  }, [
+    activeOrder?.id,
+    cancellationLoading,
+    cancellationSubmitting,
+  ]);
+
+  function exitCancellation() {
+    if (cancellationSubmitting) return;
+
+    setCancellationActive(false);
+    setCancellationContext(null);
+    setCancellationSelection({});
+    setCancellationError("");
+  }
+
+  function toggleCancellationItem(item, selected) {
+    const orderItemId = Number(item?.order_item_id || 0);
+    const maxQuantity = getCancellationEffectiveQuantity(item);
+
+    if (!orderItemId || maxQuantity <= 0) return;
+
+    setCancellationSelection((previous) => {
+      const next = { ...previous };
+
+      if (!selected) {
+        delete next[orderItemId];
+        return next;
+      }
+
+      const currentQuantity = Number(previous?.[orderItemId] || 1);
+      next[orderItemId] = Math.max(1, Math.min(maxQuantity, Math.floor(currentQuantity)));
+
+      return next;
+    });
+  }
+
+  function setCancellationQuantity(item, quantity) {
+    const orderItemId = Number(item?.order_item_id || 0);
+    const maxQuantity = getCancellationEffectiveQuantity(item);
+    const requestedQuantity = Number(quantity);
+
+    if (!orderItemId || maxQuantity <= 0 || !Number.isFinite(requestedQuantity)) return;
+
+    setCancellationSelection((previous) => {
+      if (!previous?.[orderItemId]) return previous;
+
+      return {
+        ...previous,
+        [orderItemId]: Math.max(1, Math.min(maxQuantity, Math.floor(requestedQuantity))),
+      };
+    });
+  }
+
+  const submitCancellation = useCallback(async (resolution = {}) => {
+    const orderId = Number(activeOrder?.id || cancellationContext?.order?.id || 0);
+
+    if (!orderId || !cancellationActive) {
+      const message = "No hay una cancelación activa.";
+      setCancellationError(message);
+      return { ok: false, message };
+    }
+
+    if (cancellationSubmitting) {
+      return { ok: false, message: "La cancelación ya se está procesando." };
+    }
+
+    if (!cancellationSummary.can_continue || !cancellationSummary.type) {
+      const message = "Selecciona al menos un producto para cancelar.";
+      setCancellationError(message);
+      return { ok: false, message };
+    }
+
+    const allowedTypes = Array.isArray(cancellationContext?.order?.allowed_types)
+      ? cancellationContext.order.allowed_types.map((type) => String(type))
+      : [];
+
+    if (allowedTypes.length > 0 && !allowedTypes.includes(cancellationSummary.type)) {
+      const message = "El tipo de cancelación seleccionado ya no está permitido.";
+      setCancellationError(message);
+      return { ok: false, message };
+    }
+
+    const reasonCode = String(resolution?.reason_code || "").trim();
+
+    if (!reasonCode) {
+      const message = "Debes indicar el motivo de la cancelación.";
+      setCancellationError(message);
+      return { ok: false, message };
+    }
+
+    const decisions =
+      resolution?.item_decisions &&
+      typeof resolution.item_decisions === "object" &&
+      !Array.isArray(resolution.item_decisions)
+        ? resolution.item_decisions
+        : {};
+
+    const items = cancellationSummary.items.map((selectedItem) => {
+      const orderItemId = Number(selectedItem.order_item_id);
+      const decision = decisions[orderItemId] || decisions[String(orderItemId)] || {};
+      const item = { ...selectedItem };
+
+      const reuseIntent = String(decision?.reuse_intent || "").trim();
+      const deliveryState = String(decision?.delivery_state || "").trim();
+
+      if (reuseIntent) item.reuse_intent = reuseIntent;
+      if (deliveryState) item.delivery_state = deliveryState;
+
+      return item;
+    });
+
+    const payload = {
+      type: cancellationSummary.type,
+      items,
+      reason_code: reasonCode,
+      reason_note: String(resolution?.reason_note || "").trim() || null,
+    };
+
+    const authorizerUserId = Number(resolution?.authorizer_user_id || 0);
+    const pin = String(resolution?.pin || "").trim();
+
+    if (Number.isInteger(authorizerUserId) && authorizerUserId > 0) {
+      payload.authorizer_user_id = authorizerUserId;
+    }
+
+    if (pin) payload.pin = pin;
+
+    setCancellationSubmitting(true);
+    setCancellationError("");
+
+    try {
+      const res = await cancelOrderItems(orderId, payload);
+
+      if (!res?.ok) {
+        const message = res?.message || "No fue posible aplicar la cancelación.";
+        setCancellationError(message);
+
+        return {
+          ok: false,
+          code: res?.code || null,
+          message,
+          data: res?.data || null,
+        };
+      }
+
+      await loadExisting({
+        orderId,
+        force: true,
+      });
+
+      const appliedType = cancellationSummary.type;
+
+      setCancellationActive(false);
+      setCancellationContext(null);
+      setCancellationSelection({});
+      setCancellationError("");
+      setSendToast(
+        appliedType === "full"
+          ? "✅ Comanda cancelada correctamente."
+          : "✅ Cancelación aplicada correctamente.",
+      );
+
+      return {
+        ok: true,
+        type: appliedType,
+        data: res?.data || null,
+        response: res,
+      };
+    } catch (error) {
+      const apiError = extractApiErrorInfo(error);
+      const message = apiError?.message || "No fue posible aplicar la cancelación.";
+
+      setCancellationError(message);
+
+      return {
+        ok: false,
+        code: apiError?.code || null,
+        message,
+        data: apiError?.data || null,
+      };
+    } finally {
+      setCancellationSubmitting(false);
+    }
+  }, [
+    activeOrder?.id,
+    cancellationActive,
+    cancellationContext,
+    cancellationSubmitting,
+    cancellationSummary,
+    loadExisting,
+  ]);
 
   const createFirstOrder = useCallback(
     async (name, preferredWarehouseId = null) => {
@@ -965,8 +1397,18 @@ export function useStaffCartAndOrder({ tableId }) {
     setSendOpen(false);
     setCustomerName("");
     setSendToast("");
+    setPreparedCartMessage("");
+
     setActiveOrder(null);
     setOldItems([]);
+
+    setCancellationContext(null);
+    setCancellationSelection({});
+    setCancellationActive(false);
+    setCancellationLoading(false);
+    setCancellationSubmitting(false);
+    setCancellationError("");
+
     setWarehouseDialogOpen(false);
     setWarehouseSelectionContext(null);
     lastLoadedRef.current = { tableId: null, orderId: null };
@@ -978,8 +1420,17 @@ export function useStaffCartAndOrder({ tableId }) {
     reconcileCartAvailability,
     hasInvalidCartItems,
     invalidCartItemsCount,
+
     addToCartFromProduct,
     addToCartFromVariant,
+
+    addPreparedItem,
+    removePreparedItem,
+    reconcilePreparedItems,
+    selectedPreparedItemIds,
+    preparedCartMessage,
+    clearPreparedCartMessage,
+
     setCartComponents,
     removeCartItem,
     setCartQty,
@@ -1012,6 +1463,22 @@ export function useStaffCartAndOrder({ tableId }) {
     activeOrder,
     oldItems,
     canAppend,
+
+    cancellationContext,
+    cancellationSelection,
+    cancellationSummary,
+    selectedCancellationItems,
+    cancellationRequiresAuthorization,
+    cancellationActive,
+    cancellationLoading,
+    cancellationSubmitting,
+    cancellationError,
+
+    startCancellation,
+    exitCancellation,
+    toggleCancellationItem,
+    setCancellationQuantity,
+    submitCancellation,
 
     warehouseDialogOpen,
     warehouseSelectionContext,

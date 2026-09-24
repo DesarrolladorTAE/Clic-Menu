@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   useLocation,
   useNavigate,
@@ -8,7 +8,10 @@ import {
 
 import echo from "../../../realtime/echo";
 
-import { fetchStaffWaiterMenu } from "../../../services/staff/waiter/staffOrders.service";
+import {
+  fetchPreparedItems,
+  fetchStaffWaiterMenu,
+} from "../../../services/staff/waiter/staffOrders.service";
 
 import { Badge, Modal, PillButton, SkeletonCard } from "../../public/publicMenu.ui";
 import usePagination from "../../../hooks/usePagination";
@@ -17,6 +20,7 @@ import PaginationFooter from "../../../components/common/PaginationFooter";
 import { useMenuProducts } from "../../../hooks/public/useMenuProducts";
 import useMenuSectionSelection from "../../../hooks/menu/useMenuSectionSelection";
 import useMenuAvailabilityRealtime from "../../../hooks/menu/useMenuAvailabilityRealtime";
+import { usePreparedItemsCollection } from "../../../hooks/menu/usePreparedItemsCollection";
 import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
 import { useStaffCartAndOrder } from "../../../hooks/staff/useStaffCartAndOrder";
 import {
@@ -26,8 +30,13 @@ import {
 
 import MenuHeaderCard from "../../../components/menu/staff/MenuHeaderCard";
 import WaiterWarehouseCreateDialog from "../../../components/menu/staff/WaiterWarehouseCreateDialog";
+import WaiterCancellationDialog from "../../../components/menu/staff/WaiterCancellationDialog";
 
 import MenuProductCard from "../../../components/menu/shared/MenuProductCard";
+import PreparedItemsSection from "../../../components/menu/shared/prepared-items/PreparedItemsSection";
+import OrderCancellationSelection, {
+  getOrderCancellationSelectableItems,
+} from "../../../components/menu/shared/cancellation/OrderCancellationSelection";
 import ProductVariantsModal from "../../../components/menu/shared/ProductVariantsModal";
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasModal";
@@ -118,6 +127,7 @@ export default function StaffMenuEntryPage() {
   const [q, setQ] = useState("");
 
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  const [waiterCancellationDialogOpen, setWaiterCancellationDialogOpen] = useState(false);
 
   const [variantsModalOpen, setVariantsModalOpen] = useState(false);
   const [selectedVariantsProduct, setSelectedVariantsProduct] = useState(null);
@@ -355,9 +365,79 @@ export default function StaffMenuEntryPage() {
   const currentMenuId = Number(
     data?.menu?.id ||
       data?.data?.menu?.id ||
+      data?.menu_context?.menu_id ||
       data?.menu_id ||
       0,
   );
+
+  const quickPreparation =
+    data?.quick_preparation ||
+    data?.data?.quick_preparation ||
+    null;
+
+  const initialPreparedItems = Array.isArray(quickPreparation?.items)
+    ? quickPreparation.items
+    : null;
+
+  const preparedContextOrderId = Number(menuContextOrderId || 0) || null;
+  const preparedContextTableId = preparedContextOrderId ? null : Number(tableId || 0) || null;
+
+  const preparedItemsCollection = usePreparedItemsCollection({
+    initialItems: initialPreparedItems,
+    enabled: currentMenuId > 0 && Boolean(preparedContextOrderId || preparedContextTableId),
+    contextKey: preparedContextOrderId
+      ? `waiter:order:${preparedContextOrderId}:menu:${currentMenuId}`
+      : `waiter:table:${preparedContextTableId}:menu:${currentMenuId}`,
+    loader: async () => {
+      const response = await fetchPreparedItems(
+        preparedContextOrderId
+          ? { orderId: preparedContextOrderId }
+          : { tableId: preparedContextTableId },
+      );
+
+      const responseData =
+        response?.data && typeof response.data === "object"
+          ? response.data
+          : null;
+
+      const returnedMenuId = Number(responseData?.menu_id || 0);
+
+      if (!returnedMenuId) {
+        throw new Error("Preparación rápida no devolvió el menu_id resuelto.");
+      }
+
+      if (returnedMenuId !== currentMenuId) {
+        throw new Error(
+          `El menú de Preparación rápida (${returnedMenuId}) no coincide con el menú activo (${currentMenuId}).`,
+        );
+      }
+
+      return response;
+    },
+  });
+
+  const refreshPreparedItems = useCallback(async () => {
+    const nextItems = await preparedItemsCollection.refetch();
+    cartOrder.reconcilePreparedItems?.(nextItems);
+
+    return nextItems;
+  }, [
+    preparedItemsCollection.refetch,
+    cartOrder.reconcilePreparedItems,
+  ]);
+
+  useEffect(() => {
+    if (!currentMenuId || preparedItemsCollection.loading) return;
+
+    cartOrder.reconcilePreparedItems?.(
+      preparedItemsCollection.items,
+    );
+  }, [
+    currentMenuId,
+    preparedItemsCollection.items,
+    preparedItemsCollection.loading,
+    cartOrder.reconcilePreparedItems,
+  ]);
 
   useEffect(() => {
     if (!branchId || !tableId) return;
@@ -421,6 +501,8 @@ export default function StaffMenuEntryPage() {
             })
             .catch(() => {});
         }
+
+        await refreshPreparedItems().catch(() => {});
       } finally {
         realtimeBusyRef.current = false;
       }
@@ -432,7 +514,13 @@ export default function StaffMenuEntryPage() {
     return () => {
       echo.leave(channelName);
     };
-  }, [branchId, tableId, cartOrder, effectiveOrderId]);
+  }, [
+    branchId,
+    tableId,
+    cartOrder,
+    effectiveOrderId,
+    refreshPreparedItems,
+  ]);
 
   useMenuAvailabilityRealtime({
     echo,
@@ -473,11 +561,21 @@ export default function StaffMenuEntryPage() {
       if (!refreshedPayload) return;
 
       cartOrder.reconcileCartAvailability?.(refreshedPayload);
+      await refreshPreparedItems().catch(() => {});
     },
   });
 
   const canSelect = true;
   const canAppend = cartOrder.canAppend;
+
+  const cancellationSelectableItems = getOrderCancellationSelectableItems(
+    cartOrder.oldItems,
+  );
+
+  const canStartCancellation =
+    canAppend &&
+    cancellationSelectableItems.length > 0;
+
   const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
   const invalidItemsCount = Math.max(
     0,
@@ -492,6 +590,44 @@ export default function StaffMenuEntryPage() {
   const hasCartContent =
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
     (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
+
+  const handleStartCancellation = async () => {
+    if (!canStartCancellation) return;
+
+    setWaiterCancellationDialogOpen(false);
+
+    const result = await cartOrder.startCancellation();
+    if (!result?.ok) return;
+
+    setCartDrawerOpen(true);
+  };
+
+  const handleExitCancellation = () => {
+    if (cartOrder.cancellationSubmitting) return;
+
+    setWaiterCancellationDialogOpen(false);
+    cartOrder.exitCancellation();
+  };
+
+  const handleCancellationContinue = () => {
+    if (!cartOrder.cancellationSummary?.can_continue) return;
+    setWaiterCancellationDialogOpen(true);
+  };
+
+  const handleCancellationSubmit = async (resolution) => {
+    const result = await cartOrder.submitCancellation(resolution);
+    if (!result?.ok) return result;
+
+    setWaiterCancellationDialogOpen(false);
+
+    /*
+    * Una cancelación puede regresar una unidad física al pool
+    * de Preparación rápida, por lo que se vuelve a consultar.
+    */
+    await refreshPreparedItems().catch(() => {});
+
+    return result;
+  };
 
   const resetExtrasFlow = () => {
     setExtrasModalOpen(false);
@@ -986,6 +1122,25 @@ export default function StaffMenuEntryPage() {
         }}
       />
 
+      <WaiterCancellationDialog
+        open={
+          waiterCancellationDialogOpen &&
+          cartOrder.cancellationActive
+        }
+        type={cartOrder.cancellationSummary?.type}
+        selectedItems={cartOrder.selectedCancellationItems}
+        context={cartOrder.cancellationContext}
+        requiresAuthorization={cartOrder.cancellationRequiresAuthorization}
+        loading={cartOrder.cancellationSubmitting}
+        error={cartOrder.cancellationError}
+        onClose={() => {
+          if (!cartOrder.cancellationSubmitting) {
+            setWaiterCancellationDialogOpen(false);
+          }
+        }}
+        onConfirm={handleCancellationSubmit}
+      />
+
       <CompositeProductModal
         open={compositeModalOpen}
         product={selectedCompositeProduct}
@@ -1034,67 +1189,125 @@ export default function StaffMenuEntryPage() {
 
       <MenuCartDrawer
         open={cartDrawerOpen}
-        onClose={() => setCartDrawerOpen(false)}
-        title="Comanda"
+        onClose={() => {
+          if (!cartOrder.cancellationSubmitting) setCartDrawerOpen(false);
+        }}
+        title={cartOrder.cancellationActive ? "Cancelar productos" : "Comanda"}
         subtitle={
-          canAppend
-            ? "Orden abierta: puedes agregar productos."
-            : "Revisa los productos seleccionados antes de crear la comanda."
+          cartOrder.cancellationActive
+            ? "Selecciona las partidas persistidas que deseas cancelar."
+            : canAppend
+              ? "Orden abierta: puedes agregar productos."
+              : "Revisa los productos seleccionados antes de crear la comanda."
         }
         itemCount={cartDrawerItemCount}
         total={cartOrder.displayTotal}
         totalLabel={cartOrder.totalLabel}
         isEstimated={cartOrder.isEstimated}
         pricingSummary={cartOrder.pricingSummary}
-        disabledClose={cartOrder.sending}
+        disabledClose={cartOrder.sending || cartOrder.cancellationSubmitting}
       >
-        <MenuCartPanel
-          title="Comanda"
-          subtitle={
-            canAppend
-              ? "Orden abierta: puedes agregar productos."
-              : "Selecciona productos y luego crea la comanda."
-          }
-          customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
-          total={cartOrder.displayTotal}
-          pricingSummary={cartOrder.pricingSummary}
-          oldItems={cartOrder.oldItems}
-          newItems={cartOrder.cart}
-          sendToast={cartOrder.sendToast}
-          sending={cartOrder.sending}
-          canAppend={canAppend}
-          canSubmit={cartOrder.cart.length > 0 && !hasInvalidItems}
-          hasInvalidItems={hasInvalidItems}
-          invalidItemsCount={invalidItemsCount}
-          submitBlockReason={submitBlockReason}
-          onEmpty={() => cartOrder.setCart([])}
-          onSubmit={() => {
-            if (hasInvalidItems) {
-              cartOrder.setSendToast(submitBlockReason);
-              return;
-            }
+        {cartOrder.cancellationActive ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {cartOrder.cancellationError ? (
+              <div
+                role="alert"
+                style={{
+                  border: "1px solid rgba(211,47,47,0.24)",
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  background: "rgba(211,47,47,0.07)",
+                  color: "#B42318",
+                  fontSize: 12,
+                  fontWeight: 850,
+                  lineHeight: 1.45,
+                }}
+              >
+                {cartOrder.cancellationError}
+              </div>
+            ) : null}
 
-            if (canAppend) {
-              cartOrder.submitOrderOrAppend();
-              return;
+            <OrderCancellationSelection
+              items={cartOrder.cancellationContext?.items || []}
+              selection={cartOrder.cancellationSelection}
+              disabled={
+                cartOrder.cancellationLoading ||
+                cartOrder.cancellationSubmitting
+              }
+              onExit={handleExitCancellation}
+              onToggleItem={cartOrder.toggleCancellationItem}
+              onQuantityChange={cartOrder.setCancellationQuantity}
+              onContinue={handleCancellationContinue}
+            />
+          </div>
+        ) : (
+          <MenuCartPanel
+            title="Comanda"
+            subtitle={
+              canAppend
+                ? "Orden abierta: puedes agregar productos."
+                : "Selecciona productos y luego crea la comanda."
             }
+            customerName={canAppend ? cartOrder.activeOrder?.customer_name || "" : ""}
+            total={cartOrder.displayTotal}
+            pricingSummary={cartOrder.pricingSummary}
+            oldItems={cartOrder.oldItems}
+            newItems={cartOrder.cart}
+            sendToast={cartOrder.cancellationError || cartOrder.sendToast}
+            sending={cartOrder.sending}
+            canAppend={canAppend}
+            canSubmit={cartOrder.cart.length > 0 && !hasInvalidItems}
+            hasInvalidItems={hasInvalidItems}
+            invalidItemsCount={invalidItemsCount}
+            submitBlockReason={submitBlockReason}
+            extraTopActions={
+              canStartCancellation ? (
+                <div className="cm-cancellation-action">
+                  <PillButton
+                    tone="terracotta"
+                    disabled={
+                      cartOrder.cancellationLoading ||
+                      cartOrder.cancellationSubmitting
+                    }
+                    onClick={handleStartCancellation}
+                    title="Cancelar productos ya enviados"
+                  >
+                    {cartOrder.cancellationLoading
+                      ? "⏳ Cargando..."
+                      : "Cancelar productos"}
+                  </PillButton>
+                </div>
+              ) : null
+            }
+            onEmpty={() => cartOrder.setCart([])}
+            onSubmit={() => {
+              if (hasInvalidItems) {
+                cartOrder.setSendToast(submitBlockReason);
+                return;
+              }
 
-            cartOrder.setSendOpen(true);
-          }}
-          onQtyChange={cartOrder.setCartQty}
-          onNotesChange={cartOrder.setCartNotes}
-          onRemove={cartOrder.removeCartItem}
-          statusBadges={[
-            { tone: "dark", label: "🧑‍🍳 Staff" },
-            ...(canAppend
-              ? [{ tone: "ok", label: "Orden abierta", title: "Orden abierta: puedes agregar productos" }]
-              : []),
-            ...(hasOld
-              ? [{ tone: "default", label: `Historial: ${cartOrder.oldItems.length}`, title: "Items ya enviados" }]
-              : []),
-            { tone: cartOrder.cart.length > 0 ? "ok" : "warn", label: `Nuevos: ${cartOrder.cart.length}` },
-          ]}
-        />
+              if (canAppend) {
+                cartOrder.submitOrderOrAppend();
+                return;
+              }
+
+              cartOrder.setSendOpen(true);
+            }}
+            onQtyChange={cartOrder.setCartQty}
+            onNotesChange={cartOrder.setCartNotes}
+            onRemove={cartOrder.removeCartItem}
+            statusBadges={[
+              { tone: "dark", label: "🧑‍🍳 Staff" },
+              ...(canAppend
+                ? [{ tone: "ok", label: "Orden abierta", title: "Orden abierta: puedes agregar productos" }]
+                : []),
+              ...(hasOld
+                ? [{ tone: "default", label: `Historial: ${cartOrder.oldItems.length}`, title: "Items ya enviados" }]
+                : []),
+              { tone: cartOrder.cart.length > 0 ? "ok" : "warn", label: `Nuevos: ${cartOrder.cart.length}` },
+            ]}
+          />
+        )}
       </MenuCartDrawer>
 
       <MenuHeaderCard
@@ -1282,7 +1495,7 @@ export default function StaffMenuEntryPage() {
             ) : null}
           </div>
         </>
-      ) : (
+            ) : (
         <div
           style={{
             marginTop: 14,
@@ -1308,6 +1521,37 @@ export default function StaffMenuEntryPage() {
         </div>
       )}
 
+      {cartOrder.preparedCartMessage ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 14,
+            border: "1px solid rgba(245,158,11,0.24)",
+            borderRadius: 12,
+            padding: "10px 12px",
+            background: "#fff7ed",
+            color: "#B45309",
+            fontSize: 12,
+            fontWeight: 850,
+            lineHeight: 1.45,
+          }}
+        >
+          {cartOrder.preparedCartMessage}
+        </div>
+      ) : null}
+
+      <PreparedItemsSection
+        items={preparedItemsCollection.items}
+        loading={preparedItemsCollection.loading}
+        selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
+        onSelect={(preparedItem) => {
+          const result = cartOrder.addPreparedItem(preparedItem);
+
+          if (result?.ok) {
+            setCartDrawerOpen(true);
+          }
+        }}
+      />
 
       <MenuCartFloatingButton
         itemCount={cartDrawerItemCount}

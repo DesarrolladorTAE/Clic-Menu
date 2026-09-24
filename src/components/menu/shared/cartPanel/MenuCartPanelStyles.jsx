@@ -11,6 +11,7 @@ export default function MenuCartPanelStyles() {
           width: 100%;
           max-width: 100%;
           box-sizing: border-box;
+          container-type: inline-size;
         }
 
         .cm-header {
@@ -48,11 +49,38 @@ export default function MenuCartPanelStyles() {
         }
 
         .cm-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-actions > button,
+        .cm-cancellation-action > button {
           display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
           align-items: center;
-          justify-content: flex-end;
+          justify-content: center;
+          width: 100% !important;
+          max-width: none !important;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-cancellation-action {
+          grid-column: 1 / -1;
+          display: grid;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-cancellation-action > * {
+          width: 100% !important;
+          max-width: none !important;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .cm-section {
@@ -191,16 +219,319 @@ export default function MenuCartPanelStyles() {
           background: rgba(255,152,0,0.08);
         }
 
-        .cm-combo-badge {
+        .cm-prepared-badge {
           display: inline-flex;
+          align-items: center;
           width: fit-content;
-          font-size: 10px;
-          font-weight: 950;
+          max-width: 100%;
           padding: 4px 8px;
           border-radius: 999px;
-          background: rgba(255,152,0,0.16);
-          border: 1px solid rgba(255,152,0,0.30);
-          color: #9a4a00;
+          border: 1px solid rgba(47,42,61,0.12);
+          background: rgba(47,42,61,0.05);
+          color: #5F5A6A;
+          font-size: 10px;
+          font-weight: 900;
+          line-height: 1.15;
+        }
+
+        .cm-fixed-quantity {
+          min-height: 34px;
+          display: inline-flex;
+          align-items: center;
+          padding: 0 10px;
+          border-radius: 13px;
+          border: 1px solid rgba(47,42,61,0.08);
+          background: #FBF8F8;
+          color: #3F3A52;
+          font-size: 12px;
+          font-weight: 950;
+        }
+
+        .cm-cancellation-summary {
+          display: flex;
+          align-items: center;
+          gap: 6px 9px;
+          flex-wrap: wrap;
+          margin-top: 5px;
+          color: #6E6A6A;
+          font-size: 10.5px;
+          font-weight: 750;
+          line-height: 1.35;
+        }
+
+        .cm-cancellation-summary strong {
+          color: #3F3A52;
+          font-weight: 950;
+        }
+
+        .cm-cancellation-full {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          padding: 3px 7px;
+          border-radius: 999px;
+          border: 1px solid rgba(185,28,28,0.16);
+          background: rgba(185,28,28,0.06);
+          color: #B91C1C;
+          font-weight: 950;
+        }
+
+        .cm-cancellation-section {
+          margin-top: 0;
+          gap: 0;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-cancellation-card {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 16px;
+          width: 100%;
+          min-width: 0;
+          padding: 16px;
+          border: 1px solid rgba(47,42,61,0.10);
+          border-radius: 22px;
+          background: #FFFFFF;
+          box-shadow: 0 14px 34px rgba(47,42,61,0.07);
+          box-sizing: border-box;
+        }
+
+        .cm-cancellation-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .cm-cancellation-header-copy {
+          min-width: 0;
+        }
+
+        .cm-cancellation-title {
+          margin: 0;
+          color: #3F3A52;
+          font-size: 14px;
+          font-weight: 950;
+          line-height: 1.25;
+          text-transform: uppercase;
+          letter-spacing: .035em;
+        }
+
+        .cm-cancellation-help {
+          margin-top: 5px;
+          color: #7A7484;
+          font-size: 11px;
+          font-weight: 750;
+          line-height: 1.4;
+        }
+
+        .cm-cancellation-list {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .cm-cancellation-item {
+          width: 100%;
+          min-width: 0;
+          padding: 13px;
+          border: 1px solid rgba(47,42,61,0.09);
+          border-radius: 18px;
+          background:
+            linear-gradient(
+              180deg,
+              rgba(255,255,255,1) 0%,
+              rgba(251,248,248,0.72) 100%
+            );
+          box-shadow: 0 8px 20px rgba(47,42,61,0.035);
+          box-sizing: border-box;
+          transition:
+            border-color 160ms ease,
+            box-shadow 160ms ease,
+            background 160ms ease,
+            transform 160ms ease;
+        }
+
+        .cm-cancellation-item:hover {
+          border-color: rgba(47,42,61,0.16);
+          box-shadow: 0 10px 24px rgba(47,42,61,0.055);
+        }
+
+        .cm-cancellation-item-selected {
+          border-color: var(
+            --cm-cancellation-accent,
+            #B85C46
+          );
+          background:
+            linear-gradient(
+              135deg,
+              rgba(184,92,70,0.085),
+              rgba(255,255,255,0.98)
+            );
+          box-shadow:
+            0 10px 24px rgba(184,92,70,0.09);
+        }
+
+        .cm-cancellation-item-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 14px;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .cm-cancellation-item-main {
+          display: flex;
+          align-items: flex-start;
+          gap: 11px;
+          min-width: 0;
+          padding: 2px 0;
+        }
+
+        .cm-cancellation-checkbox-wrap {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          width: 22px;
+          min-height: 22px;
+        }
+
+        .cm-cancellation-checkbox {
+          width: 19px;
+          height: 19px;
+          margin: 0;
+          flex-shrink: 0;
+        }
+
+        .cm-cancellation-item-copy {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .cm-cancellation-item-name {
+          min-width: 0;
+          color: #3F3A52;
+          font-size: 14px;
+          font-weight: 950;
+          line-height: 1.3;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
+        .cm-cancellation-item-availability {
+          color: #77717F;
+          font-size: 11px;
+          font-weight: 800;
+          line-height: 1.35;
+        }
+
+        .cm-cancellation-quantity-block {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          justify-items: end;
+          gap: 6px;
+          flex: 0 0 auto;
+        }
+
+        .cm-cancellation-quantity-label {
+          color: #77717F;
+          font-size: 9px;
+          font-weight: 900;
+          line-height: 1.2;
+          text-transform: uppercase;
+          letter-spacing: .045em;
+          white-space: nowrap;
+        }
+
+        .cm-cancellation-qty {
+          display: grid;
+          grid-template-columns: 38px 42px 38px;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 5px;
+          border: 1px solid rgba(47,42,61,0.09);
+          border-radius: 17px;
+          background: #F8F5F5;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.88);
+        }
+
+        .cm-cancellation-qty-btn {
+          width: 38px;
+          min-width: 38px;
+          height: 38px;
+          padding: 0;
+          border: 1px solid rgba(47,42,61,0.10);
+          border-radius: 13px;
+          background: #FFFFFF;
+          color: #3F3A52;
+          font-size: 18px;
+          font-weight: 950;
+          line-height: 1;
+          box-shadow: 0 5px 12px rgba(47,42,61,0.05);
+          transition:
+            transform 150ms ease,
+            border-color 150ms ease,
+            background 150ms ease,
+            opacity 150ms ease;
+        }
+
+        .cm-cancellation-qty-btn:not(:disabled):hover {
+          transform: translateY(-1px);
+          border-color: rgba(184,92,70,0.28);
+          background: rgba(184,92,70,0.06);
+        }
+
+        .cm-cancellation-qty-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.38;
+          box-shadow: none;
+        }
+
+        .cm-cancellation-qty-value {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 42px;
+          height: 38px;
+          border: 1px solid rgba(47,42,61,0.10);
+          border-radius: 13px;
+          background: #FFFFFF;
+          color: #3F3A52;
+          font-size: 13px;
+          font-weight: 950;
+          line-height: 1;
+          box-sizing: border-box;
+        }
+
+        .cm-cancellation-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+          padding-top: 2px;
+        }
+
+        .cm-cancellation-actions > button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          max-width: none;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .cm-note {
@@ -815,28 +1146,6 @@ export default function MenuCartPanelStyles() {
             min-width: 0;
           }
 
-          .cm-actions {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            align-items: stretch;
-            justify-content: stretch;
-            gap: 8px;
-            width: 100%;
-            max-width: none;
-            min-width: 0;
-            box-sizing: border-box;
-          }
-
-          .cm-actions > button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100% !important;
-            max-width: none !important;
-            min-width: 0;
-            box-sizing: border-box;
-          }
-
           .cm-table-wrap {
             display: none;
           }
@@ -862,26 +1171,6 @@ export default function MenuCartPanelStyles() {
             grid-template-columns: minmax(0, 1fr);
             width: 100%;
             min-width: 0;
-          }
-
-          .cm-actions {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            width: 100%;
-            min-width: 0;
-            max-width: none;
-            box-sizing: border-box;
-          }
-
-          .cm-actions > button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100% !important;
-            max-width: none !important;
-            min-width: 0;
-            box-sizing: border-box;
           }
 
           .cm-new-card-list {
@@ -919,6 +1208,36 @@ export default function MenuCartPanelStyles() {
 
           .cm-section > .MuiStack-root .MuiTypography-root {
             min-width: 48px;
+          }
+          
+          .cm-cancellation-card {
+            padding: 13px;
+            gap: 13px;
+            border-radius: 19px;
+          }
+
+          .cm-cancellation-item {
+            padding: 12px;
+          }
+
+          .cm-cancellation-item-layout {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 11px;
+          }
+
+          .cm-cancellation-quantity-block {
+            justify-items: start;
+            padding-left: 33px;
+          }
+
+          .cm-cancellation-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .cm-cancellation-actions > button {
+            min-width: 0;
+            padding-left: 8px;
+            padding-right: 8px;
           }
         }
       `}

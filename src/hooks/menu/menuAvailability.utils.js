@@ -5,6 +5,8 @@ import {
   translateAvailabilityStatus,
 } from "../public/publicMenu.utils";
 
+import { isPreparedItemLine } from "./preparedItem.utils";
+
 export const AVAILABILITY_STATUS_AVAILABLE = "available";
 
 const MENU_AVAILABILITY_INDEX_TYPE = "menu_availability_index";
@@ -185,7 +187,9 @@ function buildAvailabilityFields(availability) {
 ========================= */
 
 /**
- * Obtiene el product_id de una línea pendiente.
+ * Obtiene el product_id de una línea pendiente normal.
+ * Los PreparedItems no participan en identidad ni disponibilidad
+ * de inventario normal, por lo que devuelven null.
  *
  * Compatibilidad:
  * - product_id;
@@ -193,15 +197,21 @@ function buildAvailabilityFields(availability) {
  * - id.
  */
 export function getCartLineProductId(line) {
+  if (isPreparedItemLine(line)) return null;
+
   return normalizePositiveId(
     line?.product_id ?? line?.product?.id ?? line?.id,
   );
 }
 
 /**
- * Obtiene la variante seleccionada de una línea pendiente.
+ * Obtiene la variante seleccionada de una línea pendiente normal.
+ * Los PreparedItems devuelven null porque su configuración física
+ * se resuelve mediante prepared_item_id y no mediante disponibilidad normal.
  */
 export function getCartLineVariantId(line) {
+  if (isPreparedItemLine(line)) return null;
+
   return normalizePositiveId(
     line?.variant_id ??
       line?.product_variant_id ??
@@ -443,6 +453,7 @@ export function reconcilePendingCartAvailability(items, menuSource) {
 
   return rows.map((line) => {
     if (!line || typeof line !== "object") return line;
+    if (isPreparedItemLine(line)) return line;
 
     const productId = getCartLineProductId(line);
     const variantId = getCartLineVariantId(line);
@@ -483,9 +494,12 @@ export function reconcilePendingCartAvailability(items, menuSource) {
 ========================= */
 
 /**
- * Determina si una línea pendiente está bloqueada.
+ * Determina si una línea pendiente normal está bloqueada.
  *
- * Autoridad:
+ * Los PreparedItems quedan fuera de esta validación porque su disponibilidad
+ * depende de prepared_item_id y del pool físico, no de ProductAvailability.
+ *
+ * Autoridad para productos normales:
  * - is_available_now;
  * - status;
  * - max_available_qty entregado por backend.
@@ -494,6 +508,7 @@ export function reconcilePendingCartAvailability(items, menuSource) {
  */
 export function isCartItemAvailabilityInvalid(item) {
   if (!item || typeof item !== "object") return false;
+  if (isPreparedItemLine(item)) return false;
   if (item?.is_available_now === false) return true;
 
   const availability = getAvailabilityData(item);

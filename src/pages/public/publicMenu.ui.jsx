@@ -7,6 +7,8 @@ import { createPortal } from "react-dom";
 const MENU_UI = {
   orange: "#FF7A00",
   orangeDark: "#E66D00",
+  terracotta: "#B85C46",
+  terracottaDark: "#934636",
   text: "#2F2A3D",
   muted: "#6E6A7A",
   border: "rgba(47,42,61,0.10)",
@@ -133,6 +135,7 @@ export function PillButton({
   disabled,
   type = "button",
   themeColor,
+  style,
 }) {
   const safeThemeColor = isValidColor(themeColor) ? themeColor : MENU_UI.orange;
 
@@ -160,6 +163,18 @@ export function PillButton({
       bd: "rgba(239,68,68,0.22)",
       fg: "#B91C1C",
       shadow: "0 8px 18px rgba(239,68,68,0.08)",
+    },
+    terracottaSoft: {
+      bg: hexToRgba(MENU_UI.terracotta, 0.10),
+      bd: hexToRgba(MENU_UI.terracotta, 0.28),
+      fg: MENU_UI.terracottaDark,
+      shadow: `0 8px 18px ${hexToRgba(MENU_UI.terracotta, 0.08)}`,
+    },
+    terracotta: {
+      bg: `linear-gradient(135deg, ${MENU_UI.terracotta}, ${MENU_UI.terracottaDark})`,
+      bd: hexToRgba(MENU_UI.terracottaDark, 0.82),
+      fg: "#FFFFFF",
+      shadow: `0 12px 24px ${hexToRgba(MENU_UI.terracotta, 0.22)}`,
     },
     orange: {
       bg: `linear-gradient(135deg, ${safeThemeColor}, ${safeThemeColor})`,
@@ -192,6 +207,7 @@ export function PillButton({
         transition:
           "transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease, background 160ms ease",
         whiteSpace: "nowrap",
+         ...style,
       }}
       onMouseEnter={(e) => {
         if (disabled) return;

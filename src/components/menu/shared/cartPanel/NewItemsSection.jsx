@@ -7,8 +7,13 @@ import {
   money,
 } from "../../../../hooks/public/publicMenu.utils";
 import {
-  isCartItemAvailabilityInvalid,
-} from "../../../../hooks/menu/menuAvailability.utils";
+  getPreparedItemConfigurationSummary,
+  getPreparedItemCurrentPrice,
+  getPreparedItemDisplayName,
+  isPreparedItemLine,
+} from "../../../../hooks/menu/preparedItem.utils";
+
+import { isCartItemAvailabilityInvalid } from "../../../../hooks/menu/menuAvailability.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
@@ -44,7 +49,85 @@ function NoteButton({ item, onOpenNote }) {
   );
 }
 
+function RemoveButton({ item, onRemove }) {
+  return (
+    <button
+      type="button"
+      className="cm-icon-btn cm-remove-btn"
+      onClick={() => onRemove?.(item?.key)}
+      title="Quitar"
+    >
+      🗑️
+    </button>
+  );
+}
+
+function PreparedNewItemCard({ item, onRemove, onOpenNote }) {
+  const label = getPreparedItemDisplayName(item);
+  const configurationSummary = getPreparedItemConfigurationSummary(item);
+  const currentPrice = getPreparedItemCurrentPrice(item);
+
+  return (
+    <div className="cm-new-card">
+      <div className="cm-new-card-top">
+        <div className="cm-new-info">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              flexWrap: "wrap",
+            }}
+          >
+            <div className="cm-new-title">{label}</div>
+            <span className="cm-prepared-badge">Preparación rápida</span>
+          </div>
+
+          {configurationSummary.length > 0 ? (
+            <div className="cm-new-meta">
+              {configurationSummary.join(" · ")}
+            </div>
+          ) : null}
+
+          <div className="cm-price-stack" style={{ marginTop: 7 }}>
+            <strong>{currentPrice !== null ? money(currentPrice) : "—"}</strong>
+          </div>
+        </div>
+
+        <RemoveButton item={item} onRemove={onRemove} />
+      </div>
+
+      <div className="cm-new-controls">
+        <div>
+          <div className="cm-mini-label">Cantidad</div>
+          <div className="cm-fixed-quantity">1 unidad</div>
+        </div>
+
+        <div
+          className="cm-new-total-box"
+          title="Importe de referencia. El total final se confirmará al enviar."
+        >
+          <span>Subtotal aprox.</span>
+          <strong>{currentPrice !== null ? money(currentPrice) : "—"}</strong>
+        </div>
+      </div>
+
+      <NoteButton item={item} onOpenNote={onOpenNote} />
+    </div>
+  );
+}
+
 function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
+  if (isPreparedItemLine(item)) {
+    return (
+      <PreparedNewItemCard
+        item={item}
+        onRemove={onRemove}
+        onOpenNote={onOpenNote}
+      />
+    );
+  }
+
   const pricingSummary = buildNewItemsPricingSummary([item]);
   const pricingLine = pricingSummary.lines[0];
 
@@ -173,13 +256,7 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
 
         </div>
 
-        <button
-          className="cm-icon-btn cm-remove-btn"
-          onClick={() => onRemove?.(item.key)}
-          title="Quitar"
-        >
-          🗑️
-        </button>
+        <RemoveButton item={item} onRemove={onRemove} />
       </div>
 
       {invalidItem ? (

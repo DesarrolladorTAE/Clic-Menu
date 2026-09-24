@@ -7,43 +7,52 @@ const NO_CACHE_HEADERS = {
   Expires: "0",
 };
 
-export async function fetchStaffWaiterMenu({
-  tableId = null,
-  orderId = null,
-} = {}) {
-  const normalizedTableId = Number(tableId || 0);
-  const normalizedOrderId = Number(orderId || 0);
+function requirePositiveId(value, label) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) throw new Error(`${label} debe ser un identificador válido.`);
 
-  const hasTableId = normalizedTableId > 0;
-  const hasOrderId = normalizedOrderId > 0;
+  return id;
+}
 
-  /*
-   * El backend exige exactamente un contexto:
-   * - table_id: crear una orden nueva usando el menú de la zona.
-   * - order_id: continuar una orden existente conservando su menú original.
-   * No se permite enviar ambos ni omitir ambos.
-   */
+function buildExclusiveWaiterContext({ tableId = null, orderId = null } = {}) {
+  const hasTableId = tableId !== null && tableId !== undefined && tableId !== "";
+  const hasOrderId = orderId !== null && orderId !== undefined && orderId !== "";
+
   if (hasTableId === hasOrderId) {
     throw new Error(
       "Debes enviar tableId para una orden nueva u orderId para continuar una orden existente, pero no ambos.",
     );
   }
 
+  return hasTableId
+    ? { table_id: requirePositiveId(tableId, "tableId") }
+    : { order_id: requirePositiveId(orderId, "orderId") };
+}
+
+export async function fetchStaffWaiterMenu({ tableId = null, orderId = null } = {}) {
   const params = {
     _t: Date.now(),
-
-    ...(hasTableId
-      ? { table_id: normalizedTableId }
-      : { order_id: normalizedOrderId }),
+    ...buildExclusiveWaiterContext({ tableId, orderId }),
   };
 
-  const res = await staffApi.get(
-    `/staff/waiter/menu`,
-    {
-      params,
-      headers: NO_CACHE_HEADERS,
-    },
-  );
+  const res = await staffApi.get("/staff/waiter/menu", {
+    params,
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
+}
+
+export async function fetchPreparedItems({ tableId = null, orderId = null } = {}) {
+  const params = {
+    _t: Date.now(),
+    ...buildExclusiveWaiterContext({ tableId, orderId }),
+  };
+
+  const res = await staffApi.get("/staff/waiter/prepared-items", {
+    params,
+    headers: NO_CACHE_HEADERS,
+  });
 
   return res?.data;
 }
@@ -118,5 +127,31 @@ export async function getOrderById(orderId) {
     params: { _t: Date.now() },
     headers: NO_CACHE_HEADERS,
   });
+  return res?.data;
+}
+
+export async function fetchCancellationContext(orderId) {
+  const normalizedOrderId = requirePositiveId(orderId, "orderId");
+
+  const res = await staffApi.get(
+    `/staff/waiter/orders/${normalizedOrderId}/cancellation-context`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    },
+  );
+
+  return res?.data;
+}
+
+export async function cancelOrderItems(orderId, payload) {
+  const normalizedOrderId = requirePositiveId(orderId, "orderId");
+
+  const res = await staffApi.post(
+    `/staff/waiter/orders/${normalizedOrderId}/cancellations`,
+    payload,
+    { headers: NO_CACHE_HEADERS },
+  );
+
   return res?.data;
 }

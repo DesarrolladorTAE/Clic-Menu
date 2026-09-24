@@ -50,6 +50,20 @@ export async function fetchResolvedMenu(token) {
 
 /**
  * =========================================================
+ * 2.5) Preparación rápida
+ * =========================================================
+ * Consulta las unidades físicas disponibles para el contexto público
+ * resuelto por el token. No aparta ni modifica PreparedItems.
+ */
+export async function fetchPreparedItems(token) {
+  const safeToken = encodeURIComponent(String(token || ""));
+  const { data } = await publicApi.get(`/public/menu/${safeToken}/prepared-items`);
+
+  return data;
+}
+
+/**
+ * =========================================================
  * 3) Table Session (scan / poll / heartbeat)
  * =========================================================
  */
@@ -159,7 +173,54 @@ export async function appendPublicOrderItems({ orderId, token, items }) {
     device_identifier,
     items: Array.isArray(items) ? items : [],
   };
+
   const { data } = await publicApi.post(`/public/orders/${orderId}/append-items`, payload);
+  return data;
+}
+
+/**
+ * =========================================================
+ * 5.5) Solicitud de cancelación QR
+ * =========================================================
+ * Registra una solicitud parcial o total del cliente.
+ * token y device_identifier autentican la sesión por query params;
+ * el body contiene únicamente la solicitud comercial.
+ */
+export async function requestOrderCancellation({
+  orderId,
+  token,
+  type,
+  items = [],
+  reason_code,
+  reason_note = null,
+}) {
+  const device_identifier = getOrCreatePublicDeviceId();
+  const normalizedType = String(type || "").trim().toLowerCase();
+
+  const payload = {
+    type: normalizedType,
+    reason_code: String(reason_code || "").trim(),
+    reason_note: String(reason_note || "").trim() || null,
+  };
+
+  if (normalizedType === "partial") {
+    payload.items = (Array.isArray(items) ? items : []).map((item) => ({
+      order_item_id: Number(item?.order_item_id || 0),
+      quantity: Number(item?.quantity || 0),
+    }));
+  }
+
+  const { data } = await publicApi.post(
+    `/public/orders/${Number(orderId)}/cancellation-request`,
+    payload,
+    {
+      params: {
+        token: String(token || ""),
+        device_identifier,
+      },
+    },
+  );
+
   return data;
 }
 

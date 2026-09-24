@@ -24,8 +24,96 @@ function roundMoney(value) {
   return Math.round((safeNum(value, 0) + Number.EPSILON) * 100) / 100;
 }
 
+function normalizeItemQuantity(value, fallback = 0) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return Math.max(0, Math.trunc(Number(fallback) || 0));
+
+  return Math.max(0, Math.trunc(quantity));
+}
+
+function resolveCancellationState(item) {
+  const originalQuantity = normalizeItemQuantity(
+    hasOwn(item, "original_quantity") ? item?.original_quantity : item?.quantity,
+  );
+
+  const cancelledQuantity = Math.min(
+    originalQuantity,
+    normalizeItemQuantity(item?.cancelled_quantity),
+  );
+
+  const effectiveQuantity = hasOwn(item, "effective_quantity")
+    ? Math.min(originalQuantity, normalizeItemQuantity(item?.effective_quantity))
+    : Math.max(0, originalQuantity - cancelledQuantity);
+
+  const cancellations = Array.isArray(item?.cancellations) ? item.cancellations : [];
+  const hasCancellation =
+    Boolean(item?.is_cancelled) ||
+    cancelledQuantity > 0 ||
+    cancellations.length > 0;
+
+  return {
+    originalQuantity,
+    cancelledQuantity,
+    effectiveQuantity,
+    cancellations,
+    hasCancellation,
+    fullyCancelled: hasCancellation && effectiveQuantity <= 0,
+    partiallyCancelled: hasCancellation && effectiveQuantity > 0,
+  };
+}
+
+function CancellationStateBlock({ item }) {
+  const state = resolveCancellationState(item);
+
+  if (!state.hasCancellation) return null;
+
+  if (state.fullyCancelled) {
+    return (
+      <div className="cm-cancellation-summary">
+        <span className="cm-cancellation-full">Cancelado</span>
+        <span>Cantidad original: {state.originalQuantity}</span>
+
+        {state.cancellations.length > 1 ? (
+          <span>{state.cancellations.length} cancelaciones aplicadas</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="cm-cancellation-summary">
+      <span>
+        <strong>{state.effectiveQuantity}</strong> de{" "}
+        <strong>{state.originalQuantity}</strong> vigentes
+      </span>
+
+      <span>
+        Cancelada{state.cancelledQuantity === 1 ? "" : "s"}:{" "}
+        <strong>{state.cancelledQuantity}</strong>
+      </span>
+
+      {state.cancellations.length > 1 ? (
+        <span>{state.cancellations.length} cancelaciones aplicadas</span>
+      ) : null}
+    </div>
+  );
+}
+
+function PreparedReuseBadge({ item }) {
+  if (String(item?.fulfillment_source || "") !== "prepared_reuse") return null;
+
+  return <span className="cm-prepared-badge">Preparación rápida</span>;
+}
+
 function resolveConfirmedItemPricing(item) {
-  const quantity = Math.max(0, safeNum(item?.quantity, 1));
+  const quantity = Math.max(
+    0,
+    safeNum(
+      hasOwn(item, "original_quantity") ? item?.original_quantity : item?.quantity,
+      1,
+    ),
+  );
+
   const unitPrice = roundMoney(Math.max(0, safeNum(item?.unit_price, 0)));
 
   const legacyGrossLineTotal = roundMoney(unitPrice * quantity);
@@ -261,6 +349,8 @@ function OldChildRow({
   item,
   hasActionColumn = false,
 }) {
+  const cancellation = resolveCancellationState(item);
+
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -280,6 +370,8 @@ function OldChildRow({
           ↳ {label}
         </div>
 
+        <CancellationStateBlock item={item} />
+
         <ModifierGroupsBlock
           groups={item?.modifier_groups_display || []}
           indent={12}
@@ -291,7 +383,7 @@ function OldChildRow({
       </td>
 
       <td className="cm-td cm-center cm-child">
-        {item?.quantity}
+        {cancellation.effectiveQuantity}
       </td>
 
       <td className="cm-td cm-right cm-child cm-bold">
@@ -316,6 +408,8 @@ function OldRow({
     : item.product_name || `Producto #${item.product_id}`;
 
   const pricing = resolveConfirmedItemPricing(item);
+
+  const cancellation = resolveCancellationState(item);
 
   const isCompositeParent =
     !!item?.is_composite_parent ||
@@ -351,7 +445,11 @@ function OldRow({
             {isCompositeParent ? (
               <span className="cm-combo-badge">Combo</span>
             ) : null}
+
+            <PreparedReuseBadge item={item} />
           </div>
+
+          <CancellationStateBlock item={item} />
 
           <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
           <CompositeDetailBlock details={item?.components_detail || []} />
@@ -362,14 +460,14 @@ function OldRow({
         </td>
 
         <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
-          {item?.quantity}
+          {cancellation.effectiveQuantity}
         </td>
 
         <td
           className={`cm-td cm-right cm-bold ${
             isCompositeParent ? "cm-combo" : ""
           }`}
-          title="Total neto confirmado por el servidor"
+          title="Total histórico confirmado por el servidor"
         >
           {money(pricing.netLineTotal)}
         </td>
@@ -422,6 +520,8 @@ function OldItemCard({
 
   const pricing = resolveConfirmedItemPricing(item);
 
+  const cancellation = resolveCancellationState(item);
+
   const isCompositeParent =
     !!item?.is_composite_parent ||
     (Array.isArray(item?.children) && item.children.length > 0);
@@ -431,20 +531,28 @@ function OldItemCard({
       <div className="cm-mobile-card-head">
         <div>
           <div className="cm-mobile-title">{label}</div>
-          <div className="cm-mobile-sub">
-            Cantidad: <strong>{item?.quantity}</strong>
-          </div>
+
+          {!cancellation.hasCancellation ? (
+            <div className="cm-mobile-sub">
+              Cantidad: <strong>{cancellation.effectiveQuantity}</strong>
+            </div>
+          ) : null}
+
+          <CancellationStateBlock item={item} />
         </div>
 
         <div
           className="cm-mobile-price"
-          title="Total neto confirmado por el servidor"
+          title="Total histórico confirmado por el servidor"
         >
           {money(pricing.netLineTotal)}
         </div>
       </div>
 
-      {isCompositeParent ? <span className="cm-combo-badge">Combo</span> : null}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {isCompositeParent ? <span className="cm-combo-badge">Combo</span> : null}
+        <PreparedReuseBadge item={item} />
+      </div>
 
       <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
       <CompositeDetailBlock details={item?.components_detail || []} />
@@ -477,6 +585,8 @@ function OldItemCard({
               ? `${child.product_name} · ${child.variant_name}`
               : child.product_name || `Producto #${child.product_id}`;
 
+            const childCancellation = resolveCancellationState(child);
+
             const childSubtotal = safeNum(
               child?.line_total,
               safeNum(child?.unit_price, 0) * safeNum(child?.quantity, 1),
@@ -494,9 +604,11 @@ function OldItemCard({
                 <div className="cm-mobile-title">↳ {childLabel}</div>
 
                 <div className="cm-mobile-sub">
-                  Cantidad: <strong>{child?.quantity}</strong> ·{" "}
+                  Cantidad: <strong>{childCancellation.effectiveQuantity}</strong> ·{" "}
                   {childHideMoney ? "Incluido" : money(childSubtotal)}
                 </div>
+
+                <CancellationStateBlock item={child} />
 
                 <ModifierGroupsBlock
                   groups={child?.modifier_groups_display || []}

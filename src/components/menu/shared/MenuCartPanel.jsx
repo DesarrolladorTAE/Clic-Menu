@@ -6,6 +6,9 @@ import MenuCartPanelStyles from "./cartPanel/MenuCartPanelStyles";
 import NoteEditorModal from "./cartPanel/NoteEditorModal";
 import OldItemsSection from "./cartPanel/OldItemsSection";
 import NewItemsSection from "./cartPanel/NewItemsSection";
+import OrderCancellationSelection, {
+  getOrderCancellationSelectableItems,
+} from "./cancellation/OrderCancellationSelection";
 import {
   buildOldItemsTree,
   getToastStyles,
@@ -284,13 +287,36 @@ export default function MenuCartPanel({
   oldItemRemoveLabel = "Quitar",
 
   requestBillBlock = null,
+  cancellation = null,
 }) {
   const [noteItem, setNoteItem] = useState(null);
   const [noteValue, setNoteValue] = useState("");
 
-  const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
+    const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
+
+  const cancellationConfig =
+    cancellation && typeof cancellation === "object"
+      ? cancellation
+      : {};
+
+  const cancellationEnabled = Boolean(cancellationConfig?.enabled);
+  const cancellationPending =
+    cancellationEnabled && Boolean(cancellationConfig?.pending);
+
+  const cancellationActive =
+    cancellationEnabled
+    && Boolean(cancellationConfig?.active)
+    && !cancellationPending;
+
+  const cancellationItems = Array.isArray(cancellationConfig?.items)
+    ? cancellationConfig.items
+    : oldItemsTree;
+
+  const hasCancellationItems = useMemo(() => {
+    return getOrderCancellationSelectableItems(cancellationItems).length > 0;
+  }, [cancellationItems]);
 
   const isPaymentInProgress = Boolean(showPaymentMessage);
 
@@ -365,7 +391,9 @@ export default function MenuCartPanel({
     onSubmit?.();
   };
 
-  if (!hasOld && !hasNew) return null;
+  const hasCancellationState = cancellationActive || cancellationPending;
+
+  if (!hasOld && !hasNew && !hasCancellationState) return null;
 
   return (
     <div className="cm-panel">
@@ -395,7 +423,7 @@ export default function MenuCartPanel({
           </div>
 
           <div className="cm-actions">
-            <PillButton
+                        <PillButton
               tone="danger"
               onClick={onEmpty}
               title="Vaciar items nuevos"
@@ -413,6 +441,43 @@ export default function MenuCartPanel({
             >
               {sending ? "⏳ Enviando..." : resolvedSubmitLabel}
             </PillButton>
+
+            {cancellationEnabled && !cancellationActive && !cancellationPending ? (
+              <div
+                className="cm-cancellation-action"
+                style={{
+                  gridColumn: "1 / -1",
+                  width: "100%",
+                  minWidth: 0,
+                }}
+              >
+                <PillButton
+                  tone="terracotta"
+                  style={{
+                    width: "100%",
+                    maxWidth: "none",
+                    minWidth: 0,
+                  }}
+                  disabled={
+                    sending
+                    || !hasCancellationItems
+                    || typeof cancellationConfig?.onStart !== "function"
+                  }
+                  onClick={() => cancellationConfig?.onStart?.()}
+                  title={
+                    hasCancellationItems
+                      ? String(
+                          cancellationConfig?.actionTitle
+                          || cancellationConfig?.actionLabel
+                          || "Iniciar cancelación",
+                        )
+                      : "No hay productos vigentes para cancelar"
+                  }
+                >
+                  {cancellationConfig?.actionLabel || "Cancelar productos"}
+                </PillButton>
+              </div>
+            ) : null}
 
             {extraTopActions}
           </div>
@@ -486,9 +551,19 @@ export default function MenuCartPanel({
         </div>
       ) : null}
 
-      {visibleRequestBillBlock ? (
+            {visibleRequestBillBlock ? (
         <div style={{ marginTop: 12 }}>
           {visibleRequestBillBlock}
+        </div>
+      ) : null}
+
+      {cancellationPending ? (
+        <div
+          className="cm-pricing-summary-note cm-pricing-summary-note-estimated"
+          style={{ marginTop: 12 }}
+          role="status"
+        >
+          {cancellationConfig?.pendingLabel || "Solicitud de cancelación pendiente"}
         </div>
       ) : null}
 
@@ -497,7 +572,17 @@ export default function MenuCartPanel({
         fallbackTotal={resolvedDisplayTotal}
       />
 
-      {hasOld ? (
+      {cancellationActive ? (
+        <OrderCancellationSelection
+          items={cancellationItems}
+          selection={cancellationConfig?.selection || {}}
+          themeColor={themeColor}
+          onExit={cancellationConfig?.onExit}
+          onToggleItem={cancellationConfig?.onToggleItem}
+          onQuantityChange={cancellationConfig?.onQuantityChange}
+          onContinue={cancellationConfig?.onContinue}
+        />
+      ) : hasOld ? (
         <OldItemsSection
           oldItems={oldItems}
           oldItemsTree={oldItemsTree}

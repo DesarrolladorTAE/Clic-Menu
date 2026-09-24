@@ -1,3 +1,13 @@
+/*
+ * PreparedItem conserva una sola implementación compartida.
+ * Public únicamente reexporta identidad y detección para no duplicar reglas.
+ */
+export {
+  getPreparedItemCartKey,
+  getPreparedItemId,
+  isPreparedItemLine,
+} from "../menu/preparedItem.utils";
+
 export const PUBLIC_QR_DISABLED_MSG =
   "Menú digital temporalmente fuera de servicio. Por favor, solicita una carta física";
 
@@ -1285,8 +1295,69 @@ export function extractApiErrorInfo(error) {
       error?.message ||
       "Ocurrió un error inesperado.",
     data: data?.data || null,
+    errors:
+      data?.errors && typeof data.errors === "object"
+        ? data.errors
+        : null,
     raw: data,
   };
+}
+
+function findPreparedItemValidationMessage(errors) {
+  if (!errors || typeof errors !== "object") return "";
+
+  const messages = Object.values(errors)
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return messages.find((message) => {
+    const text = message.toLowerCase();
+
+    return (
+      text.includes("prepared_item") ||
+      text.includes("prepared item") ||
+      text.includes("preparación rápida")
+    );
+  }) || "";
+}
+
+export function isPreparedItemError(errorInfo) {
+  const alreadyExtracted =
+    errorInfo &&
+    typeof errorInfo === "object" &&
+    Object.prototype.hasOwnProperty.call(errorInfo, "code") &&
+    Object.prototype.hasOwnProperty.call(errorInfo, "message");
+
+  const info = alreadyExtracted ? errorInfo : extractApiErrorInfo(errorInfo);
+  const code = String(info?.code || "").trim().toUpperCase();
+
+  if (code.startsWith("PREPARED_ITEM_")) return true;
+
+  return Boolean(findPreparedItemValidationMessage(info?.errors));
+}
+
+export function buildPreparedItemErrorMessage(
+  errorInfo,
+  fallback = "Una unidad de Preparación rápida ya no está disponible. Actualiza tu selección.",
+) {
+  const alreadyExtracted =
+    errorInfo &&
+    typeof errorInfo === "object" &&
+    Object.prototype.hasOwnProperty.call(errorInfo, "code") &&
+    Object.prototype.hasOwnProperty.call(errorInfo, "message");
+
+  const info = alreadyExtracted ? errorInfo : extractApiErrorInfo(errorInfo);
+  const validationMessage = findPreparedItemValidationMessage(info?.errors);
+
+  if (validationMessage) return validationMessage;
+
+  const code = String(info?.code || "").trim().toUpperCase();
+  const backendMessage = String(info?.message || "").trim();
+
+  if (code.startsWith("PREPARED_ITEM_") && backendMessage) return backendMessage;
+
+  return fallback;
 }
 
 export function isAvailabilityErrorCode(code) {
