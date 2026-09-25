@@ -36,6 +36,28 @@ export function prettyNotes(notes) {
   }
 }
 
+export function getKitchenEffectiveQuantity(item) {
+  const hasEffectiveQuantity =
+    item?.effective_quantity !== undefined && item?.effective_quantity !== null;
+
+  const rawValue = hasEffectiveQuantity
+    ? item.effective_quantity
+    : item?.quantity ?? 1;
+
+  const quantity = Number(rawValue);
+  return Number.isFinite(quantity) ? Math.max(0, quantity) : 1;
+}
+
+export function isKitchenItemEffective(item) {
+  return getKitchenEffectiveQuantity(item) > 0;
+}
+
+export function getPreparedReuseBadge(item) {
+  const backendBadge = String(item?.badge || "").trim();
+  if (backendBadge) return backendBadge;
+  return item?.is_prepared_reuse ? "PREPARADO REASIGNADO" : "";
+}
+
 export function formatWhen(value) {
   if (!value) return "";
   try {
@@ -110,28 +132,29 @@ export function pill(status) {
 
 export function recalcOrderDerived(order, includeReady) {
   const rawItems = Array.isArray(order?.items) ? order.items : [];
+  const effectiveItems = rawItems.filter(isKitchenItemEffective);
 
-  const nonReadyCount = rawItems.filter((it) => {
+  const nonReadyCount = effectiveItems.filter((it) => {
     const st = String(it?.kitchen_status || "");
     return st !== "ready" && st !== "picked_up";
   }).length;
 
-  const readyUnpickedCount = rawItems.filter(
+  const readyUnpickedCount = effectiveItems.filter(
     (it) => String(it?.kitchen_status || "") === "ready"
   ).length;
 
-  const allReady = nonReadyCount === 0;
+  const allReady = effectiveItems.length > 0 && nonReadyCount === 0;
   const readyNoticeSent = !!order?.ready_notice_sent;
 
-  const visibleItems = includeReady
-    ? rawItems.filter((it) => {
-        const st = String(it?.kitchen_status || "");
-        return st === "queued" || st === "in_progress" || st === "ready";
-      })
-    : rawItems.filter((it) => {
-        const st = String(it?.kitchen_status || "");
-        return st !== "ready" && st !== "picked_up";
-      });
+  const visibleItems = effectiveItems.filter((it) => {
+    const st = String(it?.kitchen_status || "");
+
+    if (includeReady) {
+      return st === "queued" || st === "in_progress" || st === "ready";
+    }
+
+    return st !== "ready" && st !== "picked_up";
+  });
 
   return {
     ...order,
@@ -180,7 +203,7 @@ export function modifierLabel(mod) {
 }
 
 export function buildKitchenItemsView(items = []) {
-  const arr = Array.isArray(items) ? items : [];
+  const arr = (Array.isArray(items) ? items : []).filter(isKitchenItemEffective);
   const independent = [];
   const compositeMap = new Map();
 
@@ -990,6 +1013,26 @@ export const ticketItemMeta = {
 
 export const metaDot = {
   opacity: 0.8,
+};
+
+export const preparedReuseRow = {
+  marginTop: 6,
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+export const preparedReusePill = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "3px 8px",
+  borderRadius: 999,
+  border: "1px solid #bfdbfe",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  fontWeight: 1000,
+  fontSize: 10,
+  letterSpacing: 0.25,
 };
 
 export const consumptionRow = {

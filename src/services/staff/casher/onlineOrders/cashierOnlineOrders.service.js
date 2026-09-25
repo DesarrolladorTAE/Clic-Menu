@@ -63,10 +63,23 @@ export async function rejectCashierOnlineOrder(onlineOrderId, reason) {
   return res?.data;
 }
 
-export async function cancelCashierOnlineOrder(onlineOrderId, reason) {
+export async function cancelCashierOnlineOrder(onlineOrderId, payload) {
+  const body = {
+    reason_code: payload?.reason_code,
+    reason_note: payload?.reason_note ?? null,
+    items: Array.isArray(payload?.items)
+      ? payload.items.map((item) => ({
+          order_item_id: item?.order_item_id,
+          reuse_intent: item?.reuse_intent,
+        }))
+      : [],
+    authorizer_user_id: payload?.authorizer_user_id,
+    pin: payload?.pin,
+  };
+
   const res = await staffApi.post(
     `/staff/cashier/online-orders/${onlineOrderId}/cancel`,
-    { reason },
+    body,
     { headers: NO_CACHE_HEADERS }
   );
 

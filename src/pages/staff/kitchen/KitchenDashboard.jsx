@@ -17,6 +17,13 @@ import {
   notifyKitchenOrderReady,
 } from "../../../services/staff/kitchen/kitchenKds.service";
 
+import {
+  finishKitchenPreparedItem,
+  confirmKitchenPreparedItemReturn,
+  markKitchenPreparedItemUnfit,
+  retireExpiredKitchenPreparedItem,
+} from "../../../services/staff/kitchen/kitchenPreparedItems.service";
+
 import echo from "../../../realtime/echo";
 
 import KitchenTopbar from "../../../components/staff/kitchen/KitchenTopbar";
@@ -24,6 +31,7 @@ import KitchenTabs from "../../../components/staff/kitchen/KitchenTabs";
 import KitchenEmptyState from "../../../components/staff/kitchen/KitchenEmptyState";
 import KitchenOrderCard from "../../../components/staff/kitchen/KitchenOrderCard";
 import KitchenWarehouseSelectorDialog from "../../../components/staff/kitchen/KitchenWarehouseSelectorDialog";
+import KitchenPreparedItemsDrawer from "../../../components/staff/kitchen/KitchenPreparedItemsDrawer";
 
 import {
   buildConsumptionUi,
@@ -38,6 +46,36 @@ const PARENT_WAREHOUSE_SELECTION_FIELD =
   "selected_parent_warehouse_id";
 
 const PAGE_SIZE = 2;
+
+function createEmptyPreparedRecovery() {
+  return {
+    awaiting_finish: [],
+    awaiting_return: [],
+    waiting_prepared: [],
+    expired_to_remove: [],
+  };
+}
+
+function normalizePreparedRecovery(recovery = {}) {
+  return {
+    awaiting_finish: Array.isArray(recovery?.awaiting_finish) ? recovery.awaiting_finish : [],
+    awaiting_return: Array.isArray(recovery?.awaiting_return) ? recovery.awaiting_return : [],
+    waiting_prepared: Array.isArray(recovery?.waiting_prepared) ? recovery.waiting_prepared : [],
+    expired_to_remove: Array.isArray(recovery?.expired_to_remove) ? recovery.expired_to_remove : [],
+  };
+}
+
+function unwrapPreparedResponse(response) {
+  if (
+    response?.data &&
+    typeof response.data === "object" &&
+    ("ok" in response.data || "message" in response.data)
+  ) {
+    return response.data;
+  }
+
+  return response || {};
+}
 
 function createEmptyWarehouseSelections() {
   return {
@@ -129,8 +167,12 @@ export default function KitchenDashboard() {
 
   const [tab, setTab] = useState("preparing");
   const [orders, setOrders] = useState([]);
+  const [recovery, setRecovery] = useState(createEmptyPreparedRecovery);
+  const [preparedDrawerOpen, setPreparedDrawerOpen] = useState(false);
+
   const [notifyingOrderId, setNotifyingOrderId] = useState(null);
   const [busyItemIds, setBusyItemIds] = useState({});
+  const [preparedBusyItemIds, setPreparedBusyItemIds] = useState({});
   const [itemConsumptionState, setItemConsumptionState] = useState({});
 
   const [warehouseDialogState, setWarehouseDialogState] = useState(
@@ -147,6 +189,15 @@ export default function KitchenDashboard() {
       const next = { ...prev };
       if (!value) delete next[itemId];
       else next[itemId] = value;
+      return next;
+    });
+  };
+
+  const setPreparedItemBusy = (preparedItemId, value) => {
+    setPreparedBusyItemIds((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[preparedItemId];
+      else next[preparedItemId] = value;
       return next;
     });
   };
@@ -231,7 +282,9 @@ export default function KitchenDashboard() {
       const res = await fetchKitchenKdsOrders({ include_ready_items: 1 });
       const ok = !!res?.ok;
       const data = ok ? res?.data : [];
+
       setOrders(Array.isArray(data) ? data : []);
+      setRecovery(ok ? normalizePreparedRecovery(res?.recovery) : createEmptyPreparedRecovery());
     } catch (e) {
       const status = e?.response?.status;
 
@@ -377,6 +430,83 @@ export default function KitchenDashboard() {
     }
   };
 
+  const runPreparedItemAction = async (
+    item,
+    action,
+    request,
+    successMessage,
+    errorMessage
+  ) => {
+    const id = Number(item?.id || 0);
+    if (!id) return false;
+
+    setErr("");
+    setOkMsg("");
+    setPreparedItemBusy(id, action);
+
+    try {
+      const rawResponse = await request(id);
+      const res = unwrapPreparedResponse(rawResponse);
+
+      if (res?.ok === false) {
+        await loadOrders();
+        setErr(res?.message || errorMessage);
+        return false;
+      }
+
+      setOkMsg(res?.message || successMessage);
+      await loadOrders();
+
+      return true;
+    } catch (e) {
+      await loadOrders();
+      setErr(e?.response?.data?.message || errorMessage);
+      return false;
+    } finally {
+      setPreparedItemBusy(id, null);
+    }
+  };
+
+  const doFinishPreparedItem = async (item) => {
+    return runPreparedItemAction(
+      item,
+      "finish",
+      (id) => finishKitchenPreparedItem(id),
+      "El producto terminó su preparación física.",
+      "No se pudo terminar la preparación del producto."
+    );
+  };
+
+  const doConfirmPreparedItemReturn = async (item) => {
+    return runPreparedItemAction(
+      item,
+      "confirm-return",
+      (id) => confirmKitchenPreparedItemReturn(id),
+      "El retorno físico del producto fue confirmado.",
+      "No se pudo confirmar el regreso del producto."
+    );
+  };
+
+  const doMarkPreparedItemUnfit = async (item, note = "") => {
+    return runPreparedItemAction(
+      item,
+      "mark-unfit",
+      (id) => markKitchenPreparedItemUnfit(id, note),
+      "El producto fue marcado como no apto y descartado.",
+      "No se pudo marcar el producto como no apto."
+    );
+  };
+
+  const doRetireExpiredPreparedItem = async (item) => {
+    return runPreparedItemAction(
+      item,
+      "retire-expired",
+      (id) => retireExpiredKitchenPreparedItem(id),
+      "El producto vencido fue retirado físicamente.",
+      "No se pudo retirar el producto vencido."
+    );
+  };
+
   const preparingOrders = useMemo(() => {
     return (orders || []).filter((order) => {
       return Number(order?.non_ready_count || 0) > 0;
@@ -395,6 +525,14 @@ export default function KitchenDashboard() {
 
   const preparingCount = preparingOrders.length;
   const readyCount = readyOrders.length;
+
+  const pendingPreparedCount = useMemo(() => {
+    return (
+      recovery.awaiting_finish.length +
+      recovery.awaiting_return.length +
+      recovery.expired_to_remove.length
+    );
+  }, [recovery]);
 
   const preparingPagination = usePagination({
     items: preparingOrders,
@@ -867,6 +1005,19 @@ export default function KitchenDashboard() {
         loading={warehouseDialogState.loading}
         onClose={closeWarehouseDialog}
         onConfirm={doStartWithWarehouseSelection}
+      />
+
+      <KitchenPreparedItemsDrawer
+        open={preparedDrawerOpen}
+        onOpen={() => setPreparedDrawerOpen(true)}
+        onClose={() => setPreparedDrawerOpen(false)}
+        count={pendingPreparedCount}
+        recovery={recovery}
+        busyItemIds={preparedBusyItemIds}
+        onFinish={doFinishPreparedItem}
+        onConfirmReturn={doConfirmPreparedItemReturn}
+        onMarkUnfit={doMarkPreparedItemUnfit}
+        onRetireExpired={doRetireExpiredPreparedItem}
       />
 
       <AppAlert

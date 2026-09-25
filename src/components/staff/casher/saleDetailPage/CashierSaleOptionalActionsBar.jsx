@@ -99,14 +99,16 @@ export default function CashierSaleOptionalActionsBar({
             },
           }}
         >
-         {showAdjustments ? (
+          {showAdjustments ? (
             <ActionButton
               icon={<TuneRoundedIcon />}
-              title="Ajustes y cancelaciones"
+              title="Corregir cuenta"
               status={
                 adjustmentsCount > 0
-                  ? `${adjustmentsCount} ajuste${adjustmentsCount === 1 ? "" : "s"}`
-                  : "Sin ajustes"
+                  ? adjustmentsCount === 1
+                    ? "1 corrección"
+                    : `${adjustmentsCount} correcciones`
+                  : "Sin correcciones"
               }
               active={adjustmentsCount > 0}
               disabled={adjustmentActionDisabled}

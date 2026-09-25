@@ -22,7 +22,6 @@ import CashierSaleOptionalActionsBar from "../../../components/staff/casher/sale
 import CashierPaymentTabs from "../../../components/staff/casher/saleDetailPage/CashierPaymentTabs";
 import CashierSaleToolDialog from "../../../components/staff/casher/saleDetailPage/CashierSaleToolDialog";
 import CashierDiscountAuthorizationDialog from "../../../components/staff/casher/saleDetailPage/CashierDiscountAuthorizationDialog";
-import CashierOperationalAuthorizationDialog from "../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
 import CashierPostPaymentTicketModal from "../../../components/staff/casher/ticket/CashierPostPaymentTicketModal";
 import CashierPrebillDialog from "../../../components/staff/casher/prebill/CashierPrebillDialog";
 
@@ -127,13 +126,9 @@ export default function CashierSaleDetailPage() {
   const [authorizingDiscount, setAuthorizingDiscount] = useState(false);
   const [discountAuthorizationError, setDiscountAuthorizationError] = useState("");
 
-  const [pendingAdjustmentAuthorization, setPendingAdjustmentAuthorization] = useState(null);
-  const [operationalAuthorizationOpen, setOperationalAuthorizationOpen] = useState(false);
   const [operationalAuthorizers, setOperationalAuthorizers] = useState([]);
   const [loadingOperationalAuthorizers, setLoadingOperationalAuthorizers] = useState(false);
-  const [authorizingOperational, setAuthorizingOperational] = useState(false);
   const [operationalAuthorizationError, setOperationalAuthorizationError] = useState("");
-  const [operationalAuthorizationMessage, setOperationalAuthorizationMessage] = useState("");
 
   const [postPaymentOpen, setPostPaymentOpen] = useState(false);
   const [postPaymentTicket, setPostPaymentTicket] = useState(null);
@@ -457,6 +452,17 @@ export default function CashierSaleDetailPage() {
     return owned && ["taken", "paid"].includes(status);
   }, [cashSession, sale]);
 
+  const hasManualDiscountsAffected = useMemo(() => {
+    const values = [
+      discountSummary?.sale?.manual_discount_total,
+      discountSummary?.manual_discount_total,
+      selectedCheck?.manual_discount_total,
+      sale?.manual_discount_total,
+    ];
+
+    return values.some((value) => Number(value || 0) > 0);
+  }, [discountSummary, sale, selectedCheck]);
+
   const selectedTaxOption = useMemo(() => {
     return taxOptions.find(
       (row) => String(row.code) === String(taxOptionCode)
@@ -621,36 +627,19 @@ export default function CashierSaleDetailPage() {
 
   const adjustmentFlow = useCashierSaleAdjustments({
     nav,
-    sale,
-    selectedCheck,
     selectedSaleId,
     canManageAdjustments,
     isEqualPartsAccount,
-    adjustmentOrders,
-    partialCancelForm,
     setPartialCancelForm,
-    partialCancelDrafts,
     setPartialCancelDrafts,
-    cancelOrderReason,
-    setCancelOrderReason,
-    cancelOrderId,
-    setCancelOrderId,
     adjustmentBusy,
     setAdjustmentBusy,
-    pendingAdjustmentAuthorization,
-    setPendingAdjustmentAuthorization,
-    operationalAuthorizationOpen,
-    setOperationalAuthorizationOpen,
     operationalAuthorizers,
     setOperationalAuthorizers,
     loadingOperationalAuthorizers,
     setLoadingOperationalAuthorizers,
-    authorizingOperational,
-    setAuthorizingOperational,
     operationalAuthorizationError,
     setOperationalAuthorizationError,
-    operationalAuthorizationMessage,
-    setOperationalAuthorizationMessage,
     cancelDraftIdRef,
     setPreview,
     clearPreviewMode: paymentFlow.clearPreviewMode,
@@ -660,6 +649,11 @@ export default function CashierSaleDetailPage() {
     pickErr,
     pickCode,
   });
+
+  const handleOpenAdjustments = () => {
+    setActiveTool("adjustments");
+    adjustmentFlow.loadOperationalAuthorizers();
+  };
 
   const customerFlow = useCashierSaleCustomer({
     selectedSaleId,
@@ -787,7 +781,7 @@ export default function CashierSaleDetailPage() {
             adjustmentsDisabled={!canManageAdjustments}
             customerDisabled={!canManageCustomer}
             discountsDisabled={!canManageDiscounts}
-            onOpenAdjustments={() => setActiveTool("adjustments")}
+            onOpenAdjustments={handleOpenAdjustments}
             onOpenCustomer={() => setActiveTool("customer")}
             onOpenDiscounts={() => setActiveTool("discounts")}
           />
@@ -900,25 +894,19 @@ export default function CashierSaleDetailPage() {
       </Stack>
 
       <CashierSaleToolDialog
-        open={
-          activeTool === "adjustments" &&
-          canManageAdjustments
-        }
+        open={activeTool === "adjustments" && canManageAdjustments}
         onClose={() => setActiveTool(null)}
-        title="Ajustes y cancelaciones"
-        subtitle="Cancela ítems o una orden del paquete únicamente cuando sea necesario antes del cobro."
+        title="Corregir cuenta"
+        subtitle="Retira productos de la cuenta o cancela una orden completa antes de iniciar el cobro."
         icon={<TuneRoundedIcon />}
         maxWidth="lg"
       >
         <CashierAdjustmentCard
           sale={sale}
-          selectedCheck={selectedCheck}
+          orderCheckId={selectedCheckId}
           itemsFlat={itemsFlat}
           summary={adjustmentSummary}
           orders={adjustmentOrders}
-          orderOptions={adjustmentOrders}
-          selectedOrderId={cancelOrderId}
-          onSelectedOrderIdChange={setCancelOrderId}
           partialForm={partialCancelForm}
           onPartialFormChange={adjustmentFlow.handlePartialFormChange}
           partialDrafts={partialCancelDrafts}
@@ -926,15 +914,19 @@ export default function CashierSaleDetailPage() {
           onRemovePartialDraft={adjustmentFlow.handleRemovePartialDraft}
           onPartialDraftChange={adjustmentFlow.handlePartialDraftChange}
           onSubmitPartial={adjustmentFlow.handleSubmitPartialCancel}
+          cancelOrderId={cancelOrderId}
+          onCancelOrderIdChange={setCancelOrderId}
           cancelOrderReason={cancelOrderReason}
           onCancelOrderReasonChange={setCancelOrderReason}
           onSubmitCancelOrder={adjustmentFlow.handleSubmitCancelOrder}
+          authorizers={operationalAuthorizers}
+          loadingAuthorizers={loadingOperationalAuthorizers}
+          authorizationError={operationalAuthorizationError}
+          hasManualDiscountsAffected={hasManualDiscountsAffected}
           busy={adjustmentBusy}
-          disabled={
-            !canManageAdjustments ||
-            financialDisabled
-          }
+          disabled={!canManageAdjustments || financialDisabled}
         />
+
       </CashierSaleToolDialog>
 
       <CashierSaleToolDialog
@@ -1016,19 +1008,6 @@ export default function CashierSaleDetailPage() {
         error={discountAuthorizationError}
         message={discountAuthorizationMessage}
         policy={discountAuthorizationPolicy}
-      />
-
-      <CashierOperationalAuthorizationDialog
-        open={operationalAuthorizationOpen}
-        onClose={adjustmentFlow.handleCloseOperationalAuthorization}
-        onSubmit={adjustmentFlow.handleSubmitOperationalAuthorization}
-        authorizers={operationalAuthorizers}
-        loading={loadingOperationalAuthorizers}
-        busy={authorizingOperational}
-        error={operationalAuthorizationError}
-        title="Autorizar cancelación"
-        message={operationalAuthorizationMessage}
-        submitLabel="Autorizar y continuar"
       />
 
       <CashierPrebillDialog

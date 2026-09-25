@@ -113,6 +113,23 @@ export function actorLabel(value) {
   return labels[type] || "Sistema";
 }
 
+export const ONLINE_ORDER_CANCELLATION_REASONS = [
+  { value: "customer_changed_mind", label: "Cliente cambió de opinión" },
+  { value: "capture_error", label: "Error de captura" },
+  { value: "service_issue", label: "Problema de servicio" },
+  { value: "quality_issue", label: "Problema de calidad" },
+  { value: "preparation_incident", label: "Incidente de preparación" },
+  { value: "courtesy_compensation", label: "Cortesía o compensación" },
+  { value: "other", label: "Otro" },
+];
+
+export function cancellationReasonLabel(value) {
+  const code = String(value || "").toLowerCase();
+  const reason = ONLINE_ORDER_CANCELLATION_REASONS.find((item) => item.value === code);
+
+  return reason?.label || "Motivo no disponible";
+}
+
 export function formatCurrency(value) {
   const safe = Number(value || 0);
 

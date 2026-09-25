@@ -18,7 +18,7 @@ export default function CashierOnlineOrderActionDialog({
   onConfirm,
 }) {
   const [reason, setReason] = useState("");
-  const config = getActionConfig(action, order);
+  const config = getActionConfig(action);
 
   useEffect(() => {
     if (open) setReason("");
@@ -34,7 +34,7 @@ export default function CashierOnlineOrderActionDialog({
       open={open}
       title={config.title}
       description={config.description}
-      icon={["reject", "cancel"].includes(action) ? null : config.icon}
+      icon={action === "reject" ? null : config.icon}
       busy={submitting}
       maxWidth="sm"
       onClose={onClose}
@@ -164,9 +164,7 @@ function FieldBlock({ label, input }) {
   );
 }
 
-function getActionConfig(action, order) {
-  const isPaid = String(order?.financial_status || "").toLowerCase() === "paid";
-
+function getActionConfig(action) {
   const configs = {
     reject: {
       title: "Rechazar pedido",
@@ -179,20 +177,6 @@ function getActionConfig(action, order) {
       requiresReason: true,
       reasonLabel: "Motivo *",
       reasonPlaceholder: "Escribe el motivo por el que no se atenderá este pedido",
-    },
-    cancel: {
-      title: "Cancelar pedido",
-      description: "Confirma la cancelación de este Pedido en línea.",
-      notice: isPaid
-        ? "Este pedido ya está pagado. La cancelación se procesará conforme a las reglas financieras aplicables al pedido."
-        : "Al confirmar, el pedido se cancelará y dejará de continuar su atención.",
-      confirmLabel: "Cancelar pedido",
-      loadingLabel: "Cancelando…",
-      color: "error",
-      icon: <CloseRoundedIcon />,
-      requiresReason: true,
-      reasonLabel: "Motivo *",
-      reasonPlaceholder: "Escribe el motivo por el que se cancelará este pedido",
     },
     release: {
       title: "Liberar pedido",

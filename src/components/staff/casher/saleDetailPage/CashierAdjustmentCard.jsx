@@ -1,8 +1,9 @@
 // src/components/staff/casher/saleDetailPage/CashierAdjustmentCard.jsx
-//Tarjetita de ajustes y cancelaciones
-import React, { useMemo, useState } from "react";
+//Tarjetita para corregir cuenta antes del cobro 
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Button, Card, CardContent, Chip, IconButton, MenuItem, Stack, TextField, Typography,
+  Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress,
+  FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import PlaylistRemoveRoundedIcon from "@mui/icons-material/PlaylistRemoveRounded";
@@ -28,10 +29,32 @@ export default function CashierAdjustmentCard({
   cancelOrderReason = "",
   onCancelOrderReasonChange,
   onSubmitCancelOrder,
+  authorizers = [],
+  loadingAuthorizers = false,
+  authorizationError = "",
+  hasManualDiscountsAffected = false,
   busy = false,
   disabled = false,
 }) {
   const [activeMode, setActiveMode] = useState("partial");
+  const [authorizationUserId, setAuthorizationUserId] = useState("");
+  const [authorizationPin, setAuthorizationPin] = useState("");
+  const [clearDiscountsConfirmed, setClearDiscountsConfirmed] = useState(false);
+
+  const safeAuthorizers = useMemo(
+    () => (Array.isArray(authorizers) ? authorizers : []),
+    [authorizers]
+  );
+
+  useEffect(() => {
+    setAuthorizationUserId("");
+    setAuthorizationPin("");
+    setClearDiscountsConfirmed(false);
+  }, [sale?.id, sale?.sale_id]);
+
+  useEffect(() => {
+    if (!hasManualDiscountsAffected) setClearDiscountsConfirmed(false);
+  }, [hasManualDiscountsAffected]);
 
   const currentOrderCheckId = normalizePositiveId(
     orderCheckId ??
@@ -307,7 +330,26 @@ export default function CashierAdjustmentCard({
   const canSubmitCancelOrder =
     cleanText(cancelOrderReason) !== "" &&
     (!hasMultipleOrders || resolvedCancelOrderId !== null);
+  
+  const authorizationComplete =
+    Number(authorizationUserId) > 0 &&
+    authorizationPin.trim() !== "" &&
+    safeAuthorizers.length > 0 &&
+    !loadingAuthorizers;
 
+  const discountsConfirmationComplete =
+    !hasManualDiscountsAffected || clearDiscountsConfirmed;
+
+  const canSubmitPartialCorrection =
+    canSubmitPartial &&
+    authorizationComplete &&
+    discountsConfirmationComplete;
+
+  const canSubmitOrderCorrection =
+    canSubmitCancelOrder &&
+    authorizationComplete &&
+    discountsConfirmationComplete;
+  
   const cancelAmount = toNumber(
     summary?.adjustment_summary?.cancel_amount,
     0
@@ -335,26 +377,40 @@ export default function CashierAdjustmentCard({
     ? summary.adjustments
     : [];
 
-  const handleSubmitPartial = () => {
-    if (!canSubmitPartial) return;
+  const buildAuthorizationPayload = () => ({
+    authorization_user_id: Number(authorizationUserId),
+    authorization_pin: authorizationPin.trim(),
+    clear_discounts_on_restructure:
+      hasManualDiscountsAffected && clearDiscountsConfirmed,
+  });
 
-    onSubmitPartial?.({
+  const handleSubmitPartial = async () => {
+    if (!canSubmitPartialCorrection) return;
+
+    await onSubmitPartial?.({
       reason: partialReason,
       items: normalizedPartialDrafts.map((draft) => ({
         order_item_id: draft.orderItemId,
         quantity: draft.quantity,
       })),
+      ...buildAuthorizationPayload(),
     });
+
+    setAuthorizationPin("");
   };
 
-  const handleSubmitCancelOrder = () => {
-    if (!canSubmitCancelOrder) return;
+  const handleSubmitCancelOrder = async () => {
+    if (!canSubmitOrderCorrection) return;
 
-    onSubmitCancelOrder?.({
+    await onSubmitCancelOrder?.({
       order_id: resolvedCancelOrderId,
       reason: cleanText(cancelOrderReason),
+      ...buildAuthorizationPayload(),
     });
+
+    setAuthorizationPin("");
   };
+
 
   return (
     <Card
@@ -369,26 +425,12 @@ export default function CashierAdjustmentCard({
       <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
           <Box>
-            <Typography
-              sx={{
-                fontSize: 22,
-                fontWeight: 800,
-                color: "text.primary",
-              }}
-            >
-              Ajustes y cancelaciones
+            <Typography sx={{ fontSize: 22, fontWeight: 800, color: "text.primary" }}>
+              Corregir cuenta
             </Typography>
 
-            <Typography
-              sx={{
-                mt: 0.5,
-                fontSize: 14,
-                color: "text.secondary",
-                lineHeight: 1.5,
-              }}
-            >
-              Cancela productos asignados a esta cuenta o cancela una orden
-              completa del paquete antes de iniciar el pago.
+            <Typography sx={{ mt: 0.5, fontSize: 14, color: "text.secondary", lineHeight: 1.5 }}>
+              Retira productos de la cuenta o cancela una orden completa del paquete antes de iniciar el cobro.
             </Typography>
           </Box>
 
@@ -408,7 +450,7 @@ export default function CashierAdjustmentCard({
               />
 
               <InfoRow
-                label="Monto cancelado"
+                label="Total retirado"
                 value={formatCurrency(cancelAmount)}
               />
 
@@ -446,16 +488,16 @@ export default function CashierAdjustmentCard({
               <ModeButton
                 active={activeMode === "partial"}
                 icon={<PlaylistRemoveRoundedIcon />}
-                title="Cancelación parcial"
-                subtitle="Cancelar productos"
+                title="Quitar productos"
+                subtitle="Retirar productos de la cuenta"
                 onClick={() => setActiveMode("partial")}
               />
 
               <ModeButton
                 active={activeMode === "total"}
                 icon={<RemoveShoppingCartRoundedIcon />}
-                title="Cancelación total"
-                subtitle="Cancelar una orden"
+                title="Cancelar orden completa"
+                subtitle="Cancelar una orden del paquete"
                 onClick={() => setActiveMode("total")}
                 danger
               />
@@ -480,13 +522,8 @@ export default function CashierAdjustmentCard({
                 >
                   <PlaylistRemoveRoundedIcon color="warning" />
 
-                  <Typography
-                    sx={{
-                      fontSize: 18,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Cancelación parcial por ítems
+                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                    Quitar productos de la cuenta
                   </Typography>
                 </Stack>
 
@@ -554,7 +591,7 @@ export default function CashierAdjustmentCard({
                                   color: "text.primary",
                                 }}
                               >
-                                Ítem a cancelar {index + 1}
+                                Producto a retirar {index + 1}
                               </Typography>
 
                               <IconButton
@@ -578,7 +615,7 @@ export default function CashierAdjustmentCard({
                               spacing={2}
                             >
                               <FieldBlock
-                                label="Ítem *"
+                                label="Producto *"
                                 input={
                                   <TextField
                                     select
@@ -596,7 +633,7 @@ export default function CashierAdjustmentCard({
                                     disabled={busy || disabled}
                                   >
                                     <MenuItem value="">
-                                      Selecciona un ítem
+                                      Selecciona un producto
                                     </MenuItem>
 
                                     {selectableItems.map(
@@ -708,14 +745,10 @@ export default function CashierAdjustmentCard({
                                     color: "text.primary",
                                   }}
                                 >
-                                  Disponible en esta cuenta:{" "}
-                                  {formatQuantity(
-                                    selectedItem.availableQty
-                                  )}{" "}
+                                  Disponible para retirar:{" "}
+                                  {formatQuantity(selectedItem.availableQty)}{" "}
                                   · Precio unitario:{" "}
-                                  {formatCurrency(
-                                    selectedItem.unitPrice
-                                  )}
+                                  {formatCurrency(selectedItem.unitPrice)}
                                 </Typography>
                               </Box>
                             ) : null}
@@ -726,72 +759,31 @@ export default function CashierAdjustmentCard({
                   </Stack>
                 ) : (
                   <HelperBox>
-                    Agrega uno o más productos de esta cuenta. Si la
-                    cancelación dejara la orden en cero, deberás utilizar
-                    la cancelación total.
+                    Agrega uno o más productos que deban retirarse. Si la corrección deja la orden en cero,
+                    deberás cancelar la orden completa.
                   </HelperBox>
                 )}
 
-                <Stack
-                  direction={{
-                    xs: "column",
-                    sm: "row",
-                  }}
-                  spacing={1.25}
-                  justifyContent="space-between"
-                >
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                   <Button
                     variant="outlined"
                     onClick={onAddPartialDraft}
-                    disabled={
-                      busy ||
-                      disabled ||
-                      selectableItems.length === 0
-                    }
+                    disabled={busy || disabled || selectableItems.length === 0}
                     startIcon={<AddRoundedIcon />}
                     sx={{
-                      minWidth: {
-                        xs: "100%",
-                        sm: 220,
-                      },
+                      minWidth: { xs: "100%", sm: 220 },
                       height: 42,
                       borderRadius: 2,
                       fontWeight: 800,
                     }}
                   >
-                    Agregar ítem a cancelar
-                  </Button>
-
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    onClick={handleSubmitPartial}
-                    disabled={
-                      busy ||
-                      disabled ||
-                      !canSubmitPartial
-                    }
-                    startIcon={
-                      <PlaylistRemoveRoundedIcon />
-                    }
-                    sx={{
-                      minWidth: {
-                        xs: "100%",
-                        sm: 240,
-                      },
-                      height: 42,
-                      borderRadius: 2,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Aplicar cancelación parcial
+                    Agregar producto
                   </Button>
                 </Stack>
 
                 {selectableItems.length === 0 ? (
                   <HelperBox>
-                    No se encontraron productos principales con cantidad
-                    disponible en esta cuenta.
+                    No se encontraron productos principales con cantidad disponible para retirar.
                   </HelperBox>
                 ) : null}
               </Stack>
@@ -814,13 +806,8 @@ export default function CashierAdjustmentCard({
                 >
                   <RemoveShoppingCartRoundedIcon color="error" />
 
-                  <Typography
-                    sx={{
-                      fontSize: 18,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Cancelación total de una orden
+                  <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                    Cancelar orden completa
                   </Typography>
                 </Stack>
 
@@ -924,45 +911,170 @@ export default function CashierAdjustmentCard({
                         lineHeight: 1.55,
                       }}
                     >
-                      La cancelación afectará únicamente la orden
-                      seleccionada. La mesa se liberará solo cuando no
-                      existan otras órdenes activas relacionadas. La sesión
-                      asociada a la orden cancelada se cerrará cuando
-                      corresponda.
+                      Se cancelará por completo la orden seleccionada. Las demás órdenes del paquete
+                      continuarán activas. La mesa se liberará únicamente cuando ya no existan órdenes
+                      activas relacionadas.
                     </Typography>
                   </Stack>
                 </Box>
-
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleSubmitCancelOrder}
-                  disabled={
-                    busy ||
-                    disabled ||
-                    !canSubmitCancelOrder
-                  }
-                  startIcon={
-                    <RemoveShoppingCartRoundedIcon />
-                  }
-                  sx={{
-                    alignSelf: "flex-end",
-                    minWidth: {
-                      xs: "100%",
-                      sm: 260,
-                    },
-                    height: 42,
-                    borderRadius: 2,
-                    fontWeight: 800,
-                  }}
-                >
-                  {hasMultipleOrders
-                    ? "Cancelar orden seleccionada"
-                    : "Cancelar orden completa"}
-                </Button>
               </Stack>
             </Box>
           )}
+
+          <Box
+            sx={{
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              backgroundColor: "#FCFCFC",
+              p: 2,
+            }}
+          >
+            <Stack spacing={1.75}>
+              <Box>
+                <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
+                  Autorización operativa
+                </Typography>
+
+                <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
+                  La corrección requiere autorización. El motivo indicado arriba será también el motivo registrado en la auditoría.
+                </Typography>
+              </Box>
+
+              {loadingAuthorizers ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CircularProgress size={20} />
+                  <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                    Cargando autorizadores…
+                  </Typography>
+                </Stack>
+              ) : null}
+
+              {authorizationError ? (
+                <Alert severity="warning" variant="outlined">
+                  {authorizationError}
+                </Alert>
+              ) : null}
+
+              {!loadingAuthorizers && safeAuthorizers.length === 0 && !authorizationError ? (
+                <Alert severity="warning" variant="outlined">
+                  No hay autorizadores operativos disponibles para esta sucursal.
+                </Alert>
+              ) : null}
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                  gap: 2,
+                }}
+              >
+                <FieldBlock
+                  label="Autorizador *"
+                  input={
+                    <TextField
+                      select
+                      fullWidth
+                      value={authorizationUserId}
+                      onChange={(event) => setAuthorizationUserId(event.target.value)}
+                      disabled={busy || disabled || loadingAuthorizers || safeAuthorizers.length === 0}
+                    >
+                      <MenuItem value="">Selecciona un autorizador</MenuItem>
+
+                      {safeAuthorizers.map((authorizer) => (
+                        <MenuItem key={authorizer.user_id} value={authorizer.user_id}>
+                          {authorizer.name || `Usuario #${authorizer.user_id}`}
+                          {authorizer.email ? ` · ${authorizer.email}` : ""}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  }
+                />
+
+                <FieldBlock
+                  label="PIN *"
+                  input={
+                    <TextField
+                      fullWidth
+                      type="password"
+                      value={authorizationPin}
+                      onChange={(event) => setAuthorizationPin(event.target.value.slice(0, 20))}
+                      inputProps={{ maxLength: 20 }}
+                      autoComplete="off"
+                      placeholder="PIN del autorizador"
+                      disabled={busy || disabled}
+                    />
+                  }
+                />
+              </Box>
+
+              {hasManualDiscountsAffected ? (
+                <Alert severity="warning" variant="outlined">
+                  <Stack spacing={1}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 800 }}>
+                      Esta cuenta tiene descuentos manuales.
+                    </Typography>
+
+                    <Typography sx={{ fontSize: 13, lineHeight: 1.5 }}>
+                      Al modificar su estructura, los descuentos manuales afectados serán retirados.
+                      Después podrás revisar la cuenta y aplicar nuevamente los descuentos que correspondan.
+                    </Typography>
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={clearDiscountsConfirmed}
+                          onChange={(event) => setClearDiscountsConfirmed(event.target.checked)}
+                          disabled={busy || disabled}
+                        />
+                      }
+                      label="Confirmo que los descuentos manuales afectados pueden retirarse."
+                    />
+                  </Stack>
+                </Alert>
+              ) : null}
+
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="flex-end">
+                {activeMode === "partial" ? (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={handleSubmitPartial}
+                    disabled={busy || disabled || !canSubmitPartialCorrection}
+                    startIcon={<PlaylistRemoveRoundedIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 220 },
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {busy ? "Procesando…" : "Quitar productos"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleSubmitCancelOrder}
+                    disabled={busy || disabled || !canSubmitOrderCorrection}
+                    startIcon={<RemoveShoppingCartRoundedIcon />}
+                    sx={{
+                      minWidth: { xs: "100%", sm: 260 },
+                      height: 42,
+                      borderRadius: 2,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {busy
+                      ? "Procesando…"
+                      : hasMultipleOrders
+                      ? "Cancelar orden seleccionada"
+                      : "Cancelar orden completa"}
+                  </Button>
+                )}
+              </Stack>
+            </Stack>
+          </Box>
 
           <Box>
             <Typography
@@ -973,7 +1085,7 @@ export default function CashierAdjustmentCard({
                 mb: 1.25,
               }}
             >
-              Historial de ajustes
+              Historial de correciones
             </Typography>
 
             {adjustments.length > 0 ? (
@@ -1014,19 +1126,16 @@ export default function CashierAdjustmentCard({
                               <Chip
                                 size="small"
                                 label={
-                                  adjustment.type ===
-                                  "cancel_order"
-                                    ? "Cancelación total"
-                                    : "Cancelación parcial"
+                                  adjustment.type === "cancel_order"
+                                    ? "Orden cancelada"
+                                    : adjustment.type === "cancel_item"
+                                    ? "Productos retirados"
+                                    : "Corrección"
                                 }
                               />
-
                               <Chip
                                 size="small"
-                                label={`Estado: ${
-                                  adjustment.status ||
-                                  "—"
-                                }`}
+                                label={`Estado: ${resolveAdjustmentStatusLabel(adjustment.status)}`}
                               />
                             </Stack>
 
@@ -1114,7 +1223,7 @@ export default function CashierAdjustmentCard({
               </Stack>
             ) : (
               <HelperBox>
-                No hay ajustes aplicados para esta cuenta.
+                No hay correcciones aplicadas para esta cuenta.
               </HelperBox>
             )}
           </Box>
@@ -1373,10 +1482,10 @@ function resolveAdjustmentItemName(row) {
   const orderItem = row?.order_item || null;
 
   if (!orderItem) {
-    return `Ítem #${row?.order_item_id || "—"}`;
+    return `Producto #${row?.order_item_id || "—"}`;
   }
 
-  return `Ítem #${orderItem.id}`;
+  return `Producto #${orderItem.id}`;
 }
 
 function normalizePositiveId(value) {
@@ -1394,6 +1503,15 @@ function normalizePositiveId(value) {
     normalized > 0
     ? normalized
     : null;
+}
+
+function resolveAdjustmentStatusLabel(status) {
+  const value = String(status || "").toLowerCase();
+
+  if (value === "applied") return "Aplicado";
+  if (value === "voided") return "Anulado";
+
+  return status || "—";
 }
 
 function normalizePositiveInteger(value) {

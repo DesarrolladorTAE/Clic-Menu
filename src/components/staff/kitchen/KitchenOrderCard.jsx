@@ -21,12 +21,17 @@ import {
   emptyItemsTitle,
   formatElapsed,
   formatWhen,
+  getKitchenEffectiveQuantity,
+  getPreparedReuseBadge,
   groupItemModifiers,
+  isKitchenItemEffective,
   metaDot,
   modifierLabel,
   noticePendingPill,
   noticeSentPill,
   pill,
+  preparedReusePill,
+  preparedReuseRow,
   prettyNotes,
   qtyDot,
   tItemStatus,
@@ -70,14 +75,19 @@ export default function KitchenOrderCard({
   busyItemIds,
   itemConsumptionState,
 }) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const rawItems = Array.isArray(order?.items) ? order.items : [];
+  const items = rawItems.filter(isKitchenItemEffective);
   const createdAt = formatWhen(order?.created_at);
+  const hasVisibleItems = items.length > 0;
 
-  const allReady = !!order?.all_ready || Number(order?.non_ready_count || 0) === 0;
+  const allReady =
+    typeof order?.all_ready === "boolean"
+      ? order.all_ready
+      : hasVisibleItems && Number(order?.non_ready_count || 0) === 0;
+
   const orderStatusEs = tOrderStatus(order?.status);
   const canNotifyReady = !!order?.actions?.can_notify_ready;
   const readyNoticeSent = !!order?.ready_notice_sent;
-  const hasVisibleItems = items.length > 0;
   const groupedView = useMemo(() => buildKitchenItemsView(items), [items]);
 
   const orderSource = String(order?.source || "").trim().toLowerCase();
@@ -284,6 +294,8 @@ function ItemRow({
   consumptionState,
   compact = false,
 }) {
+  if (!isKitchenItemEffective(item)) return null;
+
   const st = String(item?.kitchen_status || "");
   const canStart = st === "queued";
   const canReady = st === "in_progress";
@@ -298,6 +310,8 @@ function ItemRow({
   const notes = prettyNotes(item?.notes);
   const itemStatusEs = tItemStatus(st);
   const groupedModifiers = groupItemModifiers(item?.modifiers);
+  const effectiveQuantity = getKitchenEffectiveQuantity(item);
+  const preparedReuseBadge = getPreparedReuseBadge(item);
 
   return (
     <div
@@ -309,11 +323,18 @@ function ItemRow({
     >
       <div style={ticketLeft}>
         <div style={ticketItemTop}>
-          <span style={qtyDot}>{item?.quantity ?? 1}</span>
+          <span style={qtyDot}>{effectiveQuantity}</span>
+
           <div style={{ minWidth: 0 }}>
             <div style={ticketItemName} title={name}>
               {name}
             </div>
+
+            {preparedReuseBadge ? (
+              <div style={preparedReuseRow}>
+                <span style={preparedReusePill}>{preparedReuseBadge}</span>
+              </div>
+            ) : null}
 
             {notes ? <div style={ticketNotes}>{notes}</div> : null}
 

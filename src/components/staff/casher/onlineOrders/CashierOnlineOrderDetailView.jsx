@@ -1,19 +1,13 @@
 import React from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Divider,
-  Stack,
-  Typography,
+  Alert, Box, Button, Card, CardContent, Chip, Divider, Stack, Typography,
 } from "@mui/material";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 
 import {
   actorLabel,
+  cancellationReasonLabel,
   financialStatusLabel,
   formatCurrency,
   formatDate,
@@ -171,6 +165,10 @@ export default function CashierOnlineOrderDetailView({
         ) : null}
       </SectionCard>
 
+      <SectionCard title="Cancelaciones">
+        <CancellationHistory rows={order?.cancellation_history} />
+      </SectionCard>
+
       <SectionCard title="Historial">
         <StatusHistory rows={order?.status_history} />
       </SectionCard>
@@ -307,6 +305,11 @@ function ProductRow({ item }) {
   const name = item?.product_name || item?.name || "Producto";
   const variant = item?.variant_name || "";
   const quantity = Number(item?.quantity ?? 1);
+  const originalQuantity = Number(item?.original_quantity ?? quantity);
+  const cancelledQuantity = Number(item?.cancelled_quantity ?? 0);
+  const effectiveQuantity = Number(item?.effective_quantity ?? quantity);
+  const hasCancellation = cancelledQuantity > 0;
+  const isPreparedReuse = String(item?.fulfillment_source || "") === "prepared_reuse";
   const total = item?.net_line_total ?? item?.line_total ?? item?.total ?? item?.subtotal;
   const children = getProductChildren(item);
 
@@ -323,9 +326,21 @@ function ProductRow({ item }) {
       <Stack spacing={1}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
-              {name}
-            </Typography>
+            <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ gap: 0.75 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
+                {name}
+              </Typography>
+
+              {isPreparedReuse ? (
+                <Chip
+                  label="Preparación rápida"
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 23, fontSize: 11.5, fontWeight: 800 }}
+                />
+              ) : null}
+            </Stack>
 
             {variant ? (
               <Typography sx={{ mt: 0.25, fontSize: 12, color: "text.secondary" }}>
@@ -333,9 +348,23 @@ function ProductRow({ item }) {
               </Typography>
             ) : null}
 
-            <Typography sx={{ mt: 0.4, fontSize: 12, color: "text.secondary" }}>
-              Cantidad: {Number.isFinite(quantity) ? quantity : 1}
-            </Typography>
+            {hasCancellation ? (
+              <Stack spacing={0.2} sx={{ mt: 0.6 }}>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                  Cantidad original: {originalQuantity}
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: "error.main", fontWeight: 700 }}>
+                  Cancelada: {cancelledQuantity}
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: "text.primary", fontWeight: 800 }}>
+                  Cantidad efectiva: {effectiveQuantity}
+                </Typography>
+              </Stack>
+            ) : (
+              <Typography sx={{ mt: 0.4, fontSize: 12, color: "text.secondary" }}>
+                Cantidad: {effectiveQuantity}
+              </Typography>
+            )}
           </Box>
 
           {total !== undefined && total !== null ? (
@@ -347,15 +376,19 @@ function ProductRow({ item }) {
 
         {children.length > 0 ? (
           <Stack spacing={0.5} pl={1.5} sx={{ borderLeft: "2px solid", borderColor: "divider" }}>
-            {children.map((child, index) => (
-              <Typography
-                key={child?.id || `child:${index}`}
-                sx={{ fontSize: 12, color: "text.secondary", wordBreak: "break-word" }}
-              >
-                {child?.product_name || child?.name || child?.option_name || "Complemento"}
-                {child?.quantity ? ` · ${child.quantity}` : ""}
-              </Typography>
-            ))}
+            {children.map((child, index) => {
+              const childQuantity = child?.effective_quantity ?? child?.quantity;
+
+              return (
+                <Typography
+                  key={child?.id || `child:${index}`}
+                  sx={{ fontSize: 12, color: "text.secondary", wordBreak: "break-word" }}
+                >
+                  {child?.product_name || child?.name || child?.option_name || "Complemento"}
+                  {childQuantity !== undefined && childQuantity !== null ? ` · ${childQuantity}` : ""}
+                </Typography>
+              );
+            })}
           </Stack>
         ) : null}
       </Stack>
@@ -390,6 +423,80 @@ function DestinationSnapshot({ snapshot }) {
       </Box>
     </>
   );
+}
+
+function CancellationHistory({ rows }) {
+  const history = Array.isArray(rows) ? rows : [];
+
+  if (history.length === 0) {
+    return (
+      <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+        No hay cancelaciones aplicadas.
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack spacing={1}>
+      {history.map((row, index) => (
+        <Box
+          key={row?.id || `cancellation:${index}`}
+          sx={{
+            p: 1.5,
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+            bgcolor: "background.default",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            spacing={1}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 800, color: "text.primary" }}>
+                {cancellationTypeLabel(row?.type)}
+              </Typography>
+
+              <Typography sx={{ mt: 0.3, fontSize: 12, color: "text.secondary" }}>
+                {cancellationReasonLabel(row?.reason_code)}
+              </Typography>
+
+              <Typography sx={{ mt: 0.3, fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+                {cancelledQuantityLabel(row?.cancelled_quantity)}
+              </Typography>
+
+              {row?.reason_note ? (
+                <Typography sx={{ mt: 0.6, fontSize: 12, color: "text.secondary", lineHeight: 1.5, fontStyle: "italic" }}>
+                  “{row.reason_note}”
+                </Typography>
+              ) : null}
+            </Box>
+
+            <Typography sx={{ fontSize: 12, color: "text.secondary", whiteSpace: "nowrap" }}>
+              {formatDateTime(row?.resolved_at)}
+            </Typography>
+          </Stack>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function cancellationTypeLabel(type) {
+  const labels = {
+    full: "Cancelación total",
+    partial: "Cancelación parcial",
+  };
+
+  return labels[String(type || "").toLowerCase()] || "Cancelación";
+}
+
+function cancelledQuantityLabel(value) {
+  const quantity = Number(value || 0);
+  return quantity === 1 ? "1 unidad cancelada" : `${quantity} unidades canceladas`;
 }
 
 function StatusHistory({ rows }) {

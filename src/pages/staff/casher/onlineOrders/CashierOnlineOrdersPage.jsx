@@ -13,6 +13,7 @@ import {
   cancelCashierOnlineOrder,
   confirmCashierOnlineOrderPreparation,
   deliverCashierOnlineOrder,
+  fetchCashierOnlineOrderDetail,
   fetchCashierOnlineOrderNewNotifications,
   fetchCashierOnlineOrders,
   markCashierOnlineOrderNewNotificationRead,
@@ -42,11 +43,12 @@ import CashierOnlineOrdersHeroCard from "../../../../components/staff/casher/onl
 import CashierOnlineOrdersTabs from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersTabs";
 import CashierOnlineOrdersPanel from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrdersPanel";
 import CashierOnlineOrderActionDialog from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrderActionDialog";
+import CashierOnlineOrderCancellationDialog from "../../../../components/staff/casher/onlineOrders/CashierOnlineOrderCancellationDialog";
 import CashierOperationalAuthorizationDialog from "../../../../components/staff/casher/authorization/CashierOperationalAuthorizationDialog";
 import CashierReadyNotificationsDrawer from "../../../../components/staff/casher/queuePage/CashierReadyNotificationsDrawer";
 
 const PAGE_SIZE = 5;
-const DIALOG_ACTIONS = ["reject", "release", "deliver", "cancel"];
+const DIALOG_ACTIONS = ["reject", "release", "deliver"];
 
 export default function CashierOnlineOrdersPage() {
   const nav = useNavigate();
@@ -63,6 +65,13 @@ export default function CashierOnlineOrdersPage() {
   const [busyAction, setBusyAction] = useState("");
   const [dialogAction, setDialogAction] = useState("");
   const [dialogOrder, setDialogOrder] = useState(null);
+
+  const [cancellationOrder, setCancellationOrder] = useState(null);
+  const [cancellationDetail, setCancellationDetail] = useState(null);
+  const [cancellationDetailLoading, setCancellationDetailLoading] = useState(false);
+  const [cancellationAuthorizers, setCancellationAuthorizers] = useState([]);
+  const [cancellationAuthorizersLoading, setCancellationAuthorizersLoading] = useState(false);
+  const [cancellationSubmitting, setCancellationSubmitting] = useState(false);
 
   const [reopenAuthorizationOpen, setReopenAuthorizationOpen] = useState(false);
   const [reopenAuthorizationLoading, setReopenAuthorizationLoading] = useState(false);
@@ -387,6 +396,9 @@ export default function CashierOnlineOrdersPage() {
     mode: "frontend",
   });
 
+  const cancellationBusy = cancellationDetailLoading || cancellationAuthorizersLoading || cancellationSubmitting;
+  const cancellationBusyOrderId = Number(cancellationOrder?.id || 0);
+
   const handleTabChange = (nextTab) => {
     const resolved = nextTab === "mine" ? "mine" : "available";
     setTab(resolved);
@@ -464,6 +476,89 @@ export default function CashierOnlineOrdersPage() {
     nav(`/staff/cashier/online-orders/${onlineOrderId}/payment`, {
       state: { fromTab: "mine" },
     });
+  };
+
+  const handleRequestCancellation = async (order) => {
+    const onlineOrderId = Number(order?.id || 0);
+    if (!onlineOrderId || cancellationDetailLoading || cancellationAuthorizersLoading || cancellationSubmitting) return;
+
+    setCancellationOrder(order);
+    setCancellationDetail(null);
+    setCancellationAuthorizers([]);
+    setCancellationDetailLoading(true);
+    setCancellationAuthorizersLoading(true);
+
+    try {
+      const [detailResponse, authorizersResponse] = await Promise.all([
+        fetchCashierOnlineOrderDetail(onlineOrderId),
+        fetchCashierOperationalAuthorizers(),
+      ]);
+
+      const detail = detailResponse?.data || null;
+      const actions = Array.isArray(detail?.actions) ? detail.actions : [];
+
+      if (!detail || !actions.includes("cancel")) {
+        setCancellationOrder(null);
+        setCancellationDetail(null);
+        setCancellationAuthorizers([]);
+
+        showAlert({
+          severity: "warning",
+          title: "Pedido actualizado",
+          message: "El estado actual del pedido ya no permite cancelarlo desde Pedidos en línea.",
+        });
+
+        await load({ silent: true });
+        return;
+      }
+
+      setCancellationDetail(detail);
+      setCancellationAuthorizers(Array.isArray(authorizersResponse?.data) ? authorizersResponse.data : []);
+    } catch (error) {
+      setCancellationOrder(null);
+      setCancellationDetail(null);
+      setCancellationAuthorizers([]);
+      handleRequestError(error, "No se pudo preparar la cancelación del pedido.");
+      await load({ silent: true });
+    } finally {
+      setCancellationDetailLoading(false);
+      setCancellationAuthorizersLoading(false);
+    }
+  };
+
+  const handleCloseCancellation = () => {
+    if (cancellationSubmitting) return;
+
+    setCancellationOrder(null);
+    setCancellationDetail(null);
+    setCancellationAuthorizers([]);
+  };
+
+  const handleCancellationConfirm = async (payload) => {
+    const onlineOrderId = Number(cancellationDetail?.id || cancellationOrder?.id || 0);
+    if (!onlineOrderId || cancellationSubmitting) return;
+
+    setCancellationSubmitting(true);
+
+    try {
+      const response = await cancelCashierOnlineOrder(onlineOrderId, payload);
+
+      setCancellationOrder(null);
+      setCancellationDetail(null);
+      setCancellationAuthorizers([]);
+
+      showAlert({
+        severity: "success",
+        message: response?.message || "Pedido cancelado correctamente.",
+      });
+
+      await load({ silent: true });
+    } catch (error) {
+      handleRequestError(error, "No se pudo cancelar el pedido.");
+      await load({ silent: true });
+    } finally {
+      setCancellationSubmitting(false);
+    }
   };
 
   const handleRequestReopen = async (order) => {
@@ -551,7 +646,14 @@ export default function CashierOnlineOrdersPage() {
 
   const handleOrderAction = (action, order) => {
     const onlineOrderId = Number(order?.id || 0);
-    if (!onlineOrderId || busyOrderId || netpayResumeBusy) return;
+    if (
+      !onlineOrderId ||
+      busyOrderId ||
+      netpayResumeBusy ||
+      cancellationDetailLoading ||
+      cancellationAuthorizersLoading ||
+      cancellationSubmitting
+    ) return;
 
     if (action === "reopen_check") {
       handleRequestReopen(order);
@@ -560,6 +662,11 @@ export default function CashierOnlineOrdersPage() {
 
     if (["prepare_payment", "pay"].includes(action)) {
       handleOpenPayment(order);
+      return;
+    }
+
+    if (action === "cancel") {
+      handleRequestCancellation(order);
       return;
     }
 
@@ -591,10 +698,6 @@ export default function CashierOnlineOrdersPage() {
           response = await rejectCashierOnlineOrder(onlineOrderId, payload.reason);
           break;
         
-        case "cancel":
-          response = await cancelCashierOnlineOrder(onlineOrderId, payload.reason);
-          break;
-
         case "take":
           response = await takeCashierOnlineOrder(onlineOrderId);
           break;
@@ -696,9 +799,9 @@ export default function CashierOnlineOrdersPage() {
         <CashierOnlineOrdersPanel
           mode={tab}
           orders={paginatedItems}
-          busyOrderId={busyOrderId}
-          busyAction={busyAction}
-          actionsDisabled={netpayResumeBusy}
+          busyOrderId={cancellationBusy && cancellationBusyOrderId ? cancellationBusyOrderId : busyOrderId}
+          busyAction={cancellationBusy && cancellationBusyOrderId ? "cancel" : busyAction}
+          actionsDisabled={netpayResumeBusy || cancellationBusy}
           page={page}
           totalPages={totalPages}
           startItem={startItem}
@@ -720,6 +823,16 @@ export default function CashierOnlineOrdersPage() {
         submitting={Boolean(dialogOrder) && Number(busyOrderId || 0) === Number(dialogOrder?.id || 0) && busyAction === dialogAction}
         onClose={handleDialogClose}
         onConfirm={handleDialogConfirm}
+      />
+
+      <CashierOnlineOrderCancellationDialog
+        open={Boolean(cancellationOrder && cancellationDetail)}
+        order={cancellationDetail}
+        authorizers={cancellationAuthorizers}
+        loadingAuthorizers={cancellationAuthorizersLoading}
+        submitting={cancellationSubmitting}
+        onClose={handleCloseCancellation}
+        onConfirm={handleCancellationConfirm}
       />
 
       <CashierOperationalAuthorizationDialog

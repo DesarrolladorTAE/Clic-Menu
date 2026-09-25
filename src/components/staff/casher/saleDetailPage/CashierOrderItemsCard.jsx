@@ -226,7 +226,15 @@ function OrderItemBlock({ item, level = 0 }) {
     ? item.applied_promotions
     : [];
 
-  const quantity = toNumber(item?.quantity ?? item?.qty, 1);
+  const capturedQuantity = toNumber(item?.quantity ?? item?.qty, 1);
+  const originalQuantity = toNumber(item?.original_quantity ?? capturedQuantity, capturedQuantity);
+  const cancelledQuantity = toNumber(item?.cancelled_quantity, 0);
+  const quantity =
+    item?.effective_quantity !== undefined && item?.effective_quantity !== null
+      ? toNumber(item.effective_quantity, capturedQuantity)
+      : capturedQuantity;
+  const hasCancellationDetails = cancelledQuantity > 0;
+  const isPreparedReuse = String(item?.fulfillment_source || "") === "prepared_reuse";
   const unitPrice = toNumber(item?.unit_price ?? item?.price, 0);
 
   const baseLineTotal = toNumber(
@@ -310,16 +318,27 @@ function OrderItemBlock({ item, level = 0 }) {
                   }}
                 />
               ) : null}
+
+              {isPreparedReuse ? (
+                <Chip
+                  label="Preparación rápida"
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 24, fontSize: 12, fontWeight: 800, flexShrink: 0 }}
+                />
+              ) : null}
+
             </Stack>
 
+            {hasCancellationDetails ? (
+              <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
+                Original: {formatQuantity(originalQuantity)} · Cancelado: {formatQuantity(cancelledQuantity)} · Vigente: {formatQuantity(quantity)}
+              </Typography>
+            ) : null}
+
             {quantity > 1 && unitPrice > 0 ? (
-              <Typography
-                sx={{
-                  mt: 0.25,
-                  fontSize: 12,
-                  color: "text.secondary",
-                }}
-              >
+              <Typography sx={{ mt: 0.25, fontSize: 12, color: "text.secondary" }}>
                 {formatCurrency(unitPrice)} c/u
               </Typography>
             ) : null}
