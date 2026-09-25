@@ -6,6 +6,7 @@ import echo from "../../realtime/echo";
 
 import {
   callWaiterByTable,
+  fetchPreparedItems,
   requestPublicOrderBill,
 } from "../../services/public/publicMenu.service";
 
@@ -29,8 +30,10 @@ import { useCompositeDrafts } from "../../hooks/public/useCompositeDrafts";
 
 import useMenuSectionSelection from "../../hooks/menu/useMenuSectionSelection";
 import useMenuAvailabilityRealtime from "../../hooks/menu/useMenuAvailabilityRealtime";
+import { usePreparedItemsCollection } from "../../hooks/menu/usePreparedItemsCollection";
 
 import MenuCartFloatingButton from "../../components/menu/shared/MenuCartFloatingButton";
+import PreparedItemsSection from "../../components/menu/shared/prepared-items/PreparedItemsSection";
 import PublicMenuCategoryTabs from "../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 import MenuSectionTabs from "../../components/menu/shared/menuUi/MenuSectionTabs";
 
@@ -73,6 +76,7 @@ export default function PublicMenuEntryPage() {
   const [selectedVariantsProduct, setSelectedVariantsProduct] = useState(null);
 
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  const [cancellationRequestOpen, setCancellationRequestOpen] = useState(false);
 
   const [extrasModalOpen, setExtrasModalOpen] = useState(false);
   const [selectedExtrasProduct, setSelectedExtrasProduct] = useState(null);
@@ -135,6 +139,7 @@ export default function PublicMenuEntryPage() {
       setSelectedVariantsProduct(null);
 
       setCartDrawerOpen(false);
+      setCancellationRequestOpen(false);
 
       setExtrasModalOpen(false);
       setSelectedExtrasProduct(null);
@@ -223,6 +228,45 @@ export default function PublicMenuEntryPage() {
     hasTable &&
     orderingMode === "customer_assisted";
 
+  /*
+   * Preparación rápida:
+   * - QR SALON: sí.
+   * - ONLINE_ORDER: sí.
+   * - WHATSAPP: no.
+   */
+  const preparedItemsEnabled =
+    isPhysicalSalonFlow ||
+    isOnlineOrderFlow;
+
+  const initialPreparedItems = Array.isArray(
+    activeMenuPayload?.quick_preparation?.items,
+  )
+    ? activeMenuPayload.quick_preparation.items
+    : null;
+
+  const loadPreparedItems = useCallback(async () => {
+    if (!preparedItemsEnabled) {
+      return [];
+    }
+
+    return fetchPreparedItems(String(token || ""));
+  }, [preparedItemsEnabled, token]);
+
+  const preparedItemsContextKey = [
+    String(token || ""),
+    qrType,
+    salesChannelCode,
+    String(activeWebChannelId || ""),
+    String(activeMenuPayload?.menu_id || ""),
+  ].join(":");
+
+  const preparedItems = usePreparedItemsCollection({
+    initialItems: initialPreparedItems,
+    loader: loadPreparedItems,
+    enabled: preparedItemsEnabled,
+    contextKey: preparedItemsContextKey,
+  });
+
   const cartOrder = useCartAndOrder({
     token,
     canSelect,
@@ -236,26 +280,37 @@ export default function PublicMenuEntryPage() {
     publicFlow,
     qrType,
     salesChannelCode,
+    onPreparedItemsRefresh: preparedItems.refetch,
   });
 
   const handleOnlineOrderCreated = useCallback(
-  (createdOrder) => {
-    const trackingUrl = String(createdOrder?.tracking_url || "").trim();
-    const trackingToken = String(createdOrder?.tracking_token || "").trim();
+    (createdOrder) => {
+      const trackingUrl = String(createdOrder?.tracking_url || "").trim();
+      const trackingToken = String(createdOrder?.tracking_token || "").trim();
 
-    const safeTrackingUrl = /^\/order\/[A-Za-z0-9]{12}$/.test(trackingUrl)
-      ? trackingUrl
-      : /^[A-Za-z0-9]{12}$/.test(trackingToken)
-        ? `/order/${trackingToken}`
-        : "";
+      const safeTrackingUrl = /^\/order\/[A-Za-z0-9]{12}$/.test(trackingUrl)
+        ? trackingUrl
+        : /^[A-Za-z0-9]{12}$/.test(trackingToken)
+          ? `/order/${trackingToken}`
+          : "";
 
-    if (!safeTrackingUrl) return false;
+      if (!safeTrackingUrl) return false;
 
-    navigate(safeTrackingUrl, { replace: true });
-    return true;
-  },
-  [navigate],
-);
+      navigate(safeTrackingUrl, { replace: true });
+      return true;
+    },
+    [navigate],
+  );
+
+  const handlePreparedItemSelect = (preparedItem) => {
+    const result = cartOrder.addPreparedItem(preparedItem);
+
+    if (result?.ok) {
+      setCartDrawerOpen(true);
+    }
+
+    return result;
+  };
 
   const canStartTableCustomerOrder =
     cartOrder.canStartCustomerOrder !== false;
@@ -688,7 +743,36 @@ export default function PublicMenuEntryPage() {
 
   const cartDisplayName = isOnlineOrderFlow ? "Pedido" : "Comanda";
   const cartInlineName = isOnlineOrderFlow ? "pedido" : "comanda";
-    
+   
+  const handleCancellationContinue = () => {
+    if (!cartOrder.cancellationSummary?.can_continue) {
+      return;
+    }
+
+    setCancellationRequestOpen(true);
+  };
+
+  const handleCloseCancellationRequest = () => {
+    if (cartOrder.cancellationSubmitting) {
+      return;
+    }
+
+    setCancellationRequestOpen(false);
+  };
+
+  const handleSubmitCancellationRequest = async (resolution) => {
+    const result = await cartOrder.requestCancellation(resolution);
+
+    if (!result?.ok) {
+      return result;
+    }
+
+    setCancellationRequestOpen(false);
+    setCartDrawerOpen(true);
+
+    return result;
+  };
+
   const handleRequestBill = async () => {
     const orderId = Number(cartOrder?.activeOrder?.id || 0);
     if (!orderId || billRequesting) return;
@@ -1223,6 +1307,9 @@ export default function PublicMenuEntryPage() {
           pending={pending}
           canAppend={canAppend}
           themeColor={themeColor}
+          cancellationRequestOpen={cancellationRequestOpen}
+          onCloseCancellationRequest={handleCloseCancellationRequest}
+          onSubmitCancellationRequest={handleSubmitCancellationRequest}
           composite={composite}
           compositeModalOpen={compositeModalOpen}
           selectedCompositeProduct={selectedCompositeProduct}
@@ -1248,7 +1335,6 @@ export default function PublicMenuEntryPage() {
         />
 
         <PublicMenuCartDrawerBlock
-          publicFlow={publicFlow}
           open={cartDrawerOpen}
           onClose={() => setCartDrawerOpen(false)}
           cartOrder={cartOrder}
@@ -1260,6 +1346,8 @@ export default function PublicMenuEntryPage() {
           invalidItemsCount={invalidItemsCount}
           submitBlockReason={submitBlockReason}
           themeColor={themeColor}
+          cancellationEnabled={isCustomerAssistedTableFlow}
+          onCancellationContinue={handleCancellationContinue}
           billRequesting={billRequesting}
           billToast={billToast}
           canRequestBill={canRequestBill}
@@ -1346,6 +1434,16 @@ export default function PublicMenuEntryPage() {
             nextPage,
           }}
         />
+
+        {preparedItemsEnabled ? (
+          <PreparedItemsSection
+            items={preparedItems.items}
+            loading={preparedItems.loading}
+            selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
+            themeColor={themeColor}
+            onSelect={handlePreparedItemSelect}
+          />
+        ) : null}
 
         <div style={{ marginTop: 28 }}>
           <PublicMenuFooter

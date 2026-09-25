@@ -27,6 +27,25 @@ export async function fetchCashierDirectMenu({
     },
   );
 
+    return res?.data;
+}
+
+export async function fetchPreparedItems(menuId) {
+  const normalizedMenuId = Number(menuId || 0);
+
+  const params = {
+    _t: Date.now(),
+    ...(normalizedMenuId > 0 ? { menu_id: normalizedMenuId } : {}),
+  };
+
+  const res = await staffApi.get(
+    "/staff/cashier/direct-orders/prepared-items",
+    {
+      params,
+      headers: NO_CACHE_HEADERS,
+    },
+  );
+
   return res?.data;
 }
 

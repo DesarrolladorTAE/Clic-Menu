@@ -51,15 +51,6 @@ export async function releaseTableSession(tableId) {
   return res?.data;
 }
 
-export async function markTablePaid(tableId) {
-  const res = await staffApi.post(
-    `/staff/waiter/tables/${tableId}/mark-paid`,
-    {},
-    { headers: NO_CACHE_HEADERS }
-  );
-  return res?.data;
-}
-
 export async function acceptCustomerOrder(orderId, payload = {}) {
   const body =
     payload && typeof payload === "object" ? payload : {};

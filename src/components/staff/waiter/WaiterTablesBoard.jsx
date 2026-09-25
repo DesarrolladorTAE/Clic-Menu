@@ -10,7 +10,6 @@ export default function WaiterTablesBoard({
   onRejectCall,
   onFinish,
   onReleaseSession,
-  onMarkPaid,
   onAccept,
   onReject,
   onStartPayment,
@@ -43,7 +42,6 @@ export default function WaiterTablesBoard({
           onRejectCall={onRejectCall}
           onFinish={onFinish}
           onReleaseSession={onReleaseSession}
-          onMarkPaid={onMarkPaid}
           onAccept={onAccept}
           onReject={onReject}
           onStartPayment={onStartPayment}

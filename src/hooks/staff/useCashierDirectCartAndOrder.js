@@ -14,8 +14,10 @@ import {
   buildCartKey,
   buildCombinedPricingSummary,
   buildNewItemsPricingSummary,
+  buildPreparedItemErrorMessage,
   extractApiErrorInfo,
   isAvailabilityErrorCode,
+  isPreparedItemError,
   normalizeCompositeComponentsForKey,
   normalizeConfirmedPricingSummary,
   normalizeModifierGroupsForKey,
@@ -30,13 +32,54 @@ import {
   reconcilePendingCartAvailability,
 } from "../menu/menuAvailability.utils";
 
+import {
+  buildPreparedItemCartLine,
+  getPreparedItemId,
+  isPreparedItemAlreadySelected,
+  isPreparedItemLine,
+  serializePreparedItemLine,
+} from "../menu/preparedItem.utils";
+
 const INVALID_CART_MESSAGE =
   "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
+
+function getPreparedItemValidationMessage(source) {
+  const errors =
+    source?.errors && typeof source.errors === "object"
+      ? source.errors
+      : source?.data?.errors && typeof source.data.errors === "object"
+        ? source.data.errors
+        : source?.response?.data?.errors &&
+            typeof source.response.data.errors === "object"
+          ? source.response.data.errors
+          : null;
+
+  if (!errors) {
+    return "";
+  }
+
+  const key = Object.keys(errors).find((name) =>
+    /(^|\.)prepared_item_id$/.test(String(name)),
+  );
+
+  if (!key) {
+    return "";
+  }
+
+  const value = errors[key];
+  const message = Array.isArray(value) ? value[0] : value;
+
+  return message ? String(message) : "";
+}
 
 function normalizeItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
   return arr.map((it) => {
+    if (isPreparedItemLine(it)) {
+      return serializePreparedItemLine(it);
+    }
+
     const out = {
       product_id: Number(it.product_id),
       variant_id: it.variant_id ? Number(it.variant_id) : null,
@@ -90,7 +133,7 @@ function normalizeItemsForApi(cart) {
     }
 
     return out;
-  });
+  }).filter(Boolean);
 }
 
 function hasOwn(source, key) {
@@ -327,6 +370,10 @@ function applyAvailabilityErrorToCart(items, apiError) {
   let marked = false;
 
   return rows.map((item, index) => {
+    if (isPreparedItemLine(item)) {
+      return item;
+    }
+
     const sameIndex = hasItemIndex && index === itemIndex;
     const sameIdentity =
       !hasItemIndex &&
@@ -352,6 +399,7 @@ function applyAvailabilityErrorToCart(items, apiError) {
 export function useCashierDirectCartAndOrder({
   returnSaleId = null,
   selectedMenuId = null,
+  onPreparedItemsRefresh = null,
 } = {}) {
   const navigate = useNavigate();
 
@@ -381,6 +429,111 @@ export function useCashierDirectCartAndOrder({
   const markCartAvailabilityError = useCallback((apiError) => {
     setCart((previous) => applyAvailabilityErrorToCart(previous, apiError));
   }, []);
+
+    const refreshPreparedItemsPool = useCallback(async () => {
+    if (typeof onPreparedItemsRefresh !== "function") {
+      return null;
+    }
+
+    try {
+      return await onPreparedItemsRefresh();
+    } catch {
+      return null;
+    }
+  }, [onPreparedItemsRefresh]);
+
+  const reconcilePreparedItems = useCallback((availablePreparedItems = []) => {
+    const available = Array.isArray(availablePreparedItems)
+      ? availablePreparedItems
+      : [];
+
+    const missingLines = cart.filter((item) => {
+      return isPreparedItemLine(item) && !isPreparedItemAlreadySelected(available, item);
+    });
+
+    if (missingLines.length === 0) {
+      return {
+        ok: true,
+        removed_prepared_item_ids: [],
+        message: "",
+      };
+    }
+
+    const missingIds = new Set(missingLines.map(getPreparedItemId).filter(Boolean));
+
+    setCart((previous) =>
+      previous.filter((item) => {
+        if (!isPreparedItemLine(item)) {
+          return true;
+        }
+
+        return !missingIds.has(getPreparedItemId(item));
+      }),
+    );
+
+    const message =
+      missingLines.length === 1
+        ? `⚠️ ${String(missingLines[0]?.name || "El producto")} de Preparación rápida ya no está disponible y se quitó de la venta.`
+        : `⚠️ ${missingLines.length} productos de Preparación rápida dejaron de estar disponibles y se quitaron de la venta.`;
+
+    setSendToast(message);
+
+    return {
+      ok: false,
+      code: "PREPARED_ITEMS_REMOVED_FROM_CART",
+      removed_prepared_item_ids: Array.from(missingIds),
+      message,
+    };
+  }, [cart]);
+
+  const handlePreparedItemRequestError = useCallback(async (source) => {
+    const apiError = source?.response
+      ? extractApiErrorInfo(source)
+      : {
+          code: String(source?.code || ""),
+          message: String(source?.message || ""),
+          data: source?.data && typeof source.data === "object" ? source.data : null,
+        };
+
+    const validationMessage = getPreparedItemValidationMessage(source);
+
+    if (!validationMessage && !isPreparedItemError(apiError)) {
+      return null;
+    }
+
+    const refreshedItems = await refreshPreparedItemsPool();
+
+    if (Array.isArray(refreshedItems)) {
+      const reconciliation = reconcilePreparedItems(refreshedItems);
+
+      if (reconciliation?.message) {
+        return {
+          ok: false,
+          preparedItemError: true,
+          message: reconciliation.message,
+          data: apiError?.data || null,
+        };
+      }
+    }
+
+    const rawMessage =
+      validationMessage ||
+      buildPreparedItemErrorMessage(apiError) ||
+      "La unidad de Preparación rápida ya no está disponible.";
+
+    const message = String(rawMessage).startsWith("⚠️")
+      ? String(rawMessage)
+      : `⚠️ ${String(rawMessage)}`;
+
+    setSendToast(message);
+
+    return {
+      ok: false,
+      preparedItemError: true,
+      message,
+      data: apiError?.data || null,
+    };
+  }, [reconcilePreparedItems, refreshPreparedItemsPool]);
 
   const normalizedReturnSaleId = Number(returnSaleId || 0);
 
@@ -586,12 +739,41 @@ export function useCashierDirectCartAndOrder({
     });
   }
 
+  function addPreparedItem(preparedItem) {
+    const line = buildPreparedItemCartLine(preparedItem);
+
+    if (!line) {
+      setSendToast("⚠️ La unidad de Preparación rápida no es válida.");
+      return { ok: false };
+    }
+
+    if (isPreparedItemAlreadySelected(cart, line)) {
+      const message = "⚠️ Esta unidad de Preparación rápida ya está en la venta.";
+      setSendToast(message);
+
+      return {
+        ok: false,
+        code: "PREPARED_ITEM_ALREADY_SELECTED",
+        message,
+        prepared_item_id: getPreparedItemId(line),
+      };
+    }
+
+    setCart((previous) => [...previous, line]);
+
+    return {
+      ok: true,
+      prepared_item_id: getPreparedItemId(line),
+      key: line.key,
+    };
+  }
+
   function setCartComponents(itemKey, components, componentsDetail = null) {
     const normalized = normalizeCompositeComponentsForKey(components);
 
     setCart((prev) =>
       prev.map((item) =>
-        item.key === itemKey
+        item.key === itemKey && !isPreparedItemLine(item)
           ? {
               ...item,
               components: normalized,
@@ -613,7 +795,9 @@ export function useCashierDirectCartAndOrder({
 
     setCart((prev) =>
       prev.map((item) =>
-        item.key === key ? { ...item, quantity: nextQty } : item
+        item.key === key && !isPreparedItemLine(item)
+          ? { ...item, quantity: nextQty }
+          : item
       )
     );
   }
@@ -625,6 +809,14 @@ export function useCashierDirectCartAndOrder({
       )
     );
   }
+
+  const selectedPreparedItemIds = useMemo(() => {
+    return Array.from(
+      new Set(
+        cart.map(getPreparedItemId).filter(Boolean),
+      ),
+    );
+  }, [cart]);
 
   const newItemsPricingSummary = useMemo(() => {
     const summary = buildNewItemsPricingSummary(cart);
@@ -821,6 +1013,12 @@ export function useCashierDirectCartAndOrder({
       try {
         res = await createCashierDirectOrder(payload);
       } catch (error) {
+        const preparedError = await handlePreparedItemRequestError(error);
+
+        if (preparedError) {
+          return preparedError;
+        }
+
         const apiError = extractApiErrorInfo(error);
 
         if (isAvailabilityErrorCode(apiError.code)) {
@@ -843,7 +1041,7 @@ export function useCashierDirectCartAndOrder({
 
         setCart([]);
         setSendOpen(false);
-        setSendToast("✅ Venta directa creada correctamente.");
+        setSendToast(" Venta directa creada correctamente.");
 
         if (orderId) {
           await loadExisting({
@@ -869,6 +1067,12 @@ export function useCashierDirectCartAndOrder({
         };
       }
 
+      const preparedError = await handlePreparedItemRequestError(res);
+
+      if (preparedError) {
+        return preparedError;
+      }
+
       if (isAvailabilityErrorCode(res?.code)) {
         const apiError = {
           code: res?.code,
@@ -886,12 +1090,7 @@ export function useCashierDirectCartAndOrder({
         };
       }
 
-      setSendToast(
-        `⚠️ ${
-          res?.message ||
-          "No se pudo crear la venta directa."
-        }`
-      );
+      setSendToast(`⚠️ ${res?.message || "No se pudo crear la venta directa."}`);
 
       return {
         ok: false,
@@ -906,6 +1105,7 @@ export function useCashierDirectCartAndOrder({
       navigate,
       hasInvalidCartItems,
       markCartAvailabilityError,
+      handlePreparedItemRequestError,
     ]
   );
 
@@ -935,6 +1135,12 @@ export function useCashierDirectCartAndOrder({
       try {
         res = await appendCashierDirectOrderItems(targetOrderId, { items });
       } catch (error) {
+        const preparedError = await handlePreparedItemRequestError(error);
+
+        if (preparedError) {
+          return preparedError;
+        }
+
         const apiError = extractApiErrorInfo(error);
 
         if (isAvailabilityErrorCode(apiError.code)) {
@@ -954,7 +1160,7 @@ export function useCashierDirectCartAndOrder({
       if (res?.ok) {
         setCart([]);
         setSendOpen(false);
-        setSendToast("✅ Productos agregados a la venta directa.");
+        setSendToast("Productos agregados a la venta directa.");
 
         const data = res?.data || null;
         const saleIdFromResponse = getSaleIdFromAppendResponse(res);
@@ -971,6 +1177,8 @@ export function useCashierDirectCartAndOrder({
           () => {}
         );
 
+        await refreshPreparedItemsPool();
+
         if (shouldReturnToSaleDetail && nextSaleId) {
           navigate(`/staff/cashier/sales/${nextSaleId}`, { replace: true });
         }
@@ -980,6 +1188,12 @@ export function useCashierDirectCartAndOrder({
           data,
           saleId: nextSaleId || null,
         };
+      }
+
+      const preparedError = await handlePreparedItemRequestError(res);
+
+      if (preparedError) {
+        return preparedError;
       }
 
       if (isAvailabilityErrorCode(res?.code)) {
@@ -1017,6 +1231,8 @@ export function useCashierDirectCartAndOrder({
       navigate,
       hasInvalidCartItems,
       markCartAvailabilityError,
+      handlePreparedItemRequestError,
+      refreshPreparedItemsPool,
     ]
   );
 
@@ -1025,6 +1241,12 @@ export function useCashierDirectCartAndOrder({
       const shouldReturnToSaleDetail = Boolean(options?.returnToSaleDetail);
       const targetOrderId = Number(activeOrder?.id || 0);
       const targetItemId = Number(orderItemId || 0);
+
+      const existingItem = oldItems.find((item) => {
+        return Number(item?.id || item?.order_item_id || 0) === targetItemId;
+      });
+
+      const removedPreparedItem = isPreparedItemLine(existingItem);
 
       if (!targetOrderId || !targetItemId) {
         setSendToast("⚠️ No se pudo identificar el producto a eliminar.");
@@ -1041,11 +1263,15 @@ export function useCashierDirectCartAndOrder({
           Number(activeSale?.id || activeSale?.sale_id || 0);
 
         setStockReview(data?.stock_review || null);
-        setSendToast("✅ Producto eliminado de la venta directa.");
+        setSendToast("Producto eliminado de la venta directa.");
 
         await loadExisting({ orderId: targetOrderId, force: true }).catch(
           () => {}
         );
+
+        if (removedPreparedItem) {
+          await refreshPreparedItemsPool();
+        }
 
         if (shouldReturnToSaleDetail && nextSaleId) {
           navigate(`/staff/cashier/sales/${nextSaleId}`, { replace: true });
@@ -1065,7 +1291,15 @@ export function useCashierDirectCartAndOrder({
         data: res?.data || null,
       };
     },
-    [activeOrder, activeSale, normalizedReturnSaleId, loadExisting, navigate]
+    [
+      activeOrder,
+      activeSale,
+      oldItems,
+      normalizedReturnSaleId,
+      loadExisting,
+      navigate,
+      refreshPreparedItemsPool,
+    ]
   );
 
   const validateAndGoToPayment = useCallback(
@@ -1116,7 +1350,7 @@ export function useCashierDirectCartAndOrder({
           currentSaleId;
 
         if (reviewRes?.ok && reviewData?.can_return_to_payment === true) {
-          setSendToast("✅ Venta validada. Regresando a cobro.");
+          setSendToast("Venta validada. Regresando a cobro.");
 
           await loadExisting({ orderId: targetOrderId, force: true }).catch(
             () => {}
@@ -1277,6 +1511,11 @@ export function useCashierDirectCartAndOrder({
     invalidCartItemsCount,
     addToCartFromProduct,
     addToCartFromVariant,
+
+    addPreparedItem,
+    selectedPreparedItemIds,
+    reconcilePreparedItems,
+
     setCartComponents,
     removeCartItem,
     setCartQty,

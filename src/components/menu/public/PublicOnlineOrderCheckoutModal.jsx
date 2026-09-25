@@ -9,6 +9,13 @@ import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
 
 import { money } from "../../../hooks/public/publicMenu.utils";
+import {
+  getPreparedItemConfigurationSummary,
+  getPreparedItemCurrentPrice,
+  getPreparedItemDisplayName,
+  isPreparedItemLine,
+} from "../../../hooks/menu/preparedItem.utils";
+
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import AppAlert from "../../common/AppAlert";
 import OnlineOrderFulfillmentSection from "./online-order-checkout/OnlineOrderFulfillmentSection";
@@ -585,6 +592,11 @@ export default function PublicOnlineOrderCheckoutModal({
         Boolean(created?.tracking_token);
 
       if (!successful) {
+        if (result?.preparedItemError) {
+          setQuote(null);
+          setQuotedSelection(null);
+        }
+
         setErrorMessage(result?.message || "No se pudo enviar el pedido.");
         return;
       }
@@ -926,65 +938,163 @@ export default function PublicOnlineOrderCheckoutModal({
                 </Box>
 
                 <Box sx={{ width: "100%", backgroundColor: "transparent" }}>
-                  {paginatedCart.map((item, index) => (
-                    <Box
-                      key={item.key}
-                      sx={{
-                        minHeight: 52,
-                        py: 1,
-                        px: { xs: 0.25, sm: 0.5 },
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 2,
-                        borderBottom: index < paginatedCart.length - 1 ? "1px solid" : "none",
-                        borderColor: "divider",
-                        backgroundColor: "transparent",
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-                            fontWeight: 750,
-                            lineHeight: 1.3,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {item.name || "Producto"}
-                        </Typography>
+                  {paginatedCart.map((item, index) => {
+                    const prepared = isPreparedItemLine(item);
+                    const preparedName = prepared ? getPreparedItemDisplayName(item) : "";
+                    const preparedConfiguration = prepared ? getPreparedItemConfigurationSummary(item) : [];
+                    const preparedPrice = prepared ? getPreparedItemCurrentPrice(item) : null;
 
-                        {item.variant_name ? (
-                          <Typography
-                            sx={{
-                              mt: 0.2,
-                              fontSize: 12,
-                              color: "text.secondary",
-                              lineHeight: 1.25,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {item.variant_name}
-                          </Typography>
-                        ) : null}
-                      </Box>
-
-                      <Typography
+                    return (
+                      <Box
+                        key={item.key}
                         sx={{
-                          flexShrink: 0,
-                          fontSize: 14,
-                          fontWeight: 850,
-                          color: "text.primary",
+                          minHeight: prepared ? 78 : 52,
+                          py: prepared ? 1.15 : 1,
+                          px: { xs: 0.25, sm: 0.5 },
+                          display: "flex",
+                          alignItems: prepared ? "flex-start" : "center",
+                          justifyContent: "space-between",
+                          gap: 2,
+                          borderBottom: index < paginatedCart.length - 1 ? "1px solid" : "none",
+                          borderColor: "divider",
+                          backgroundColor: "transparent",
                         }}
                       >
-                        × {Number(item.quantity || 1)}
-                      </Typography>
-                    </Box>
-                  ))}
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          {prepared ? (
+                            <>
+                              <Box
+                                component="span"
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  mb: 0.65,
+                                  px: 0.9,
+                                  py: 0.35,
+                                  border: "1px solid",
+                                  borderColor: hexToRgba(accentColor, 0.24),
+                                  borderRadius: 999,
+                                  backgroundColor: hexToRgba(accentColor, 0.07),
+                                  color: accentColor,
+                                  fontSize: 10,
+                                  fontWeight: 900,
+                                  lineHeight: 1.1,
+                                }}
+                              >
+                                Preparación rápida
+                              </Box>
+
+                              <Typography
+                                sx={{
+                                  fontSize: 14,
+                                  fontWeight: 800,
+                                  lineHeight: 1.3,
+                                  color: "text.primary",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {preparedName}
+                              </Typography>
+
+                              {preparedConfiguration.length > 0 ? (
+                                <Typography
+                                  sx={{
+                                    mt: 0.3,
+                                    fontSize: 12,
+                                    color: "text.secondary",
+                                    lineHeight: 1.35,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {preparedConfiguration.join(" · ")}
+                                </Typography>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <Typography
+                                sx={{
+                                  fontSize: 14,
+                                  fontWeight: 750,
+                                  lineHeight: 1.3,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {item.name || "Producto"}
+                              </Typography>
+
+                              {item.variant_name ? (
+                                <Typography
+                                  sx={{
+                                    mt: 0.2,
+                                    fontSize: 12,
+                                    color: "text.secondary",
+                                    lineHeight: 1.25,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {item.variant_name}
+                                </Typography>
+                              ) : null}
+                            </>
+                          )}
+                        </Box>
+
+                        {prepared ? (
+                          <Box
+                            sx={{
+                              flexShrink: 0,
+                              display: "grid",
+                              justifyItems: "end",
+                              gap: 0.35,
+                              pt: 0.25,
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                fontSize: 14,
+                                fontWeight: 900,
+                                color: accentColor,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {preparedPrice !== null ? money(preparedPrice) : "—"}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                fontSize: 11.5,
+                                fontWeight: 750,
+                                color: "text.secondary",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              1 unidad
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography
+                            sx={{
+                              flexShrink: 0,
+                              fontSize: 14,
+                              fontWeight: 850,
+                              color: "text.primary",
+                            }}
+                          >
+                            × {Number(item.quantity || 1)}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Box>
 
                 {cartPageCount > 1 ? (

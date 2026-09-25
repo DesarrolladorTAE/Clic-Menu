@@ -130,6 +130,16 @@ export async function getOrderById(orderId) {
   return res?.data;
 }
 
+// Solicitudes QR de cancelación pendientes asignadas al mesero.
+export async function fetchPendingCancellationRequests() {
+  const res = await staffApi.get("/staff/waiter/cancellation-requests/pending", {
+    params: { _t: Date.now() },
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
+}
+
 export async function fetchCancellationContext(orderId) {
   const normalizedOrderId = requirePositiveId(orderId, "orderId");
 

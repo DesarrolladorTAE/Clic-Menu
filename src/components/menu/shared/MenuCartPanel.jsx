@@ -484,6 +484,12 @@ export default function MenuCartPanel({
         </div>
       </div>
 
+      {visibleRequestBillBlock ? (
+        <div style={{ marginTop: 12 }}>
+          {visibleRequestBillBlock}
+        </div>
+      ) : null}
+
       {hasInvalidCartItems ? (
         <div
           role="alert"
@@ -548,12 +554,6 @@ export default function MenuCartPanel({
               {b?.label}
             </Badge>
           ))}
-        </div>
-      ) : null}
-
-            {visibleRequestBillBlock ? (
-        <div style={{ marginTop: 12 }}>
-          {visibleRequestBillBlock}
         </div>
       ) : null}
 

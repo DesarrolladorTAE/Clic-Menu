@@ -15,7 +15,6 @@ import {
   attendTable,
   finishAttention,
   releaseTableSession,
-  markTablePaid,
   rejectTableCall,
   acceptCustomerOrder,
   rejectCustomerOrder,
@@ -30,6 +29,7 @@ import {
   occupyTable,
   freeTable,
   fetchStaffWaiterMenu,
+  fetchPendingCancellationRequests,
 } from "../../../services/staff/waiter/staffOrders.service";
 
 import {
@@ -231,6 +231,8 @@ export default function WaiterTablesGrid() {
   const [billRequests, setBillRequests] = useState([]);
   const [billBusyId, setBillBusyId] = useState(null);
 
+  const [cancellationRequests, setCancellationRequests] = useState([]);
+
   const [payingBusyOrderId, setPayingBusyOrderId] = useState(null);
 
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -362,17 +364,19 @@ export default function WaiterTablesGrid() {
     else setRefreshing(true);
 
     try {
-      const [resGrid, resReq, resReady, resBill] = await Promise.all([
+      const [resGrid, resReq, resReady, resBill, resCancellation] = await Promise.all([
         fetchStaffTablesGrid(),
         fetchTableSessionRequests().catch(() => null),
         fetchWaiterReadyNotifications().catch(() => null),
         fetchWaiterBillRequests().catch(() => null),
+        fetchPendingCancellationRequests().catch(() => null),
       ]);
 
       setData(resGrid || null);
       setRequests(Array.isArray(resReq?.data) ? resReq.data : []);
       setReadyNotifications(Array.isArray(resReady?.data) ? resReady.data : []);
       setBillRequests(Array.isArray(resBill?.data) ? resBill.data : []);
+      setCancellationRequests(Array.isArray(resCancellation?.data) ? resCancellation.data : []);
     } catch (e) {
       const st = e?.response?.status;
 
@@ -500,9 +504,9 @@ export default function WaiterTablesGrid() {
   const noticesCount =
     (Array.isArray(requests) ? requests.length : 0) +
     (Array.isArray(readyNotifications) ? readyNotifications.length : 0) +
-    (Array.isArray(billRequests) ? billRequests.length : 0);
+    (Array.isArray(billRequests) ? billRequests.length : 0) +
+    (Array.isArray(cancellationRequests) ? cancellationRequests.length : 0);
 
-  
   const hasMultipleContexts = Array.isArray(contexts) && contexts.length > 1;
 
   const headerActionLabel = hasMultipleContexts ? "Regresar" : "Cerrar sesión";
@@ -680,34 +684,6 @@ export default function WaiterTablesGrid() {
       await load({ silent: true });
     } catch (e) {
       showAlert(pickErr(e, "No se pudo liberar la sesión."), "error");
-    }
-  };
-
-  const doMarkPaid = async (table) => {
-    const tableId = table?.id;
-    if (!tableId) return;
-
-    try {
-      const res = await markTablePaid(tableId);
-      showAlert(
-        res?.message || "Cuenta marcada como pagada. Mesa liberada.",
-        "success"
-      );
-      await load({ silent: true });
-    } catch (e) {
-      const code = pickCode(e);
-      const msg = pickErr(e, "No se pudo marcar como pagada.");
-
-      if (code === "WAITER_MARK_PAID_DISABLED") {
-        showAlert(
-          "El cierre final del cobro ya no lo hace el mesero. Ahora debe realizarlo caja.",
-          "warning"
-        );
-        await load({ silent: true });
-        return;
-      }
-
-      showAlert(msg, "error");
     }
   };
 
@@ -1152,37 +1128,26 @@ export default function WaiterTablesGrid() {
     }
   };
 
-  const doViewOrder = async (table) => {
-    const tableId = Number(table?.id || 0);
-    const openOrderId = Number(
-      table?.active_order?.id || 0,
-    );
+  const openExistingOrder = async ({ tableId, orderId, fallbackMessage }) => {
+    const normalizedTableId = Number(tableId || 0);
+    const normalizedOrderId = Number(orderId || 0);
 
-    if (!tableId || !openOrderId) return;
+    if (!normalizedTableId || !normalizedOrderId) {
+      showAlert("No se encontró la mesa u orden asociada.", "warning");
+      return;
+    }
+
+    const table = tables.find((row) => Number(row?.id || 0) === normalizedTableId) || null;
 
     try {
-      const res = await fetchStaffWaiterMenu({
-        orderId: openOrderId,
-      });
-
-      const payload =
-        res?.data ||
-        res?.payload ||
-        res ||
-        null;
-
-      /*
-      * El order_id también se conserva en la URL.
-      * Así no se pierde el contexto al recargar la página.
-      */
-      const orderUrl =
-        `/staff/waiter/tables/${tableId}/order` +
-        `?order_id=${encodeURIComponent(openOrderId)}`;
+      const res = await fetchStaffWaiterMenu({ orderId: normalizedOrderId });
+      const payload = res?.data || res?.payload || res || null;
+      const orderUrl = `/staff/waiter/tables/${normalizedTableId}/order?order_id=${encodeURIComponent(normalizedOrderId)}`;
 
       nav(orderUrl, {
         state: {
           table: {
-            id: tableId,
+            id: normalizedTableId,
             name: table?.name || null,
             seats: table?.seats || null,
             occupancy: table?.occupancy || null,
@@ -1190,36 +1155,47 @@ export default function WaiterTablesGrid() {
             adult_count: table?.adult_count ?? null,
             child_count: table?.child_count ?? null,
             remaining_seats: table?.remaining_seats ?? null,
-            ordering_mode:
-              table?.ordering_mode ||
-              meta?.ordering_mode ||
-              null,
-            table_service_mode:
-              table?.table_service_mode ||
-              meta?.table_service_mode ||
-              null,
+            ordering_mode: table?.ordering_mode || meta?.ordering_mode || null,
+            table_service_mode: table?.table_service_mode || meta?.table_service_mode || null,
           },
-
           preloadedMenu: payload,
-
           intent: "view",
-
-          /*
-          * Se conserva también en location.state para el acceso
-          * normal desde el tablero.
-          */
-          existingOrderId: openOrderId,
+          existingOrderId: normalizedOrderId,
         },
       });
     } catch (e) {
-      showAlert(
-        pickErr(
-          e,
-          "No se pudo abrir el menú para ver la comanda.",
-        ),
-        "error",
-      );
+      showAlert(pickErr(e, fallbackMessage || "No se pudo abrir la comanda."), "error");
     }
+  };
+
+  const doViewOrder = async (table) => {
+    const tableId = Number(table?.id || 0);
+    const orderId = Number(table?.active_order?.id || 0);
+
+    if (!tableId || !orderId) return;
+
+    await openExistingOrder({
+      tableId,
+      orderId,
+      fallbackMessage: "No se pudo abrir el menú para ver la comanda.",
+    });
+  };
+
+  const doReviewCancellation = async (cancellation) => {
+    const tableId = Number(cancellation?.table_id || 0);
+    const orderId = Number(cancellation?.order_id || 0);
+
+    if (!tableId || !orderId) {
+      showAlert("La solicitud no tiene una mesa u orden válida.", "warning");
+      await load({ silent: true });
+      return;
+    }
+
+    await openExistingOrder({
+      tableId,
+      orderId,
+      fallbackMessage: "No se pudo abrir la comanda de la solicitud de cancelación.",
+    });
   };
 
   if (busy) {
@@ -1302,7 +1278,6 @@ export default function WaiterTablesGrid() {
               onRejectCall={doRejectCall}
               onFinish={doFinish}
               onReleaseSession={doReleaseSession}
-              onMarkPaid={doMarkPaid}
               onAccept={doAccept}
               onReject={doReject}
               onStartPayment={doStartPayment}
@@ -1347,6 +1322,8 @@ export default function WaiterTablesGrid() {
         readyBusyId={readyBusyId}
         billRequests={billRequests}
         billBusyId={billBusyId}
+        cancellationRequests={cancellationRequests}
+        onReviewCancellation={doReviewCancellation}
         payingBusyOrderId={payingBusyOrderId}
         onApproveReq={doApproveReq}
         onRejectReq={doRejectReq}

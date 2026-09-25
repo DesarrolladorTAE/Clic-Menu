@@ -134,7 +134,6 @@ export default function WaiterTableCard({
   onRejectCall,
   onFinish,
   onReleaseSession,
-  onMarkPaid,
   onAccept,
   onReject,
   onStartPayment,
@@ -150,6 +149,10 @@ export default function WaiterTableCard({
   const hasOpenOrder = !!openOrder?.id;
   const openOrderId = Number(openOrder?.id || 0);
   const orderStatus = String(openOrder?.status || "");
+
+  const pendingCancellationCount = Number(table?.pending_cancellation_requests_count || 0);
+  const hasPendingCancellation =
+    !!table?.has_pending_cancellation_requests && pendingCancellationCount > 0;
 
   const orderDisplayTotal = resolveOrderDisplayTotal(openOrder);
 
@@ -174,8 +177,7 @@ export default function WaiterTableCard({
 
   const canAccept = !!table?.actions?.can_accept_order && hasPending;
   const canReject = !!table?.actions?.can_reject_order && hasPending;
-  const canMarkPaid = !!table?.actions?.can_mark_paid && hasOpenOrder;
-
+  
   const canMarkOccupied = !!table?.actions?.can_mark_occupied;
   const canMarkFree = !!table?.actions?.can_mark_free;
   const canCreateOrder = !!table?.actions?.can_create_order && !hasOpenOrder;
@@ -217,9 +219,6 @@ export default function WaiterTableCard({
 
   const safeCanFinish =
     belongsToMe && isMine && canFinish;
-
-  const safeCanMarkPaid =
-    belongsToMe && canMarkPaid;
 
   const safeCanAccept =
     canAccept && !isLockedLike;
@@ -432,6 +431,30 @@ export default function WaiterTableCard({
               </strong>
             </Typography>
 
+            {hasPendingCancellation ? (
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label={
+                  pendingCancellationCount === 1
+                    ? "Solicitud de cancelación pendiente"
+                    : `${pendingCancellationCount} solicitudes de cancelación pendientes`
+                }
+                sx={{
+                  justifySelf: "start",
+                  maxWidth: "100%",
+                  height: "auto",
+                  fontWeight: 800,
+                  "& .MuiChip-label": {
+                    py: 0.5,
+                    whiteSpace: "normal",
+                    lineHeight: 1.25,
+                  },
+                }}
+              />
+            ) : null}
+
             {orderStatus === "paying" ? (
               <Typography
                 sx={{
@@ -573,17 +596,6 @@ export default function WaiterTableCard({
               title="La cuenta ya fue enviada al cajero"
             >
               En caja
-            </ActionButton>
-          ) : null}
-
-          {safeCanMarkPaid ? (
-            <ActionButton
-              variant="contained"
-              color="success"
-              onClick={() => onMarkPaid(table)}
-              title="El cierre final lo realiza caja"
-            >
-              Pagado
             </ActionButton>
           ) : null}
 

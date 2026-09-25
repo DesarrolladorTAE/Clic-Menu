@@ -10,8 +10,12 @@ import PaginationFooter from "../../../components/common/PaginationFooter";
 import usePagination from "../../../hooks/usePagination";
 import useMenuSectionSelection from "../../../hooks/menu/useMenuSectionSelection";
 import useMenuAvailabilityRealtime from "../../../hooks/menu/useMenuAvailabilityRealtime";
+import { usePreparedItemsCollection } from "../../../hooks/menu/usePreparedItemsCollection";
 
-import { fetchCashierDirectMenu } from "../../../services/staff/casher/cashierDirectOrder.service";
+import {
+  fetchCashierDirectMenu,
+  fetchPreparedItems,
+} from "../../../services/staff/casher/cashierDirectOrder.service";
 
 import { useMenuProducts } from "../../../hooks/public/useMenuProducts";
 import { useCompositeDrafts } from "../../../hooks/public/useCompositeDrafts";
@@ -27,6 +31,7 @@ import MenuCartDrawer from "../../../components/menu/shared/MenuCartDrawer";
 import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloatingButton";
 import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 import MenuSectionTabs from "../../../components/menu/shared/menuUi/MenuSectionTabs";
+import PreparedItemsSection from "../../../components/menu/shared/prepared-items/PreparedItemsSection";
 
 import CashierDirectHeaderCard from "../../../components/staff/casher/directOrderPage/CashierDirectHeaderCard";
 import CashierDirectCreateOrderDialog from "../../../components/staff/casher/directOrderPage/CashierDirectCreateOrderDialog";
@@ -159,12 +164,32 @@ export default function CashierDirectOrderPage() {
 
   const [selectedMenuId, setSelectedMenuId] = useState(null);
 
+  const preparedItems = usePreparedItemsCollection({
+    enabled: Boolean(selectedMenuId),
+    contextKey: selectedMenuId ? `cashier-direct:${selectedMenuId}` : "cashier-direct:none",
+    loader: selectedMenuId ? () => fetchPreparedItems(selectedMenuId) : null,
+  });
+
   const cartOrder = useCashierDirectCartAndOrder({
     returnSaleId,
     selectedMenuId,
+    onPreparedItemsRefresh: preparedItems.refetch,
   });
 
   const composite = useCompositeDrafts();
+
+  useEffect(() => {
+    if (!selectedMenuId || preparedItems.loading) {
+      return;
+    }
+
+    cartOrder.reconcilePreparedItems?.(preparedItems.items);
+  }, [
+    selectedMenuId,
+    preparedItems.items,
+    preparedItems.loading,
+    cartOrder.reconcilePreparedItems,
+  ]);
 
   const sections = Array.isArray(data?.sections)
     ? data.sections
@@ -563,6 +588,18 @@ export default function CashierDirectOrderPage() {
       silent: true,
       menuId: normalizedMenuId,
     });
+  };
+
+  const handlePreparedItemSelect = (preparedItem) => {
+    if (syncing) {
+      return;
+    }
+
+    const result = cartOrder.addPreparedItem(preparedItem);
+
+    if (result?.ok) {
+      setCartDrawerOpen(true);
+    }
   };
 
   const openReadOnlyExtrasViewer = (product) => {
@@ -998,6 +1035,13 @@ export default function CashierDirectOrderPage() {
               />
             </Box>
           ) : null}
+
+          <PreparedItemsSection
+            items={preparedItems.items}
+            loading={preparedItems.loading || syncing}
+            selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
+            onSelect={handlePreparedItemSelect}
+          />
         </Box>
       </Stack>
 
