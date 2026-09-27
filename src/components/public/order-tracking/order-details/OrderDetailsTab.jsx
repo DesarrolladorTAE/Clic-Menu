@@ -21,6 +21,7 @@ const PAGE_SIZE = 5;
 
 export default function OrderDetailsTab({ data, themeColor, onNotify }) {
   const products = Array.isArray(data?.products) ? data.products : [];
+  const orderCancelled = String(data?.status || "") === "cancelled";
   const [page, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
@@ -81,7 +82,9 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
                 </Typography>
 
                 <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
-                  {products.length} {products.length === 1 ? "producto" : "productos"} en tu pedido
+                  {orderCancelled
+                    ? `${products.length} ${products.length === 1 ? "producto incluido originalmente" : "productos incluidos originalmente"} en tu pedido`
+                    : `${products.length} ${products.length === 1 ? "producto" : "productos"} en tu pedido`}
                 </Typography>
               </Box>
             </Stack>
@@ -99,6 +102,7 @@ export default function OrderDetailsTab({ data, themeColor, onNotify }) {
                     key={`${product?.name || "producto"}-${startIndex + index}`}
                     item={product}
                     themeColor={themeColor}
+                    orderCancelled={orderCancelled}
                     isLast={index === paginatedProducts.length - 1}
                   />
                 ))}
@@ -451,12 +455,17 @@ function DestinationBlock({ destination, themeColor }) {
   );
 }
 
-function ProductItem({ item, themeColor, level = 0, isLast = false }) {
+function ProductItem({ item, themeColor, orderCancelled = false, level = 0, isLast = false }) {
   const modifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
   const components = Array.isArray(item?.components) ? item.components : [];
   const notes = normalizeNotes(item?.notes);
   const hasDiscount = Number(item?.discount_total || 0) > 0;
   const nested = level > 0;
+
+  const originalQuantity = Number(item?.original_quantity ?? item?.quantity ?? 0);
+  const effectiveQuantity = Number(item?.effective_quantity ?? item?.original_quantity ?? item?.quantity ?? 0);
+  const displayQuantity = orderCancelled ? originalQuantity : effectiveQuantity;
+  const showPreparationLabel = !orderCancelled && Boolean(String(item?.preparation_label || "").trim());
 
   return (
     <Box
@@ -469,6 +478,7 @@ function ProductItem({ item, themeColor, level = 0, isLast = false }) {
         backgroundColor: nested ? `${themeColor}06` : "transparent",
         borderLeft: nested ? `3px solid ${themeColor}` : "none",
         borderRadius: nested ? 1 : 0,
+        opacity: orderCancelled && !nested ? 0.72 : 1,
       }}
     >
       <Stack
@@ -490,6 +500,42 @@ function ProductItem({ item, themeColor, level = 0, isLast = false }) {
             {item?.name || item?.product_name || "Producto"}
           </Typography>
 
+          {!nested && (orderCancelled || showPreparationLabel) ? (
+            <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap sx={{ mt: 0.7 }}>
+              {orderCancelled ? (
+                <Chip
+                  size="small"
+                  label="Cancelado"
+                  sx={{
+                    height: 24,
+                    color: "error.main",
+                    fontSize: 11,
+                    fontWeight: 900,
+                    border: "1px solid",
+                    borderColor: "rgba(211,47,47,0.25)",
+                    backgroundColor: "rgba(211,47,47,0.08)",
+                  }}
+                />
+              ) : null}
+
+              {showPreparationLabel ? (
+                <Chip
+                  size="small"
+                  label="Preparación rápida"
+                  sx={{
+                    height: 24,
+                    color: themeColor,
+                    fontSize: 11,
+                    fontWeight: 900,
+                    border: "1px solid",
+                    borderColor: `${themeColor}32`,
+                    backgroundColor: `${themeColor}10`,
+                  }}
+                />
+              ) : null}
+            </Stack>
+          ) : null}
+
           {item?.variant_name ? (
             <Typography
               sx={{
@@ -508,10 +554,10 @@ function ProductItem({ item, themeColor, level = 0, isLast = false }) {
               mt: 0.55,
               fontSize: 12,
               fontWeight: 850,
-              color: themeColor,
+              color: orderCancelled ? "text.secondary" : themeColor,
             }}
           >
-            Cantidad: {Number(item?.quantity || 0)}
+            {orderCancelled ? "Cantidad solicitada" : "Cantidad"}: {displayQuantity}
           </Typography>
         </Box>
 
@@ -604,6 +650,7 @@ function ProductItem({ item, themeColor, level = 0, isLast = false }) {
                 key={`${component?.name || "componente"}-${index}`}
                 item={component}
                 themeColor={themeColor}
+                orderCancelled={orderCancelled}
                 level={level + 1}
                 isLast={index === components.length - 1}
               />

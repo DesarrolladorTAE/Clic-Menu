@@ -48,6 +48,7 @@ export default function WaiterNoticesDrawer({
   billRequests = [],
   billBusyId,
   cancellationRequests = [],
+  cancellationBusyId,
   onReviewCancellation,
   payingBusyOrderId,
   onApproveReq,
@@ -356,10 +357,15 @@ export default function WaiterNoticesDrawer({
                           <Button
                             variant="contained"
                             color="primary"
-                            disabled={!onReviewCancellation}
+                            disabled={
+                              !onReviewCancellation ||
+                              Number(cancellationBusyId || 0) === Number(cancellation?.id || 0)
+                            }
                             onClick={() => onReviewCancellation?.(cancellation)}
                           >
-                            Revisar solicitud
+                            {Number(cancellationBusyId || 0) === Number(cancellation?.id || 0)
+                              ? "Cargando…"
+                              : "Revisar solicitud"}
                           </Button>
                         }
                       />

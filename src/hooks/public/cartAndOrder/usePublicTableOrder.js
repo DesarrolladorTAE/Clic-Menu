@@ -21,6 +21,18 @@ import {
   normalizeItemsForApi,
 } from "./publicCartAndOrder.utils";
 
+const PENDING_ITEMS_STATUSES = new Set([
+  "pending",
+  "pending_approval",
+]);
+
+const HIDDEN_HISTORY_STATUSES = new Set([
+  "pending",
+  "pending_approval",
+  "rejected",
+  "expired",
+]);
+
 /*
 |--------------------------------------------------------------------------
 | usePublicTableOrder
@@ -65,7 +77,7 @@ export function usePublicTableOrder({
 }) {
   const [pendingOrder, setPendingOrder] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
-  const [oldItems, setOldItems] = useState([]);
+  const [orderItems, setOrderItems] = useState([]);
 
   const lastOrderIdRef = useRef(null);
 
@@ -88,6 +100,28 @@ export function usePublicTableOrder({
         activeOrder?.status || "",
       ).toLowerCase(),
     );
+
+  const orderItemsStatus = String(
+    pendingOrder?.status ||
+    activeOrder?.status ||
+    "",
+  ).trim().toLowerCase();
+
+  const pendingItems = useMemo(() => {
+    if (!PENDING_ITEMS_STATUSES.has(orderItemsStatus)) {
+      return [];
+    }
+
+    return orderItems;
+  }, [orderItems, orderItemsStatus]);
+
+  const oldItems = useMemo(() => {
+    if (HIDDEN_HISTORY_STATUSES.has(orderItemsStatus)) {
+      return [];
+    }
+
+    return orderItems;
+  }, [orderItems, orderItemsStatus]);
 
   const reconcileOrderState = useCallback(
     (order) => {
@@ -226,7 +260,7 @@ export function usePublicTableOrder({
           }));
         }
 
-        setOldItems(items);
+        setOrderItems(items);
         lastOrderIdRef.current = oid;
 
         return {
@@ -1054,7 +1088,7 @@ export function usePublicTableOrder({
   function resetTableOrder() {
     setPendingOrder(null);
     setActiveOrder(null);
-    setOldItems([]);
+    setOrderItems([]);
 
     lastOrderIdRef.current = null;
   }
@@ -1062,6 +1096,7 @@ export function usePublicTableOrder({
   return {
     pendingOrder,
     activeOrder,
+    pendingItems,
     oldItems,
 
     currentOrderId,

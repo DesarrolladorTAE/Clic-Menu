@@ -1,13 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  Typography,
-  useMediaQuery,
+  Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -34,9 +27,13 @@ export default function CashierSaleToolDialog({
       slotProps={{
         paper: {
           sx: {
+            height: { xs: "100dvh", sm: "min(720px, calc(100dvh - 48px))" },
+            maxHeight: { xs: "100dvh", sm: "calc(100dvh - 48px)" },
             borderRadius: { xs: 0, sm: 1 },
             overflow: "hidden",
-            backgroundColor: "background.paper",
+            bgcolor: "background.paper",
+            display: "flex",
+            flexDirection: "column",
           },
         },
       }}
@@ -47,22 +44,18 @@ export default function CashierSaleToolDialog({
           py: 2,
           bgcolor: "#111111",
           color: "#fff",
+          flexShrink: 0,
         }}
       >
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={2}
-        >
-          <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+          <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ minWidth: 0 }}>
             {icon ? (
               <Box
                 sx={{
                   width: 42,
                   height: 42,
                   borderRadius: 1,
-                  bgcolor: "rgba(255, 152, 0, 0.16)",
+                  bgcolor: "rgba(255,152,0,0.16)",
                   color: "#FF9800",
                   display: "grid",
                   placeItems: "center",
@@ -109,9 +102,7 @@ export default function CashierSaleToolDialog({
               bgcolor: "rgba(255,255,255,0.08)",
               borderRadius: 1,
               flexShrink: 0,
-              "&:hover": {
-                bgcolor: "rgba(255,255,255,0.16)",
-              },
+              "&:hover": { bgcolor: "rgba(255,255,255,0.16)" },
             }}
           >
             <CloseRoundedIcon />
@@ -121,15 +112,26 @@ export default function CashierSaleToolDialog({
 
       <DialogContent
         sx={{
-          p: { xs: 2, sm: 3 },
+          p: { xs: 1.5, sm: 2.5 },
           bgcolor: "background.default",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          display: "flex",
         }}
       >
         <Box
           sx={{
-            minHeight: { xs: "auto", sm: 560 },
+            flex: 1,
+            minHeight: 0,
+            width: "100%",
+            overflowY: "auto",
+            overflowX: "hidden",
+            pr: { xs: 0.25, sm: 0.75 },
             "& > .MuiCard-root": {
-              borderRadius: 1,
+              width: "100%",
+              minHeight: "100%",
+              borderRadius: 0,
               boxShadow: "none",
             },
           }}

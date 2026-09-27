@@ -27,6 +27,7 @@ import {
   getCartLineVariantId,
   reconcilePendingCartAvailability,
 } from "../menu/menuAvailability.utils";
+import { useTransientMessage } from "../menu/useTransientMessage";
 
 import {
   buildPreparedItemCartLine,
@@ -294,8 +295,9 @@ export function useStaffCartAndOrder({ tableId }) {
   const [sendOpen, setSendOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [sending, setSending] = useState(false);
-  const [sendToast, setSendToast] = useState("");
-  const [preparedCartMessage, setPreparedCartMessage] = useState("");
+  const [sendToast, setSendToast, clearSendToast] = useTransientMessage();
+  const [preparedCartMessage, setPreparedCartMessage, clearPreparedCartMessage] =
+    useTransientMessage();
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [oldItems, setOldItems] = useState([]);
@@ -624,10 +626,6 @@ export function useStaffCartAndOrder({ tableId }) {
       message,
     };
   }, [cart]);
-
-  function clearPreparedCartMessage() {
-    setPreparedCartMessage("");
-  }
 
   const selectedPreparedItemIds = useMemo(() => {
     return Array.from(
@@ -1338,9 +1336,9 @@ export function useStaffCartAndOrder({ tableId }) {
       if (sending) return;
 
       setSending(true);
+
       try {
         await createFirstOrder(name, Number(warehouseId));
-        setTimeout(() => setSendToast(""), 6500);
       } finally {
         setSending(false);
       }
@@ -1353,40 +1351,38 @@ export function useStaffCartAndOrder({ tableId }) {
 
     if (hasInvalidCartItems) {
       setSendToast(INVALID_CART_MESSAGE);
-      setTimeout(() => setSendToast(""), 5000);
       return;
     }
 
     if (cart.length <= 0) {
       setSendToast("⚠️ No hay items seleccionados.");
-      setTimeout(() => setSendToast(""), 3000);
       return;
     }
 
     if (canAppend && activeOrder?.id) {
       setSending(true);
       setSendToast("");
+
       try {
         await appendToOpenOrder(activeOrder.id);
-        setTimeout(() => setSendToast(""), 6500);
       } finally {
         setSending(false);
       }
+
       return;
     }
 
     const name = String(customerName || "").trim();
     if (!name) {
       setSendToast("⚠️ Escribe el nombre del cliente para crear la comanda.");
-      setTimeout(() => setSendToast(""), 3500);
       return;
     }
 
     setSending(true);
     setSendToast("");
+
     try {
       await createFirstOrder(name);
-      setTimeout(() => setSendToast(""), 6500);
     } finally {
       setSending(false);
     }
@@ -1396,8 +1392,8 @@ export function useStaffCartAndOrder({ tableId }) {
     setCart([]);
     setSendOpen(false);
     setCustomerName("");
-    setSendToast("");
-    setPreparedCartMessage("");
+    clearSendToast();
+    clearPreparedCartMessage();
 
     setActiveOrder(null);
     setOldItems([]);

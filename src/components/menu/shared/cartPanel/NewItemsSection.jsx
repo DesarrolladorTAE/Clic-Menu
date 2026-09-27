@@ -5,6 +5,7 @@ import {
   getAvailabilityData,
   getPublicAvailabilityPresentation,
   money,
+  safeNum,
 } from "../../../../hooks/public/publicMenu.utils";
 import {
   getPreparedItemConfigurationSummary,
@@ -15,11 +16,41 @@ import {
 
 import { isCartItemAvailabilityInvalid } from "../../../../hooks/menu/menuAvailability.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
+import { buildOldItemsTree, renderNotes } from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
 import QtyControl from "./QtyControl";
 
 const NEW_ITEMS_PAGE_SIZE = 4;
+
+function useItemsPagination(items, pageSize = NEW_ITEMS_PAGE_SIZE) {
+  const rows = Array.isArray(items) ? items : [];
+  const [page, setPage] = useState(1);
+
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(Math.max(currentPage, 1), totalPages));
+  }, [totalPages]);
+
+  const paginatedItems = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    return rows.slice(startIndex, startIndex + pageSize);
+  }, [rows, page, pageSize]);
+
+  return {
+    page,
+    setPage,
+    total,
+    totalPages,
+    paginatedItems,
+    startItem: total > 0 ? (page - 1) * pageSize + 1 : 0,
+    endItem: Math.min(page * pageSize, total),
+    hasPrev: page > 1,
+    hasNext: page < totalPages,
+  };
+}
 
 function normalizeAvailabilityMaxQty(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -113,6 +144,130 @@ function PreparedNewItemCard({ item, onRemove, onOpenNote }) {
       </div>
 
       <NoteButton item={item} onOpenNote={onOpenNote} />
+    </div>
+  );
+}
+
+function getPendingItemLabel(item) {
+  const productName =
+    item?.product_name ||
+    item?.name ||
+    `Producto #${item?.product_id || ""}`;
+
+  return item?.variant_name
+    ? `${productName} · ${item.variant_name}`
+    : productName;
+}
+
+function getPendingItemQuantity(item) {
+  const quantity = Number(
+    item?.effective_quantity ??
+    item?.quantity ??
+    0,
+  );
+
+  if (!Number.isFinite(quantity)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(quantity));
+}
+
+function getPendingItemTotal(item) {
+  const quantity = getPendingItemQuantity(item);
+  const unitPrice = Math.max(0, safeNum(item?.unit_price, 0));
+
+  return Math.max(
+    0,
+    safeNum(
+      item?.net_line_total,
+      safeNum(item?.line_total, unitPrice * quantity),
+    ),
+  );
+}
+
+function PendingChildCard({ item }) {
+  const label = getPendingItemLabel(item);
+  const quantity = getPendingItemQuantity(item);
+  const total = getPendingItemTotal(item);
+
+  return (
+    <div className="cm-child-card">
+      <div className="cm-mobile-title">↳ {label}</div>
+
+      <div className="cm-mobile-sub">
+        Cantidad: <strong>{quantity}</strong>
+        {total > 0 ? <> · {money(total)}</> : null}
+      </div>
+
+      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
+
+      {item?.notes ? (
+        <div className="cm-note">• {renderNotes(item.notes)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function PendingNewItemCard({ item }) {
+  const label = getPendingItemLabel(item);
+  const quantity = getPendingItemQuantity(item);
+  const total = getPendingItemTotal(item);
+
+  const isPrepared =
+    String(item?.fulfillment_source || "") === "prepared_reuse";
+
+  return (
+    <div className="cm-new-card">
+      <div className="cm-new-card-top">
+        <div className="cm-new-info">
+          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+            <div className="cm-new-title">{label}</div>
+            <span className="cm-prepared-badge">En espera de aprobación</span>
+
+            {isPrepared ? (
+              <span className="cm-prepared-badge">Preparación rápida</span>
+            ) : null}
+          </div>
+
+          <div className="cm-new-meta">Pedido enviado · Solo lectura</div>
+        </div>
+      </div>
+
+      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
+      <CompositeDetailBlock details={item?.components_detail || []} />
+
+      {item?.notes ? (
+        <div className="cm-note">• {renderNotes(item.notes)}</div>
+      ) : null}
+
+      <div className="cm-new-controls">
+        <div>
+          <div className="cm-mini-label">Cantidad</div>
+          <div className="cm-fixed-quantity">
+            {quantity} {quantity === 1 ? "unidad" : "unidades"}
+          </div>
+        </div>
+
+        <div
+          className="cm-new-total-box"
+          title="Importe correspondiente al pedido enviado."
+        >
+          <span>Total enviado</span>
+          <strong>{money(total)}</strong>
+        </div>
+      </div>
+
+      {Array.isArray(item?.children) && item.children.length > 0 ? (
+        <div className="cm-children-list">
+          {item.children.map((child) => (
+            <PendingChildCard
+              key={`pending-child-${child?.id || child?.order_item_id}`}
+              item={child}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -352,6 +507,7 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
 
 export default function NewItemsSection({
   newItems = [],
+  pendingItems = [],
   canAppend = false,
   onQtyChange,
   onRemove,
@@ -359,85 +515,104 @@ export default function NewItemsSection({
 }) {
   const items = Array.isArray(newItems) ? newItems : [];
 
-  const [page, setPage] = useState(1);
-
-  const totalItems = items.length;
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalItems / NEW_ITEMS_PAGE_SIZE),
+  const pendingItemsTree = useMemo(
+    () => buildOldItemsTree(pendingItems),
+    [pendingItems],
   );
 
-  useEffect(() => {
-    setPage((currentPage) =>
-      Math.min(Math.max(currentPage, 1), totalPages),
-    );
-  }, [totalPages]);
+  const localPagination = useItemsPagination(items);
+  const pendingPagination = useItemsPagination(pendingItemsTree);
 
-  const paginatedItems = useMemo(() => {
-    const startIndex = (page - 1) * NEW_ITEMS_PAGE_SIZE;
-    const endIndex = startIndex + NEW_ITEMS_PAGE_SIZE;
-
-    return items.slice(startIndex, endIndex);
-  }, [items, page]);
-
-  const startItem =
-    totalItems > 0
-      ? (page - 1) * NEW_ITEMS_PAGE_SIZE + 1
-      : 0;
-
-  const endItem = Math.min(
-    page * NEW_ITEMS_PAGE_SIZE,
-    totalItems,
-  );
-
-  const hasPrev = page > 1;
-  const hasNext = page < totalPages;
-
-  const handlePrevPage = () => {
-    setPage((currentPage) =>
-      Math.max(1, currentPage - 1),
-    );
-  };
-
-  const handleNextPage = () => {
-    setPage((currentPage) =>
-      Math.min(totalPages, currentPage + 1),
-    );
-  };
+  const showPendingItems = pendingPagination.total > 0;
+  const showLocalItems = localPagination.total > 0 || !showPendingItems;
 
   return (
     <div className="cm-section">
-      <div className="cm-section-title">
-        <span>Items nuevos por {canAppend ? "agregar" : "enviar"}</span>
-        <Badge tone="ok">{totalItems}</Badge>
-      </div>
+      {showPendingItems ? (
+        <>
+          <div className="cm-section-title">
+            <span>En espera de aprobación</span>
+            <Badge tone="dark">{pendingPagination.total}</Badge>
+          </div>
 
-      <div className="cm-new-card-list">
-        {paginatedItems.map((it) => (
-          <NewItemCard
-            key={`new-card-${it.key}`}
-            item={it}
-            onQtyChange={onQtyChange}
-            onRemove={onRemove}
-            onOpenNote={onOpenNote}
-          />
-        ))}
-      </div>
+          <div className="cm-new-card-list">
+            {pendingPagination.paginatedItems.map((item) => (
+              <PendingNewItemCard
+                key={`pending-card-${item?.id || item?.order_item_id}`}
+                item={item}
+              />
+            ))}
+          </div>
 
-      {totalItems > NEW_ITEMS_PAGE_SIZE ? (
-        <PaginationFooter
-          page={page}
-          totalPages={totalPages}
-          startItem={startItem}
-          endItem={endItem}
-          total={totalItems}
-          hasPrev={hasPrev}
-          hasNext={hasNext}
-          onPrev={handlePrevPage}
-          onNext={handleNextPage}
-          itemLabel="productos nuevos"
-        />
+          {pendingPagination.total > NEW_ITEMS_PAGE_SIZE ? (
+            <PaginationFooter
+              page={pendingPagination.page}
+              totalPages={pendingPagination.totalPages}
+              startItem={pendingPagination.startItem}
+              endItem={pendingPagination.endItem}
+              total={pendingPagination.total}
+              hasPrev={pendingPagination.hasPrev}
+              hasNext={pendingPagination.hasNext}
+              onPrev={() =>
+                pendingPagination.setPage((currentPage) =>
+                  Math.max(1, currentPage - 1),
+                )
+              }
+              onNext={() =>
+                pendingPagination.setPage((currentPage) =>
+                  Math.min(pendingPagination.totalPages, currentPage + 1),
+                )
+              }
+              itemLabel="productos en espera"
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {showLocalItems ? (
+        <>
+          <div className="cm-section-title">
+            <span>
+              Items nuevos por {canAppend ? "agregar" : "enviar"}
+            </span>
+            <Badge tone="ok">{localPagination.total}</Badge>
+          </div>
+
+          <div className="cm-new-card-list">
+            {localPagination.paginatedItems.map((item) => (
+              <NewItemCard
+                key={`new-card-${item.key}`}
+                item={item}
+                onQtyChange={onQtyChange}
+                onRemove={onRemove}
+                onOpenNote={onOpenNote}
+              />
+            ))}
+          </div>
+
+          {localPagination.total > NEW_ITEMS_PAGE_SIZE ? (
+            <PaginationFooter
+              page={localPagination.page}
+              totalPages={localPagination.totalPages}
+              startItem={localPagination.startItem}
+              endItem={localPagination.endItem}
+              total={localPagination.total}
+              hasPrev={localPagination.hasPrev}
+              hasNext={localPagination.hasNext}
+              onPrev={() =>
+                localPagination.setPage((currentPage) =>
+                  Math.max(1, currentPage - 1),
+                )
+              }
+              onNext={() =>
+                localPagination.setPage((currentPage) =>
+                  Math.min(localPagination.totalPages, currentPage + 1),
+                )
+              }
+              itemLabel="productos nuevos"
+            />
+          ) : null}
+        </>
       ) : null}
     </div>
   );

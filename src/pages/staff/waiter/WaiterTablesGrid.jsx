@@ -30,6 +30,8 @@ import {
   freeTable,
   fetchStaffWaiterMenu,
   fetchPendingCancellationRequests,
+  fetchCancellationContext,
+  resolveCancellationRequest,
 } from "../../../services/staff/waiter/staffOrders.service";
 
 import {
@@ -46,8 +48,20 @@ import WaiterTablesBoard from "../../../components/staff/waiter/WaiterTablesBoar
 import WaiterNoticesDrawer from "../../../components/staff/waiter/WaiterNoticesDrawer";
 import WaiterWarehouseSelectionDialog from "../../../components/staff/waiter/WaiterWarehouseSelectionDialog";
 import WaiterOccupyTableDialog from "../../../components/staff/waiter/WaiterOccupyTableDialog";
+import WaiterCancellationRequestDialog from "../../../components/menu/staff/WaiterCancellationRequestDialog";
 
 const PAGE_SIZE = 8;
+
+function createCancellationReviewState() {
+  return {
+    open: false,
+    loading: false,
+    resolving: false,
+    request: null,
+    context: null,
+    error: "",
+  };
+}
 
 function getAllowedWarehouseIds(context) {
   if (!context || typeof context !== "object") {
@@ -233,6 +247,10 @@ export default function WaiterTablesGrid() {
 
   const [cancellationRequests, setCancellationRequests] = useState([]);
 
+  const [cancellationReview, setCancellationReview] = useState(
+    createCancellationReviewState,
+  );
+
   const [payingBusyOrderId, setPayingBusyOrderId] = useState(null);
 
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -357,6 +375,16 @@ export default function WaiterTablesGrid() {
       loading: false,
       table: null,
     });
+  };
+
+  const closeCancellationReview = () => {
+    if (cancellationReview.resolving) {
+      return;
+    }
+
+    setCancellationReview(
+      createCancellationReviewState(),
+    );
   };
 
   const load = async ({ silent = false } = {}) => {
@@ -506,6 +534,10 @@ export default function WaiterTablesGrid() {
     (Array.isArray(readyNotifications) ? readyNotifications.length : 0) +
     (Array.isArray(billRequests) ? billRequests.length : 0) +
     (Array.isArray(cancellationRequests) ? cancellationRequests.length : 0);
+
+  const cancellationBusyId = cancellationReview.loading
+    ? Number(cancellationReview?.request?.id || 0) || null
+    : null;
 
   const hasMultipleContexts = Array.isArray(contexts) && contexts.length > 1;
 
@@ -1182,20 +1214,220 @@ export default function WaiterTablesGrid() {
   };
 
   const doReviewCancellation = async (cancellation) => {
+    if (cancellationReview.loading || cancellationReview.resolving) {
+      return;
+    }
+
+    const cancellationId = Number(cancellation?.id || 0);
     const tableId = Number(cancellation?.table_id || 0);
     const orderId = Number(cancellation?.order_id || 0);
 
-    if (!tableId || !orderId) {
-      showAlert("La solicitud no tiene una mesa u orden válida.", "warning");
+    if (!cancellationId || !tableId || !orderId) {
+      showAlert("La solicitud no tiene una cancelación, mesa u orden válida.", "warning");
       await load({ silent: true });
       return;
     }
 
-    await openExistingOrder({
-      tableId,
-      orderId,
-      fallbackMessage: "No se pudo abrir la comanda de la solicitud de cancelación.",
+    setCancellationReview({
+      open: false,
+      loading: true,
+      resolving: false,
+      request: cancellation,
+      context: null,
+      error: "",
     });
+
+    try {
+      const res = await fetchCancellationContext(orderId);
+
+      if (!res?.ok || !res?.data) {
+        throw new Error(
+          res?.message ||
+            "No se pudo cargar el contexto actual de la cancelación.",
+        );
+      }
+
+      setCancellationReview({
+        open: true,
+        loading: false,
+        resolving: false,
+        request: cancellation,
+        context: res.data,
+        error: "",
+      });
+
+      setNoticeOpen(false);
+    } catch (e) {
+      setCancellationReview(
+        createCancellationReviewState(),
+      );
+
+      showAlert(
+        pickErr(
+          e,
+          "No se pudo cargar la solicitud de cancelación.",
+        ),
+        "error",
+      );
+
+      await load({ silent: true });
+    }
+  };
+
+  const resolveReviewedCancellation = async (approve, resolution = {}) => {
+    const cancellationId = Number(cancellationReview?.request?.id || 0);
+
+    if (!cancellationId || cancellationReview.resolving) {
+      return {
+        ok: false,
+        message: "No hay una solicitud válida para resolver.",
+      };
+    }
+
+    const payload = {
+      approve: Boolean(approve),
+    };
+
+    if (approve) {
+      const decisionItems = Array.isArray(resolution?.items)
+        ? resolution.items
+            .map((item) => {
+              const orderItemId = Number(item?.order_item_id || 0);
+
+              if (!Number.isInteger(orderItemId) || orderItemId <= 0) {
+                return null;
+              }
+
+              const decision = {
+                order_item_id: orderItemId,
+              };
+
+              const reuseIntent = String(item?.reuse_intent || "").trim();
+              const deliveryState = String(item?.delivery_state || "").trim();
+
+              if (reuseIntent) {
+                decision.reuse_intent = reuseIntent;
+              }
+
+              if (deliveryState) {
+                decision.delivery_state = deliveryState;
+              }
+
+              if (!reuseIntent && !deliveryState) {
+                return null;
+              }
+
+              return decision;
+            })
+            .filter(Boolean)
+        : [];
+
+      if (decisionItems.length > 0) {
+        payload.items = decisionItems;
+      }
+
+      const authorizerUserId = Number(resolution?.authorizer_user_id || 0);
+      const pin = String(resolution?.pin || "").trim();
+
+      if (Number.isInteger(authorizerUserId) && authorizerUserId > 0) {
+        payload.authorizer_user_id = authorizerUserId;
+      }
+
+      if (pin) {
+        payload.pin = pin;
+      }
+    }
+
+    setCancellationReview((previous) => ({
+      ...previous,
+      resolving: true,
+      error: "",
+    }));
+
+    try {
+      const res = await resolveCancellationRequest(
+        cancellationId,
+        payload,
+      );
+
+      if (!res?.ok) {
+        const message =
+          res?.message ||
+          "No se pudo resolver la solicitud de cancelación.";
+
+        setCancellationReview((previous) => ({
+          ...previous,
+          resolving: false,
+          error: message,
+        }));
+
+        showAlert(message, "error");
+        await load({ silent: true });
+
+        return {
+          ok: false,
+          code: res?.code || null,
+          message,
+          data: res?.data || null,
+        };
+      }
+
+      const successMessage =
+        res?.message ||
+        (approve
+          ? "Solicitud de cancelación aprobada."
+          : "Solicitud de cancelación rechazada.");
+
+      setCancellationReview(
+        createCancellationReviewState(),
+      );
+
+      showAlert(successMessage, "success");
+      await load({ silent: true });
+
+      return {
+        ok: true,
+        data: res?.data || null,
+        response: res,
+      };
+    } catch (e) {
+      const errors = e?.response?.data?.errors;
+      const firstValidationError =
+        errors && typeof errors === "object"
+          ? Object.values(errors).flat()?.[0]
+          : null;
+
+      const message =
+        firstValidationError ||
+        pickErr(
+          e,
+          "No se pudo resolver la solicitud de cancelación.",
+        );
+
+      setCancellationReview((previous) => ({
+        ...previous,
+        resolving: false,
+        error: String(message),
+      }));
+
+      showAlert(String(message), "error");
+      await load({ silent: true });
+
+      return {
+        ok: false,
+        code: e?.response?.data?.code || null,
+        message: String(message),
+        data: e?.response?.data?.data || null,
+      };
+    }
+  };
+
+  const doRejectCancellationRequest = async () => {
+    return resolveReviewedCancellation(false);
+  };
+
+  const doApproveCancellationRequest = async (resolution = {}) => {
+    return resolveReviewedCancellation(true, resolution);
   };
 
   if (busy) {
@@ -1323,6 +1555,7 @@ export default function WaiterTablesGrid() {
         billRequests={billRequests}
         billBusyId={billBusyId}
         cancellationRequests={cancellationRequests}
+        cancellationBusyId={cancellationBusyId}
         onReviewCancellation={doReviewCancellation}
         payingBusyOrderId={payingBusyOrderId}
         onApproveReq={doApproveReq}
@@ -1330,6 +1563,16 @@ export default function WaiterTablesGrid() {
         onReadReadyNotification={doReadReadyNotification}
         onReadBillRequest={doReadBillRequest}
         floatingIcon={NotificationsNoneRoundedIcon}
+      />
+
+      <WaiterCancellationRequestDialog
+        open={cancellationReview.open}
+        request={cancellationReview.request}
+        context={cancellationReview.context}
+        loading={cancellationReview.resolving}
+        onClose={closeCancellationReview}
+        onReject={doRejectCancellationRequest}
+        onApprove={doApproveCancellationRequest}
       />
 
       <WaiterWarehouseSelectionDialog

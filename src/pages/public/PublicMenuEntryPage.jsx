@@ -662,6 +662,7 @@ export default function PublicMenuEntryPage() {
     ),
     onAvailabilityEvent: async () => {
       await load({ silent: true });
+      await preparedItems.refetch().catch(() => {});
     },
   });
 
@@ -733,13 +734,19 @@ export default function PublicMenuEntryPage() {
   const showBillButton =
     isCustomerAssistedTableFlow && !!cartOrder.activeOrder?.id;
 
+  const pendingOrderItems = Array.isArray(cartOrder.pendingItems)
+    ? cartOrder.pendingItems
+    : [];
+
   const cartDrawerItemCount =
     Number(cartOrder.cart?.length || 0) +
-    Number(cartOrder.oldItems?.length || 0);
+    Number(cartOrder.oldItems?.length || 0) +
+    pendingOrderItems.length;
 
   const hasCartContent =
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
-    (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
+    (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0) ||
+    pendingOrderItems.length > 0;
 
   const cartDisplayName = isOnlineOrderFlow ? "Pedido" : "Comanda";
   const cartInlineName = isOnlineOrderFlow ? "pedido" : "comanda";
@@ -1339,6 +1346,7 @@ export default function PublicMenuEntryPage() {
           onClose={() => setCartDrawerOpen(false)}
           cartOrder={cartOrder}
           cartDrawerItemCount={cartDrawerItemCount}
+          pendingItems={pendingOrderItems}
           canAppend={canAppend}
           pending={pending}
           allowSendButton={allowSendButton}

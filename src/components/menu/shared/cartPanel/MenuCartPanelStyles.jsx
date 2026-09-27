@@ -10,8 +10,10 @@ export default function MenuCartPanelStyles() {
           box-shadow: 0 18px 46px rgba(47,42,61,0.08);
           width: 100%;
           max-width: 100%;
+          min-width: 0;
           box-sizing: border-box;
           container-type: inline-size;
+          container-name: cm-cart;
         }
 
         .cm-header {
@@ -87,6 +89,10 @@ export default function MenuCartPanelStyles() {
           margin-top: 14px;
           display: grid;
           gap: 9px;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .cm-section-title {
@@ -586,13 +592,24 @@ export default function MenuCartPanelStyles() {
           box-sizing: border-box;
         }
 
-        .cm-mobile-list,
-        .cm-new-card-list {
+        .cm-mobile-list {
           display: none;
+        }
+
+        .cm-new-card-list {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
         }
 
         .cm-mobile-card,
         .cm-new-card {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
           border: 1px solid rgba(47,42,61,0.09);
           border-radius: 20px;
           background: #fff;
@@ -616,6 +633,9 @@ export default function MenuCartPanelStyles() {
           align-items: flex-start;
           justify-content: space-between;
           gap: 10px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
         }
 
         .cm-new-card-top {
@@ -623,7 +643,9 @@ export default function MenuCartPanelStyles() {
         }
 
         .cm-new-info {
+          flex: 1 1 auto;
           min-width: 0;
+          max-width: 100%;
         }
 
         .cm-mobile-title,
@@ -661,6 +683,8 @@ export default function MenuCartPanelStyles() {
 
         .cm-new-total-box {
           min-width: 106px;
+          max-width: 100%;
+          box-sizing: border-box;
           border-radius: 17px;
           border: 1px solid rgba(255,152,0,0.18);
           background: rgba(255,152,0,0.08);
@@ -1054,27 +1078,121 @@ export default function MenuCartPanelStyles() {
         }
 
         /* =========================
+          Nuevo / Historial
+        ========================= */
+
+        .cm-view-tabs {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          width: 100%;
+          min-width: 0;
+          margin-top: 14px;
+        }
+
+        .cm-view-tab {
+          cursor: pointer;
+          min-width: 0;
+          min-height: 42px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 8px 10px;
+          border: 1px solid rgba(47,42,61,0.10);
+          border-radius: 14px;
+          background: #FBF8F8;
+          color: #6E6A6A;
+          font-size: 12px;
+          font-weight: 950;
+          line-height: 1.2;
+          box-sizing: border-box;
+          transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+        }
+
+        .cm-view-tab:hover {
+          border-color: rgba(47,42,61,0.18);
+          background: #FFFFFF;
+        }
+
+        .cm-view-tab-active {
+          border-color: var(--cm-cart-accent, #FF9800);
+          background: color-mix(
+            in srgb,
+            var(--cm-cart-accent, #FF9800) 9%,
+            #FFFFFF
+          );
+          color: #3F3A52;
+          box-shadow: inset 0 -3px 0 var(--cm-cart-accent, #FF9800);
+        }
+
+        .cm-view-tab-count {
+          min-width: 22px;
+          height: 22px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 6px;
+          border: 1px solid rgba(47,42,61,0.10);
+          border-radius: 999px;
+          background: #FFFFFF;
+          color: #6E6A6A;
+          font-size: 10px;
+          font-weight: 950;
+          box-sizing: border-box;
+        }
+
+        .cm-view-tab-active .cm-view-tab-count {
+          border-color: var(--cm-cart-accent, #FF9800);
+          background: var(--cm-cart-accent, #FF9800);
+          color: #FFFFFF;
+        }
+
+        .cm-view-panel {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        /* =========================
           Cart section pagination
         ========================= */
 
-        .cm-section > .MuiStack-root {
+        .cm-panel .cm-pagination-footer {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
           margin-top: 2px;
           padding: 9px 10px !important;
           border: 1px solid rgba(47,42,61,0.08) !important;
           border-radius: 14px;
           background: #FBF8F8 !important;
+          box-sizing: border-box;
         }
 
-        .cm-section > .MuiStack-root .MuiButton-root {
+        .cm-panel .cm-pagination-footer > .MuiTypography-root {
+          min-width: 0;
+          font-size: 11px;
+          overflow-wrap: anywhere;
+        }
+
+        .cm-panel .cm-pagination-controls {
+          max-width: 100%;
+          min-width: 0;
+        }
+
+        .cm-panel .cm-pagination-controls .MuiButton-root {
           min-width: 92px !important;
           height: 36px !important;
           padding-left: 10px;
           padding-right: 10px;
           font-size: 11px;
           font-weight: 850;
+          box-sizing: border-box;
         }
 
-        .cm-section > .MuiStack-root .MuiTypography-root {
+        .cm-panel .cm-pagination-controls .MuiTypography-root {
           font-size: 11px;
         }
 
@@ -1082,7 +1200,7 @@ export default function MenuCartPanelStyles() {
           Promotion responsive rules
         ========================= */
 
-        @media (max-width: 760px) {
+        @container cm-cart (max-width: 760px) {
           .cm-pricing-summary-grid {
             grid-template-columns: 1fr;
           }
@@ -1096,7 +1214,7 @@ export default function MenuCartPanelStyles() {
           }
         }
 
-        @media (max-width: 420px) {
+        @container cm-cart (max-width: 420px) {
           .cm-pricing-summary-head {
             display: grid;
           }
@@ -1131,13 +1249,7 @@ export default function MenuCartPanelStyles() {
         }
 
 
-        @media (max-width: 760px) {
-          .cm-panel {
-            border-radius: 22px;
-            padding: 12px;
-            box-shadow: none;
-          }
-
+        @container cm-cart (max-width: 760px) {
           .cm-header-main {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
@@ -1150,10 +1262,12 @@ export default function MenuCartPanelStyles() {
             display: none;
           }
 
-          .cm-mobile-list,
-          .cm-new-card-list {
+          .cm-mobile-list {
             display: grid;
+            grid-template-columns: minmax(0, 1fr);
             gap: 10px;
+            width: 100%;
+            min-width: 0;
           }
 
           .cm-new-controls {
@@ -1163,9 +1277,54 @@ export default function MenuCartPanelStyles() {
           .cm-note-btn {
             width: 100%;
           }
+
+          .cm-panel .cm-pagination-footer {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr);
+            align-items: stretch !important;
+            gap: 10px !important;
+          }
+
+          .cm-panel .cm-pagination-footer > :not(style) ~ :not(style) {
+            margin-left: 0 !important;
+            margin-top: 0 !important;
+          }
+
+          .cm-panel .cm-pagination-footer > .MuiTypography-root {
+            width: 100%;
+            text-align: left;
+          }
+
+          .cm-panel .cm-pagination-controls {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            align-items: center;
+            gap: 8px !important;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+          }
+
+          .cm-panel .cm-pagination-controls > :not(style) ~ :not(style) {
+            margin-left: 0 !important;
+            margin-top: 0 !important;
+          }
+
+          .cm-panel .cm-pagination-controls .MuiButton-root {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0 !important;
+            padding-left: 8px;
+            padding-right: 8px;
+          }
+
+          .cm-panel .cm-pagination-controls .MuiTypography-root {
+            min-width: 48px;
+            text-align: center;
+          }
         }
 
-       @media (min-width: 761px) {
+        @container cm-cart (min-width: 761px) {
           .cm-header-main {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
@@ -1173,17 +1332,12 @@ export default function MenuCartPanelStyles() {
             min-width: 0;
           }
 
-          .cm-new-card-list {
-            display: grid;
-            gap: 10px;
-          }
-
           .cm-new-card {
             padding: 14px;
           }
         }
 
-        @media (max-width: 420px) {
+        @container cm-cart (max-width: 420px) {
           .cm-new-controls {
             display: grid;
             gap: 10px;
@@ -1195,21 +1349,6 @@ export default function MenuCartPanelStyles() {
             text-align: left;
           }
 
-          .cm-section > .MuiStack-root .MuiStack-root {
-            width: 100%;
-          }
-
-          .cm-section > .MuiStack-root .MuiButton-root {
-            flex: 1;
-            min-width: 0 !important;
-            padding-left: 7px;
-            padding-right: 7px;
-          }
-
-          .cm-section > .MuiStack-root .MuiTypography-root {
-            min-width: 48px;
-          }
-          
           .cm-cancellation-card {
             padding: 13px;
             gap: 13px;

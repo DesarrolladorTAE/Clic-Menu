@@ -154,6 +154,21 @@ export async function fetchCancellationContext(orderId) {
   return res?.data;
 }
 
+export async function resolveCancellationRequest(cancellationId, payload = {}) {
+  const normalizedCancellationId = requirePositiveId(
+    cancellationId,
+    "cancellationId",
+  );
+
+  const res = await staffApi.post(
+    `/staff/waiter/cancellation-requests/${normalizedCancellationId}/resolve`,
+    payload,
+    { headers: NO_CACHE_HEADERS },
+  );
+
+  return res?.data;
+}
+
 export async function cancelOrderItems(orderId, payload) {
   const normalizedOrderId = requirePositiveId(orderId, "orderId");
 

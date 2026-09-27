@@ -17,6 +17,7 @@ export default function PaginationFooter({
 }) {
   return (
     <Stack
+      className="cm-pagination-footer"
       direction={{ xs: "column", sm: "row" }}
       justifyContent="space-between"
       alignItems={{ xs: "stretch", sm: "center" }}
@@ -40,6 +41,7 @@ export default function PaginationFooter({
       </Typography>
 
       <Stack
+        className="cm-pagination-controls"
         direction="row"
         spacing={1}
         justifyContent={{ xs: "center", sm: "flex-end" }}

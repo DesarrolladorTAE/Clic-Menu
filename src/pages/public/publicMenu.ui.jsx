@@ -222,8 +222,12 @@ export function PillButton({
   );
 }
 
-export function ProductThumb({ imageUrl, title }) {
-
+export function ProductThumb({
+  imageUrl,
+  title,
+  height = 230,
+  style = {},
+}) {
   const imageRef = useRef(null);
 
   const [loading, setLoading] = useState(Boolean(imageUrl));
@@ -257,7 +261,7 @@ export function ProductThumb({ imageUrl, title }) {
 
   const wrapStyle = {
     width: "100%",
-    height: 230,
+    height,
     borderRadius: 6,
     border: `1px solid ${MENU_UI.softBorder}`,
     background: "#FFFFFF",
@@ -266,6 +270,7 @@ export function ProductThumb({ imageUrl, title }) {
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+    ...style,
   };
 
   const labelStyle = {

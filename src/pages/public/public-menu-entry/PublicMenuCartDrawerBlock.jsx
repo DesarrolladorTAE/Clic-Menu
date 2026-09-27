@@ -14,6 +14,7 @@ export default function PublicMenuCartDrawerBlock({
   onClose,
   cartOrder,
   cartDrawerItemCount,
+  pendingItems = [],
   canAppend,
   pending,
   allowSendButton,
@@ -92,6 +93,10 @@ export default function PublicMenuCartDrawerBlock({
     isPaymentInProgress
       ? ""
       : String(billToast || "");
+
+  const newViewItemCount =
+    Number(cartOrder?.cart?.length || 0) +
+    (Array.isArray(pendingItems) ? pendingItems.length : 0);
 
   const cancellationActive =
     !isPaymentInProgress &&
@@ -206,6 +211,7 @@ export default function PublicMenuCartDrawerBlock({
           pricingSummary={cartOrder.pricingSummary}
           oldItems={cartOrder.oldItems}
           newItems={cartOrder.cart}
+          pendingItems={pendingItems}
           sendToast={visibleSendToast}
           sending={cartOrder.sending}
           canAppend={effectiveCanAppend}
@@ -266,8 +272,8 @@ export default function PublicMenuCartDrawerBlock({
               : []),
 
             {
-              tone: cartOrder.cart.length > 0 ? "ok" : "warn",
-              label: `Nuevos: ${cartOrder.cart.length}`,
+              tone: newViewItemCount > 0 ? "ok" : "warn",
+              label: `Nuevo: ${newViewItemCount}`,
             },
 
             ...(effectiveShowBillButton

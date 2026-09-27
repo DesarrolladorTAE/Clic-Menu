@@ -1,7 +1,4 @@
-import {
-  useMemo,
-  useState,
-} from "react";
+import { useMemo, useState } from "react";
 import {
   buildCombinedPricingSummary,
   normalizeConfirmedPricingSummary,
@@ -12,6 +9,7 @@ import { usePublicWebOrdering } from "./cartAndOrder/usePublicWebOrdering";
 import { usePublicTableOrder } from "./cartAndOrder/usePublicTableOrder";
 import { usePublicOrderCancellation } from "./cartAndOrder/usePublicOrderCancellation";
 import { toSafeInt } from "./cartAndOrder/publicCartAndOrder.utils";
+import { useTransientMessage } from "../menu/useTransientMessage";
 
 export function useCartAndOrder({
   token,
@@ -118,10 +116,7 @@ export function useCartAndOrder({
     setSending,
   ] = useState(false);
 
-  const [
-    sendToast,
-    setSendToast,
-  ] = useState("");
+  const [sendToast, setSendToast] = useTransientMessage();
 
   /*
   |--------------------------------------------------------------------------
@@ -565,16 +560,9 @@ export function useCartAndOrder({
       return;
     }
 
-    if (
-      publicCart.hasInvalidCartItems
-    ) {
+    if (publicCart.hasInvalidCartItems) {
       setSendToast(
         "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        5000,
       );
 
       return;
@@ -582,18 +570,11 @@ export function useCartAndOrder({
 
     // A. WEB + WHATSAPP
     if (isWhatsappFlow) {
-      const res =
-        await webOrdering
-          .sendWhatsAppOrder();
+      const res = await webOrdering.sendWhatsAppOrder();
 
       if (!res.ok) {
         return;
       }
-
-      setTimeout(
-        () => setSendToast(""),
-        4000,
-      );
 
       return;
     }
@@ -601,23 +582,11 @@ export function useCartAndOrder({
     // B. WEB + ONLINE_ORDER
     if (isOnlineOrderFlow) {
       if (!allowBase) {
-        setSendToast(
-          `⚠️ ${buildBlockerMessage()}`,
-        );
-
-        setTimeout(
-          () => setSendToast(""),
-          3000,
-        );
-
+        setSendToast(`⚠️ ${buildBlockerMessage()}`);
         return;
       }
 
-      webOrdering
-        .setOnlineOrderCreated(
-          null,
-        );
-
+      webOrdering.setOnlineOrderCreated(null);
       setSendOpen(true);
 
       return;
@@ -632,15 +601,7 @@ export function useCartAndOrder({
       setSendToast("");
 
       try {
-        await tableOrder
-          .appendToOpenOrder(
-            tableOrder.activeOrder.id,
-          );
-
-        setTimeout(
-          () => setSendToast(""),
-          6500,
-        );
+        await tableOrder.appendToOpenOrder(tableOrder.activeOrder.id);
       } finally {
         setSending(false);
       }
@@ -658,40 +619,19 @@ export function useCartAndOrder({
         customerOrderStartReason ||
         "No se pueden iniciar nuevos pedidos desde QR en este momento.";
 
-      setSendToast(
-        `⚠️ ${message}`,
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        6500,
-      );
-
+      setSendToast(`⚠️ ${message}`);
       return;
     }
 
     // E. VALIDACIÓN BASE ANTES DE ABRIR MODAL
     if (!allowBase) {
-      setSendToast(
-        buildBlockerMessage(),
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        5000,
-      );
-
+      setSendToast(buildBlockerMessage());
       return;
     }
 
     if (hasPending) {
       setSendToast(
         "⏳ Ya hay una comanda en espera de aprobación. No puedes enviar otra.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        5000,
       );
 
       return;
@@ -713,18 +653,10 @@ export function useCartAndOrder({
       return;
     }
 
-    if (
-      publicCart.hasInvalidCartItems
-    ) {
+    if (publicCart.hasInvalidCartItems) {
       setSendToast(
         "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.",
       );
-
-      setTimeout(
-        () => setSendToast(""),
-        5000,
-      );
-
       return;
     }
 
@@ -734,15 +666,7 @@ export function useCartAndOrder({
       ).trim();
 
     if (!name) {
-      setSendToast(
-        "⚠️ Escribe tu nombre para enviar la comanda.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        3500,
-      );
-
+      setSendToast("⚠️ Escribe tu nombre para enviar la comanda.");
       return;
     }
 
@@ -756,41 +680,17 @@ export function useCartAndOrder({
       toSafeInt(childCount);
 
     if (party < 1) {
-      setSendToast(
-        "⚠️ Debe haber al menos una persona en la mesa.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        4000,
-      );
-
+      setSendToast("⚠️ Debe haber al menos una persona en la mesa.");
       return;
     }
 
     if (adultCount === "") {
-      setSendToast(
-        "⚠️ Captura el número de adultos. Usa 0 si no hay.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        4000,
-      );
-
+      setSendToast("⚠️ Captura el número de adultos. Usa 0 si no hay.");
       return;
     }
 
     if (childCount === "") {
-      setSendToast(
-        "⚠️ Captura el número de niños. Usa 0 si no hay.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        4000,
-      );
-
+      setSendToast("⚠️ Captura el número de niños. Usa 0 si no hay.");
       return;
     }
 
@@ -798,15 +698,7 @@ export function useCartAndOrder({
       adults < 0 ||
       children < 0
     ) {
-      setSendToast(
-        "⚠️ Adultos y niños no pueden ser menores a 0.",
-      );
-
-      setTimeout(
-        () => setSendToast(""),
-        4000,
-      );
-
+      setSendToast("⚠️ Adultos y niños no pueden ser menores a 0.");
       return;
     }
 
@@ -817,12 +709,6 @@ export function useCartAndOrder({
       setSendToast(
         "⚠️ La suma de adultos y niños debe coincidir con el total de personas.",
       );
-
-      setTimeout(
-        () => setSendToast(""),
-        4500,
-      );
-
       return;
     }
 
@@ -830,20 +716,11 @@ export function useCartAndOrder({
     setSendToast("");
 
     try {
-      await tableOrder
-        .createFirstOrder(
-          name,
-          {
-            party_size: party,
-            adult_count: adults,
-            child_count: children,
-          },
-        );
-
-      setTimeout(
-        () => setSendToast(""),
-        6500,
-      );
+      await tableOrder.createFirstOrder(name, {
+        party_size: party,
+        adult_count: adults,
+        child_count: children,
+      });
     } finally {
       setSending(false);
     }
@@ -988,6 +865,9 @@ export function useCartAndOrder({
 
     activeOrder:
       tableOrder.activeOrder,
+
+    pendingItems:
+      tableOrder.pendingItems,
 
     oldItems:
       tableOrder.oldItems,

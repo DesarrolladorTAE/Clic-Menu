@@ -261,6 +261,7 @@ export default function MenuCartPanel({
   pricingSummary = null,
   oldItems = [],
   newItems = [],
+  pendingItems = [],
   sendToast = "",
   sending = false,
   canAppend = false,
@@ -291,10 +292,21 @@ export default function MenuCartPanel({
 }) {
   const [noteItem, setNoteItem] = useState(null);
   const [noteValue, setNoteValue] = useState("");
+  const [activeView, setActiveView] = useState("new");
 
-    const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
+  const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
+  const hasPendingItems = Array.isArray(pendingItems) && pendingItems.length > 0;
+
   const oldItemsTree = useMemo(() => buildOldItemsTree(oldItems), [oldItems]);
+  const pendingItemsTree = useMemo(() => buildOldItemsTree(pendingItems), [pendingItems]);
+
+  const newViewCount = (Array.isArray(newItems) ? newItems.length : 0) + pendingItemsTree.length;
+  const historyViewCount = oldItemsTree.length;
+
+  const resolvedThemeColor = /^#[0-9A-F]{6}$/i.test(String(themeColor || "").trim())
+    ? String(themeColor).trim()
+    : "#FF9800";
 
   const cancellationConfig =
     cancellation && typeof cancellation === "object"
@@ -393,10 +405,13 @@ export default function MenuCartPanel({
 
   const hasCancellationState = cancellationActive || cancellationPending;
 
-  if (!hasOld && !hasNew && !hasCancellationState) return null;
+  if (!hasOld && !hasNew && !hasPendingItems && !hasCancellationState) return null;
 
   return (
-    <div className="cm-panel">
+    <div
+      className="cm-panel"
+      style={{ "--cm-cart-accent": resolvedThemeColor }}
+    >
       <MenuCartPanelStyles />
 
       <NoteEditorModal
@@ -582,27 +597,64 @@ export default function MenuCartPanel({
           onQuantityChange={cancellationConfig?.onQuantityChange}
           onContinue={cancellationConfig?.onContinue}
         />
-      ) : hasOld ? (
-        <OldItemsSection
-          oldItems={oldItems}
-          oldItemsTree={oldItemsTree}
-          onRemoveOldItem={onRemoveOldItem}
-          removingOldItemId={removingOldItemId}
-          oldItemRemoveLabel={oldItemRemoveLabel}
-        />
       ) : (
-        <div className="cm-empty-history">No hay historial cargado.</div>
-      )}
+        <>
+          <div className="cm-view-tabs" role="tablist" aria-label="Contenido de la comanda">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === "new"}
+              className={`cm-view-tab ${activeView === "new" ? "cm-view-tab-active" : ""}`}
+              onClick={() => setActiveView("new")}
+            >
+              <span>Nuevo</span>
+              <span className="cm-view-tab-count">{newViewCount}</span>
+            </button>
 
-      {hasNew ? (
-        <NewItemsSection
-          newItems={newItems}
-          canAppend={canAppend}
-          onQtyChange={onQtyChange}
-          onRemove={onRemove}
-          onOpenNote={openNoteModal}
-        />
-      ) : null}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeView === "history"}
+              className={`cm-view-tab ${activeView === "history" ? "cm-view-tab-active" : ""}`}
+              onClick={() => setActiveView("history")}
+            >
+              <span>Historial</span>
+              <span className="cm-view-tab-count">{historyViewCount}</span>
+            </button>
+          </div>
+
+          <div className="cm-view-panel" role="tabpanel">
+            {activeView === "new" ? (
+              hasNew || hasPendingItems ? (
+                <NewItemsSection
+                  newItems={newItems}
+                  pendingItems={pendingItems}
+                  canAppend={canAppend}
+                  onQtyChange={onQtyChange}
+                  onRemove={onRemove}
+                  onOpenNote={openNoteModal}
+                />
+              ) : (
+                <div className="cm-empty-history">
+                  No hay productos nuevos en este momento.
+                </div>
+              )
+            ) : hasOld ? (
+              <OldItemsSection
+                oldItems={oldItems}
+                oldItemsTree={oldItemsTree}
+                onRemoveOldItem={onRemoveOldItem}
+                removingOldItemId={removingOldItemId}
+                oldItemRemoveLabel={oldItemRemoveLabel}
+              />
+            ) : (
+              <div className="cm-empty-history">
+                No hay historial cargado.
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {visibleSendToast ? (
         <div

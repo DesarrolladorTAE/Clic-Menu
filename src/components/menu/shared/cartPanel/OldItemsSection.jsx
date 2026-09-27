@@ -2,7 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Badge, PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money, safeNum } from "../../../../hooks/public/publicMenu.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
-import { renderNotes } from "./cartPanel.utils";
+import {
+  buildOldItemsTree,
+  classifyOrderHistoryItems,
+  renderNotes,
+  resolveOrderItemCancellationState,
+} from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
 
@@ -24,46 +29,8 @@ function roundMoney(value) {
   return Math.round((safeNum(value, 0) + Number.EPSILON) * 100) / 100;
 }
 
-function normalizeItemQuantity(value, fallback = 0) {
-  const quantity = Number(value);
-  if (!Number.isFinite(quantity)) return Math.max(0, Math.trunc(Number(fallback) || 0));
-
-  return Math.max(0, Math.trunc(quantity));
-}
-
-function resolveCancellationState(item) {
-  const originalQuantity = normalizeItemQuantity(
-    hasOwn(item, "original_quantity") ? item?.original_quantity : item?.quantity,
-  );
-
-  const cancelledQuantity = Math.min(
-    originalQuantity,
-    normalizeItemQuantity(item?.cancelled_quantity),
-  );
-
-  const effectiveQuantity = hasOwn(item, "effective_quantity")
-    ? Math.min(originalQuantity, normalizeItemQuantity(item?.effective_quantity))
-    : Math.max(0, originalQuantity - cancelledQuantity);
-
-  const cancellations = Array.isArray(item?.cancellations) ? item.cancellations : [];
-  const hasCancellation =
-    Boolean(item?.is_cancelled) ||
-    cancelledQuantity > 0 ||
-    cancellations.length > 0;
-
-  return {
-    originalQuantity,
-    cancelledQuantity,
-    effectiveQuantity,
-    cancellations,
-    hasCancellation,
-    fullyCancelled: hasCancellation && effectiveQuantity <= 0,
-    partiallyCancelled: hasCancellation && effectiveQuantity > 0,
-  };
-}
-
 function CancellationStateBlock({ item }) {
-  const state = resolveCancellationState(item);
+  const state = resolveOrderItemCancellationState(item);
 
   if (!state.hasCancellation) return null;
 
@@ -349,7 +316,7 @@ function OldChildRow({
   item,
   hasActionColumn = false,
 }) {
-  const cancellation = resolveCancellationState(item);
+  const cancellation = resolveOrderItemCancellationState(item);
 
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
@@ -409,7 +376,7 @@ function OldRow({
 
   const pricing = resolveConfirmedItemPricing(item);
 
-  const cancellation = resolveCancellationState(item);
+  const cancellation = resolveOrderItemCancellationState(item);
 
   const isCompositeParent =
     !!item?.is_composite_parent ||
@@ -520,7 +487,7 @@ function OldItemCard({
 
   const pricing = resolveConfirmedItemPricing(item);
 
-  const cancellation = resolveCancellationState(item);
+  const cancellation = resolveOrderItemCancellationState(item);
 
   const isCompositeParent =
     !!item?.is_composite_parent ||
@@ -626,6 +593,118 @@ function OldItemCard({
   );
 }
 
+function HistoryItemsGroup({
+  title,
+  items = [],
+  emptyMessage = "",
+  itemLabel = "productos",
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
+  const rows = Array.isArray(items) ? items : [];
+  const canRemoveOldItems = typeof onRemoveOldItem === "function";
+  const [page, setPage] = useState(1);
+
+  const totalItems = rows.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / OLD_ITEMS_PAGE_SIZE));
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(Math.max(currentPage, 1), totalPages));
+  }, [totalPages]);
+
+  const paginatedItems = useMemo(() => {
+    const startIndex = (page - 1) * OLD_ITEMS_PAGE_SIZE;
+    return rows.slice(startIndex, startIndex + OLD_ITEMS_PAGE_SIZE);
+  }, [rows, page]);
+
+  const startItem = totalItems > 0 ? (page - 1) * OLD_ITEMS_PAGE_SIZE + 1 : 0;
+  const endItem = Math.min(page * OLD_ITEMS_PAGE_SIZE, totalItems);
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+
+  return (
+    <div style={{ display: "grid", gap: 9 }}>
+      <div className="cm-section-title">
+        <span>{title}</span>
+        <Badge tone="dark">{totalItems}</Badge>
+      </div>
+
+      {totalItems <= 0 ? (
+        <div className="cm-empty-history">{emptyMessage}</div>
+      ) : (
+        <>
+          <div className="cm-table-wrap">
+            <table className="cm-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th style={{ textAlign: "center" }}>Cant.</th>
+                  <th style={{ textAlign: "right" }}>Total</th>
+
+                  {canRemoveOldItems ? (
+                    <th style={{ textAlign: "right" }}>Acción</th>
+                  ) : null}
+                </tr>
+              </thead>
+
+              <tbody>
+                {paginatedItems.map((item) => (
+                  <React.Fragment key={`history-${item?.id || item?.order_item_id}`}>
+                    <OldRow
+                      item={item}
+                      onRemoveOldItem={onRemoveOldItem}
+                      removingOldItemId={removingOldItemId}
+                      oldItemRemoveLabel={oldItemRemoveLabel}
+                    />
+
+                    {Array.isArray(item?.children) && item.children.length > 0
+                      ? item.children.map((child) => (
+                          <OldChildRow
+                            key={`history-child-${child?.id || child?.order_item_id}`}
+                            item={child}
+                            hasActionColumn={canRemoveOldItems}
+                          />
+                        ))
+                      : null}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="cm-mobile-list">
+            {paginatedItems.map((item) => (
+              <OldItemCard
+                key={`history-mobile-${item?.id || item?.order_item_id}`}
+                item={item}
+                onRemoveOldItem={onRemoveOldItem}
+                removingOldItemId={removingOldItemId}
+                oldItemRemoveLabel={oldItemRemoveLabel}
+              />
+            ))}
+          </div>
+
+          {totalItems > OLD_ITEMS_PAGE_SIZE ? (
+            <PaginationFooter
+              page={page}
+              totalPages={totalPages}
+              startItem={startItem}
+              endItem={endItem}
+              total={totalItems}
+              hasPrev={hasPrev}
+              hasNext={hasNext}
+              onPrev={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+              onNext={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+              itemLabel={itemLabel}
+            />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function OldItemsSection({
   oldItems = [],
   oldItemsTree = [],
@@ -633,130 +712,41 @@ export default function OldItemsSection({
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
 }) {
-  const canRemoveOldItems = typeof onRemoveOldItem === "function";
+  const confirmedItems = useMemo(() => {
+    if (Array.isArray(oldItemsTree) && oldItemsTree.length > 0) {
+      return oldItemsTree;
+    }
 
-  const confirmedItems = Array.isArray(oldItemsTree)
-    ? oldItemsTree
-    : [];
+    return buildOldItemsTree(oldItems);
+  }, [oldItems, oldItemsTree]);
 
-  const [page, setPage] = useState(1);
-
-  const totalConfirmedItems = confirmedItems.length;
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalConfirmedItems / OLD_ITEMS_PAGE_SIZE),
+  const { sentItems, cancelledItems } = useMemo(
+    () => classifyOrderHistoryItems(confirmedItems),
+    [confirmedItems],
   );
-
-  useEffect(() => {
-    setPage((currentPage) =>
-      Math.min(Math.max(currentPage, 1), totalPages),
-    );
-  }, [totalPages]);
-
-  const paginatedConfirmedItems = useMemo(() => {
-    const startIndex = (page - 1) * OLD_ITEMS_PAGE_SIZE;
-    const endIndex = startIndex + OLD_ITEMS_PAGE_SIZE;
-
-    return confirmedItems.slice(startIndex, endIndex);
-  }, [confirmedItems, page]);
-
-  const startItem =
-    totalConfirmedItems > 0
-      ? (page - 1) * OLD_ITEMS_PAGE_SIZE + 1
-      : 0;
-
-  const endItem = Math.min(
-    page * OLD_ITEMS_PAGE_SIZE,
-    totalConfirmedItems,
-  );
-
-  const hasPrev = page > 1;
-  const hasNext = page < totalPages;
-
-  const handlePrevPage = () => {
-    setPage((currentPage) => Math.max(1, currentPage - 1));
-  };
-
-  const handleNextPage = () => {
-    setPage((currentPage) =>
-      Math.min(totalPages, currentPage + 1),
-    );
-  };
 
   return (
     <div className="cm-section">
-      <div className="cm-section-title">
-        <span>Items ya enviados</span>
-        <Badge tone="dark">{oldItems.length}</Badge>
-      </div>
+      <HistoryItemsGroup
+        title="Pedidos enviados"
+        items={sentItems}
+        emptyMessage="No hay productos vigentes en el historial."
+        itemLabel="productos enviados"
+        onRemoveOldItem={onRemoveOldItem}
+        removingOldItemId={removingOldItemId}
+        oldItemRemoveLabel={oldItemRemoveLabel}
+      />
 
-      <div className="cm-table-wrap">
-        <table className="cm-table">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th style={{ textAlign: "center" }}>Cant.</th>
-              <th style={{ textAlign: "right" }}>Total</th>
-
-              {canRemoveOldItems ? (
-                <th style={{ textAlign: "right" }}>Acción</th>
-              ) : null}
-            </tr>
-          </thead>
-
-          <tbody>
-            {paginatedConfirmedItems.map((it) => (
-              <React.Fragment key={`old-${it?.id}`}>
-                <OldRow
-                  item={it}
-                  onRemoveOldItem={onRemoveOldItem}
-                  removingOldItemId={removingOldItemId}
-                  oldItemRemoveLabel={oldItemRemoveLabel}
-                />
-
-                {Array.isArray(it?.children) && it.children.length > 0
-                  ? it.children.map((child) => (
-                      <OldChildRow
-                        key={`old-child-${child?.id}`}
-                        item={child}
-                        hasActionColumn={canRemoveOldItems}
-                      />
-                    ))
-                  : null}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="cm-mobile-list">
-        {paginatedConfirmedItems.map((it) => (
-          <OldItemCard
-            key={`old-mobile-${it?.id}`}
-            item={it}
-            onRemoveOldItem={onRemoveOldItem}
-            removingOldItemId={removingOldItemId}
-            oldItemRemoveLabel={oldItemRemoveLabel}
-          />
-        ))}
-      </div>
-
-      {totalConfirmedItems > OLD_ITEMS_PAGE_SIZE ? (
-        <PaginationFooter
-          page={page}
-          totalPages={totalPages}
-          startItem={startItem}
-          endItem={endItem}
-          total={totalConfirmedItems}
-          hasPrev={hasPrev}
-          hasNext={hasNext}
-          onPrev={handlePrevPage}
-          onNext={handleNextPage}
-          itemLabel="productos confirmados"
+      {cancelledItems.length > 0 ? (
+        <HistoryItemsGroup
+          title="Cancelados"
+          items={cancelledItems}
+          itemLabel="productos cancelados"
+          onRemoveOldItem={null}
+          removingOldItemId={null}
+          oldItemRemoveLabel={oldItemRemoveLabel}
         />
       ) : null}
-
     </div>
   );
 }

@@ -32,6 +32,8 @@ import {
   reconcilePendingCartAvailability,
 } from "../menu/menuAvailability.utils";
 
+import { useTransientMessage } from "../menu/useTransientMessage";
+
 import {
   buildPreparedItemCartLine,
   getPreparedItemId,
@@ -409,7 +411,7 @@ export function useCashierDirectCartAndOrder({
   const [customerName, setCustomerName] = useState("Cliente mostrador");
   const [kitchenFlow, setKitchenFlow] = useState("");
   const [sending, setSending] = useState(false);
-  const [sendToast, setSendToast] = useState("");
+  const [sendToast, setSendToast, clearSendToast] = useTransientMessage();
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [activeSale, setActiveSale] = useState(null);
@@ -1332,7 +1334,6 @@ export function useCashierDirectCartAndOrder({
           });
 
           if (!appendResult?.ok) {
-            setTimeout(() => setSendToast(""), 6500);
             return appendResult;
           }
         }
@@ -1368,7 +1369,6 @@ export function useCashierDirectCartAndOrder({
         }
 
         setSendToast(`⚠️ ${buildReviewErrorMessage(reviewRes)}`);
-        setTimeout(() => setSendToast(""), 6500);
 
         return {
           ok: false,
@@ -1422,18 +1422,16 @@ export function useCashierDirectCartAndOrder({
 
     if (hasInvalidCartItems) {
       setSendToast(INVALID_CART_MESSAGE);
-      setTimeout(() => setSendToast(""), 5000);
       return { ok: false, availabilityError: true };
     }
 
     if (cart.length <= 0) {
       setSendToast("⚠️ No hay productos seleccionados.");
-      setTimeout(() => setSendToast(""), 3500);
       return { ok: false };
     }
 
     setSending(true);
-    setSendToast("");
+    clearSendToast();
 
     try {
       let result;
@@ -1446,8 +1444,6 @@ export function useCashierDirectCartAndOrder({
           requestedKitchenFlow: kitchenFlow,
         });
       }
-
-      setTimeout(() => setSendToast(""), 6500);
 
       return result;
     } catch (e) {

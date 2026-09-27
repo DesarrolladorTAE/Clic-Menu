@@ -1,7 +1,10 @@
-import React from "react";
-import { useTheme } from "@mui/material/styles";
+import React, { useState } from "react";
+import { alpha, useTheme } from "@mui/material/styles";
 
-import { PillButton } from "../../../../pages/public/publicMenu.ui";
+import {
+  PillButton,
+  ProductThumb,
+} from "../../../../pages/public/publicMenu.ui";
 import { money } from "../../../../hooks/public/publicMenu.utils";
 import {
   getPreparedItemConfigurationSummary,
@@ -13,7 +16,7 @@ import {
  * Tarjeta visual compartida de una unidad física de Preparación rápida.
  *
  * Usa:
- * - publicMenu.ui.jsx, para reutilizar PillButton y conservar el diseño actual.
+ * - publicMenu.ui.jsx, para reutilizar PillButton y ProductThumb.
  * - publicMenu.utils.js, para reutilizar el formateo monetario.
  *
  * La usan:
@@ -41,10 +44,16 @@ function getPreparedAgoMinutes(preparedItem) {
   }
 
   const directMinutes = Number(preparedItem?.prepared_ago_minutes);
-  if (Number.isFinite(directMinutes)) return Math.max(0, Math.floor(directMinutes));
+
+  if (Number.isFinite(directMinutes)) {
+    return Math.max(0, Math.floor(directMinutes));
+  }
 
   const elapsedSeconds = Number(preparedItem?.prepared_elapsed_seconds);
-  if (Number.isFinite(elapsedSeconds)) return Math.max(0, Math.floor(elapsedSeconds / 60));
+
+  if (Number.isFinite(elapsedSeconds)) {
+    return Math.max(0, Math.floor(elapsedSeconds / 60));
+  }
 
   return null;
 }
@@ -57,10 +66,16 @@ function getExpiresInMinutes(preparedItem) {
   }
 
   const directMinutes = Number(preparedItem?.expires_in_minutes);
-  if (Number.isFinite(directMinutes)) return Math.max(0, Math.ceil(directMinutes));
+
+  if (Number.isFinite(directMinutes)) {
+    return Math.max(0, Math.ceil(directMinutes));
+  }
 
   const expiresInSeconds = Number(preparedItem?.expires_in_seconds);
-  if (Number.isFinite(expiresInSeconds)) return Math.max(0, Math.ceil(expiresInSeconds / 60));
+
+  if (Number.isFinite(expiresInSeconds)) {
+    return Math.max(0, Math.ceil(expiresInSeconds / 60));
+  }
 
   return null;
 }
@@ -73,14 +88,31 @@ export default function PreparedItemCard({
   onSelect,
 }) {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
+
   const cardThemeColor = getCardThemeColor(theme, themeColor);
 
   const title = getPreparedItemDisplayName(preparedItem);
-  const configurationSummary = getPreparedItemConfigurationSummary(preparedItem);
+  const configurationSummary =
+    getPreparedItemConfigurationSummary(preparedItem);
   const currentPrice = getPreparedItemCurrentPrice(preparedItem);
 
   const preparedAgoMinutes = getPreparedAgoMinutes(preparedItem);
   const expiresInMinutes = getExpiresInMinutes(preparedItem);
+
+  const cardBorder = alpha(cardThemeColor, selected ? 0.5 : 0.2);
+  const softSurface = alpha(cardThemeColor, 0.055);
+  const softSurfaceStrong = alpha(cardThemeColor, 0.085);
+  const softBorder = alpha(cardThemeColor, 0.18);
+  const selectedSurface = alpha(cardThemeColor, 0.08);
+
+  const normalShadow = selected
+    ? `0 12px 28px ${alpha(cardThemeColor, 0.14)}`
+    : "0 10px 26px rgba(47,42,61,0.075)";
+
+  const hoverShadow = selected
+    ? `0 17px 34px ${alpha(cardThemeColor, 0.2)}`
+    : `0 17px 34px ${alpha(cardThemeColor, 0.16)}`;
 
   const timeLabels = [];
 
@@ -109,16 +141,21 @@ export default function PreparedItemCard({
 
   return (
     <article
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",
-        border: `1px solid ${theme.palette.divider}`,
+        width: "100%",
+        height: "100%",
+        border: `3px solid ${cardBorder}`,
         borderRadius: 10,
-        background: selected ? theme.palette.action.hover : "#FFFFFF",
+        background: "#FFFFFF",
         overflow: "hidden",
-        boxShadow: "0 10px 26px rgba(47,42,61,0.05)",
+        boxShadow: hovered ? hoverShadow : normalShadow,
         display: "grid",
-        gridTemplateRows: "1fr auto",
-        minHeight: 210,
+        gridTemplateRows: "auto 1fr auto",
+        transform: hovered ? "translateY(-3px)" : "translateY(0)",
+        transition: "transform 180ms ease, box-shadow 180ms ease",
       }}
     >
       <div
@@ -128,42 +165,69 @@ export default function PreparedItemCard({
           left: 0,
           right: 0,
           height: 4,
-          background: selected ? theme.palette.divider : cardThemeColor,
+          background: cardThemeColor,
+          zIndex: 3,
         }}
       />
 
       <div
         style={{
-          padding: "18px 14px 12px",
-          display: "grid",
-          gap: 10,
-          alignContent: "start",
+          padding: "10px 10px 0",
+          position: "relative",
         }}
       >
-        <div>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "4px 9px",
-              borderRadius: 999,
-              border: `1px solid ${theme.palette.divider}`,
-              background: "#FFFFFF",
-              color: cardThemeColor,
-              fontSize: 10,
-              fontWeight: 900,
-              lineHeight: 1.1,
-            }}
-          >
-            Preparación rápida
-          </span>
+        <div className="preparedItemCardThumb">
+          <ProductThumb
+            imageUrl={preparedItem?.image_url || null}
+            title={title}
+          />
         </div>
 
         <div
           style={{
+            position: "absolute",
+            top: 16,
+            left: 16,
+            right: 16,
+            display: "flex",
+            alignItems: "flex-start",
+            pointerEvents: "none",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              maxWidth: "100%",
+              padding: "5px 9px",
+              borderRadius: 999,
+              border: `1px solid ${cardThemeColor}`,
+              background: cardThemeColor,
+              color: "#FFFFFF",
+              fontSize: 9.5,
+              fontWeight: 950,
+              lineHeight: 1.1,
+              boxShadow: `0 5px 14px ${alpha(cardThemeColor, 0.2)}`,
+            }}
+          >
+            Entrega inmediata
+          </span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: "10px 11px",
+          display: "grid",
+          gap: 8,
+          alignContent: "start",
+        }}
+      >
+        <div
+          style={{
             display: "flex",
             justifyContent: "space-between",
-            gap: 12,
+            gap: 9,
             alignItems: "flex-start",
           }}
         >
@@ -172,9 +236,9 @@ export default function PreparedItemCard({
             style={{
               minWidth: 0,
               color: theme.palette.text.primary,
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: 900,
-              lineHeight: 1.22,
+              lineHeight: 1.2,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
@@ -201,15 +265,20 @@ export default function PreparedItemCard({
 
         {configurationSummary.length > 0 ? (
           <div
+            title={configurationSummary.join(" · ")}
             style={{
-              padding: "9px 10px",
-              borderRadius: 8,
-              border: `1px solid ${theme.palette.divider}`,
-              background: theme.palette.action.hover,
+              padding: "7px 8px",
+              borderRadius: 7,
+              border: `1px solid ${softBorder}`,
+              background: softSurface,
               color: theme.palette.text.secondary,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: 700,
-              lineHeight: 1.45,
+              lineHeight: 1.35,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
             }}
           >
             {configurationSummary.join(" · ")}
@@ -219,9 +288,13 @@ export default function PreparedItemCard({
         {timeLabels.length > 0 ? (
           <div
             style={{
-              color: theme.palette.text.secondary,
-              fontSize: 10.5,
-              fontWeight: 750,
+              padding: "8px 9px",
+              borderRadius: 7,
+              border: `1px solid ${softBorder}`,
+              background: softSurfaceStrong,
+              color: theme.palette.text.primary,
+              fontSize: 10,
+              fontWeight: 800,
               lineHeight: 1.35,
             }}
           >
@@ -230,13 +303,32 @@ export default function PreparedItemCard({
         ) : null}
       </div>
 
-      <div style={{ padding: "0 14px 14px" }}>
+      <div style={{ padding: "0 11px 11px" }}>
         <PillButton
           tone={selected ? "default" : "orange"}
           themeColor={cardThemeColor}
           disabled={blocked}
           onClick={handleSelect}
-          title={selected ? "Esta unidad ya está agregada" : "Agregar esta unidad"}
+          title={
+            selected
+              ? "Esta unidad ya está agregada"
+              : "Agregar esta unidad"
+          }
+          style={{
+            width: "100%",
+            minHeight: 36,
+            height: 36,
+            borderRadius: 12,
+            padding: "0 12px",
+            fontSize: 12,
+            ...(selected
+              ? {
+                  background: selectedSurface,
+                  border: `1px solid ${softBorder}`,
+                  color: cardThemeColor,
+                }
+              : {}),
+          }}
         >
           {selected ? "Agregado" : "Agregar"}
         </PillButton>

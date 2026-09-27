@@ -423,6 +423,7 @@ export default function CashierDirectOrderPage() {
       if (!refreshedPayload) return;
 
       cartOrder.reconcileCartAvailability?.(refreshedPayload);
+      await preparedItems.refetch().catch(() => {});
     },
   });
   

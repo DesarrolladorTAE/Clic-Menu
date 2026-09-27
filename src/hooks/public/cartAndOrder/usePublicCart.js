@@ -27,6 +27,7 @@ import {
   buildCartAvailabilityMetadata,
   buildCartPromotionMetadata,
 } from "./publicCartAndOrder.utils";
+import { useTransientMessage } from "../../menu/useTransientMessage";
 
 /*
 |--------------------------------------------------------------------------
@@ -52,7 +53,8 @@ export function usePublicCart({
   onPreparedItemsRefresh = null,
 }) {
   const [cart, setCart] = useState([]);
-  const [preparedCartMessage, setPreparedCartMessage] = useState("");
+  const [preparedCartMessage, setPreparedCartMessage, clearPreparedCartMessage] =
+    useTransientMessage();
   const cartLineSequenceRef = useRef(0);
 
   const invalidCartItemsCount = useMemo(
@@ -446,10 +448,6 @@ export function usePublicCart({
     );
   }
 
-  function clearPreparedCartMessage() {
-    setPreparedCartMessage("");
-  }
-
   const selectedPreparedItemIds = useMemo(() => {
     return Array.from(
       new Set(
@@ -596,7 +594,7 @@ export function usePublicCart({
 
   function resetCartState() {
     setCart([]);
-    setPreparedCartMessage("");
+    clearPreparedCartMessage();
   }
 
   return {

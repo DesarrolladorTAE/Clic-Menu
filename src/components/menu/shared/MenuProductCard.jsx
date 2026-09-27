@@ -1,11 +1,17 @@
 // src/components/menu/shared/MenuProductCard.jsx
-import React from "react";
+import React, { useState } from "react";
+import { IconButton } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+
 import {
   Badge,
   PillButton,
   ProductThumb,
 } from "../../../pages/public/publicMenu.ui";
+
+import ProductInfoModal from "./ProductInfoModal";
 import {
   getAvailabilityData,
   getAvailabilityTone,
@@ -133,6 +139,7 @@ export default function MenuProductCard({
 }) {
   const theme = useTheme();
   const cardThemeColor = getCardThemeColor(themeColor);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const title = product?.display_name || product?.name || "Producto";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
@@ -169,6 +176,11 @@ export default function MenuProductCard({
     !productBlocked &&
     !(isComposite && hasComposite);
 
+  const handleOpenInfo = (event) => {
+    event?.stopPropagation?.();
+    setInfoOpen(true);
+  };
+
   const handleMainAction = () => {
     if (productBlocked || !canSelect) return;
 
@@ -186,330 +198,383 @@ export default function MenuProductCard({
   };
 
   return (
-    <article
-      style={{
-        position: "relative",
-        border: `1px solid ${
-          productBlocked ? "rgba(255, 152, 0, 0.25)" : theme.palette.divider
-        }`,
-        borderRadius: 10,
-        background: "#FFFFFF",
-        overflow: "hidden",
-        boxShadow: "0 10px 26px rgba(47,42,61,0.05)",
-        display: "grid",
-        gridTemplateRows: "auto 1fr",
-        minHeight: "100%",
-        opacity: productBlocked ? 0.86 : 1,
-      }}
-    >
-      <div
+    <>
+      <article
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 4,
-          background: productBlocked
-            ? "rgba(63,58,82,0.12)"
-            : cardThemeColor,
+          position: "relative",
+          border: `1px solid ${
+            productBlocked ? "rgba(255, 152, 0, 0.25)" : theme.palette.divider
+          }`,
+          borderRadius: 10,
+          background: "#FFFFFF",
+          overflow: "hidden",
+          boxShadow: "0 10px 26px rgba(47,42,61,0.05)",
+          display: "grid",
+          gridTemplateRows: "auto 1fr",
+          minHeight: "100%",
+          opacity: productBlocked ? 0.86 : 1,
         }}
-      />
-
-      <div style={{ padding: "12px 12px 8px", position: "relative" }}>
-        <ProductThumb imageUrl={product?.image_url || null} title={title} />
-
+      >
         <div
           style={{
             position: "absolute",
-            top: 18,
-            left: 18,
-            display: "flex",
-            gap: 6,
-            flexWrap: "wrap",
-            maxWidth: "calc(100% - 36px)",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 4,
+            background: productBlocked
+              ? "rgba(63,58,82,0.12)"
+              : cardThemeColor,
           }}
-        >
-          {isComposite ? (
-            <Badge tone="dark" title="Producto compuesto">
-              Combo
-            </Badge>
-          ) : hasVariants ? (
-            <Badge tone="default" title="Producto con variantes">
-              {variants.length} opciones
-            </Badge>
-          ) : null}
-        </div>
-      </div>
+        />
 
-      <div
-        style={{
-          padding: "8px 12px 12px",
-          display: "grid",
-          gap: 9,
-          alignContent: "space-between",
-        }}
-      >
-        <div style={{ display: "grid", gap: 7 }}>
+        <div style={{ padding: "12px 12px 8px", position: "relative" }}>
+          <ProductThumb imageUrl={product?.image_url || null} title={title} />
+
           <div
             style={{
+              position: "absolute",
+              top: 18,
+              left: 18,
+              right: 18,
+              zIndex: 5,
               display: "flex",
               justifyContent: "space-between",
-              gap: 10,
               alignItems: "flex-start",
+              gap: 8,
+              pointerEvents: "none",
             }}
           >
             <div
               style={{
                 minWidth: 0,
-                fontWeight: 800,
-                fontSize: 13,
-                lineHeight: 1.18,
-                color: theme.palette.text.primary,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
+                maxWidth: "calc(100% - 42px)",
+                display: "flex",
+                gap: 6,
+                flexWrap: "wrap",
+                pointerEvents: "auto",
               }}
-              title={title}
             >
-              {title}
+              {isComposite ? (
+                <Badge tone="dark" title="Producto compuesto">
+                  Combo
+                </Badge>
+              ) : hasVariants ? (
+                <Badge tone="default" title="Producto con variantes">
+                  {variants.length} opciones
+                </Badge>
+              ) : null}
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                justifyItems: "end",
-                gap: 3,
+            <IconButton
+              type="button"
+              onClick={handleOpenInfo}
+              aria-label={`Ver información de ${title}`}
+              title="Ver información"
+              sx={{
+                width: 32,
+                height: 32,
                 flexShrink: 0,
-                paddingTop: 2,
+                pointerEvents: "auto",
+                bgcolor: "rgba(255,255,255,0.94)",
+                color: "#2F2A3D",
+                border: "1px solid rgba(47,42,61,0.12)",
+                borderRadius: "50%",
+                boxShadow: "0 6px 16px rgba(47,42,61,0.14)",
+                backdropFilter: "blur(5px)",
+                transition: "transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease",
+                "&:hover": {
+                  bgcolor: "#FFFFFF",
+                  color: cardThemeColor,
+                  borderColor: cardThemeColor,
+                  boxShadow: `0 8px 18px ${cardThemeColor}30`,
+                  transform: "translateY(-1px)",
+                },
               }}
             >
-              {showPromotionalPrice ? (
-                <>
+              <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: "8px 12px 12px",
+            display: "grid",
+            gap: 9,
+            alignContent: "space-between",
+          }}
+        >
+          <div style={{ display: "grid", gap: 7 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  minWidth: 0,
+                  fontWeight: 800,
+                  fontSize: 13,
+                  lineHeight: 1.18,
+                  color: theme.palette.text.primary,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+                title={title}
+              >
+                {title}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  justifyItems: "end",
+                  gap: 3,
+                  flexShrink: 0,
+                  paddingTop: 2,
+                }}
+              >
+                {showPromotionalPrice ? (
+                  <>
+                    <span
+                      style={{
+                        color: theme.palette.text.secondary,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        textDecoration: "line-through",
+                        textDecorationThickness: "1.5px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {money(promotion.originalPrice)}
+                    </span>
+
+                    <span
+                      style={{
+                        color: cardThemeColor,
+                        fontSize: 14,
+                        fontWeight: 950,
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {money(promotion.displayPrice)}
+                    </span>
+                  </>
+                ) : (
                   <span
                     style={{
-                      color: theme.palette.text.secondary,
-                      fontSize: 11,
-                      fontWeight: 800,
+                      color: cardThemeColor,
+                      fontSize: 13,
+                      fontWeight: 900,
                       lineHeight: 1,
-                      textDecoration: "line-through",
-                      textDecorationThickness: "1.5px",
                       whiteSpace: "nowrap",
                     }}
                   >
                     {money(promotion.originalPrice)}
                   </span>
-
-                  <span
-                    style={{
-                      color: cardThemeColor,
-                      fontSize: 14,
-                      fontWeight: 950,
-                      lineHeight: 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {money(promotion.displayPrice)}
-                  </span>
-                </>
-              ) : (
-                <span
-                  style={{
-                    color: cardThemeColor,
-                    fontSize: 13,
-                    fontWeight: 900,
-                    lineHeight: 1,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {money(promotion.originalPrice)}
-                </span>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 6,
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            <span
+            <div
               style={{
-                display: "inline-flex",
+                display: "flex",
+                gap: 6,
                 alignItems: "center",
-                maxWidth: "100%",
-                padding: "4px 9px",
-                borderRadius: 999,
-                background: "#FFFFFF",
-                border: `1px solid ${theme.palette.divider}`,
-                color: theme.palette.text.secondary,
-                fontSize: 10,
-                fontWeight: 800,
-                lineHeight: 1.1,
+                flexWrap: "wrap",
               }}
-              title={categoryName}
             >
-              {categoryName}
-            </span>
-
-            {showPromotionBadge ? (
               <span
-                title={
-                  promotion.promotionName
-                    ? `${promotion.promotionName}: ${promotion.promotionLabel}`
-                    : promotion.promotionLabel
-                }
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   maxWidth: "100%",
                   padding: "4px 9px",
                   borderRadius: 999,
-                  border: promotion.isQuantityPromotion
-                    ? "1px solid rgba(109, 40, 217, 0.22)"
-                    : "1px solid rgba(15, 118, 110, 0.22)",
-                  background: promotion.isQuantityPromotion
-                    ? "rgba(109, 40, 217, 0.09)"
-                    : "rgba(15, 118, 110, 0.09)",
-                  color: promotion.isQuantityPromotion
-                    ? "#6D28D9"
-                    : "#0F766E",
+                  background: "#FFFFFF",
+                  border: `1px solid ${theme.palette.divider}`,
+                  color: theme.palette.text.secondary,
                   fontSize: 10,
-                  fontWeight: 950,
+                  fontWeight: 800,
                   lineHeight: 1.1,
-                  wordBreak: "break-word",
+                }}
+                title={categoryName}
+              >
+                {categoryName}
+              </span>
+
+              {showPromotionBadge ? (
+                <span
+                  title={
+                    promotion.promotionName
+                      ? `${promotion.promotionName}: ${promotion.promotionLabel}`
+                      : promotion.promotionLabel
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    maxWidth: "100%",
+                    padding: "4px 9px",
+                    borderRadius: 999,
+                    border: promotion.isQuantityPromotion
+                      ? "1px solid rgba(109, 40, 217, 0.22)"
+                      : "1px solid rgba(15, 118, 110, 0.22)",
+                    background: promotion.isQuantityPromotion
+                      ? "rgba(109, 40, 217, 0.09)"
+                      : "rgba(15, 118, 110, 0.09)",
+                    color: promotion.isQuantityPromotion
+                      ? "#6D28D9"
+                      : "#0F766E",
+                    fontSize: 10,
+                    fontWeight: 950,
+                    lineHeight: 1.1,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {promotion.promotionLabel}
+                </span>
+              ) : null}
+
+              <AvailabilityPill availability={productAvailability} />
+            </div>
+
+            <AvailabilityNotice availability={productAvailability} />
+
+            {hasComposite ? (
+              <div
+                style={{
+                  fontSize: 10.5,
+                  lineHeight: 1.35,
+                  padding: "8px 9px",
+                  borderRadius: 8,
+                  background: "#FFFFFF",
+                  border: `1px solid ${theme.palette.divider}`,
+                  color: theme.palette.text.secondary,
+                  fontWeight: 700,
                 }}
               >
-                {promotion.promotionLabel}
-              </span>
-            ) : null}
-
-            <AvailabilityPill availability={productAvailability} />
-          </div>
-
-          <AvailabilityNotice availability={productAvailability} />
-
-          {hasComposite ? (
-            <div
-              style={{
-                fontSize: 10.5,
-                lineHeight: 1.35,
-                padding: "8px 9px",
-                borderRadius: 8,
-                background: "#FFFFFF",
-                border: `1px solid ${theme.palette.divider}`,
-                color: theme.palette.text.secondary,
-                fontWeight: 700,
-              }}
-            >
-              Incluye <strong>{compositeItems.length}</strong> componente(s).
-            </div>
-          ) : null}
-
-          {hasExtras ? (
-            <div
-              style={{
-                fontSize: 10.5,
-                lineHeight: 1.35,
-                padding: "8px 9px",
-                borderRadius: 8,
-                background: "rgba(255, 152, 0, 0.07)",
-                border: "1px solid rgba(255, 152, 0, 0.20)",
-                color: "#A75A00",
-                fontWeight: 750,
-              }}
-            >
-              ✨ Extras disponibles
-            </div>
-          ) : null}
-        </div>
-
-        <div style={{ display: "grid", gap: 7 }}>
-          {showSelectBtn ? (
-            <PillButton
-              tone={productBlocked ? "danger" : "orange"}
-              themeColor={cardThemeColor}
-              onClick={handleMainAction}
-              title={
-                !canSelect
-                  ? "Solo lectura"
-                  : productBlocked
-                    ? productAvailabilityCaption
-                    : isComposite && hasComposite
-                      ? "Configurar producto compuesto"
-                      : hasVariants
-                        ? "Agregar producto base a comanda"
-                        : "Agregar a comanda"
-              }
-              disabled={!canSelect || productBlocked}
-            >
-              {productBlocked
-                ? productAvailabilityLabel
-                : isComposite && hasComposite
-                ? "Configurar"
-                : "＋ Seleccionar"}
-            </PillButton>
-          ) : null}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                hasVariants && hasExtras ? "1fr 1fr" : "1fr",
-              gap: 7,
-            }}
-          >
-            {hasVariants && !isComposite ? (
-              <PillButton
-                tone="default"
-                onClick={handleOpenVariants}
-                title={
-                  productBlocked
-                    ? productAvailabilityCaption
-                    : "Ver variantes disponibles"
-                }
-                disabled={!onOpenVariants || !canSelect || productBlocked}
-              >
-                Variantes ({variants.length})
-              </PillButton>
+                Incluye <strong>{compositeItems.length}</strong> componente(s).
+              </div>
             ) : null}
 
             {hasExtras ? (
-              <PillButton
-                tone="soft"
-                onClick={() => {
-                  if (!canSelect || productBlocked) return;
-                  onOpenExtras?.(product);
+              <div
+                style={{
+                  fontSize: 10.5,
+                  lineHeight: 1.35,
+                  padding: "8px 9px",
+                  borderRadius: 8,
+                  background: "rgba(255, 152, 0, 0.07)",
+                  border: "1px solid rgba(255, 152, 0, 0.20)",
+                  color: "#A75A00",
+                  fontWeight: 750,
                 }}
-                title={
-                  productBlocked
-                    ? productAvailabilityCaption
-                    : "Ver extras disponibles de este producto"
-                }
-                disabled={!canSelect || productBlocked}
               >
-                Extras
-              </PillButton>
+                ✨ Extras disponibles
+              </div>
             ) : null}
           </div>
 
-          {canChooseMain ? (
-            <span
+          <div style={{ display: "grid", gap: 7 }}>
+            {showSelectBtn ? (
+              <PillButton
+                tone={productBlocked ? "danger" : "orange"}
+                themeColor={cardThemeColor}
+                onClick={handleMainAction}
+                title={
+                  !canSelect
+                    ? "Solo lectura"
+                    : productBlocked
+                      ? productAvailabilityCaption
+                      : isComposite && hasComposite
+                        ? "Configurar producto compuesto"
+                        : hasVariants
+                          ? "Agregar producto base a comanda"
+                          : "Agregar a comanda"
+                }
+                disabled={!canSelect || productBlocked}
+              >
+                {productBlocked
+                  ? productAvailabilityLabel
+                  : isComposite && hasComposite
+                  ? "Configurar"
+                  : "＋ Seleccionar"}
+              </PillButton>
+            ) : null}
+
+            <div
               style={{
-                fontSize: 10,
-                color: theme.palette.text.secondary,
-                textAlign: "center",
-                fontWeight: 700,
+                display: "grid",
+                gridTemplateColumns:
+                  hasVariants && hasExtras ? "1fr 1fr" : "1fr",
+                gap: 7,
               }}
             >
-              Se agregará el producto base a la comanda
-            </span>
-          ) : null}
+              {hasVariants && !isComposite ? (
+                <PillButton
+                  tone="default"
+                  onClick={handleOpenVariants}
+                  title={
+                    productBlocked
+                      ? productAvailabilityCaption
+                      : "Ver variantes disponibles"
+                  }
+                  disabled={!onOpenVariants || !canSelect || productBlocked}
+                >
+                  Variantes ({variants.length})
+                </PillButton>
+              ) : null}
+
+              {hasExtras ? (
+                <PillButton
+                  tone="soft"
+                  onClick={() => {
+                    if (!canSelect || productBlocked) return;
+                    onOpenExtras?.(product);
+                  }}
+                  title={
+                    productBlocked
+                      ? productAvailabilityCaption
+                      : "Ver extras disponibles de este producto"
+                  }
+                  disabled={!canSelect || productBlocked}
+                >
+                  Extras
+                </PillButton>
+              ) : null}
+            </div>
+
+            {canChooseMain ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: theme.palette.text.secondary,
+                  textAlign: "center",
+                  fontWeight: 700,
+                }}
+              >
+                Se agregará el producto base a la comanda
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      <ProductInfoModal
+        open={infoOpen}
+        product={product}
+        categoryName={categoryName}
+        themeColor={cardThemeColor}
+        onClose={() => setInfoOpen(false)}
+      />
+    </>
   );
 }
