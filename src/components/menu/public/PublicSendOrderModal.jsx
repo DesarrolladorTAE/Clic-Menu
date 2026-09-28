@@ -1,4 +1,6 @@
 import React from "react";
+import { TextField } from "@mui/material";
+
 import { money } from "../../../hooks/public/publicMenu.utils";
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 
@@ -15,6 +17,41 @@ function toDisplayAmount(value, fallback = 0) {
     ? fallbackNumber
     : 0;
 }
+
+function sanitizeIntegerInput(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+const formFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 2,
+
+    "& fieldset": {
+      borderColor: "rgba(47,42,61,0.22)",
+      borderWidth: "1px",
+    },
+
+    "&:hover fieldset": {
+      borderColor: "rgba(47,42,61,0.42)",
+    },
+
+    "&.Mui-focused fieldset": {
+      borderColor: "primary.main",
+      borderWidth: "2px",
+    },
+  },
+
+  "& .MuiInputBase-input": {
+    color: "text.primary",
+    fontWeight: 700,
+  },
+
+  "& .MuiInputBase-input::placeholder": {
+    color: "text.secondary",
+    opacity: 0.72,
+  },
+};
 
 function NewItemsPricingPreview({
   summary,
@@ -239,9 +276,7 @@ function NewItemsPricingPreview({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {money(
-                            promotion?.originalPrice,
-                          )}
+                          {money(promotion?.originalPrice)}
                         </span>
 
                         <span
@@ -252,9 +287,7 @@ function NewItemsPricingPreview({
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {money(
-                            promotion?.displayPrice,
-                          )}
+                          {money(promotion?.displayPrice)}
                         </span>
                       </>
                     ) : (
@@ -266,16 +299,13 @@ function NewItemsPricingPreview({
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {money(
-                          line?.unitPriceReference,
-                        )}
+                        {money(line?.unitPriceReference)}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {hasPromotion &&
-                promotion?.promotionLabel ? (
+                {hasPromotion && promotion?.promotionLabel ? (
                   <span
                     style={{
                       display: "inline-flex",
@@ -463,7 +493,9 @@ export default function PublicSendOrderModal({
       open={open}
       title="Enviar comanda"
       onClose={() => {
-        if (!sending) onClose?.();
+        if (!sending) {
+          onClose?.();
+        }
       }}
       actions={
         <>
@@ -484,10 +516,10 @@ export default function PublicSendOrderModal({
               canAppend
                 ? "Esta orden ya está abierta, se agrega directo desde el botón Enviar."
                 : pending
-                ? "Ya hay comanda en espera."
-                : !allowBaseSend
-                ? "No se puede enviar aún"
-                : "Mandar comanda"
+                  ? "Ya hay comanda en espera."
+                  : !allowBaseSend
+                    ? "No se puede enviar aún"
+                    : "Mandar comanda"
             }
           >
             {sending ? "⏳ Mandando..." : "📨 Mandar"}
@@ -517,81 +549,105 @@ export default function PublicSendOrderModal({
           </div>
         ) : null}
 
-        <input
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          placeholder="Ej: Juan"
-          style={{
-            padding: "12px 14px",
-            borderRadius: 12,
-            border: "1px solid rgba(0,0,0,0.12)",
-            outline: "none",
-            fontWeight: 850,
-            width: "100%",
-          }}
-          maxLength={120}
-          disabled={sending}
+        <FieldBlock
+          label="Nombre del pedido *"
+          input={
+            <TextField
+              fullWidth
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Ej. Juan"
+              disabled={sending}
+              sx={formFieldSx}
+              slotProps={{
+                htmlInput: {
+                  maxLength: 120,
+                },
+              }}
+            />
+          }
         />
 
         <div
           style={{
             display: "grid",
-            gap: 10,
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 16,
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           }}
         >
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={partySize}
-            onChange={(e) => setPartySize(e.target.value)}
-            placeholder="Total personas"
-            style={{
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.12)",
-              outline: "none",
-              fontWeight: 850,
-              width: "100%",
-            }}
-            disabled={sending}
+          <FieldBlock
+            label="Total de personas *"
+            input={
+              <TextField
+                fullWidth
+                type="text"
+                value={partySize}
+                onChange={(e) => {
+                  setPartySize(
+                    sanitizeIntegerInput(e.target.value),
+                  );
+                }}
+                placeholder="Ej. 4"
+                disabled={sending}
+                sx={formFieldSx}
+                slotProps={{
+                  htmlInput: {
+                    inputMode: "numeric",
+                    pattern: "[0-9]*",
+                  },
+                }}
+              />
+            }
           />
 
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={adultCount}
-            onChange={(e) => setAdultCount(e.target.value)}
-            placeholder="Adultos"
-            style={{
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.12)",
-              outline: "none",
-              fontWeight: 850,
-              width: "100%",
-            }}
-            disabled={sending}
+          <FieldBlock
+            label="Adultos *"
+            input={
+              <TextField
+                fullWidth
+                type="text"
+                value={adultCount}
+                onChange={(e) => {
+                  setAdultCount(
+                    sanitizeIntegerInput(e.target.value),
+                  );
+                }}
+                placeholder="Ej. 2"
+                disabled={sending}
+                sx={formFieldSx}
+                slotProps={{
+                  htmlInput: {
+                    inputMode: "numeric",
+                    pattern: "[0-9]*",
+                  },
+                }}
+              />
+            }
           />
 
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={childCount}
-            onChange={(e) => setChildCount(e.target.value)}
-            placeholder="Niños"
-            style={{
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.12)",
-              outline: "none",
-              fontWeight: 850,
-              width: "100%",
-            }}
-            disabled={sending}
+          <FieldBlock
+            label="Niños *"
+            input={
+              <TextField
+                fullWidth
+                type="text"
+                value={childCount}
+                onChange={(e) => {
+                  setChildCount(
+                    sanitizeIntegerInput(e.target.value),
+                  );
+                }}
+                placeholder="Ej. 0"
+                disabled={sending}
+                sx={formFieldSx}
+                slotProps={{
+                  htmlInput: {
+                    inputMode: "numeric",
+                    pattern: "[0-9]*",
+                  },
+                }}
+              />
+            }
           />
         </div>
 
@@ -606,7 +662,7 @@ export default function PublicSendOrderModal({
             opacity: 0.88,
           }}
         >
-          <strong>Nota:</strong> Si no hay adultos o niños, ingresa 0. No dejes campos vacíos.
+          <strong>Nota:</strong> Puedes dejar Adultos o Niños vacío cuando no aplique.
         </div>
 
         <NewItemsPricingPreview
@@ -640,5 +696,42 @@ export default function PublicSendOrderModal({
         ) : null}
       </div>
     </Modal>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          marginBottom: 8,
+          fontSize: 14,
+          fontWeight: 800,
+          color: "#2F2A3D",
+        }}
+      >
+        {label}
+      </div>
+
+      {input}
+
+      {help ? (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 12,
+            color: "#6E6A6A",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </div>
+      ) : null}
+    </div>
   );
 }

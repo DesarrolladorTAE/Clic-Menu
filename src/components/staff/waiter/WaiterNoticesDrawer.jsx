@@ -58,18 +58,18 @@ export default function WaiterNoticesDrawer({
   floatingIcon: FloatingIcon,
 }) {
   /*
-   * La primera categoría visible al montar el drawer siempre es Cancelaciones.
-   * Después el mesero puede cambiar libremente entre las cuatro opciones.
-   */
-  const [activeNoticeType, setActiveNoticeType] = useState("cancellations");
+  * La primera categoría visible al montar el drawer siempre es Cocina.
+  * Después el mesero puede cambiar libremente entre las cuatro opciones.
+  */
+  const [activeNoticeType, setActiveNoticeType] = useState("ready");
 
   const noticeTabs = [
     {
-      key: "cancellations",
-      label: "Cancelaciones",
-      title: "Solicitudes de cancelación",
-      emptyText: "Aún no hay avisos de cancelación.",
-      items: Array.isArray(cancellationRequests) ? cancellationRequests : [],
+      key: "ready",
+      label: "Cocina",
+      title: "Avisos de cocina",
+      emptyText: "Aún no hay avisos de cocina.",
+      items: Array.isArray(readyNotifications) ? readyNotifications : [],
     },
     {
       key: "bill",
@@ -79,11 +79,11 @@ export default function WaiterNoticesDrawer({
       items: Array.isArray(billRequests) ? billRequests : [],
     },
     {
-      key: "ready",
-      label: "Cocina",
-      title: "Avisos de cocina",
-      emptyText: "Aún no hay avisos de cocina.",
-      items: Array.isArray(readyNotifications) ? readyNotifications : [],
+      key: "cancellations",
+      label: "Cancelaciones",
+      title: "Solicitudes de cancelación",
+      emptyText: "Aún no hay avisos de cancelación.",
+      items: Array.isArray(cancellationRequests) ? cancellationRequests : [],
     },
     {
       key: "session",

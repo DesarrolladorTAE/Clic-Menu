@@ -90,12 +90,28 @@ export default function CatalogContextCard({
   );
 }
 
-function ContextMiniCard({ icon, title, value, chipLabel, chipColor = "default" }) {
+function ContextMiniCard({
+  icon,
+  title,
+  value,
+  chipLabel,
+  chipColor = "default",
+}) {
   return (
     <Box
       sx={{
-        flex: "1 1 240px",
-        minWidth: 220,
+        flex: {
+          xs: "0 0 auto",
+          md: "1 1 240px",
+        },
+        width: {
+          xs: "100%",
+          md: "auto",
+        },
+        minWidth: {
+          xs: 0,
+          md: 220,
+        },
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
@@ -114,6 +130,7 @@ function ContextMiniCard({ icon, title, value, chipLabel, chipColor = "default" 
               placeItems: "center",
               bgcolor: "rgba(255, 152, 0, 0.12)",
               color: "primary.main",
+              flexShrink: 0,
             }}
           >
             {icon}
@@ -135,7 +152,10 @@ function ContextMiniCard({ icon, title, value, chipLabel, chipColor = "default" 
             fontSize: 14,
             color: "text.primary",
             lineHeight: 1.45,
-            minHeight: 42,
+            minHeight: {
+              xs: "auto",
+              md: 42,
+            },
           }}
         >
           {value}

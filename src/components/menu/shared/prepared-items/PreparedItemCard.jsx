@@ -189,6 +189,7 @@ export default function PreparedItemCard({
             top: 16,
             left: 16,
             right: 16,
+            zIndex: 5,
             display: "flex",
             alignItems: "flex-start",
             pointerEvents: "none",
@@ -207,6 +208,7 @@ export default function PreparedItemCard({
               fontSize: 9.5,
               fontWeight: 950,
               lineHeight: 1.1,
+              whiteSpace: "nowrap",
               boxShadow: `0 5px 14px ${alpha(cardThemeColor, 0.2)}`,
             }}
           >

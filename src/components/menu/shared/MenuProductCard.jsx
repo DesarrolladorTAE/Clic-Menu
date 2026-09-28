@@ -1,7 +1,7 @@
 // src/components/menu/shared/MenuProductCard.jsx
 import React, { useState } from "react";
 import { IconButton } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
@@ -139,7 +139,13 @@ export default function MenuProductCard({
 }) {
   const theme = useTheme();
   const cardThemeColor = getCardThemeColor(themeColor);
+
   const [infoOpen, setInfoOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const normalShadow = "0 10px 26px rgba(47,42,61,0.05)";
+
+  const hoverShadow = `0 17px 34px ${alpha(cardThemeColor, 0.16)}`;
 
   const title = product?.display_name || product?.name || "Producto";
   const variants = Array.isArray(product?.variants) ? product.variants : [];
@@ -200,19 +206,30 @@ export default function MenuProductCard({
   return (
     <>
       <article
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
           position: "relative",
           border: `1px solid ${
-            productBlocked ? "rgba(255, 152, 0, 0.25)" : theme.palette.divider
+            productBlocked
+              ? "rgba(255, 152, 0, 0.25)"
+              : theme.palette.divider
           }`,
           borderRadius: 10,
           background: "#FFFFFF",
           overflow: "hidden",
-          boxShadow: "0 10px 26px rgba(47,42,61,0.05)",
+          boxShadow: hovered
+            ? hoverShadow
+            : normalShadow,
           display: "grid",
           gridTemplateRows: "auto 1fr",
           minHeight: "100%",
           opacity: productBlocked ? 0.86 : 1,
+          transform: hovered
+            ? "translateY(-3px)"
+            : "translateY(0)",
+          transition:
+            "transform 180ms ease, box-shadow 180ms ease",
         }}
       >
         <div

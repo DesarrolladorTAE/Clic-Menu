@@ -1,24 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box,Button,Card,CardContent,Dialog,DialogContent,DialogTitle,IconButton,Stack,TextField,Typography,useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+
 import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 function toInt(value) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
+
+  if (!Number.isFinite(n)) {
+    return 0;
+  }
+
   return Math.trunc(n);
+}
+
+function sanitizeIntegerInput(value) {
+  return String(value || "").replace(/\D/g, "");
 }
 
 export default function WaiterOccupyTableDialog({
@@ -37,10 +37,14 @@ export default function WaiterOccupyTableDialog({
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState({});
 
-  const seats = useMemo(() => Number(table?.seats || 0), [table]);
+  const seats = useMemo(() => {
+    return Number(table?.seats || 0);
+  }, [table]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
     setPartySize("");
     setAdultCount("");
@@ -52,50 +56,51 @@ export default function WaiterOccupyTableDialog({
   const validate = () => {
     const nextErrors = {};
 
+    /*
+     * Total de personas sí es obligatorio.
+     *
+     * Adultos y niños pueden permanecer vacíos.
+     * toInt("") los normaliza internamente a 0.
+     */
     const party = toInt(partySize);
     const adults = toInt(adultCount);
     const children = toInt(childCount);
 
-    if (!partySize && partySize !== 0) {
-      nextErrors.party_size = "El total de personas es obligatorio.";
+    if (partySize === "") {
+      nextErrors.party_size ="El total de personas es obligatorio.";
     } else if (party < 1) {
       nextErrors.party_size = "Debe haber al menos una persona en la mesa.";
     }
 
-    if (adultCount === "") {
-      nextErrors.adult_count = "El número de adultos es obligatorio.";
-    } else if (adults < 0) {
-      nextErrors.adult_count = "El número de adultos no puede ser menor a 0.";
-    }
-
-    if (childCount === "") {
-      nextErrors.child_count = "El número de niños es obligatorio.";
-    } else if (children < 0) {
-      nextErrors.child_count = "El número de niños no puede ser menor a 0.";
+    if (
+      !nextErrors.party_size &&
+      adults + children !== party
+    ) {
+      nextErrors.party_size = "La suma de adultos y niños debe coincidir con el total de personas.";
     }
 
     if (
       !nextErrors.party_size &&
-      !nextErrors.adult_count &&
-      !nextErrors.child_count
+      seats > 0 &&
+      party > seats
     ) {
-      if (adults + children !== party) {
-        nextErrors.party_size =
-          "La suma de adultos y niños debe coincidir con el total de personas.";
-      }
-
-      if (seats > 0 && party > seats) {
-        nextErrors.party_size = `El total de personas no puede exceder la capacidad de la mesa (${seats}).`;
-      }
+      nextErrors.party_size =`El total de personas no puede exceder la capacidad de la mesa (${seats}).`;
     }
 
     setErrors(nextErrors);
+
     return Object.keys(nextErrors).length === 0;
   };
 
   const handleConfirm = () => {
-    if (!validate()) return;
+    if (!validate()) {
+      return;
+    }
 
+    /*
+     * Los campos Adultos y Niños pueden verse vacíos,
+     * pero el backend siempre recibe un entero.
+     */
     onConfirm?.({
       party_size: toInt(partySize),
       adult_count: toInt(adultCount),
@@ -103,6 +108,10 @@ export default function WaiterOccupyTableDialog({
       notes: notes?.trim() || null,
     });
   };
+
+  if (!open) {
+    return null;
+  }
 
   return (
     <Dialog
@@ -183,142 +192,303 @@ export default function WaiterOccupyTableDialog({
           bgcolor: "background.default",
         }}
       >
-        <Stack spacing={2.25}>
-          <Box
+        <Card
+          sx={{
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+          }}
+        >
+          <CardContent
             sx={{
-              p: 1.75,
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor: "background.paper",
+              p: { xs: 2, sm: 3 },
+              "&:last-child": {
+                pb: { xs: 2, sm: 3 },
+              },
             }}
           >
-            <Stack spacing={0.75}>
-              <Typography
+            <Stack spacing={2.5}>
+            
+              <Box
                 sx={{
-                  fontSize: 14,
-                  fontWeight: 800,
-                  color: "text.primary",
+                  p: 1.5,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  bgcolor: "background.default",
                 }}
               >
-                Resumen de la mesa
-              </Typography>
+                <Stack spacing={0.75}>
+                  <Typography
+                    sx={{
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    Resumen de la mesa
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                Mesa: <strong>{table?.name || "—"}</strong>
-              </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Mesa:{" "}
+                    <strong>
+                      {table?.name || "—"}
+                    </strong>
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                Capacidad: <strong>{seats || 0}</strong> asiento(s)
-              </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      color: "text.secondary",
+                    }}
+                  >
+                    Capacidad:{" "}
+                    <strong>
+                      {seats || 0} asiento(s)
+                    </strong>
+                  </Typography>
+                </Stack>
+              </Box>
+
+              <Stack spacing={2}>
+                <FieldBlock
+                  label="Total de personas *"
+                  help={
+                    errors.party_size ||
+                    "Debe coincidir con la suma de adultos y niños."
+                  }
+                  error={!!errors.party_size}
+                  input={
+                    <TextField
+                      fullWidth
+                      type="text"
+                      value={partySize}
+                      onChange={(e) => {
+                        setPartySize(
+                          sanitizeIntegerInput(
+                            e.target.value,
+                          ),
+                        );
+
+                        if (errors.party_size) {
+                          setErrors((previous) => ({
+                            ...previous,
+                            party_size: undefined,
+                          }));
+                        }
+                      }}
+                      placeholder="Ej. 4"
+                      disabled={loading}
+                      error={!!errors.party_size}
+                      slotProps={{
+                        htmlInput: {
+                          inputMode: "numeric",
+                          pattern: "[0-9]*",
+                        },
+                      }}
+                    />
+                  }
+                />
+
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={2}
+                >
+                  <FieldBlock
+                    label="Adultos"
+                    help="Opcional. Si lo dejas vacío se registrará como 0."
+                    input={
+                      <TextField
+                        fullWidth
+                        type="text"
+                        value={adultCount}
+                        onChange={(e) => {
+                          setAdultCount(
+                            sanitizeIntegerInput(
+                              e.target.value,
+                            ),
+                          );
+
+                          if (errors.party_size) {
+                            setErrors((previous) => ({
+                              ...previous,
+                              party_size: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Ej. 2"
+                        disabled={loading}
+                        slotProps={{
+                          htmlInput: {
+                            inputMode: "numeric",
+                            pattern: "[0-9]*",
+                          },
+                        }}
+                      />
+                    }
+                  />
+
+                  <FieldBlock
+                    label="Niños"
+                    help="Opcional. Si lo dejas vacío se registrará como 0."
+                    input={
+                      <TextField
+                        fullWidth
+                        type="text"
+                        value={childCount}
+                        onChange={(e) => {
+                          setChildCount(
+                            sanitizeIntegerInput(
+                              e.target.value,
+                            ),
+                          );
+
+                          if (errors.party_size) {
+                            setErrors((previous) => ({
+                              ...previous,
+                              party_size: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Ej. 0"
+                        disabled={loading}
+                        slotProps={{
+                          htmlInput: {
+                            inputMode: "numeric",
+                            pattern: "[0-9]*",
+                          },
+                        }}
+                      />
+                    }
+                  />
+                </Stack>
+
+                <FieldBlock
+                  label="Notas"
+                  help="Opcional. Puedes dejar un comentario breve si hace falta."
+                  input={
+                    <TextField
+                      fullWidth
+                      value={notes}
+                      onChange={(e) =>
+                        setNotes(e.target.value)
+                      }
+                      placeholder="Ej. Requieren silla para bebé"
+                      disabled={loading}
+                      slotProps={{
+                        htmlInput: {
+                          maxLength: 500,
+                        },
+                      }}
+                    />
+                  }
+                />
+
+              </Stack>
+
+              <Stack
+                direction={{
+                  xs: "column-reverse",
+                  sm: "row",
+                }}
+                justifyContent="flex-end"
+                spacing={1.5}
+                pt={1}
+              >
+                <Button
+                  type="button"
+                  onClick={onClose}
+                  disabled={loading}
+                  variant="outlined"
+                  sx={{
+                    minWidth: {
+                      xs: "100%",
+                      sm: 150,
+                    },
+                    height: 44,
+                    borderRadius: 2,
+                  }}
+                >
+                  Cancelar
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={loading}
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  sx={{
+                    minWidth: {
+                      xs: "100%",
+                      sm: 190,
+                    },
+                    height: 44,
+                    borderRadius: 2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {loading
+                    ? "Guardando…"
+                    : "Confirmar ocupación"}
+                </Button>
+              </Stack>
             </Stack>
-          </Box>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <TextField
-              label="Total personas"
-              type="number"
-              fullWidth
-              value={partySize}
-              onChange={(e) => setPartySize(e.target.value)}
-              error={!!errors.party_size}
-              helperText={errors.party_size || "Debe coincidir con adultos + niños."}
-              inputProps={{ min: 1, step: 1 }}
-            />
-
-            <TextField
-              label="Adultos"
-              type="number"
-              fullWidth
-              value={adultCount}
-              onChange={(e) => setAdultCount(e.target.value)}
-              error={!!errors.adult_count}
-              helperText={errors.adult_count || "Usa 0 si no hay adultos."}
-              inputProps={{ min: 0, step: 1 }}
-            />
-          </Stack>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <TextField
-              label="Niños"
-              type="number"
-              fullWidth
-              value={childCount}
-              onChange={(e) => setChildCount(e.target.value)}
-              error={!!errors.child_count}
-              helperText={errors.child_count || "Usa 0 si no hay niños."}
-              inputProps={{ min: 0, step: 1 }}
-            />
-
-            <TextField
-              label="Notas (opcional)"
-              fullWidth
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              helperText="Puedes dejar un comentario breve si hace falta."
-              inputProps={{ maxLength: 500 }}
-            />
-          </Stack>
-
-          <Box
-            sx={{
-              px: 1.5,
-              py: 1.25,
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              backgroundColor: "background.paper",
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 12.5,
-                color: "text.secondary",
-                lineHeight: 1.5,
-              }}
-            >
-              <strong>Nota:</strong> Si no hay adultos o niños, ingresa 0. No dejes campos vacíos.
-            </Typography>
-          </Box>
-
-          <Stack
-            direction={{ xs: "column-reverse", sm: "row" }}
-            justifyContent="flex-end"
-            spacing={1.5}
-            pt={1}
-          >
-            <Button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              variant="outlined"
-              sx={{
-                minWidth: { xs: "100%", sm: 150 },
-                height: 44,
-                borderRadius: 2,
-              }}
-            >
-              Cancelar
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleConfirm}
-              disabled={loading}
-              variant="contained"
-              startIcon={<SaveIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 190 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              {loading ? "Guardando…" : "Confirmar ocupación"}
-            </Button>
-          </Stack>
-        </Stack>
+          </CardContent>
+        </Card>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FieldBlock({
+  label,
+  input,
+  help,
+  error = false,
+}) {
+  return (
+    <Box
+      sx={{
+        flex: 1,
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: error
+              ? "error.main"
+              : "text.secondary",
+            fontWeight: error
+              ? 700
+              : 400,
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }

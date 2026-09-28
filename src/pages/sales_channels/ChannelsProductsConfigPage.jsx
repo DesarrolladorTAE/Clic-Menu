@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   Box, Button, Card, Chip, CircularProgress, FormControlLabel, IconButton, Paper, Stack, Switch, Table,
-  TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography, useMediaQuery,
+  TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -13,6 +13,9 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import BlockIcon from "@mui/icons-material/Block";
 
 import { getBranch } from "../../services/restaurant/branch.service";
+import { getMenuSections } from "../../services/menu/menuSections.service";
+import { getCategories } from "../../services/menu/categories.service";
+
 import {
   getChannelProducts,
   upsertChannelProduct,
@@ -22,6 +25,7 @@ import usePagination from "../../hooks/usePagination";
 import PaginationFooter from "../../components/common/PaginationFooter";
 import AppAlert from "../../components/common/AppAlert";
 import ChannelProductConfigModal from "../../components/sales_channels/ChannelProductConfigModal";
+import CatalogFiltersCard from "../../components/catalog/CatalogFiltersCard";
 
 const PAGE_SIZE = 5;
 
@@ -59,6 +63,12 @@ export default function ChannelProductsConfigPage() {
   const [channelCode, setChannelCode] = useState("");
 
   const [rows, setRows] = useState([]);
+
+  const [sections, setSections] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [sectionId, setSectionId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+
   const [search, setSearch] = useState("");
   const [onlyActiveProductStatus, setOnlyActiveProductStatus] = useState(true);
 
@@ -89,10 +99,53 @@ export default function ChannelProductsConfigPage() {
 
   const isSaving = (productId) => !!savingMap[productId];
 
+  const visibleCategories = useMemo(() => {
+    if (!sectionId) return categories;
+
+    return categories.filter(
+      (category) => String(category.section_id ?? "") === String(sectionId)
+    );
+  }, [categories, sectionId]);
+
+  const categoryMap = useMemo(() => {
+    return new Map(
+      categories.map((category) => [String(category.id), category])
+    );
+  }, [categories]);
+
+  const sectionMap = useMemo(() => {
+    return new Map(
+      sections.map((section) => [String(section.id), section])
+    );
+  }, [sections]);
+
+  const loadCatalogStructure = async (catalogMode) => {
+    const query =
+      catalogMode === "branch"
+        ? {
+            status: "active",
+            branch_id: bid,
+          }
+        : {
+            status: "active",
+          };
+
+    const [sectionsResponse, categoriesResponse] = await Promise.all([
+      getMenuSections(rid, query),
+      getCategories(rid, query),
+    ]);
+
+    setSections(Array.isArray(sectionsResponse) ? sectionsResponse : []);
+    setCategories(Array.isArray(categoriesResponse) ? categoriesResponse : []);
+  };
+
   const load = async () => {
     setLoading(true);
 
     try {
+      setSectionId("");
+      setCategoryId("");
+
       try {
         const b = await getBranch(rid, bid);
         setBranchName(b?.name || "");
@@ -102,10 +155,14 @@ export default function ChannelProductsConfigPage() {
 
       const res = await getChannelProducts(rid, bid, scid);
 
-      setMode(res?.mode || "global");
+      const nextMode = res?.mode || "global";
+
+      setMode(nextMode);
       setChannelName(res?.sales_channel?.name || "");
       setChannelCode(res?.sales_channel?.code || "");
       setRows(Array.isArray(res?.data) ? res.data : []);
+
+      await loadCatalogStructure(nextMode);
     } catch (e) {
       showAlert({
         severity: "error",
@@ -114,15 +171,39 @@ export default function ChannelProductsConfigPage() {
           e?.response?.data?.message ||
           "No se pudo cargar la configuración del canal",
       });
+
+      setSections([]);
+      setCategories([]);
+      setSectionId("");
+      setCategoryId("");
     } finally {
       setLoading(false);
     }
   };
 
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, branchId, salesChannelId]);
+
+  const handleSectionChange = (nextSectionId) => {
+    const nextValue = String(nextSectionId || "");
+
+    setSectionId(nextValue);
+
+    if (!nextValue || !categoryId) return;
+
+    const categoryStillExists = categories.some(
+      (category) =>
+        String(category.id) === String(categoryId) &&
+        String(category.section_id ?? "") === nextValue
+    );
+
+    if (!categoryStillExists) {
+      setCategoryId("");
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -130,22 +211,84 @@ export default function ChannelProductsConfigPage() {
     return rows
       .filter((r) => {
         const p = r.product;
-        if (onlyActiveProductStatus && p?.status !== "active") return false;
-        if (!q) return true;
+
+        const productCategoryId = String(
+          p?.category_id ?? p?.category?.id ?? ""
+        );
+
+        const productCategory =
+          categoryMap.get(productCategoryId) ||
+          p?.category ||
+          null;
+
+        const productSectionId = String(
+          productCategory?.section_id ?? ""
+        );
+
+        const productSection = sectionMap.get(productSectionId) || null;
+
+        if (onlyActiveProductStatus && p?.status !== "active") {
+          return false;
+        }
+
+        if (sectionId && productSectionId !== String(sectionId)) 
+        {
+          return false;
+        }
+
+        if (
+          categoryId &&
+          productCategoryId !== String(categoryId)
+        ) {
+          return false;
+        }
+
+        if (!q) {
+          return true;
+        }
 
         const name = (p?.name || "").toLowerCase();
         const desc = (p?.description || "").toLowerCase();
-        const cat = (p?.category?.name || "").toLowerCase();
+        const cat = (
+          productCategory?.name ||
+          p?.category?.name ||
+          ""
+        ).toLowerCase();
+        const section = (productSection?.name || "").toLowerCase();
 
-        return name.includes(q) || desc.includes(q) || cat.includes(q);
+        return (
+          name.includes(q) ||
+          desc.includes(q) ||
+          cat.includes(q) ||
+          section.includes(q)
+        );
       })
       .sort((a, b) => {
         const ea = a?.channel?.is_enabled ? 1 : 0;
         const eb = b?.channel?.is_enabled ? 1 : 0;
-        if (ea !== eb) return eb - ea;
-        return (a?.product?.name || "").localeCompare(b?.product?.name || "");
+
+        if (ea !== eb) {
+          return eb - ea;
+        }
+
+        return (a?.product?.name || "").localeCompare(
+          b?.product?.name || "",
+          "es",
+          {
+            sensitivity: "base",
+          }
+        );
       });
-  }, [rows, search, onlyActiveProductStatus]);
+  }, [
+    rows,
+    search,
+    onlyActiveProductStatus,
+    sectionId,
+    categoryId,
+    categoryMap,
+    sectionMap,
+  ]);
+
 
   const {
     page,
@@ -395,68 +538,21 @@ export default function ChannelProductsConfigPage() {
               </Button>
             </Stack>
           </Stack>
-
-          <Paper
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              borderRadius: 1,
-              backgroundColor: "background.paper",
-              border: "1px solid",
-              borderColor: "divider",
-              boxShadow: "none",
-            }}
-          >
-            <Stack spacing={2}>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
-                alignItems={{ xs: "stretch", md: "flex-end" }}
-              >
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={fieldLabelSx}>Buscar producto</Typography>
-                  <TextField
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar por nombre, descripción o categoría..."
-                    fullWidth
-                  />
-                </Box>
-              </Stack>
-
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.5}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", md: "center" }}
-              >
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={onlyActiveProductStatus}
-                      onChange={(e) => setOnlyActiveProductStatus(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography sx={switchLabelSx}>
-                      Solo productos activos
-                    </Typography>
-                  }
-                  sx={{ m: 0 }}
-                />
-
-                <Typography
-                  sx={{
-                    fontSize: 13,
-                    color: "text.secondary",
-                    fontWeight: 700,
-                  }}
-                >
-                  Mostrando {filtered.length} de {rows.length} productos
-                </Typography>
-              </Stack>
-            </Stack>
-          </Paper>
+          
+          <CatalogFiltersCard
+            search={search}
+            onChangeSearch={setSearch}
+            sections={sections}
+            sectionId={sectionId}
+            onChangeSection={handleSectionChange}
+            categories={visibleCategories}
+            categoryId={categoryId}
+            onChangeCategory={setCategoryId}
+            onlyActiveProducts={onlyActiveProductStatus}
+            onChangeOnlyActiveProducts={setOnlyActiveProductStatus}
+            filteredCount={filtered.length}
+            totalCount={rows.length}
+          />
 
           <Paper
             sx={{
@@ -851,13 +947,6 @@ export default function ChannelProductsConfigPage() {
     </Box>
   );
 }
-
-const fieldLabelSx = {
-  fontSize: 14,
-  fontWeight: 800,
-  color: "text.primary",
-  mb: 1,
-};
 
 const switchLabelSx = {
   fontSize: 14,

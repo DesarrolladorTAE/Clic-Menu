@@ -1,6 +1,11 @@
 import React from "react";
 import {
-  Box, Button, Chip, Divider, Stack, Typography,
+  Box,
+  Button,
+  Chip,
+  Divider,
+  Stack,
+  Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
@@ -26,30 +31,83 @@ export default function WaiterCancellationRequestReview({
 }) {
   const theme = useTheme();
   const primaryColor = theme.palette.primary.main;
-  const isFull = String(request?.type || "").toLowerCase() === "full";
 
-  const reasonLabel = getReasonLabel(request?.reason_code);
-  const reasonNote = String(request?.reason_note || "").trim();
-  const requestedAt = formatRequestDate(request?.created_at);
+  const isFull =
+    String(request?.type || "").toLowerCase() === "full";
+
+  const reasonLabel =
+    getReasonLabel(request?.reason_code);
+
+  const reasonNote =
+    String(request?.reason_note || "").trim();
+
+  const requestedAt =
+    formatRequestDate(request?.created_at);
 
   return (
-    <Stack sx={{ flex: 1, minHeight: 0 }}>
-      <Box>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+    <Stack
+      sx={{
+        flex: 1,
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          pr: { xs: 0.5, sm: 1 },
+          pb: 0.5,
+          scrollbarGutter: "stable",
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1}
+          useFlexGap
+          flexWrap="wrap"
+          sx={{ mb: 2 }}
+        >
           <Chip
-            label={isFull ? "Cancelación total" : "Cancelación parcial"}
+            label={
+              isFull
+                ? "Cancelación total"
+                : "Cancelación parcial"
+            }
             size="small"
-            sx={{ fontWeight: 800, bgcolor: alpha(primaryColor, 0.1), color: primaryColor }}
+            sx={{
+              fontWeight: 800,
+              bgcolor: alpha(primaryColor, 0.1),
+              color: primaryColor,
+            }}
           />
 
           <Chip
-            label={items.length === 1 ? "1 partida solicitada" : `${items.length} partidas solicitadas`}
+            label={
+              items.length === 1
+                ? "1 partida solicitada"
+                : `${items.length} partidas solicitadas`
+            }
             size="small"
-            sx={{ bgcolor: "text.primary", color: "#fff", fontWeight: 800 }}
+            sx={{
+              bgcolor: "text.primary",
+              color: "#fff",
+              fontWeight: 800,
+            }}
           />
 
           {hasStaleItems ? (
-            <Chip label="Solicitud desactualizada" size="small" color="error" variant="outlined" sx={{ fontWeight: 800 }} />
+            <Chip
+              label="Solicitud desactualizada"
+              size="small"
+              color="error"
+              variant="outlined"
+              sx={{
+                fontWeight: 800,
+              }}
+            />
           ) : null}
         </Stack>
 
@@ -63,12 +121,42 @@ export default function WaiterCancellationRequestReview({
           }}
         >
           <Stack spacing={1.25}>
-            <InfoRow label="Mesa" value={request?.table_id ? `#${request.table_id}` : "—"} />
-            <InfoRow label="Orden" value={request?.order_id ? `#${request.order_id}` : "—"} />
-            <InfoRow label="Motivo" value={reasonLabel} />
+            <InfoRow
+              label="Mesa"
+              value={
+                request?.table_id
+                  ? `#${request.table_id}`
+                  : "—"
+              }
+            />
 
-            {reasonNote ? <InfoRow label="Nota" value={reasonNote} /> : null}
-            {requestedAt ? <InfoRow label="Solicitada" value={requestedAt} /> : null}
+            <InfoRow
+              label="Orden"
+              value={
+                request?.order_id
+                  ? `#${request.order_id}`
+                  : "—"
+              }
+            />
+
+            <InfoRow
+              label="Motivo"
+              value={reasonLabel}
+            />
+
+            {reasonNote ? (
+              <InfoRow
+                label="Nota"
+                value={reasonNote}
+              />
+            ) : null}
+
+            {requestedAt ? (
+              <InfoRow
+                label="Solicitada"
+                value={requestedAt}
+              />
+            ) : null}
           </Stack>
         </Box>
 
@@ -79,21 +167,46 @@ export default function WaiterCancellationRequestReview({
               mt: 2,
               p: 1.5,
               border: "1px solid",
-              borderColor: alpha(theme.palette.error.main, 0.24),
-              bgcolor: alpha(theme.palette.error.main, 0.06),
+              borderColor: alpha(
+                theme.palette.error.main,
+                0.24,
+              ),
+              bgcolor: alpha(
+                theme.palette.error.main,
+                0.06,
+              ),
               borderRadius: 1,
             }}
           >
-            <Typography sx={{ fontSize: 13, fontWeight: 800, color: "error.main", lineHeight: 1.5 }}>
-              La comanda cambió después de que el cliente envió esta solicitud. Puedes rechazarla, pero no aprobarla con información desactualizada.
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: "error.main",
+                lineHeight: 1.5,
+              }}
+            >
+              La comanda cambió después de que el cliente
+              envió esta solicitud. Puedes rechazarla, pero
+              no aprobarla con información desactualizada.
             </Typography>
           </Box>
         ) : null}
 
-        <Stack spacing={1.25} sx={{ mt: 2 }}>
+        <Stack
+          spacing={1.25}
+          sx={{
+            mt: 2,
+          }}
+        >
           {items.map((item) => {
-            const orderItemId = getOrderItemId(item);
-            const kitchenLabel = getKitchenStatusLabel(item?.kitchen_status);
+            const orderItemId =
+              getOrderItemId(item);
+
+            const kitchenLabel =
+              getKitchenStatusLabel(
+                item?.kitchen_status,
+              );
 
             return (
               <Box
@@ -101,34 +214,86 @@ export default function WaiterCancellationRequestReview({
                 sx={{
                   p: { xs: 1.5, sm: 1.75 },
                   border: "1px solid",
-                  borderColor: item?.stale ? alpha(theme.palette.error.main, 0.28) : "divider",
-                  bgcolor: item?.stale ? alpha(theme.palette.error.main, 0.04) : "background.paper",
+                  borderColor: item?.stale
+                    ? alpha(
+                        theme.palette.error.main,
+                        0.28,
+                      )
+                    : "divider",
+                  bgcolor: item?.stale
+                    ? alpha(
+                        theme.palette.error.main,
+                        0.04,
+                      )
+                    : "background.paper",
                   borderRadius: 1,
                 }}
               >
                 <Stack spacing={1}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 14.5, fontWeight: 800, color: "text.primary", lineHeight: 1.35 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    spacing={1}
+                  >
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 14.5,
+                          fontWeight: 800,
+                          color: "text.primary",
+                          lineHeight: 1.35,
+                        }}
+                      >
                         {getItemLabel(item)}
                       </Typography>
 
                       {kitchenLabel ? (
-                        <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
-                          Cocina: <strong>{kitchenLabel}</strong>
+                        <Typography
+                          sx={{
+                            mt: 0.35,
+                            fontSize: 12,
+                            color: "text.secondary",
+                          }}
+                        >
+                          Cocina:{" "}
+                          <strong>
+                            {kitchenLabel}
+                          </strong>
                         </Typography>
                       ) : null}
                     </Box>
 
                     <Chip
-                      label={`Cant. ${getRequestedQuantity(item)}`}
+                      label={`Cant. ${getRequestedQuantity(
+                        item,
+                      )}`}
                       size="small"
-                      sx={{ flexShrink: 0, bgcolor: alpha(primaryColor, 0.1), color: primaryColor, fontWeight: 800 }}
+                      sx={{
+                        flexShrink: 0,
+                        bgcolor: alpha(
+                          primaryColor,
+                          0.1,
+                        ),
+                        color: primaryColor,
+                        fontWeight: 800,
+                      }}
                     />
                   </Stack>
 
                   {item?.stale ? (
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "error.main", lineHeight: 1.45 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "error.main",
+                        lineHeight: 1.45,
+                      }}
+                    >
                       {item.stale_message}
                     </Typography>
                   ) : null}
@@ -139,28 +304,44 @@ export default function WaiterCancellationRequestReview({
         </Stack>
       </Box>
 
-      <Box sx={{ flexGrow: 1 }} />
+      <Divider
+        sx={{
+          my: 2,
+          flexShrink: 0,
+        }}
+      />
 
-      <Divider sx={{ my: 2 }} />
-
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+      <Stack
+        direction={{
+          xs: "column",
+          sm: "row",
+        }}
+        spacing={1.25}
+        sx={{
+          flexShrink: 0,
+        }}
+      >
         <Button
-            type="button"
-            fullWidth
-            variant="contained"
-            color="error"
-            disabled={loading}
-            onClick={onReject}
-            sx={{
-                minHeight: 46,
-                borderRadius: 2,
-                fontWeight: 800,
-                color: "#fff",
-                boxShadow: "none",
-                "&:hover": { boxShadow: "none" },
-            }}
-            >
-            {loading && action === "reject" ? "Rechazando…" : "Rechazar solicitud"}
+          type="button"
+          fullWidth
+          variant="contained"
+          color="error"
+          disabled={loading}
+          onClick={onReject}
+          sx={{
+            minHeight: 46,
+            borderRadius: 2,
+            fontWeight: 800,
+            color: "#fff",
+            boxShadow: "none",
+            "&:hover": {
+              boxShadow: "none",
+            },
+          }}
+        >
+          {loading && action === "reject"
+            ? "Rechazando…"
+            : "Rechazar solicitud"}
         </Button>
 
         <Button
@@ -168,22 +349,51 @@ export default function WaiterCancellationRequestReview({
           fullWidth
           variant="contained"
           color="primary"
-          disabled={loading || hasStaleItems || items.length === 0}
+          disabled={
+            loading ||
+            hasStaleItems ||
+            items.length === 0
+          }
           startIcon={<CheckRoundedIcon />}
           onClick={onApprove}
-          sx={{ minHeight: 46, borderRadius: 2, fontWeight: 800, boxShadow: "none", "&:hover": { boxShadow: "none" } }}
+          sx={{
+            minHeight: 46,
+            borderRadius: 2,
+            fontWeight: 800,
+            boxShadow: "none",
+            "&:hover": {
+              boxShadow: "none",
+            },
+          }}
         >
-          {loading && action === "approve" ? "Aprobando…" : "Aprobar solicitud"}
+          {loading && action === "approve"
+            ? "Aprobando…"
+            : "Aprobar solicitud"}
         </Button>
       </Stack>
     </Stack>
   );
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({
+  label,
+  value,
+}) {
   return (
-    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-      <Typography sx={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
+    <Stack
+      direction="row"
+      justifyContent="space-between"
+      alignItems="flex-start"
+      spacing={2}
+    >
+      <Typography
+        sx={{
+          flexShrink: 0,
+          fontSize: 12,
+          fontWeight: 700,
+          color: "text.secondary",
+        }}
+      >
         {label}
       </Typography>
 

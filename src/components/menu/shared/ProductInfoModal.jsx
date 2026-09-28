@@ -104,8 +104,15 @@ export default function ProductInfoModal({
           sx: {
             width: { xs: "100%", sm: "min(960px, calc(100vw - 48px))" },
             maxWidth: { xs: "100%", sm: "960px" },
-            height: { xs: "100dvh", sm: "min(720px, calc(100dvh - 48px))" },
+
+            /*
+             * En escritorio mantenemos una altura fija más compacta.
+             * Si el contenido excede este espacio, DialogContent
+             * se encarga del scroll vertical.
+             */
+            height: { xs: "100dvh", sm: "min(530px, calc(100dvh - 48px))" },
             maxHeight: { xs: "100dvh", sm: "calc(100dvh - 48px)" },
+
             m: { xs: 0, sm: 2 },
             borderRadius: { xs: 0, sm: 2 },
             overflow: "hidden",
@@ -216,15 +223,17 @@ export default function ProductInfoModal({
           >
             <Box
               sx={{
-                height: { xs: 300, sm: 420, md: 520 },
+                width: "100%",
+                aspectRatio: "1 / 1",
+                alignSelf: "start",
                 minWidth: 0,
-                minHeight: 0,
                 p: 1,
-                bgcolor: "#fff",
+                bgcolor: "#FFFFFF",
                 border: "1px solid",
                 borderColor: "divider",
                 borderRadius: 1.5,
                 overflow: "hidden",
+                boxSizing: "border-box",
               }}
             >
               <ProductThumb
@@ -232,6 +241,8 @@ export default function ProductInfoModal({
                 title={title}
                 height="100%"
                 style={{
+                  width: "100%",
+                  height: "100%",
                   border: "none",
                   borderRadius: 8,
                   background: "#FFFFFF",

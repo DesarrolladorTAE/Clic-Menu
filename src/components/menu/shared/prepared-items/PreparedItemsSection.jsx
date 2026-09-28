@@ -10,6 +10,9 @@ import {
 
 import PreparedItemCard from "./PreparedItemCard";
 
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+
 /*
  * Sección visual compartida de Preparación rápida.
  *
@@ -235,9 +238,6 @@ export default function PreparedItemsSection({
             place-items: center;
             padding: 0;
             cursor: pointer;
-            font-size: 31px;
-            font-weight: 500;
-            line-height: 1;
             box-shadow: 0 8px 22px rgba(17,24,39,0.20);
             transform: translateY(-50%);
             transition:
@@ -293,7 +293,6 @@ export default function PreparedItemsSection({
             .preparedItemsArrow {
               width: 34px;
               height: 34px;
-              font-size: 27px;
             }
 
             .preparedItemsArrowLeft {
@@ -375,7 +374,12 @@ export default function PreparedItemsSection({
             title="Anterior"
             style={{ background: carouselColor }}
           >
-            ‹
+            <ChevronLeftRoundedIcon
+              sx={{
+                fontSize: 28,
+                display: "block",
+              }}
+            />
           </button>
         ) : null}
 
@@ -414,7 +418,12 @@ export default function PreparedItemsSection({
             title="Siguiente"
             style={{ background: carouselColor }}
           >
-            ›
+            <ChevronRightRoundedIcon
+              sx={{
+                fontSize: 28,
+                display: "block",
+              }}
+            />
           </button>
         ) : null}
       </div>

@@ -670,45 +670,24 @@ export function useCartAndOrder({
       return;
     }
 
-    const party =
-      toSafeInt(partySize);
+    const party = toSafeInt(partySize);
 
-    const adults =
-      toSafeInt(adultCount);
+    const adults = toSafeInt(adultCount);
 
-    const children =
-      toSafeInt(childCount);
+    const children = toSafeInt(childCount);
 
     if (party < 1) {
       setSendToast("⚠️ Debe haber al menos una persona en la mesa.");
       return;
     }
 
-    if (adultCount === "") {
-      setSendToast("⚠️ Captura el número de adultos. Usa 0 si no hay.");
-      return;
-    }
-
-    if (childCount === "") {
-      setSendToast("⚠️ Captura el número de niños. Usa 0 si no hay.");
-      return;
-    }
-
-    if (
-      adults < 0 ||
-      children < 0
-    ) {
+    if (adults < 0 || children < 0) {
       setSendToast("⚠️ Adultos y niños no pueden ser menores a 0.");
       return;
     }
 
-    if (
-      adults + children !==
-      party
-    ) {
-      setSendToast(
-        "⚠️ La suma de adultos y niños debe coincidir con el total de personas.",
-      );
+    if (adults + children !== party) {
+      setSendToast( "⚠️ La suma de adultos y niños debe coincidir con el total de personas.",);
       return;
     }
 

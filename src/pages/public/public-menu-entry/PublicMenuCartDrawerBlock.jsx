@@ -16,7 +16,6 @@ export default function PublicMenuCartDrawerBlock({
   cartDrawerItemCount,
   pendingItems = [],
   canAppend,
-  pending,
   allowSendButton,
   hasInvalidItems,
   invalidItemsCount,
@@ -30,8 +29,6 @@ export default function PublicMenuCartDrawerBlock({
   billToast,
   canRequestBill,
   requestBillReason,
-  billAlreadySent,
-  billRequestStatus,
   showBillButton,
   onRequestBill,
 }) {
@@ -49,8 +46,6 @@ export default function PublicMenuCartDrawerBlock({
   const effectiveCanAppend =
     !isPaymentInProgress && Boolean(canAppend);
 
-  const effectivePending = !isPaymentInProgress && Boolean(pending);
-
   const effectiveHasInvalidItems =
     !isPaymentInProgress && Boolean(hasInvalidItems);
 
@@ -67,14 +62,6 @@ export default function PublicMenuCartDrawerBlock({
 
   const effectiveCanRequestBill =
     effectiveShowBillButton && Boolean(canRequestBill);
-
-  const effectiveBillAlreadySent =
-    effectiveShowBillButton && Boolean(billAlreadySent);
-
-  const effectiveBillRequestStatus =
-    effectiveShowBillButton
-      ? String(billRequestStatus || "")
-      : "";
 
   const effectiveRequestBillReason =
     effectiveShowBillButton
@@ -94,32 +81,20 @@ export default function PublicMenuCartDrawerBlock({
       ? ""
       : String(billToast || "");
 
-  const newViewItemCount =
-    Number(cartOrder?.cart?.length || 0) +
-    (Array.isArray(pendingItems) ? pendingItems.length : 0);
-
   const cancellationActive =
     !isPaymentInProgress &&
     Boolean(cancellationEnabled) &&
     Boolean(cartOrder?.cancellationActive);
 
-  const cancellationSelectableItems = getOrderCancellationSelectableItems(
-    cartOrder?.oldItems,
-  );
+  const cancellationSelectableItems =
+    getOrderCancellationSelectableItems(
+      cartOrder?.oldItems,
+    );
 
   const pendingCancellation =
     !isPaymentInProgress && cancellationEnabled
       ? cartOrder?.pendingCancellation || null
       : null;
-
-  const pendingCancellationType = String(
-    pendingCancellation?.type || "",
-  ).toLowerCase();
-
-  const pendingCancellationLabel =
-    pendingCancellationType === "full"
-      ? "⏳ Cancelación de comanda solicitada"
-      : "⏳ Cancelación solicitada";
 
   const canStartCancellation =
     Boolean(cancellationEnabled) &&
@@ -231,77 +206,6 @@ export default function PublicMenuCartDrawerBlock({
           onQtyChange={cartOrder.setCartQty}
           onNotesChange={cartOrder.setCartNotes}
           onRemove={cartOrder.removeCartItem}
-          statusBadges={[
-            ...(effectiveCanAppend
-              ? [
-                  {
-                    tone: "ok",
-                    label: "✅ Orden abierta",
-                  },
-                ]
-              : []),
-
-            ...(!effectiveCanAppend && effectivePending
-              ? [
-                  {
-                    tone: "warn",
-                    label: "⏳ En espera de aprobación",
-                  },
-                ]
-              : []),
-
-            ...(pendingCancellation
-              ? [
-                  {
-                    tone: "warn",
-                    label: pendingCancellationLabel,
-                    title: "Solicitud de cancelación pendiente",
-                  },
-                ]
-              : []),
-
-            ...(Array.isArray(cartOrder.oldItems) &&
-            cartOrder.oldItems.length > 0
-              ? [
-                  {
-                    tone: "dark",
-                    label: `Historial: ${cartOrder.oldItems.length}`,
-                    title: "Historial (solo lectura)",
-                  },
-                ]
-              : []),
-
-            {
-              tone: newViewItemCount > 0 ? "ok" : "warn",
-              label: `Nuevo: ${newViewItemCount}`,
-            },
-
-            ...(effectiveShowBillButton
-              ? [
-                  {
-                    tone: effectiveBillAlreadySent
-                      ? "dark"
-                      : effectiveCanRequestBill
-                        ? "ok"
-                        : "warn",
-
-                    label: effectiveBillAlreadySent
-                      ? `🧾 Aviso enviado${
-                          effectiveBillRequestStatus
-                            ? ` (${effectiveBillRequestStatus})`
-                            : ""
-                        }`
-                      : effectiveCanRequestBill
-                        ? "🧾 Puedes pedir cuenta"
-                        : "🧾 Aún no disponible",
-
-                    title:
-                      effectiveRequestBillReason ||
-                      "Estado del flujo para pedir cuenta",
-                  },
-                ]
-              : []),
-          ]}
 
           extraTopActions={
             canStartCancellation ? (
