@@ -62,11 +62,12 @@ function planAllowsRecipes(allowedProducts) {
   return planAllowsCombination(allowedProducts, "simple", "ingredients");
 }
 
-function planAllowsVariants(allowedProducts) {
-  return (
-    planAllowsCombination(allowedProducts, "simple", "ingredients") ||
-    planAllowsCombination(allowedProducts, "simple", "product")
-  );
+function planAllowsVariants(allowedProducts, productType, inventoryType) {
+  if (productType !== "simple") {
+    return false;
+  }
+
+  return planAllowsCombination(allowedProducts, productType, inventoryType);
 }
 
 function buttonsRules(productType, inventoryType, allowedProducts, planMeta = null) {
@@ -75,15 +76,16 @@ function buttonsRules(productType, inventoryType, allowedProducts, planMeta = nu
 
   const rules = { recipes: false, variants: false, components: false };
 
-  if (isBlockedByPlan) return rules;
+  if (isBlockedByPlan) {
+    return rules;
+  }
 
-  if (key === "simple:ingredients" && planAllowsRecipes(allowedProducts)) {
-    rules.recipes = true;
+  if (planAllowsVariants(allowedProducts, productType, inventoryType)) {
     rules.variants = true;
   }
 
-  if (key === "simple:product" && planAllowsVariants(allowedProducts)) {
-    rules.variants = true;
+  if (key === "simple:ingredients" && planAllowsRecipes(allowedProducts)) {
+    rules.recipes = true;
   }
 
   if (key === "composite:none" && planAllowsComposite(allowedProducts)) {

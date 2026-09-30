@@ -1,46 +1,73 @@
+//src/services/products/variants/variantAttributeValues.service.js
 import api from "../../api";
 
 /**
- * GET /api/restaurants/{restaurant}/variant-attributes/{attribute}/values?only_active=1|0
+ * GET /api/restaurants/{restaurant}/products/{product}/variant-attributes/{attribute}/values
+ * params: { only_active?: boolean }
  */
-export async function getVariantAttributeValues(restaurantId, attributeId, params = {}) {
+export async function getVariantAttributeValues(
+  restaurantId,
+  productId,
+  attributeId,
+  params = {}
+) {
   const { data } = await api.get(
-    `/restaurants/${restaurantId}/variant-attributes/${attributeId}/values`,
+    `/restaurants/${restaurantId}/products/${productId}/variant-attributes/${attributeId}/values`,
     { params },
   );
-  return data; // { attribute, data: [...] }
+
+  return data; // { product, attribute, data: [...] }
 }
 
 /**
- * POST /api/restaurants/{restaurant}/variant-attributes/{attribute}/values
+ * POST /api/restaurants/{restaurant}/products/{product}/variant-attributes/{attribute}/values
  * body: { value, sort_order, status }
  */
-export async function createVariantAttributeValue(restaurantId, attributeId, payload) {
+export async function createVariantAttributeValue(
+  restaurantId,
+  productId,
+  attributeId,
+  payload
+) {
   const { data } = await api.post(
-    `/restaurants/${restaurantId}/variant-attributes/${attributeId}/values`,
+    `/restaurants/${restaurantId}/products/${productId}/variant-attributes/${attributeId}/values`,
     payload,
   );
+
   return data;
 }
 
 /**
- * PUT /api/restaurants/{restaurant}/variant-attributes/{attribute}/values/{valueRow}
+ * PUT /api/restaurants/{restaurant}/products/{product}/variant-attributes/{attribute}/values/{valueRow}
  * body: { value?, sort_order?, status? }
  */
-export async function updateVariantAttributeValue(restaurantId, attributeId, valueId, payload) {
+export async function updateVariantAttributeValue(
+  restaurantId,
+  productId,
+  attributeId,
+  valueId,
+  payload
+) {
   const { data } = await api.put(
-    `/restaurants/${restaurantId}/variant-attributes/${attributeId}/values/${valueId}`,
+    `/restaurants/${restaurantId}/products/${productId}/variant-attributes/${attributeId}/values/${valueId}`,
     payload,
   );
+
   return data;
 }
 
 /**
- * DELETE /api/restaurants/{restaurant}/variant-attributes/{attribute}/values/{valueRow}
+ * DELETE /api/restaurants/{restaurant}/products/{product}/variant-attributes/{attribute}/values/{valueRow}
  */
-export async function deleteVariantAttributeValue(restaurantId, attributeId, valueId) {
+export async function deleteVariantAttributeValue(
+  restaurantId,
+  productId,
+  attributeId,
+  valueId
+) {
   const { data } = await api.delete(
-    `/restaurants/${restaurantId}/variant-attributes/${attributeId}/values/${valueId}`,
+    `/restaurants/${restaurantId}/products/${productId}/variant-attributes/${attributeId}/values/${valueId}`,
   );
+
   return data;
 }
