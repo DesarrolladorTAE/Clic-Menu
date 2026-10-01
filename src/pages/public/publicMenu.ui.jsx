@@ -674,6 +674,7 @@ export function Modal({
           display: "flex",
           flexDirection: "column",
           ...contentStyle,
+          ...(useMobileFullScreen ? { borderRadius: 0 } : {}),
         }}
       >
         <div

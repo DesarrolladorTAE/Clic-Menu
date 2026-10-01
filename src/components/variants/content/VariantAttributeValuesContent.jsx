@@ -476,17 +476,6 @@ export default function VariantAttributeValuesContent({
     <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
       <Stack spacing={2.5}>
         <Box>
-          <Button
-            type="button"
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => onBack?.()}
-            disabled={busy}
-            sx={{ mb: 1, fontWeight: 800 }}
-          >
-            Volver
-          </Button>
-
           <Typography
             sx={{
               fontWeight: 800,
@@ -629,28 +618,13 @@ export default function VariantAttributeValuesContent({
                   backgroundColor: "background.paper",
                 }}
               >
-                <PlaylistAddCheckCircleOutlinedIcon
-                  sx={{ fontSize: 38, color: "text.secondary" }}
-                />
+                <PlaylistAddCheckCircleOutlinedIcon sx={{ fontSize: 38, color: "text.secondary" }} />
 
-                <Typography
-                  sx={{
-                    mt: 1,
-                    fontSize: 18,
-                    fontWeight: 800,
-                    color: "text.primary",
-                  }}
-                >
+                <Typography sx={{ mt: 1, fontSize: 18, fontWeight: 800, color: "text.primary" }}>
                   Todavía no hay opciones
                 </Typography>
 
-                <Typography
-                  sx={{
-                    mt: 0.75,
-                    fontSize: 14,
-                    color: "text.secondary",
-                  }}
-                >
+                <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary" }}>
                   Agrega la primera opción para comenzar.
                 </Typography>
               </Paper>
@@ -1083,6 +1057,19 @@ export default function VariantAttributeValuesContent({
             )}
           </>
         )}
+
+        <Stack direction="row" justifyContent="flex-end">
+          <Button
+            type="button"
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => onBack?.()}
+            disabled={busy}
+            sx={{ minWidth: 130, height: 44, fontWeight: 800 }}
+          >
+            Volver
+          </Button>
+        </Stack>
       </Stack>
 
       <AppAlert

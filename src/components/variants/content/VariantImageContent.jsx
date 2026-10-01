@@ -1,21 +1,22 @@
+//Ventana imagen variante
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box, Button, Card, CircularProgress, Paper, Stack, Typography,
 } from "@mui/material";
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import UploadOutlinedIcon from "@mui/icons-material/UploadOutlined";
 
 import AppAlert from "../../common/AppAlert";
-import PageContainer from "../../common/PageContainer";
 
 function normalizeErr(error, fallback = "Ocurrió un error") {
   return (
     error?.response?.data?.message ||
-    (error?.response?.data?.errors ? Object.values(error.response.data.errors).flat().join("\n") : "") ||
+    (error?.response?.data?.errors
+      ? Object.values(error.response.data.errors).flat().join("\n")
+      : "") ||
     fallback
   );
 }
@@ -25,6 +26,8 @@ function extractImageState(response) {
 
   if (!state || typeof state !== "object") {
     return {
+      product_id: null,
+      variant_id: null,
       variant_image: null,
       effective_image: null,
     };
@@ -39,7 +42,9 @@ function extractImageState(response) {
 }
 
 function imageUrl(image) {
-  if (!image) return "";
+  if (!image) {
+    return "";
+  }
 
   return (
     image.best_public_url ||
@@ -50,17 +55,9 @@ function imageUrl(image) {
   );
 }
 
-function effectiveSourceLabel(image, hasOwnImage) {
-  if (hasOwnImage) return "Imagen propia de la variante";
-  if (!image) return "Sin imagen disponible";
-  if (image.source === "product") return "Imagen heredada del producto";
-  if (image.source === "variant") return "Imagen propia de la variante";
-  if (image.source === "placeholder") return "Imagen predeterminada";
-  return "Imagen disponible";
-}
-
 function variantTitle(productName, variant) {
   const product = String(productName || "").trim();
+
   const option = String(
     variant?.variant_name ||
     variant?.canonical_name ||
@@ -68,7 +65,10 @@ function variantTitle(productName, variant) {
     ""
   ).trim();
 
-  if (product && option) return `${product} · ${option}`;
+  if (product && option) {
+    return `${product} · ${option}`;
+  }
+
   return variant?.display_name || variant?.name || product || "Variante";
 }
 
@@ -80,7 +80,6 @@ export default function VariantImageContent({
   getVariantImage,
   uploadVariantImage,
   deleteVariantImage,
-  onBack,
   onChanged,
 }) {
   const fileInputRef = useRef(null);
@@ -113,16 +112,17 @@ export default function VariantImageContent({
   };
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway") {
+      return;
+    }
+
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
   const busy = uploading || deleting;
-  const ownImage = imageState?.variant_image ?? null;
-  const effectiveImage = imageState?.effective_image ?? null;
-  const ownImageUrl = imageUrl(ownImage);
-  const effectiveImageUrl = imageUrl(effectiveImage);
-  const hasOwnImage = Boolean(ownImage);
+  const variantImage = imageState?.variant_image ?? null;
+  const variantImageUrl = imageUrl(variantImage);
+  const hasImage = Boolean(variantImage);
 
   useEffect(() => {
     setImageState(initialState);
@@ -150,10 +150,15 @@ export default function VariantImageContent({
           variant.id
         );
 
-        if (requestId !== requestRef.current) return;
+        if (requestId !== requestRef.current) {
+          return;
+        }
+
         setImageState(extractImageState(response));
       } catch (error) {
-        if (requestId !== requestRef.current) return;
+        if (requestId !== requestRef.current) {
+          return;
+        }
 
         showAlert({
           severity: "error",
@@ -161,7 +166,9 @@ export default function VariantImageContent({
           message: normalizeErr(error, "Inténtalo nuevamente."),
         });
       } finally {
-        if (requestId === requestRef.current) setLoading(false);
+        if (requestId === requestRef.current) {
+          setLoading(false);
+        }
       }
     })();
 
@@ -172,18 +179,25 @@ export default function VariantImageContent({
 
   const updateLocalState = (response) => {
     const nextState = extractImageState(response);
+
     setImageState(nextState);
     onChanged?.(nextState);
+
     return nextState;
   };
 
   const chooseFile = () => {
-    if (busy) return;
+    if (busy) {
+      return;
+    }
+
     fileInputRef.current?.click();
   };
 
   const upload = async (file) => {
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     if (!file.type?.startsWith("image/")) {
       showAlert({
@@ -192,7 +206,10 @@ export default function VariantImageContent({
         message: "Selecciona una imagen.",
       });
 
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
       return;
     }
 
@@ -203,7 +220,10 @@ export default function VariantImageContent({
         message: "La gestión de imágenes no está disponible en este momento.",
       });
 
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
       return;
     }
 
@@ -221,10 +241,10 @@ export default function VariantImageContent({
 
       showAlert({
         severity: "success",
-        title: hasOwnImage ? "Imagen reemplazada" : "Imagen guardada",
-        message: hasOwnImage
-          ? "La imagen propia de la variante se reemplazó correctamente."
-          : "La variante ahora tiene una imagen propia.",
+        title: hasImage ? "Imagen reemplazada" : "Imagen guardada",
+        message: hasImage
+          ? "La imagen de la variante se reemplazó correctamente."
+          : "La imagen de la variante se guardó correctamente.",
       });
     } catch (error) {
       showAlert({
@@ -234,12 +254,17 @@ export default function VariantImageContent({
       });
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
   const remove = async () => {
-    if (!hasOwnImage || deleting) return;
+    if (!hasImage || deleting) {
+      return;
+    }
 
     if (typeof deleteVariantImage !== "function") {
       showAlert({
@@ -247,6 +272,15 @@ export default function VariantImageContent({
         title: "No se pudo continuar",
         message: "La gestión de imágenes no está disponible en este momento.",
       });
+
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Deseas eliminar la imagen de esta variante?\n\nLa variante quedará sin imagen."
+    );
+
+    if (!confirmed) {
       return;
     }
 
@@ -264,7 +298,7 @@ export default function VariantImageContent({
       showAlert({
         severity: "success",
         title: "Imagen eliminada",
-        message: "La variante volverá a utilizar la imagen disponible del producto.",
+        message: "La variante quedó sin imagen.",
       });
     } catch (error) {
       showAlert({
@@ -278,162 +312,99 @@ export default function VariantImageContent({
   };
 
   return (
-    <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
+    <>
       <Stack spacing={2.5}>
         <Box>
-          <Button
-            type="button"
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => onBack?.()}
-            disabled={busy}
-            sx={{ mb: 1, fontWeight: 800 }}
-          >
-            Volver
-          </Button>
-
-          <Typography sx={titleSx}>Imagen de la variante</Typography>
-          <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary" }}>
-            {variantTitle(productName, variant)}
+          <Typography sx={{ fontSize: 14, color: "text.secondary", lineHeight: 1.5 }}>
+            Administra la imagen que pertenece a{" "}
+            <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
+              {variantTitle(productName, variant)}
+            </Box>
+            .
           </Typography>
         </Box>
 
         {loading ? (
           <Paper sx={loadingSx}>
-            <CircularProgress size={30} />
-            <Typography sx={{ mt: 1.25, fontSize: 13, color: "text.secondary" }}>
-              Cargando imagen…
-            </Typography>
+            <Stack alignItems="center">
+              <CircularProgress size={30} />
+
+              <Typography sx={{ mt: 1.25, fontSize: 13, color: "text.secondary" }}>
+                Cargando imagen…
+              </Typography>
+            </Stack>
           </Paper>
         ) : (
-          <>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-                gap: 2,
-                alignItems: "stretch",
-              }}
-            >
-              <Card sx={imageCardSx}>
-                <Stack sx={{ height: "100%" }}>
-                  <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography sx={sectionTitleSx}>Imagen propia</Typography>
-                    <Typography sx={{ mt: 0.4, fontSize: 13, color: "text.secondary" }}>
-                      Esta imagen pertenece únicamente a esta variante.
-                    </Typography>
-                  </Box>
+          <Card sx={imageCardSx}>
+            <Stack>
+              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Typography sx={sectionTitleSx}>Imagen de la variante</Typography>
 
-                  <ImagePreview
-                    src={ownImageUrl}
-                    alt={`Imagen propia de ${variantTitle(productName, variant)}`}
-                    emptyText="Esta variante no tiene una imagen propia"
-                  />
+                <Typography sx={{ mt: 0.4, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
+                  Recomendado: 1280 × 1280 px o menor. JPG, PNG o WebP. Máximo 4 MB.
+                </Typography>
+              </Box>
 
-                  <Stack spacing={1.25} sx={{ p: 2, mt: "auto" }}>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      hidden
-                      accept="image/*"
-                      onChange={(event) => upload(event.target.files?.[0] || null)}
-                    />
+              <ImagePreview
+                src={variantImageUrl}
+                alt={`Imagen de ${variantTitle(productName, variant)}`}
+                emptyText="Sin imagen"
+              />
 
-                    <Button
-                      fullWidth
-                      type="button"
-                      variant="contained"
-                      startIcon={
-                        uploading
-                          ? <CircularProgress size={17} color="inherit" />
-                          : <UploadOutlinedIcon />
-                      }
-                      onClick={chooseFile}
-                      disabled={busy}
-                      sx={{ minHeight: 44, fontWeight: 800 }}
-                    >
-                      {uploading
-                        ? "Guardando…"
-                        : hasOwnImage
-                        ? "Reemplazar imagen"
-                        : "Subir imagen"}
-                    </Button>
-
-                    {hasOwnImage ? (
-                      <Button
-                        fullWidth
-                        type="button"
-                        variant="outlined"
-                        color="error"
-                        startIcon={
-                          deleting
-                            ? <CircularProgress size={17} color="inherit" />
-                            : <DeleteOutlineIcon />
-                        }
-                        onClick={remove}
-                        disabled={busy}
-                        sx={{ minHeight: 44, fontWeight: 800 }}
-                      >
-                        {deleting ? "Eliminando…" : "Eliminar imagen propia"}
-                      </Button>
-                    ) : null}
-                  </Stack>
-                </Stack>
-              </Card>
-
-              <Card sx={imageCardSx}>
-                <Stack sx={{ height: "100%" }}>
-                  <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography sx={sectionTitleSx}>Imagen efectiva</Typography>
-                    <Typography sx={{ mt: 0.4, fontSize: 13, color: "text.secondary" }}>
-                      Es la imagen que se utilizará actualmente para esta variante.
-                    </Typography>
-                  </Box>
-
-                  <ImagePreview
-                    src={effectiveImageUrl}
-                    alt={`Imagen efectiva de ${variantTitle(productName, variant)}`}
-                    emptyText="No hay una imagen disponible"
-                  />
-
-                  <Box sx={{ p: 2, mt: "auto" }}>
-                    <Typography sx={fieldLabelSx}>Origen actual</Typography>
-                    <Typography sx={{ mt: 0.5, fontSize: 15, fontWeight: 800 }}>
-                      {effectiveSourceLabel(effectiveImage, hasOwnImage)}
-                    </Typography>
-
-                    {!hasOwnImage && effectiveImage?.source === "product" ? (
-                      <Typography sx={{ mt: 0.75, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
-                        Si subes una imagen propia, reemplazará visualmente a la imagen heredada del producto.
-                      </Typography>
-                    ) : null}
-
-                    {!hasOwnImage && effectiveImage?.source === "placeholder" ? (
-                      <Typography sx={{ mt: 0.75, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
-                        No hay una imagen propia ni una imagen disponible en el producto.
-                      </Typography>
-                    ) : null}
-                  </Box>
-                </Stack>
-              </Card>
-            </Box>
-
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              justifyContent="flex-start"
-            >
-              <Button
-                type="button"
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => onBack?.()}
-                disabled={busy}
-                sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 150 }, height: 44 }}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.25}
+                sx={{ p: 2 }}
               >
-                Volver
-              </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(event) => upload(event.target.files?.[0] || null)}
+                />
+
+                <Button
+                  fullWidth
+                  type="button"
+                  variant="contained"
+                  startIcon={
+                    uploading
+                      ? <CircularProgress size={17} color="inherit" />
+                      : <UploadOutlinedIcon />
+                  }
+                  onClick={chooseFile}
+                  disabled={busy}
+                  sx={{ minHeight: 44, fontWeight: 800 }}
+                >
+                  {uploading
+                    ? "Guardando…"
+                    : hasImage
+                    ? "Reemplazar imagen"
+                    : "Subir imagen"}
+                </Button>
+
+                {hasImage ? (
+                  <Button
+                    fullWidth
+                    type="button"
+                    variant="outlined"
+                    color="error"
+                    startIcon={
+                      deleting
+                        ? <CircularProgress size={17} color="inherit" />
+                        : <DeleteOutlineIcon />
+                    }
+                    onClick={remove}
+                    disabled={busy}
+                    sx={{ minHeight: 44, fontWeight: 800 }}
+                  >
+                    {deleting ? "Eliminando…" : "Eliminar imagen"}
+                  </Button>
+                ) : null}
+              </Stack>
             </Stack>
-          </>
+          </Card>
         )}
       </Stack>
 
@@ -445,7 +416,7 @@ export default function VariantImageContent({
         message={alertState.message}
         autoHideDuration={3000}
       />
-    </PageContainer>
+    </>
   );
 }
 
@@ -461,7 +432,7 @@ function ImagePreview({ src, alt, emptyText }) {
       <Box
         sx={{
           width: "100%",
-          height: { xs: 240, sm: 280, md: 300 },
+          height: { xs: 260, sm: 320, md: 380 },
           display: "grid",
           placeItems: "center",
           bgcolor: "action.hover",
@@ -470,8 +441,9 @@ function ImagePreview({ src, alt, emptyText }) {
         }}
       >
         <Stack spacing={1} alignItems="center" sx={{ px: 2, textAlign: "center" }}>
-          <ImageOutlinedIcon sx={{ fontSize: 46, color: "text.secondary" }} />
-          <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+          <ImageOutlinedIcon sx={{ fontSize: 52, color: "text.secondary" }} />
+
+          <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
             {emptyText}
           </Typography>
         </Stack>
@@ -488,9 +460,9 @@ function ImagePreview({ src, alt, emptyText }) {
       onError={() => setFailed(true)}
       sx={{
         width: "100%",
-        height: { xs: 240, sm: 280, md: 300 },
+        height: { xs: 260, sm: 320, md: 380 },
         display: "block",
-        objectFit: "cover",
+        objectFit: "contain",
         bgcolor: "action.hover",
         borderBottom: "1px solid",
         borderColor: "divider",
@@ -499,30 +471,14 @@ function ImagePreview({ src, alt, emptyText }) {
   );
 }
 
-const titleSx = {
-  fontSize: { xs: 22, sm: 26 },
-  fontWeight: 800,
-  color: "text.primary",
-  lineHeight: 1.25,
-};
-
 const sectionTitleSx = {
   fontSize: 17,
   fontWeight: 800,
   color: "text.primary",
 };
 
-const fieldLabelSx = {
-  fontSize: 11,
-  fontWeight: 800,
-  color: "text.secondary",
-  textTransform: "uppercase",
-  letterSpacing: 0.3,
-};
-
 const imageCardSx = {
   width: "100%",
-  height: "100%",
   minWidth: 0,
   overflow: "hidden",
   border: "1px solid",
@@ -533,7 +489,7 @@ const imageCardSx = {
 };
 
 const loadingSx = {
-  minHeight: 320,
+  minHeight: 360,
   display: "grid",
   placeItems: "center",
   textAlign: "center",

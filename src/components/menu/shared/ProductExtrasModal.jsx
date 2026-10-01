@@ -1047,6 +1047,7 @@ export default function ProductExtrasModal({
       maxHeight="min(88vh, 920px)"
       bodyPadding={16}
       backdropBlur={false}
+      fullScreenMobile
       contentStyle={{
         borderRadius: 18,
       }}

@@ -1,8 +1,13 @@
 // src/components/menu/shared/ProductVariantsModal.jsx
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { Badge, Modal, PillButton } from "../../../pages/public/publicMenu.ui";
+
+import {
+  Badge, Modal, PillButton, ProductThumb,
+} from "../../../pages/public/publicMenu.ui";
+
 import {
   AVAILABILITY_STATUS_UNAVAILABLE_BY_SCHEDULE,
   getAvailabilityData,
@@ -13,12 +18,44 @@ import {
   normalizePromotionPresentation,
 } from "../../../hooks/public/publicMenu.utils";
 
+import usePagination from "../../../hooks/usePagination";
+import PaginationFooter from "../../common/PaginationFooter";
+
 function isValidColor(color) {
   return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
 }
 
 function getSafeThemeColor(themeColor) {
   return isValidColor(themeColor) ? themeColor : "#FF7A00";
+}
+
+const PAGE_SIZE = 4;
+
+function resolveVariantImageUrl(variant) {
+  const image = variant?.effective_image || variant?.variant_image || null;
+
+  if (!image) {
+    return null;
+  }
+
+  if (typeof image === "string") {
+    return image.trim() || null;
+  }
+
+  if (typeof image !== "object") {
+    return null;
+  }
+
+  return (
+    image.thumbnail_public_url ||
+    image.medium_public_url ||
+    image.best_public_url ||
+    image.public_url ||
+    image.thumbnail_url ||
+    image.medium_url ||
+    image.url ||
+    null
+  );
 }
 
 function resolveVariantAvailability(product, variant) {
@@ -143,6 +180,7 @@ function VariantCard({
 }) {
   const theme = useTheme();
   const safeThemeColor = getSafeThemeColor(themeColor);
+  const [hovered, setHovered] = useState(false);
 
   const variantAvailability = resolveVariantAvailability(product, variant);
   const variantBlocked = isAvailabilityBlocked(variantAvailability);
@@ -157,8 +195,9 @@ function VariantCard({
     variantAvailabilityUi.caption || "No disponible";
 
   const variantName =
-    variant?.name || variant?.display_name || `Variante ${index + 1}`;
+    variant?.display_name || variant?.name || `Variante ${index + 1}`;
 
+  const variantImageUrl = resolveVariantImageUrl(variant);
   const variantPromotion = normalizePromotionPresentation(variant);
 
   const showPromotionalPrice =
@@ -182,10 +221,14 @@ function VariantCard({
 
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         display: "grid",
+        gridTemplateRows: "auto 1fr",
         gap: 10,
-        padding: 14,
+        height: "100%",
+        padding: 10,
         borderRadius: 10,
         border: `1px solid ${
           variantBlocked
@@ -193,10 +236,24 @@ function VariantCard({
             : "rgba(63, 58, 82, 0.10)"
         }`,
         background: "#FFFFFF",
-        boxShadow: "0 12px 28px rgba(63, 58, 82, 0.06)",
+        boxShadow: hovered
+          ? `0 17px 34px ${safeThemeColor}24`
+          : "0 10px 26px rgba(47,42,61,0.07)",
         opacity: variantBlocked ? 0.82 : 1,
+        transform: hovered ? "translateY(-3px)" : "translateY(0)",
+        transition: "transform 180ms ease, box-shadow 180ms ease",
       }}
     >
+      <ProductThumb
+        imageUrl={variantImageUrl}
+        title={variantName}
+        height={145}
+        style={{
+          background: "#FFFFFF",
+          borderRadius: 7,
+        }}
+      />
+
       <div
         style={{
           display: "flex",
@@ -367,6 +424,7 @@ export default function ProductVariantsModal({
   onAddVariant,
 }) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const safeThemeColor = getSafeThemeColor(themeColor);
 
   const title = product?.display_name || product?.name || "Producto";
@@ -375,7 +433,28 @@ export default function ProductVariantsModal({
     return Array.isArray(product?.variants) ? product.variants : [];
   }, [product]);
 
-  if (!product) return null;
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: variants,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+    resetKey: `${product?.id || 0}:${open ? "open" : "closed"}`,
+  });
+
+  if (!product) {
+    return null;
+  }
 
   return (
     <Modal
@@ -386,9 +465,7 @@ export default function ProductVariantsModal({
       maxHeight="min(88vh, 920px)"
       bodyPadding={16}
       backdropBlur={false}
-      contentStyle={{
-        borderRadius: 18,
-      }}
+      fullScreenMobile
       actions={
         <PillButton tone="default" onClick={onClose} title="Cerrar">
           Cerrar
@@ -428,27 +505,58 @@ export default function ProductVariantsModal({
         </div>
 
         {variants.length > 0 ? (
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
-            }}
-          >
-            {variants.map((variant, index) => (
-              <VariantCard
-                key={variant?.id || index}
-                product={product}
-                variant={variant}
-                index={index}
-                canSelect={canSelect}
-                showSelectBtn={showSelectBtn}
-                themeColor={safeThemeColor}
-                onAddVariant={onAddVariant}
-                onClose={onClose}
-              />
-            ))}
+          <div style={{ display: "grid", gap: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(2, minmax(0, 1fr))",
+                alignItems: "stretch",
+              }}
+            >
+              {paginatedItems.map((variant, index) => {
+                const absoluteIndex = (page - 1) * PAGE_SIZE + index;
+
+                return (
+                  <VariantCard
+                    key={variant?.id || absoluteIndex}
+                    product={product}
+                    variant={variant}
+                    index={absoluteIndex}
+                    canSelect={canSelect}
+                    showSelectBtn={showSelectBtn}
+                    themeColor={safeThemeColor}
+                    onAddVariant={onAddVariant}
+                    onClose={onClose}
+                  />
+                );
+              })}
+            </div>
+
+            {total > PAGE_SIZE ? (
+              <div
+                style={{
+                  overflow: "hidden",
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: 12,
+                }}
+              >
+                <PaginationFooter
+                  page={page}
+                  totalPages={totalPages}
+                  startItem={startItem}
+                  endItem={endItem}
+                  total={total}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={prevPage}
+                  onNext={nextPage}
+                  itemLabel="variantes"
+                />
+              </div>
+            ) : null}
           </div>
         ) : (
           <div

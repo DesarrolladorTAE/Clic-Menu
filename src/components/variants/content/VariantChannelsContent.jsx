@@ -6,9 +6,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import SaveIcon from "@mui/icons-material/Save";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
@@ -26,25 +24,45 @@ import usePagination from "../../../hooks/usePagination";
 const PAGE_SIZE = 5;
 
 function money(value) {
-  if (value == null || value === "") return "—";
+  if (value == null || value === "") {
+    return "—";
+  }
+
   const number = Number(value);
-  if (!Number.isFinite(number)) return String(value);
-  return number.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+
+  if (!Number.isFinite(number)) {
+    return String(value);
+  }
+
+  return number.toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
 }
 
 function normalizeErr(error, fallback = "Ocurrió un error") {
   return (
     error?.response?.data?.message ||
-    (error?.response?.data?.errors ? Object.values(error.response.data.errors).flat().join("\n") : "") ||
+    (error?.response?.data?.errors
+      ? Object.values(error.response.data.errors).flat().join("\n")
+      : "") ||
     fallback
   );
 }
 
 function variantTitle(productName, variant) {
   const product = String(productName || "").trim();
-  const option = String(variant?.variant_name || variant?.canonical_name || variant?.stored_name || "").trim();
+  const option = String(
+    variant?.variant_name ||
+    variant?.canonical_name ||
+    variant?.stored_name ||
+    ""
+  ).trim();
 
-  if (product && option) return `${product} · ${option}`;
+  if (product && option) {
+    return `${product} · ${option}`;
+  }
+
   return variant?.display_name || variant?.name || product || "Variante";
 }
 
@@ -53,7 +71,6 @@ export default function VariantChannelsContent({
   productId,
   productName,
   variant,
-  onBack,
   onChanged,
 }) {
   const theme = useTheme();
@@ -86,7 +103,10 @@ export default function VariantChannelsContent({
   };
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway") {
+      return;
+    }
+
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
@@ -95,9 +115,12 @@ export default function VariantChannelsContent({
   }, [branches, branchId]);
 
   useEffect(() => {
-    if (!restaurantId || !variant?.id) return;
+    if (!restaurantId || !variant?.id) {
+      return;
+    }
 
     const requestId = ++branchReqRef.current;
+
     setBranches([]);
     setBranchId("");
     setRows([]);
@@ -108,7 +131,10 @@ export default function VariantChannelsContent({
     (async () => {
       try {
         const response = await getBranchesByRestaurant(restaurantId);
-        if (requestId !== branchReqRef.current) return;
+
+        if (requestId !== branchReqRef.current) {
+          return;
+        }
 
         const list = Array.isArray(response)
           ? response
@@ -119,9 +145,14 @@ export default function VariantChannelsContent({
           : [];
 
         setBranches(list);
-        if (list.length > 0) setBranchId(String(list[0].id));
+
+        if (list.length > 0) {
+          setBranchId(String(list[0].id));
+        }
       } catch (error) {
-        if (requestId !== branchReqRef.current) return;
+        if (requestId !== branchReqRef.current) {
+          return;
+        }
 
         showAlert({
           severity: "error",
@@ -129,7 +160,9 @@ export default function VariantChannelsContent({
           message: normalizeErr(error, "Inténtalo nuevamente."),
         });
       } finally {
-        if (requestId === branchReqRef.current) setLoadingBranches(false);
+        if (requestId === branchReqRef.current) {
+          setLoadingBranches(false);
+        }
       }
     })();
 
@@ -140,9 +173,12 @@ export default function VariantChannelsContent({
   }, [restaurantId, productId, variant?.id]);
 
   useEffect(() => {
-    if (!restaurantId || !productId || !variant?.id || !branchId) return;
+    if (!restaurantId || !productId || !variant?.id || !branchId) {
+      return;
+    }
 
     const requestId = ++tableReqRef.current;
+
     setLoadingTable(true);
     setTableReady(false);
     setDraft({});
@@ -156,12 +192,18 @@ export default function VariantChannelsContent({
           Number(branchId)
         );
 
-        if (requestId !== tableReqRef.current) return;
+        if (requestId !== tableReqRef.current) {
+          return;
+        }
+
         setRows(Array.isArray(response?.data) ? response.data : []);
       } catch (error) {
-        if (requestId !== tableReqRef.current) return;
+        if (requestId !== tableReqRef.current) {
+          return;
+        }
 
         setRows([]);
+
         showAlert({
           severity: "error",
           title: "No se pudieron cargar los canales",
@@ -208,15 +250,25 @@ export default function VariantChannelsContent({
       ui_price: price,
       ui_origin: origin,
       ui_locked: variantDisabled || !row.branch_is_active,
-      ui_changed: Boolean(change),
     };
   };
 
-  const mergedRows = useMemo(() => rows.map(resolvedRow), [rows, draft, variantDisabled]);
+  const mergedRows = useMemo(
+    () => rows.map(resolvedRow),
+    [rows, draft, variantDisabled]
+  );
 
   const {
-    page, nextPage, prevPage, total, totalPages, startItem, endItem,
-    hasPrev, hasNext, paginatedItems,
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
   } = usePagination({
     items: mergedRows,
     initialPage: 1,
@@ -226,7 +278,10 @@ export default function VariantChannelsContent({
 
   const onChangeVisible = (channelId, checked) => {
     setDraft((prev) => {
-      const row = rows.find((item) => Number(item.branch_sales_channel_id) === Number(channelId));
+      const row = rows.find(
+        (item) => Number(item.branch_sales_channel_id) === Number(channelId)
+      );
+
       const current = prev[channelId];
 
       return {
@@ -234,7 +289,9 @@ export default function VariantChannelsContent({
         [channelId]: {
           mode: "set",
           is_enabled: Boolean(checked),
-          price: current?.mode === "set" ? current.price : String(row?.base?.price ?? row?.price ?? 0),
+          price: current?.mode === "set"
+            ? current.price
+            : String(row?.base?.price ?? row?.price ?? 0),
         },
       };
     });
@@ -258,16 +315,10 @@ export default function VariantChannelsContent({
   const useProductPrice = (channelId) => {
     setDraft((prev) => ({
       ...prev,
-      [channelId]: { mode: "remove" },
+      [channelId]: {
+        mode: "remove",
+      },
     }));
-  };
-
-  const discardRow = (channelId) => {
-    setDraft((prev) => {
-      const next = { ...prev };
-      delete next[channelId];
-      return next;
-    });
   };
 
   const hasChanges = Object.keys(draft).length > 0;
@@ -277,11 +328,18 @@ export default function VariantChannelsContent({
 
     for (const [key, change] of Object.entries(draft)) {
       const channelId = Number(key);
-      const row = rows.find((item) => Number(item.branch_sales_channel_id) === channelId);
+      const row = rows.find(
+        (item) => Number(item.branch_sales_channel_id) === channelId
+      );
+
       const channelName = row?.sales_channel?.name || "el canal seleccionado";
 
       if (change.mode === "remove") {
-        items.push({ branch_sales_channel_id: channelId, mode: "remove" });
+        items.push({
+          branch_sales_channel_id: channelId,
+          mode: "remove",
+        });
+
         continue;
       }
 
@@ -311,7 +369,9 @@ export default function VariantChannelsContent({
       const channelId = Number(row.branch_sales_channel_id);
       const change = draft[channelId];
 
-      if (!change) return row;
+      if (!change) {
+        return row;
+      }
 
       if (change.mode === "remove") {
         const visible = Boolean(row.branch_is_active && row.base?.is_enabled);
@@ -340,6 +400,7 @@ export default function VariantChannelsContent({
 
     setRows(updatedRows);
     setDraft({});
+
     onChanged?.({
       branch_id: Number(branchId),
       branch_name: selectedBranchName,
@@ -354,6 +415,7 @@ export default function VariantChannelsContent({
         title: "Selecciona una sucursal",
         message: "Elige la sucursal que deseas configurar.",
       });
+
       return;
     }
 
@@ -363,10 +425,13 @@ export default function VariantChannelsContent({
         title: "Variante inactiva",
         message: "Activa la variante antes de modificar sus precios por canal.",
       });
+
       return;
     }
 
-    if (!hasChanges) return;
+    if (!hasChanges) {
+      return;
+    }
 
     const touchedInactiveChannel = rows.some((row) => {
       return !row.branch_is_active && Boolean(draft[Number(row.branch_sales_channel_id)]);
@@ -378,6 +443,7 @@ export default function VariantChannelsContent({
         title: "Hay un canal no disponible",
         message: "No se pueden guardar cambios en un canal desactivado para esta sucursal.",
       });
+
       return;
     }
 
@@ -391,6 +457,7 @@ export default function VariantChannelsContent({
         title: "Revisa los precios",
         message: error?.message || "Hay información que necesita corrección.",
       });
+
       return;
     }
 
@@ -420,18 +487,8 @@ export default function VariantChannelsContent({
     <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
       <Stack spacing={2.5}>
         <Box>
-          <Button
-            type="button"
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => onBack?.()}
-            disabled={saving}
-            sx={{ mb: 1, fontWeight: 800 }}
-          >
-            Volver
-          </Button>
-
           <Typography sx={titleSx}>Precios por canal</Typography>
+
           <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary" }}>
             {variantTitle(productName, variant)}
           </Typography>
@@ -439,7 +496,10 @@ export default function VariantChannelsContent({
 
         {variantDisabled ? (
           <Paper sx={warningSx}>
-            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>Variante inactiva</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+              Variante inactiva
+            </Typography>
+
             <Typography sx={{ mt: 0.4, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
               Puedes consultar los precios, pero debes activar la variante para modificarlos.
             </Typography>
@@ -456,6 +516,7 @@ export default function VariantChannelsContent({
             >
               <Box>
                 <Typography sx={sectionTitleSx}>Sucursal</Typography>
+
                 <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary" }}>
                   Selecciona dónde deseas configurar el precio de esta variante.
                 </Typography>
@@ -463,13 +524,23 @@ export default function VariantChannelsContent({
 
               <Stack direction="row" spacing={1} alignItems="center">
                 <StorefrontOutlinedIcon color="primary" />
+
                 <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
-                  {loadingBranches ? "Cargando sucursales…" : selectedBranchName || "Sin sucursal"}
+                  {loadingBranches
+                    ? "Cargando sucursales…"
+                    : selectedBranchName || "Sin sucursal"}
                 </Typography>
               </Stack>
             </Stack>
 
-            <Box sx={{ width: "100%", overflowX: "auto", borderBottom: "1px solid", borderColor: "divider" }}>
+            <Box
+              sx={{
+                width: "100%",
+                overflowX: "auto",
+                borderBottom: "1px solid",
+                borderColor: "divider",
+              }}
+            >
               <Tabs
                 value={branchId}
                 onChange={(_, value) => setBranchId(value)}
@@ -504,6 +575,7 @@ export default function VariantChannelsContent({
         {!tableReady || loadingTable ? (
           <Paper sx={loadingSx}>
             <CircularProgress size={28} />
+
             <Typography sx={{ mt: 1.25, fontSize: 13, color: "text.secondary" }}>
               Cargando canales…
             </Typography>
@@ -511,9 +583,11 @@ export default function VariantChannelsContent({
         ) : total === 0 ? (
           <Paper sx={loadingSx}>
             <PointOfSaleOutlinedIcon sx={{ fontSize: 38, color: "text.secondary" }} />
+
             <Typography sx={{ mt: 1, fontSize: 18, fontWeight: 800 }}>
               No hay canales disponibles
             </Typography>
+
             <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary" }}>
               Esta sucursal todavía no tiene canales configurados para este producto.
             </Typography>
@@ -523,15 +597,22 @@ export default function VariantChannelsContent({
             {!useCards ? (
               <Paper sx={tableContainerSx}>
                 <Box sx={{ width: "100%", overflowX: "auto" }}>
-                  <Box component="table" sx={{ width: "100%", minWidth: 900, borderCollapse: "collapse" }}>
+                  <Box
+                    component="table"
+                    sx={{
+                      width: "100%",
+                      minWidth: 780,
+                      borderCollapse: "collapse",
+                      tableLayout: "fixed",
+                    }}
+                  >
                     <Box component="thead">
-                      <Box component="tr" sx={{ bgcolor: "action.hover" }}>
-                        <TableHeadCell>Canal</TableHeadCell>
-                        <TableHeadCell>Canal disponible</TableHeadCell>
-                        <TableHeadCell>Variante disponible</TableHeadCell>
-                        <TableHeadCell>Precio</TableHeadCell>
-                        <TableHeadCell>Precio aplicado</TableHeadCell>
-                        <TableHeadCell>Acciones</TableHeadCell>
+                      <Box component="tr">
+                        <TableHeadCell sx={{ width: "18%" }}>Canal</TableHeadCell>
+                        <TableHeadCell sx={{ width: "18%" }}>Variante disponible</TableHeadCell>
+                        <TableHeadCell sx={{ width: "18%" }}>Precio</TableHeadCell>
+                        <TableHeadCell sx={{ width: "18%" }}>Precio aplicado</TableHeadCell>
+                        <TableHeadCell sx={{ width: "28%" }}>Acciones</TableHeadCell>
                       </Box>
                     </Box>
 
@@ -540,22 +621,22 @@ export default function VariantChannelsContent({
                         const channelId = Number(row.branch_sales_channel_id);
 
                         return (
-                          <Box component="tr" key={channelId}>
+                          <Box component="tr" key={channelId} sx={tableRowSx}>
                             <TableBodyCell>
-                              <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+                              <Typography sx={{ fontSize: 14, fontWeight: 800, lineHeight: 1.35 }}>
                                 {row.sales_channel?.name || "Canal"}
                               </Typography>
-                            </TableBodyCell>
 
-                            <TableBodyCell>
                               <Typography
                                 sx={{
-                                  fontSize: 13,
+                                  mt: 0.35,
+                                  fontSize: 11.5,
                                   fontWeight: 800,
-                                  color: row.branch_is_active ? "success.main" : "text.secondary",
+                                  lineHeight: 1.35,
+                                  color: row.branch_is_active ? "success.main" : "error.main",
                                 }}
                               >
-                                {row.branch_is_active ? "Sí" : "No"}
+                                {row.branch_is_active ? "Disponible" : "No disponible"}
                               </Typography>
                             </TableBodyCell>
 
@@ -566,7 +647,9 @@ export default function VariantChannelsContent({
                                   <Switch
                                     checked={Boolean(row.ui_visible)}
                                     disabled={row.ui_locked || saving}
-                                    onChange={(event) => onChangeVisible(channelId, event.target.checked)}
+                                    onChange={(event) =>
+                                      onChangeVisible(channelId, event.target.checked)
+                                    }
                                   />
                                 }
                                 label={
@@ -586,6 +669,7 @@ export default function VariantChannelsContent({
                                 inputProps={{ inputMode: "decimal" }}
                                 sx={{ width: 140 }}
                               />
+
                               <Typography sx={{ mt: 0.6, fontSize: 11, color: "text.secondary" }}>
                                 Producto: {row.base ? money(row.base.price) : "—"}
                               </Typography>
@@ -602,28 +686,14 @@ export default function VariantChannelsContent({
                             </TableBodyCell>
 
                             <TableBodyCell>
-                              <Stack direction="row" spacing={1}>
-                                <Button
-                                  variant="outlined"
-                                  startIcon={<RestartAltIcon />}
-                                  disabled={row.ui_locked || saving}
-                                  onClick={() => useProductPrice(channelId)}
-                                  sx={{ whiteSpace: "nowrap", fontWeight: 800 }}
-                                >
-                                  Usar precio del producto
-                                </Button>
-
-                                {row.ui_changed ? (
-                                  <Button
-                                    variant="text"
-                                    disabled={saving}
-                                    onClick={() => discardRow(channelId)}
-                                    sx={{ fontWeight: 800 }}
-                                  >
-                                    Descartar
-                                  </Button>
-                                ) : null}
-                              </Stack>
+                              <Button
+                                variant="outlined"
+                                disabled={row.ui_locked || saving}
+                                onClick={() => useProductPrice(channelId)}
+                                sx={{ whiteSpace: "nowrap", fontWeight: 800, px: 1.5 }}
+                              >
+                                Usar precio del producto
+                              </Button>
                             </TableBodyCell>
                           </Box>
                         );
@@ -669,6 +739,7 @@ export default function VariantChannelsContent({
                           borderColor: "divider",
                           borderRadius: 1,
                           boxShadow: "none",
+                          bgcolor: "background.paper",
                         }}
                       >
                         <Stack sx={{ height: "100%", p: 2 }} spacing={1.75}>
@@ -676,27 +747,31 @@ export default function VariantChannelsContent({
                             <Typography sx={{ fontSize: 18, fontWeight: 800, wordBreak: "break-word" }}>
                               {row.sales_channel?.name || "Canal"}
                             </Typography>
+
                             <Typography
                               sx={{
                                 mt: 0.4,
                                 fontSize: 12,
-                                fontWeight: 700,
-                                color: row.branch_is_active ? "success.main" : "text.secondary",
+                                fontWeight: 800,
+                                color: row.branch_is_active ? "success.main" : "error.main",
                               }}
                             >
-                              {row.branch_is_active ? "Canal disponible" : "Canal no disponible"}
+                              {row.branch_is_active ? "Disponible" : "No disponible"}
                             </Typography>
                           </Box>
 
                           <Box>
                             <Typography sx={mobileLabelSx}>Variante disponible</Typography>
+
                             <FormControlLabel
                               sx={{ m: 0, mt: 0.4 }}
                               control={
                                 <Switch
                                   checked={Boolean(row.ui_visible)}
                                   disabled={row.ui_locked || saving}
-                                  onChange={(event) => onChangeVisible(channelId, event.target.checked)}
+                                  onChange={(event) =>
+                                    onChangeVisible(channelId, event.target.checked)
+                                  }
                                 />
                               }
                               label={
@@ -709,6 +784,7 @@ export default function VariantChannelsContent({
 
                           <Box>
                             <Typography sx={mobileLabelSx}>Precio</Typography>
+
                             <TextField
                               fullWidth
                               value={row.ui_price == null ? "" : String(row.ui_price)}
@@ -718,6 +794,7 @@ export default function VariantChannelsContent({
                               inputProps={{ inputMode: "decimal" }}
                               sx={{ mt: 0.7 }}
                             />
+
                             <Typography sx={{ mt: 0.6, fontSize: 11, color: "text.secondary" }}>
                               Precio del producto: {row.base ? money(row.base.price) : "—"}
                             </Typography>
@@ -725,6 +802,7 @@ export default function VariantChannelsContent({
 
                           <Box>
                             <Typography sx={mobileLabelSx}>Precio aplicado</Typography>
+
                             <Typography sx={{ mt: 0.4, fontSize: 14, fontWeight: 700 }}>
                               {row.ui_origin === "variant"
                                 ? "Precio propio"
@@ -738,25 +816,12 @@ export default function VariantChannelsContent({
                             <Button
                               fullWidth
                               variant="outlined"
-                              startIcon={<RestartAltIcon />}
                               disabled={row.ui_locked || saving}
                               onClick={() => useProductPrice(channelId)}
                               sx={{ fontWeight: 800 }}
                             >
                               Usar precio del producto
                             </Button>
-
-                            {row.ui_changed ? (
-                              <Button
-                                fullWidth
-                                variant="text"
-                                disabled={saving}
-                                onClick={() => discardRow(channelId)}
-                                sx={{ fontWeight: 800 }}
-                              >
-                                Descartar cambio
-                              </Button>
-                            ) : null}
                           </Stack>
                         </Stack>
                       </Card>
@@ -779,22 +844,7 @@ export default function VariantChannelsContent({
               </Paper>
             )}
 
-            <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              justifyContent="flex-end"
-              spacing={1.25}
-            >
-              <Button
-                type="button"
-                variant="outlined"
-                startIcon={<ArrowBackIcon />}
-                onClick={() => onBack?.()}
-                disabled={saving}
-                sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 150 }, height: 44 }}
-              >
-                Volver
-              </Button>
-
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="flex-end" spacing={1.25}>
               <Button
                 type="button"
                 variant="contained"
@@ -827,20 +877,21 @@ export default function VariantChannelsContent({
   );
 }
 
-function TableHeadCell({ children }) {
+function TableHeadCell({ children, sx = {} }) {
   return (
     <Box
       component="th"
       sx={{
         px: 2,
-        py: 1.5,
+        py: 1.75,
         textAlign: "left",
-        borderBottom: "1px solid",
-        borderColor: "divider",
-        fontSize: 12,
+        backgroundColor: "primary.main",
+        borderBottom: "none",
+        fontSize: 13,
         fontWeight: 800,
-        color: "text.secondary",
+        color: "#fff",
         whiteSpace: "nowrap",
+        ...sx,
       }}
     >
       {children}
@@ -854,10 +905,11 @@ function TableBodyCell({ children }) {
       component="td"
       sx={{
         px: 2,
-        py: 1.5,
-        verticalAlign: "top",
+        py: 1.6,
+        verticalAlign: "middle",
         borderBottom: "1px solid",
         borderColor: "divider",
+        color: "text.primary",
       }}
     >
       {children}
@@ -916,6 +968,13 @@ const tableContainerSx = {
   borderRadius: 1,
   boxShadow: "none",
   backgroundColor: "background.paper",
+};
+
+const tableRowSx = {
+  backgroundColor: "background.paper",
+  "&:hover": {
+    backgroundColor: "action.hover",
+  },
 };
 
 const tabSx = {

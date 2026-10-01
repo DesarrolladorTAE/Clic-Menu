@@ -1,10 +1,11 @@
+// Muestra y administra el detalle de una variante, incluyendo estado, predeterminada, imagen, canales y corrección.
+
 import { useEffect, useMemo, useState } from "react";
 
 import {
   Box, Button, CircularProgress, FormControlLabel, Paper, Stack, Switch, Typography,
 } from "@mui/material";
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import BuildCircleOutlinedIcon from "@mui/icons-material/BuildCircleOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
@@ -86,7 +87,6 @@ export default function VariantDetailContent({
   productName,
   variantRow,
   effectiveImage = null,
-  onBack,
   onOpenChannels,
   onOpenImage,
   onOpenRepair,
@@ -239,17 +239,6 @@ export default function VariantDetailContent({
     <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
       <Stack spacing={2.5}>
         <Box>
-          <Button
-            type="button"
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => onBack?.()}
-            disabled={busy}
-            sx={{ mb: 1, fontWeight: 800 }}
-          >
-            Volver
-          </Button>
-
           <Typography
             sx={{
               fontSize: { xs: 22, sm: 26 },

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box, Button, Card, Checkbox, Chip, CircularProgress, FormControlLabel, Paper, Stack,
+  Box, Button, Card, Checkbox, Chip, CircularProgress, FormControlLabel, Paper, Radio, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
 
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -14,6 +16,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { getVariantAttributes } from "../../../services/products/variants/variantAttributes.service";
 import { getVariantAttributeValues } from "../../../services/products/variants/variantAttributeValues.service";
 import { generateProductVariants } from "../../../services/products/variants/productVariantGenerator.service";
+import { getProductVariants } from "../../../services/products/variants/productVariants.service";
 
 import PageContainer from "../../common/PageContainer";
 import AppAlert from "../../common/AppAlert";
@@ -22,6 +25,26 @@ import usePagination from "../../../hooks/usePagination";
 import { normalizeErr } from "../../../utils/err";
 
 const PAGE_SIZE = 5;
+
+function existingVariantValueIds(response) {
+  const rows = Array.isArray(response?.data) ? response.data : [];
+  const ids = new Set();
+
+  rows.forEach((row) => {
+    const attributes = Array.isArray(row?.attributes) ? row.attributes : [];
+
+    attributes.forEach((attribute) => {
+      const values = Array.isArray(attribute?.values) ? attribute.values : [];
+
+      values.forEach((value) => {
+        const valueId = Number(value?.value_id);
+        if (Number.isInteger(valueId) && valueId > 0) ids.add(valueId);
+      });
+    });
+  });
+
+  return Array.from(ids);
+}
 
 export default function VariantCreateContent({
   restaurantId,
@@ -33,13 +56,20 @@ export default function VariantCreateContent({
   onGenerated,
 }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const useCards = useMediaQuery(theme.breakpoints.down("md"));
 
   const [loading, setLoading] = useState(true);
+  const [loadingValues, setLoadingValues] = useState(false);
   const [generating, setGenerating] = useState(false);
+
+  const [step, setStep] = useState("attributes");
+  const [attributes, setAttributes] = useState([]);
+  const [selectedAttributeId, setSelectedAttributeId] = useState(null);
   const [attribute, setAttribute] = useState(null);
+
   const [values, setValues] = useState([]);
   const [selectedValueIds, setSelectedValueIds] = useState([]);
+  const [usedValueIds, setUsedValueIds] = useState([]);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -49,6 +79,7 @@ export default function VariantCreateContent({
   });
 
   const reqRef = useRef(0);
+  const valuesReqRef = useRef(0);
 
   const showAlert = ({ severity = "error", title = "", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
@@ -61,60 +92,31 @@ export default function VariantCreateContent({
 
   const load = async () => {
     const myReq = ++reqRef.current;
+    ++valuesReqRef.current;
+
     setLoading(true);
+    setStep("attributes");
+    setAttributes([]);
+    setSelectedAttributeId(null);
+    setAttribute(null);
+    setValues([]);
+    setSelectedValueIds([]);
 
     try {
-      const attributeResponse = await getVariantAttributes(
-        restaurantId,
-        productId,
-        { only_active: false }
-      );
+      const [attributeResponse, variantsResponse] = await Promise.all([
+        getVariantAttributes(restaurantId, productId, { only_active: false }),
+        getProductVariants(restaurantId, productId),
+      ]);
 
       if (myReq !== reqRef.current) return;
 
-      const attributes = Array.isArray(attributeResponse?.data)
-        ? attributeResponse.data
-        : [];
-
-      const currentAttribute = attributes[0] || null;
-      setAttribute(currentAttribute);
-
-      if (!currentAttribute) {
-        setValues([]);
-        setSelectedValueIds([]);
-        return;
-      }
-
-      const valuesResponse = await getVariantAttributeValues(
-        restaurantId,
-        productId,
-        currentAttribute.id,
-        { only_active: false }
-      );
-
-      if (myReq !== reqRef.current) return;
-
-      const nextValues = Array.isArray(valuesResponse?.data)
-        ? valuesResponse.data
-        : [];
-
-      setValues(nextValues);
-
-      setSelectedValueIds((prev) => {
-        const allowedIds = new Set(
-          nextValues
-            .filter((item) => item.status === "active")
-            .map((item) => Number(item.id))
-        );
-
-        return prev.map(Number).filter((id) => allowedIds.has(id));
-      });
+      setAttributes(Array.isArray(attributeResponse?.data) ? attributeResponse.data : []);
+      setUsedValueIds(existingVariantValueIds(variantsResponse));
     } catch (e) {
       if (myReq !== reqRef.current) return;
 
-      setAttribute(null);
-      setValues([]);
-      setSelectedValueIds([]);
+      setAttributes([]);
+      setUsedValueIds([]);
 
       showAlert({
         severity: "error",
@@ -122,8 +124,7 @@ export default function VariantCreateContent({
         message: normalizeErr(e, "No se pudo preparar la creación de variantes."),
       });
     } finally {
-      if (myReq !== reqRef.current) return;
-      setLoading(false);
+      if (myReq === reqRef.current) setLoading(false);
     }
   };
 
@@ -132,27 +133,100 @@ export default function VariantCreateContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId, productId, refreshKey]);
 
+  const selectedAttribute = useMemo(() => {
+    return attributes.find((item) => Number(item.id) === Number(selectedAttributeId)) || null;
+  }, [attributes, selectedAttributeId]);
+
+  const usedValueSet = useMemo(() => new Set(usedValueIds.map(Number)), [usedValueIds]);
+  const selectedSet = useMemo(() => new Set(selectedValueIds.map(Number)), [selectedValueIds]);
+
   const isAttributeActive = attribute?.status === "active";
 
   const activeValuesCount = useMemo(() => {
     return values.filter((item) => item.status === "active").length;
   }, [values]);
 
-  const selectedSet = useMemo(() => {
-    return new Set(selectedValueIds.map(Number));
-  }, [selectedValueIds]);
+  const availableValuesCount = useMemo(() => {
+    return values.filter((item) => item.status === "active" && !usedValueSet.has(Number(item.id))).length;
+  }, [values, usedValueSet]);
+
+  const selectAttribute = (row) => {
+    if (row.status !== "active" || loadingValues || generating) return;
+    setSelectedAttributeId(Number(row.id));
+  };
+
+  const goToValues = async () => {
+    if (!selectedAttribute) {
+      showAlert({
+        severity: "warning",
+        title: "Selecciona un atributo",
+        message: "Elige el atributo que deseas utilizar para crear las variantes.",
+      });
+      return;
+    }
+
+    if (selectedAttribute.status !== "active") {
+      showAlert({
+        severity: "warning",
+        title: "El atributo está inactivo",
+        message: "Activa el atributo antes de utilizar sus opciones.",
+      });
+      return;
+    }
+
+    const myReq = ++valuesReqRef.current;
+
+    setAttribute(selectedAttribute);
+    setValues([]);
+    setSelectedValueIds([]);
+    setStep("values");
+    setLoadingValues(true);
+
+    try {
+      const response = await getVariantAttributeValues(
+        restaurantId,
+        productId,
+        selectedAttribute.id,
+        { only_active: false }
+      );
+
+      if (myReq !== valuesReqRef.current) return;
+
+      setValues(Array.isArray(response?.data) ? response.data : []);
+    } catch (e) {
+      if (myReq !== valuesReqRef.current) return;
+
+      setValues([]);
+
+      showAlert({
+        severity: "error",
+        title: "No se pudieron cargar las opciones",
+        message: normalizeErr(e, "No se pudieron consultar las opciones del atributo."),
+      });
+    } finally {
+      if (myReq === valuesReqRef.current) setLoadingValues(false);
+    }
+  };
+
+  const goToAttributes = () => {
+    ++valuesReqRef.current;
+    setStep("attributes");
+    setAttribute(null);
+    setValues([]);
+    setSelectedValueIds([]);
+    setLoadingValues(false);
+  };
 
   const toggleValue = (value) => {
-    if (value.status !== "active" || !isAttributeActive || generating) return;
-
     const valueId = Number(value.id);
+    const alreadyCreated = usedValueSet.has(valueId);
+
+    if (value.status !== "active" || !isAttributeActive || alreadyCreated || generating) return;
 
     setSelectedValueIds((prev) => {
       const next = new Set(prev.map(Number));
-
       if (next.has(valueId)) next.delete(valueId);
       else next.add(valueId);
-
       return Array.from(next);
     });
   };
@@ -161,8 +235,8 @@ export default function VariantCreateContent({
     if (!attribute) {
       showAlert({
         severity: "warning",
-        title: "Falta configurar el atributo",
-        message: "Primero configura el atributo que utilizará este producto.",
+        title: "Selecciona un atributo",
+        message: "Primero selecciona el atributo que utilizarán las nuevas variantes.",
       });
       return;
     }
@@ -185,22 +259,23 @@ export default function VariantCreateContent({
       return;
     }
 
+    const selectedIds = selectedValueIds.map(Number);
+
     setGenerating(true);
 
     try {
-      const response = await generateProductVariants(
-        restaurantId,
-        productId,
-        {
-          selections: [{
-            attribute_id: Number(attribute.id),
-            value_ids: selectedValueIds.map(Number),
-          }],
-        }
-      );
+      const response = await generateProductVariants(restaurantId, productId, {
+        selections: [{
+          attribute_id: Number(attribute.id),
+          value_ids: selectedIds,
+        }],
+      });
 
       const createdCount = Number(response?.data?.created_count ?? 0);
-      const syncedCount = Number(response?.data?.synced_count ?? selectedValueIds.length);
+      const syncedCount = Number(response?.data?.synced_count ?? selectedIds.length);
+
+      setUsedValueIds((prev) => Array.from(new Set([...prev.map(Number), ...selectedIds])));
+      setSelectedValueIds([]);
 
       if (createdCount === 0) {
         showAlert({
@@ -211,7 +286,7 @@ export default function VariantCreateContent({
       } else if (createdCount < syncedCount) {
         showAlert({
           severity: "success",
-          title: "Variantes actualizadas",
+          title: "Variantes creadas",
           message: `Se crearon ${createdCount} variante(s). Las demás opciones ya estaban configuradas.`,
         });
       } else {
@@ -235,16 +310,34 @@ export default function VariantCreateContent({
   };
 
   const {
-    page,
-    nextPage,
-    prevPage,
-    total,
-    totalPages,
-    startItem,
-    endItem,
-    hasPrev,
-    hasNext,
-    paginatedItems,
+    page: attributePage,
+    nextPage: nextAttributePage,
+    prevPage: prevAttributePage,
+    total: attributeTotal,
+    totalPages: attributeTotalPages,
+    startItem: attributeStartItem,
+    endItem: attributeEndItem,
+    hasPrev: attributeHasPrev,
+    hasNext: attributeHasNext,
+    paginatedItems: paginatedAttributes,
+  } = usePagination({
+    items: attributes,
+    initialPage: 1,
+    pageSize: PAGE_SIZE,
+    mode: "frontend",
+  });
+
+  const {
+    page: valuePage,
+    nextPage: nextValuePage,
+    prevPage: prevValuePage,
+    total: valueTotal,
+    totalPages: valueTotalPages,
+    startItem: valueStartItem,
+    endItem: valueEndItem,
+    hasPrev: valueHasPrev,
+    hasNext: valueHasNext,
+    paginatedItems: paginatedValues,
   } = usePagination({
     items: values,
     initialPage: 1,
@@ -253,10 +346,7 @@ export default function VariantCreateContent({
   });
 
   return (
-    <PageContainer
-      sx={{ py: 0, px: 0 }}
-      innerSx={{ width: "100%" }}
-    >
+    <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
       <Stack spacing={2.5}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -276,15 +366,10 @@ export default function VariantCreateContent({
               Crear variantes{productName ? ` — ${productName}` : ""}
             </Typography>
 
-            <Typography
-              sx={{
-                mt: 0.75,
-                fontSize: 14,
-                color: "text.secondary",
-                lineHeight: 1.5,
-              }}
-            >
-              Selecciona las opciones que deseas convertir en variantes del producto.
+            <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary", lineHeight: 1.5 }}>
+              {step === "attributes"
+                ? "Selecciona el atributo que deseas utilizar."
+                : "Selecciona las opciones que deseas convertir en variantes del producto."}
             </Typography>
           </Box>
 
@@ -293,14 +378,10 @@ export default function VariantCreateContent({
             variant="outlined"
             startIcon={<TuneIcon />}
             onClick={() => onManageAttribute?.()}
-            disabled={generating}
-            sx={{
-              minWidth: { xs: "100%", sm: 190 },
-              height: 44,
-              fontWeight: 800,
-            }}
+            disabled={generating || loadingValues}
+            sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
           >
-            Administrar atributo
+            Administrar atributos
           </Button>
         </Stack>
 
@@ -341,11 +422,11 @@ export default function VariantCreateContent({
             <Stack spacing={1.5} alignItems="center">
               <CircularProgress size={30} />
               <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                Preparando las opciones…
+                Preparando los atributos…
               </Typography>
             </Stack>
           </Paper>
-        ) : !attribute ? (
+        ) : attributes.length === 0 ? (
           <Paper
             sx={{
               p: { xs: 3, sm: 4 },
@@ -360,11 +441,11 @@ export default function VariantCreateContent({
             <CategoryOutlinedIcon sx={{ fontSize: 40, color: "text.secondary" }} />
 
             <Typography sx={{ mt: 1, fontSize: 18, fontWeight: 800, color: "text.primary" }}>
-              Este producto todavía no tiene un atributo
+              Este producto todavía no tiene atributos
             </Typography>
 
             <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary", lineHeight: 1.5 }}>
-              Crea uno para definir opciones como Chico, Mediano, Grande u otra presentación.
+              Crea un atributo y sus opciones para comenzar a generar variantes.
             </Typography>
 
             <Button
@@ -374,9 +455,182 @@ export default function VariantCreateContent({
               onClick={() => onManageAttribute?.()}
               sx={{ mt: 2, minWidth: 210, height: 44, fontWeight: 800 }}
             >
-              Configurar atributo
+              Configurar atributos
             </Button>
           </Paper>
+        ) : step === "attributes" ? (
+          <>
+            <Paper
+              sx={{
+                p: 0,
+                overflow: "hidden",
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                boxShadow: "none",
+                backgroundColor: "background.paper",
+              }}
+            >
+              <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Typography sx={{ fontSize: 17, fontWeight: 800, color: "text.primary" }}>
+                  Atributos disponibles
+                </Typography>
+
+                <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
+                  Selecciona un atributo para consultar sus opciones.
+                </Typography>
+              </Box>
+
+              {useCards ? (
+                <Stack spacing={1.5} sx={{ p: 2 }}>
+                  {paginatedAttributes.map((row) => {
+                    const active = row.status === "active";
+                    const selected = Number(selectedAttributeId) === Number(row.id);
+
+                    return (
+                      <Card
+                        key={row.id}
+                        sx={{
+                          width: "100%",
+                          minHeight: 88,
+                          borderRadius: 1,
+                          border: "1px solid",
+                          borderColor: selected ? "primary.main" : "divider",
+                          boxShadow: "none",
+                          backgroundColor: selected ? "action.selected" : "background.paper",
+                        }}
+                      >
+                        <Box sx={{ p: 1.5 }}>
+                          <FormControlLabel
+                            sx={{
+                              m: 0,
+                              width: "100%",
+                              alignItems: "center",
+                              "& .MuiFormControlLabel-label": { width: "100%" },
+                            }}
+                            control={
+                              <Radio
+                                checked={selected}
+                                disabled={!active}
+                                onChange={() => selectAttribute(row)}
+                              />
+                            }
+                            label={
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                spacing={1}
+                                sx={{ width: "100%" }}
+                              >
+                                <Typography sx={{ fontSize: 15, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
+                                  {row.name}
+                                </Typography>
+
+                                <Chip
+                                  size="small"
+                                  color={active ? "success" : "default"}
+                                  label={active ? "Activo" : "Inactivo"}
+                                  sx={{ fontWeight: 800 }}
+                                />
+                              </Stack>
+                            }
+                          />
+                        </Box>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              ) : (
+                <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
+                  <Table sx={{ minWidth: 620 }}>
+                    <TableHead>
+                      <TableRow
+                        sx={{
+                          "& th": {
+                            backgroundColor: "primary.main",
+                            color: "#fff",
+                            fontWeight: 800,
+                            borderBottom: "none",
+                            whiteSpace: "nowrap",
+                          },
+                        }}
+                      >
+                        <TableCell width={110}>Seleccionar</TableCell>
+                        <TableCell>Atributo</TableCell>
+                        <TableCell width={160}>Estado</TableCell>
+                      </TableRow>
+                    </TableHead>
+
+                    <TableBody>
+                      {paginatedAttributes.map((row) => {
+                        const active = row.status === "active";
+                        const selected = Number(selectedAttributeId) === Number(row.id);
+
+                        return (
+                          <TableRow key={row.id} hover>
+                            <TableCell>
+                              <Radio
+                                checked={selected}
+                                disabled={!active}
+                                onChange={() => selectAttribute(row)}
+                              />
+                            </TableCell>
+
+                            <TableCell>
+                              <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+                                {row.name}
+                              </Typography>
+                            </TableCell>
+
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={active ? "success" : "default"}
+                                label={active ? "Activo" : "Inactivo"}
+                                sx={{ fontWeight: 800 }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+
+              <PaginationFooter
+                page={attributePage}
+                totalPages={attributeTotalPages}
+                startItem={attributeStartItem}
+                endItem={attributeEndItem}
+                total={attributeTotal}
+                hasPrev={attributeHasPrev}
+                hasNext={attributeHasNext}
+                onPrev={prevAttributePage}
+                onNext={nextAttributePage}
+                itemLabel="atributos"
+              />
+            </Paper>
+
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="flex-end">
+              <Button
+                type="button"
+                variant="contained"
+                endIcon={<ArrowForwardIcon />}
+                onClick={goToValues}
+                disabled={!selectedAttribute}
+                sx={{
+                  width: { xs: "100%", sm: "auto" },
+                  minWidth: { sm: 160 },
+                  height: 44,
+                  fontWeight: 800,
+                }}
+              >
+                Siguiente
+              </Button>
+            </Stack>
+          </>
         ) : (
           <>
             <Paper
@@ -397,15 +651,16 @@ export default function VariantCreateContent({
               >
                 <Box>
                   <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary" }}>
-                    ATRIBUTO DEL PRODUCTO
+                    ATRIBUTO SELECCIONADO
                   </Typography>
 
                   <Typography sx={{ mt: 0.4, fontSize: 20, fontWeight: 800, color: "text.primary" }}>
-                    {attribute.name}
+                    {attribute?.name}
                   </Typography>
 
                   <Typography sx={{ mt: 0.4, fontSize: 13, color: "text.secondary" }}>
-                    {activeValuesCount} opción{activeValuesCount === 1 ? "" : "es"} activa{activeValuesCount === 1 ? "" : "s"}.
+                    {activeValuesCount} opción{activeValuesCount === 1 ? "" : "es"} activa{activeValuesCount === 1 ? "" : "s"} ·{" "}
+                    {availableValuesCount} disponible{availableValuesCount === 1 ? "" : "s"}.
                   </Typography>
                 </Box>
 
@@ -418,7 +673,27 @@ export default function VariantCreateContent({
               </Stack>
             </Paper>
 
-            {values.length === 0 ? (
+            {loadingValues ? (
+              <Paper
+                sx={{
+                  minHeight: 260,
+                  borderRadius: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "none",
+                  display: "grid",
+                  placeItems: "center",
+                  backgroundColor: "background.paper",
+                }}
+              >
+                <Stack spacing={1.5} alignItems="center">
+                  <CircularProgress size={30} />
+                  <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                    Cargando opciones…
+                  </Typography>
+                </Stack>
+              </Paper>
+            ) : values.length === 0 ? (
               <Paper
                 sx={{
                   p: { xs: 3, sm: 4 },
@@ -431,11 +706,11 @@ export default function VariantCreateContent({
                 }}
               >
                 <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
-                  El atributo todavía no tiene opciones
+                  Este atributo todavía no tiene opciones
                 </Typography>
 
                 <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary" }}>
-                  Entra a administrar el atributo para agregar sus opciones.
+                  Entra a administrar los atributos para agregar sus opciones.
                 </Typography>
 
                 <Button
@@ -445,7 +720,7 @@ export default function VariantCreateContent({
                   onClick={() => onManageAttribute?.()}
                   sx={{ mt: 2, minWidth: 210, height: 44, fontWeight: 800 }}
                 >
-                  Administrar atributo
+                  Administrar atributos
                 </Button>
               </Paper>
             ) : (
@@ -460,14 +735,7 @@ export default function VariantCreateContent({
                   backgroundColor: "background.paper",
                 }}
               >
-                <Box
-                  sx={{
-                    px: 2,
-                    py: 1.5,
-                    borderBottom: "1px solid",
-                    borderColor: "divider",
-                  }}
-                >
+                <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
                   <Stack
                     direction={{ xs: "column", sm: "row" }}
                     justifyContent="space-between"
@@ -480,7 +748,7 @@ export default function VariantCreateContent({
                       </Typography>
 
                       <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
-                        Selecciona una o varias opciones. Cada opción corresponde a una variante.
+                        Selecciona una o varias opciones. Las que ya tienen variante no pueden seleccionarse otra vez.
                       </Typography>
                     </Box>
 
@@ -493,18 +761,20 @@ export default function VariantCreateContent({
                   </Stack>
                 </Box>
 
-                {isMobile ? (
+                {useCards ? (
                   <Stack spacing={1.5} sx={{ p: 2 }}>
-                    {paginatedItems.map((value) => {
+                    {paginatedValues.map((value) => {
+                      const valueId = Number(value.id);
                       const active = value.status === "active";
-                      const checked = selectedSet.has(Number(value.id));
+                      const alreadyCreated = usedValueSet.has(valueId);
+                      const checked = selectedSet.has(valueId);
 
                       return (
                         <Card
                           key={value.id}
                           sx={{
                             width: "100%",
-                            minHeight: 82,
+                            minHeight: 88,
                             borderRadius: 1,
                             border: "1px solid",
                             borderColor: checked ? "primary.main" : "divider",
@@ -523,7 +793,7 @@ export default function VariantCreateContent({
                               control={
                                 <Checkbox
                                   checked={checked}
-                                  disabled={!active || !isAttributeActive || generating}
+                                  disabled={!active || !isAttributeActive || alreadyCreated || generating}
                                   onChange={() => toggleValue(value)}
                                 />
                               }
@@ -535,23 +805,26 @@ export default function VariantCreateContent({
                                   spacing={1}
                                   sx={{ width: "100%" }}
                                 >
-                                  <Typography
-                                    sx={{
-                                      fontSize: 15,
-                                      fontWeight: 800,
-                                      color: "text.primary",
-                                      wordBreak: "break-word",
-                                    }}
-                                  >
+                                  <Typography sx={{ fontSize: 15, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
                                     {value.value}
                                   </Typography>
 
-                                  <Chip
-                                    size="small"
-                                    color={active ? "success" : "default"}
-                                    label={active ? "Activo" : "Inactivo"}
-                                    sx={{ fontWeight: 800 }}
-                                  />
+                                  <Stack direction="row" spacing={0.75} alignItems="center">
+                                    <Chip
+                                      size="small"
+                                      color={active ? "success" : "default"}
+                                      label={active ? "Activo" : "Inactivo"}
+                                      sx={{ fontWeight: 800 }}
+                                    />
+
+                                    {alreadyCreated ? (
+                                      <Chip
+                                        size="small"
+                                        label="Ya creada"
+                                        sx={{ fontWeight: 800 }}
+                                      />
+                                    ) : null}
+                                  </Stack>
                                 </Stack>
                               }
                             />
@@ -562,7 +835,7 @@ export default function VariantCreateContent({
                   </Stack>
                 ) : (
                   <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                    <Table sx={{ minWidth: 620 }}>
+                    <Table sx={{ minWidth: 680 }}>
                       <TableHead>
                         <TableRow
                           sx={{
@@ -577,21 +850,23 @@ export default function VariantCreateContent({
                         >
                           <TableCell width={110}>Seleccionar</TableCell>
                           <TableCell>Opción</TableCell>
-                          <TableCell width={150}>Estado</TableCell>
+                          <TableCell width={230}>Estado</TableCell>
                         </TableRow>
                       </TableHead>
 
                       <TableBody>
-                        {paginatedItems.map((value) => {
+                        {paginatedValues.map((value) => {
+                          const valueId = Number(value.id);
                           const active = value.status === "active";
-                          const checked = selectedSet.has(Number(value.id));
+                          const alreadyCreated = usedValueSet.has(valueId);
+                          const checked = selectedSet.has(valueId);
 
                           return (
                             <TableRow key={value.id} hover>
                               <TableCell>
                                 <Checkbox
                                   checked={checked}
-                                  disabled={!active || !isAttributeActive || generating}
+                                  disabled={!active || !isAttributeActive || alreadyCreated || generating}
                                   onChange={() => toggleValue(value)}
                                 />
                               </TableCell>
@@ -603,12 +878,22 @@ export default function VariantCreateContent({
                               </TableCell>
 
                               <TableCell>
-                                <Chip
-                                  size="small"
-                                  color={active ? "success" : "default"}
-                                  label={active ? "Activo" : "Inactivo"}
-                                  sx={{ fontWeight: 800 }}
-                                />
+                                <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                                  <Chip
+                                    size="small"
+                                    color={active ? "success" : "default"}
+                                    label={active ? "Activo" : "Inactivo"}
+                                    sx={{ fontWeight: 800 }}
+                                  />
+
+                                  {alreadyCreated ? (
+                                    <Chip
+                                      size="small"
+                                      label="Ya creada"
+                                      sx={{ fontWeight: 800 }}
+                                    />
+                                  ) : null}
+                                </Stack>
                               </TableCell>
                             </TableRow>
                           );
@@ -619,25 +904,41 @@ export default function VariantCreateContent({
                 )}
 
                 <PaginationFooter
-                  page={page}
-                  totalPages={totalPages}
-                  startItem={startItem}
-                  endItem={endItem}
-                  total={total}
-                  hasPrev={hasPrev}
-                  hasNext={hasNext}
-                  onPrev={prevPage}
-                  onNext={nextPage}
+                  page={valuePage}
+                  totalPages={valueTotalPages}
+                  startItem={valueStartItem}
+                  endItem={valueEndItem}
+                  total={valueTotal}
+                  hasPrev={valueHasPrev}
+                  hasNext={valueHasNext}
+                  onPrev={prevValuePage}
+                  onNext={nextValuePage}
                   itemLabel="opciones"
                 />
               </Paper>
             )}
 
             <Stack
-              direction={{ xs: "column", sm: "row" }}
-              justifyContent="flex-end"
+              direction={{ xs: "column-reverse", sm: "row" }}
+              justifyContent="space-between"
               spacing={1.5}
             >
+              <Button
+                type="button"
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={goToAttributes}
+                disabled={generating || loadingValues}
+                sx={{
+                  width: { xs: "100%", sm: "auto" },
+                  minWidth: { sm: 180 },
+                  height: 44,
+                  fontWeight: 800,
+                }}
+              >
+                Cambiar atributo
+              </Button>
+
               <Button
                 type="button"
                 variant="contained"
@@ -646,6 +947,7 @@ export default function VariantCreateContent({
                 disabled={
                   disabledByPrecondition ||
                   generating ||
+                  loadingValues ||
                   !attribute ||
                   !isAttributeActive ||
                   selectedValueIds.length === 0
@@ -657,7 +959,11 @@ export default function VariantCreateContent({
                   fontWeight: 800,
                 }}
               >
-                {generating ? "Creando…" : "Crear variantes"}
+                {generating
+                  ? "Creando…"
+                  : selectedValueIds.length === 1
+                    ? "Crear variante"
+                    : "Crear variantes"}
               </Button>
             </Stack>
           </>

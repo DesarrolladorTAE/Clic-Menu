@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography, useMediaQuery,
+  Box, Card, CardContent, Dialog, DialogContent, DialogTitle, IconButton, Stack, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -33,8 +33,18 @@ const TITLES = {
   image: "Imagen de la variante",
 };
 
+const VARIANT_VIEWS = [
+  "variant_detail",
+  "repair",
+  "channels",
+  "image",
+];
+
 function normalizeRoute(route) {
-  if (!route?.name || !TITLES[route.name]) return { name: "create", payload: {} };
+  if (!route?.name || !TITLES[route.name]) {
+    return { name: "create", payload: {} };
+  }
+
   return { name: route.name, payload: route.payload || {} };
 }
 
@@ -43,10 +53,15 @@ function routeVariant(route) {
 }
 
 function patchRouteVariant(route, variantId, patch) {
-  if (!route || !variantId) return route;
+  if (!route || !variantId) {
+    return route;
+  }
 
   const currentVariant = routeVariant(route);
-  if (!currentVariant || Number(currentVariant.id) !== Number(variantId)) return route;
+
+  if (!currentVariant || Number(currentVariant.id) !== Number(variantId)) {
+    return route;
+  }
 
   const nextVariant = { ...currentVariant, ...patch };
   const nextPayload = { ...route.payload, variant: nextVariant };
@@ -70,7 +85,10 @@ function variantLabel(productName, variant) {
     ""
   ).trim();
 
-  if (product && option) return `${product} · ${option}`;
+  if (product && option) {
+    return `${product} · ${option}`;
+  }
+
   return variant?.display_name || variant?.name || product || "Variante";
 }
 
@@ -90,12 +108,14 @@ export default function VariantManagementDialog({
   const wasOpenRef = useRef(false);
 
   const initialRoute = useMemo(() => {
-    if (initialView === "variant_detail" && initialVariantRow) {
+    if (VARIANT_VIEWS.includes(initialView) && initialVariantRow) {
+      const variant = initialVariantRow?.variant || initialVariantRow;
+
       return {
-        name: "variant_detail",
+        name: initialView,
         payload: {
-          variantRow: initialVariantRow,
-          variant: initialVariantRow?.variant || initialVariantRow,
+          variantRow: initialVariantRow?.variant ? initialVariantRow : { variant },
+          variant,
         },
       };
     }
@@ -125,7 +145,10 @@ export default function VariantManagementDialog({
     (currentVariantRow?.id ? currentVariantRow : null);
 
   const headerSubtitle = useMemo(() => {
-    if (currentVariant) return variantLabel(productName, currentVariant);
+    if (currentVariant) {
+      return variantLabel(productName, currentVariant);
+    }
+
     return productName || "Producto";
   }, [currentVariant, productName]);
 
@@ -146,12 +169,17 @@ export default function VariantManagementDialog({
   };
 
   const notifyChanged = async (detail = null) => {
-    if (typeof onChanged === "function") await onChanged(detail);
+    if (typeof onChanged === "function") {
+      await onChanged(detail);
+    }
   };
 
   const patchVariant = (patch) => {
     const variantId = currentVariant?.id;
-    if (!variantId) return;
+
+    if (!variantId) {
+      return;
+    }
 
     setCurrent((prev) => patchRouteVariant(prev, variantId, patch));
     setHistory((prev) => prev.map((route) => patchRouteVariant(route, variantId, patch)));
@@ -167,13 +195,19 @@ export default function VariantManagementDialog({
   };
 
   const openValues = (attribute) => {
-    if (!attribute?.id) return;
+    if (!attribute?.id) {
+      return;
+    }
+
     goTo("values", { attribute });
   };
 
   const openVariantDetail = (variantRow) => {
     const variant = variantRow?.variant || variantRow;
-    if (!variant?.id) return;
+
+    if (!variant?.id) {
+      return;
+    }
 
     goTo("variant_detail", {
       variantRow: variantRow?.variant ? variantRow : { variant },
@@ -182,7 +216,9 @@ export default function VariantManagementDialog({
   };
 
   const openRepair = () => {
-    if (!currentVariant?.id) return;
+    if (!currentVariant?.id) {
+      return;
+    }
 
     goTo("repair", {
       variantRow: currentVariantRow || { variant: currentVariant },
@@ -191,7 +227,9 @@ export default function VariantManagementDialog({
   };
 
   const openChannels = () => {
-    if (!currentVariant?.id) return;
+    if (!currentVariant?.id) {
+      return;
+    }
 
     goTo("channels", {
       variantRow: currentVariantRow || { variant: currentVariant },
@@ -200,7 +238,9 @@ export default function VariantManagementDialog({
   };
 
   const openImage = () => {
-    if (!currentVariant?.id) return;
+    if (!currentVariant?.id) {
+      return;
+    }
 
     goTo("image", {
       variantRow: currentVariantRow || { variant: currentVariant },
@@ -263,12 +303,8 @@ export default function VariantManagementDialog({
           productId={productId}
           productName={productName}
           disabledByPrecondition={disabledByPrecondition}
-          onBack={goBack}
-          onClose={goBack}
+          onManageAttribute={openAttributes}
           onGenerated={handleGenerated}
-          onManageAttributes={openAttributes}
-          onOpenAttributes={openAttributes}
-          onAttributes={openAttributes}
         />
       );
     }
@@ -313,17 +349,17 @@ export default function VariantManagementDialog({
     }
 
     if (current.name === "values") {
-        return (
-            <VariantAttributeValuesContent
-            restaurantId={restaurantId}
-            productId={productId}
-            productName={productName}
-            attribute={current?.payload?.attribute || null}
-            onBack={goBack}
-            onClose={goBack}
-            onChanged={handleValuesChanged}
-            />
-        );
+      return (
+        <VariantAttributeValuesContent
+          restaurantId={restaurantId}
+          productId={productId}
+          productName={productName}
+          attribute={current?.payload?.attribute || null}
+          onBack={goBack}
+          onClose={goBack}
+          onChanged={handleValuesChanged}
+        />
+      );
     }
 
     if (current.name === "variant_detail") {
@@ -472,7 +508,7 @@ export default function VariantManagementDialog({
 
       <DialogContent
         sx={{
-          p: 0,
+          p: { xs: 2, sm: 3 },
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
@@ -481,9 +517,16 @@ export default function VariantManagementDialog({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        <Box sx={{ p: { xs: 2, sm: 2.5, md: 3 } }}>
-          {renderContent()}
-        </Box>
+        <Card
+          sx={{
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            {renderContent()}
+          </CardContent>
+        </Card>
       </DialogContent>
     </Dialog>
   );

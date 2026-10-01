@@ -6,7 +6,6 @@ import {
 } from "@mui/material";
 
 import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
 
 import {
@@ -16,16 +15,7 @@ import {
 
 import PageContainer from "../../common/PageContainer";
 import AppAlert from "../../common/AppAlert";
-
-function normalizeErr(e) {
-  return (
-    e?.response?.data?.message ||
-    (e?.response?.data?.errors
-      ? Object.values(e.response.data.errors).flat().join("\n")
-      : "") ||
-    "Ocurrió un error"
-  );
-}
+import { normalizeErr } from "../../../utils/err";
 
 export default function VariantAttributeFormContent({
   restaurantId,
@@ -110,7 +100,7 @@ export default function VariantAttributeFormContent({
       showAlert({
         severity: "error",
         title: "No se pudo guardar",
-        message: normalizeErr(e),
+        message: normalizeErr(e, "No se pudo guardar el atributo."),
       });
     } finally {
       setSaving(false);
@@ -121,17 +111,6 @@ export default function VariantAttributeFormContent({
     <PageContainer sx={{ py: 0, px: 0 }} innerSx={{ width: "100%" }}>
       <Stack spacing={2.5}>
         <Box>
-          <Button
-            type="button"
-            variant="text"
-            startIcon={<ArrowBackIcon />}
-            onClick={() => onBack?.()}
-            disabled={saving}
-            sx={{ mb: 1, fontWeight: 800 }}
-          >
-            Volver
-          </Button>
-
           <Typography
             sx={{
               fontWeight: 800,
@@ -143,17 +122,10 @@ export default function VariantAttributeFormContent({
             {isEdit ? "Editar atributo" : "Crear atributo"}
           </Typography>
 
-          <Typography
-            sx={{
-              mt: 0.75,
-              fontSize: 14,
-              color: "text.secondary",
-              lineHeight: 1.5,
-            }}
-          >
+          <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary", lineHeight: 1.5 }}>
             {isEdit
               ? `Actualiza el atributo${productName ? ` de ${productName}` : ""}.`
-              : `Define el atributo que organizará las variantes${productName ? ` de ${productName}` : ""}.`}
+              : `Agrega un atributo para organizar las variantes${productName ? ` de ${productName}` : ""}.`}
           </Typography>
         </Box>
 
@@ -174,7 +146,7 @@ export default function VariantAttributeFormContent({
                 </Typography>
 
                 <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
-                  Cada producto puede tener un solo atributo para sus variantes.
+                  Cada producto puede tener uno o varios atributos, cada uno con sus propias opciones.
                 </Typography>
               </Box>
 

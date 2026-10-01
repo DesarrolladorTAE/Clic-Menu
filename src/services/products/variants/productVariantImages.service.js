@@ -1,12 +1,15 @@
+//src/services/products/variants/productVariantImages.service.js
 import api from "../../api";
 
 /**
  * GET /api/restaurants/{restaurant}/products/{product}/variants/{variant}/image
  *
+ * Obtiene la imagen propia de la variante.
+ * Si la variante no tiene imagen, variant_image y effective_image son null.
  */
 export async function getProductVariantImage(restaurantId, productId, variantId) {
   const { data } = await api.get(
-    `/restaurants/${restaurantId}/products/${productId}/variants/${variantId}/image`,
+    `/restaurants/${restaurantId}/products/${productId}/variants/${variantId}/image`
   );
 
   return data?.data ?? null;
@@ -28,7 +31,7 @@ export async function uploadProductVariantImage(
 
   const { data } = await api.post(
     `/restaurants/${restaurantId}/products/${productId}/variants/${variantId}/image`,
-    formData,
+    formData
   );
 
   return data?.data ?? null;
@@ -37,8 +40,8 @@ export async function uploadProductVariantImage(
 /**
  * DELETE /api/restaurants/{restaurant}/products/{product}/variants/{variant}/image
  *
- * Elimina únicamente la imagen propia de la variante.
- * effective_image puede seguir resolviendo a producto o placeholder.
+ * Elimina la imagen propia de la variante.
+ * Después de eliminarla, la variante queda sin imagen.
  */
 export async function deleteProductVariantImage(
   restaurantId,
@@ -46,7 +49,7 @@ export async function deleteProductVariantImage(
   variantId
 ) {
   const { data } = await api.delete(
-    `/restaurants/${restaurantId}/products/${productId}/variants/${variantId}/image`,
+    `/restaurants/${restaurantId}/products/${productId}/variants/${variantId}/image`
   );
 
   return data?.data ?? null;

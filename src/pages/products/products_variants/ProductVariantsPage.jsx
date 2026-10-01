@@ -2,15 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  Box, Button, Card, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, useMediaQuery,
+  Box, Button, Card, Chip, CircularProgress, FormControlLabel, IconButton, ListItemIcon,
+  Menu, MenuItem, Paper, Stack, Switch, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import AutoAwesomeMotionIcon from "@mui/icons-material/AutoAwesomeMotion";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
@@ -50,7 +53,7 @@ function money(value) {
 
 function buildPresentationSummary(attributes) {
   if (!Array.isArray(attributes) || !attributes.length) {
-    return "Sin presentación relacionada";
+    return "Sin atributo relacionado";
   }
 
   return attributes
@@ -64,7 +67,7 @@ function buildPresentationSummary(attributes) {
         return attribute?.attribute_name || "";
       }
 
-      return `${attribute?.attribute_name || "Presentación"}: ${values}`;
+      return `${attribute?.attribute_name || "Atributo"}: ${values}`;
     })
     .filter(Boolean)
     .join(" · ");
@@ -121,6 +124,9 @@ export default function ProductVariantsPage() {
   const [basePrice, setBasePrice] = useState(null);
   const [rows, setRows] = useState([]);
   const [pendingActions, setPendingActions] = useState({});
+
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [menuVariantRow, setMenuVariantRow] = useState(null);
 
   const [management, setManagement] = useState({
     open: false,
@@ -257,12 +263,20 @@ export default function ProductVariantsPage() {
     });
   };
 
-  const openManage = (variantRow) => {
+  const openManagementView = (initialView, variantRow) => {
     setManagement({
       open: true,
-      initialView: "variant_detail",
+      initialView,
       variantRow,
     });
+  };
+
+  const openChannels = (variantRow) => {
+    openManagementView("channels", variantRow);
+  };
+
+  const openImage = (variantRow) => {
+    openManagementView("image", variantRow);
   };
 
   const closeManagement = () => {
@@ -271,6 +285,26 @@ export default function ProductVariantsPage() {
       initialView: "create",
       variantRow: null,
     });
+  };
+
+  const openVariantMenu = (event, row) => {
+    setMenuAnchor(event.currentTarget);
+    setMenuVariantRow(row);
+  };
+
+  const closeVariantMenu = () => {
+    setMenuAnchor(null);
+    setMenuVariantRow(null);
+  };
+
+  const runVariantAction = (action) => {
+    if (!menuVariantRow) {
+      return;
+    }
+
+    const row = menuVariantRow;
+    closeVariantMenu();
+    action(row);
   };
 
   const onToggle = async (variantId, nextEnabled) => {
@@ -380,7 +414,7 @@ export default function ProductVariantsPage() {
 
       showAlert({
         severity: "success",
-        title: "Presentación predeterminada actualizada",
+        title: "Variante predeterminada actualizada",
         message: nextDefault
           ? "La variante quedó activa y predeterminada."
           : "La variante dejó de ser predeterminada.",
@@ -496,7 +530,7 @@ export default function ProductVariantsPage() {
                 lineHeight: 1.1,
               }}
             >
-              Variantes y presentaciones
+              Variantes
             </Typography>
 
             <Typography
@@ -507,7 +541,7 @@ export default function ProductVariantsPage() {
                 lineHeight: 1.5,
               }}
             >
-              Administra las presentaciones disponibles de{" "}
+              Administra las variantes disponibles de{" "}
               <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
                 {titleName}
               </Box>
@@ -573,7 +607,7 @@ export default function ProductVariantsPage() {
 
             <InstructionRow
               icon={<AutoAwesomeMotionIcon sx={{ fontSize: 18 }} />}
-              text="Cada producto utiliza una sola presentación, por ejemplo Tamaño, y cada opción crea una variante independiente, por ejemplo Chica, Mediana o Grande."
+              text="Cada producto puede tener uno o varios atributos, por ejemplo Tamaño o Tipo de tortilla. Cada opción seleccionada crea una variante independiente."
             />
 
             <InstructionRow
@@ -641,7 +675,7 @@ export default function ProductVariantsPage() {
               </Typography>
 
               <Typography sx={{ mt: 0.75, fontSize: 14, color: "text.secondary" }}>
-                Crea una presentación y sus opciones para comenzar.
+                Crea un atributo y sus opciones para comenzar.
               </Typography>
 
               <Button
@@ -693,12 +727,7 @@ export default function ProductVariantsPage() {
                     >
                       <Stack spacing={1.75} sx={{ p: 2, width: "100%", height: "100%" }}>
                         <Box>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="flex-start"
-                            spacing={1}
-                          >
+                          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
                             <Typography
                               sx={{
                                 minWidth: 0,
@@ -736,7 +765,7 @@ export default function ProductVariantsPage() {
                           ) : null}
                         </Box>
 
-                        <InfoRow label="Presentación" value={buildPresentationSummary(row?.attributes)} />
+                        <InfoRow label="Atributo y opción" value={buildPresentationSummary(row?.attributes)} />
                         <InfoRow label="Precio base" value={basePriceLabel} />
 
                         <Box>
@@ -782,32 +811,40 @@ export default function ProductVariantsPage() {
                         </Box>
 
                         <Stack
-                          direction={{ xs: "column", sm: "row" }}
+                          direction="row"
+                          justifyContent="flex-end"
+                          alignItems="center"
                           spacing={1}
-                          sx={{ mt: "auto !important", pt: 1 }}
+                          sx={{
+                            mt: "auto !important",
+                            pt: 1,
+                            borderTop: "1px solid",
+                            borderColor: "divider",
+                          }}
                         >
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            startIcon={<SettingsOutlinedIcon />}
-                            onClick={() => openManage(row)}
-                            disabled={changingVariant}
-                            sx={{ minHeight: 42, fontWeight: 800 }}
-                          >
-                            Administrar
-                          </Button>
+                          <Tooltip title="Eliminar variante">
+                            <IconButton
+                              onClick={() => onDelete(row)}
+                              disabled={changingVariant}
+                              sx={iconDeleteSx}
+                            >
+                              {deleting ? (
+                                <CircularProgress size={18} sx={{ color: "#fff" }} />
+                              ) : (
+                                <DeleteOutlineIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
 
-                          <Button
-                            fullWidth
-                            variant="outlined"
-                            color="error"
-                            startIcon={<DeleteOutlineIcon />}
-                            onClick={() => onDelete(row)}
-                            disabled={changingVariant}
-                            sx={{ minHeight: 42, fontWeight: 800 }}
-                          >
-                            {deleting ? "Eliminando…" : "Eliminar"}
-                          </Button>
+                          <Tooltip title="Opciones de variante">
+                            <IconButton
+                              onClick={(event) => openVariantMenu(event, row)}
+                              disabled={changingVariant}
+                              sx={iconMoreSx}
+                            >
+                              <MoreVertIcon />
+                            </IconButton>
+                          </Tooltip>
                         </Stack>
                       </Stack>
                     </Card>
@@ -830,8 +867,8 @@ export default function ProductVariantsPage() {
             </>
           ) : (
             <>
-              <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-                <Table sx={{ minWidth: 1050 }}>
+              <TableContainer sx={{ width: "100%", overflowX: "hidden" }}>
+                <Table sx={{ width: "100%", tableLayout: "fixed" }}>
                   <TableHead>
                     <TableRow
                       sx={{
@@ -842,15 +879,16 @@ export default function ProductVariantsPage() {
                           fontWeight: 800,
                           whiteSpace: "nowrap",
                           borderBottom: "none",
+                          py: 1.75,
                         },
                       }}
                     >
-                      <TableCell>Variante</TableCell>
-                      <TableCell>Presentación</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell>Predeterminada</TableCell>
-                      <TableCell>Precio base</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
+                      <TableCell sx={{ width: "25%" }}>Variante</TableCell>
+                      <TableCell sx={{ width: "20%" }}>Atributo y opción</TableCell>
+                      <TableCell sx={{ width: "14%" }}>Estado</TableCell>
+                      <TableCell sx={{ width: "14%" }}>Predeterminada</TableCell>
+                      <TableCell sx={{ width: "13%" }}>Precio base</TableCell>
+                      <TableCell align="right" sx={{ width: "14%" }}>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
 
@@ -878,14 +916,14 @@ export default function ProductVariantsPage() {
                             },
                           }}
                         >
-                          <TableCell sx={{ minWidth: 250 }}>
+                          <TableCell sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>
                             <Stack spacing={0.6}>
-                              <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+                              <Typography sx={{ fontSize: 14, fontWeight: 800, lineHeight: 1.4 }}>
                                 {names.title}
                               </Typography>
 
                               {isInvalid ? (
-                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                <Stack spacing={0.5} alignItems="flex-start">
                                   <Chip
                                     size="small"
                                     color="error"
@@ -894,14 +932,7 @@ export default function ProductVariantsPage() {
                                   />
 
                                   {variant?.invalid_reason ? (
-                                    <Typography
-                                      sx={{
-                                        maxWidth: 280,
-                                        fontSize: 11,
-                                        color: "error.main",
-                                        lineHeight: 1.35,
-                                      }}
-                                    >
+                                    <Typography sx={{ fontSize: 11, color: "error.main", lineHeight: 1.35 }}>
                                       {variant.invalid_reason}
                                     </Typography>
                                   ) : null}
@@ -910,7 +941,7 @@ export default function ProductVariantsPage() {
                             </Stack>
                           </TableCell>
 
-                          <TableCell sx={{ minWidth: 220 }}>
+                          <TableCell sx={{ whiteSpace: "normal", wordBreak: "break-word" }}>
                             <Typography sx={{ fontSize: 13, lineHeight: 1.5 }}>
                               {buildPresentationSummary(row?.attributes)}
                             </Typography>
@@ -965,27 +996,36 @@ export default function ProductVariantsPage() {
                           </TableCell>
 
                           <TableCell align="right">
-                            <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-                              <Button
-                                variant="outlined"
-                                startIcon={<SettingsOutlinedIcon />}
-                                onClick={() => openManage(row)}
-                                disabled={changingVariant}
-                                sx={{ minHeight: 38, minWidth: 125, fontSize: 12, fontWeight: 800 }}
-                              >
-                                Administrar
-                              </Button>
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              justifyContent="flex-end"
+                              alignItems="center"
+                              flexWrap="nowrap"
+                            >
+                              <Tooltip title="Eliminar variante">
+                                <IconButton
+                                  onClick={() => onDelete(row)}
+                                  disabled={changingVariant}
+                                  sx={iconDeleteSx}
+                                >
+                                  {deleting ? (
+                                    <CircularProgress size={18} sx={{ color: "#fff" }} />
+                                  ) : (
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
 
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<DeleteOutlineIcon />}
-                                onClick={() => onDelete(row)}
-                                disabled={changingVariant}
-                                sx={{ minHeight: 38, minWidth: 110, fontSize: 12, fontWeight: 800 }}
-                              >
-                                {deleting ? "Eliminando…" : "Eliminar"}
-                              </Button>
+                              <Tooltip title="Opciones de variante">
+                                <IconButton
+                                  onClick={(event) => openVariantMenu(event, row)}
+                                  disabled={changingVariant}
+                                  sx={iconMoreSx}
+                                >
+                                  <MoreVertIcon />
+                                </IconButton>
+                              </Tooltip>
                             </Stack>
                           </TableCell>
                         </TableRow>
@@ -1011,8 +1051,50 @@ export default function ProductVariantsPage() {
           )}
         </Paper>
 
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={closeVariantMenu}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 0.75,
+                minWidth: 260,
+                borderRadius: 1,
+                border: "1px solid",
+                borderColor: "divider",
+                boxShadow: 3,
+              },
+            },
+          }}
+        >
+          <MenuItem onClick={() => runVariantAction(openChannels)} sx={menuItemSx}>
+            <ListItemIcon>
+              <PointOfSaleOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+
+            <Box>
+              <Typography sx={menuTitleSx}>Canales</Typography>
+              <Typography sx={menuDescriptionSx}>Configurar precios por canal</Typography>
+            </Box>
+          </MenuItem>
+
+          <MenuItem onClick={() => runVariantAction(openImage)} sx={menuItemSx}>
+            <ListItemIcon>
+              <ImageOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+
+            <Box>
+              <Typography sx={menuTitleSx}>Imagen</Typography>
+              <Typography sx={menuDescriptionSx}>Administrar imagen de la variante</Typography>
+            </Box>
+          </MenuItem>
+        </Menu>
+
         <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
-          Las variantes que requieren corrección permanecen inactivas hasta que su presentación vuelva a quedar correctamente relacionada.
+          Las variantes que requieren corrección permanecen inactivas hasta que su atributo y opción vuelvan a quedar correctamente relacionados.
         </Typography>
       </Stack>
 
@@ -1094,4 +1176,55 @@ const mobileValueSx = {
   color: "text.primary",
   lineHeight: 1.5,
   wordBreak: "break-word",
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "action.disabledBackground",
+    color: "action.disabled",
+  },
+};
+
+const iconMoreSx = {
+  width: 40,
+  height: 40,
+  borderRadius: 1.5,
+  bgcolor: "background.default",
+  color: "text.primary",
+  border: "1px solid",
+  borderColor: "divider",
+  "&:hover": {
+    bgcolor: "action.hover",
+    color: "primary.main",
+  },
+};
+
+const menuItemSx = {
+  py: 1.25,
+  px: 1.5,
+  gap: 0.5,
+  "& .MuiListItemIcon-root": {
+    minWidth: 36,
+    color: "primary.main",
+  },
+};
+
+const menuTitleSx = {
+  fontSize: 13,
+  fontWeight: 800,
+  color: "text.primary",
+};
+
+const menuDescriptionSx = {
+  mt: 0.2,
+  fontSize: 11.5,
+  color: "text.secondary",
 };
