@@ -1,20 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, MenuItem, Stack, Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -22,6 +9,30 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../../../components/common/AppAlert";
+import ModifierAssignmentRulesFields from "./shared/ModifierAssignmentRulesFields";
+
+const EMPTY_RULES = {
+  required_override: null,
+  min_selections_override: null,
+  max_selections_override: null,
+};
+
+function nullableBoolean(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return value === true || value === 1 || value === "1";
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export default function VariantModifierGroupUpsertModal({
   open,
@@ -41,6 +52,11 @@ export default function VariantModifierGroupUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
+  const [modifierGroupId, setModifierGroupId] = useState("");
+  const [sortOrder, setSortOrder] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+  const [rules, setRules] = useState({ ...EMPTY_RULES });
+  const [rulesValid, setRulesValid] = useState(true);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -49,10 +65,6 @@ export default function VariantModifierGroupUpsertModal({
     message: "",
   });
 
-  const [modifierGroupId, setModifierGroupId] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
-  const [isActive, setIsActive] = useState(true);
-
   const title = useMemo(
     () => (isEdit ? "Editar asignación" : "Asignar grupo"),
     [isEdit]
@@ -60,60 +72,102 @@ export default function VariantModifierGroupUpsertModal({
 
   const filteredGroups = useMemo(() => {
     return Array.isArray(availableGroups)
-      ? availableGroups.filter((g) => g?.id)
+      ? availableGroups.filter((group) => group?.id)
       : [];
   }, [availableGroups]);
 
-  const showAlert = ({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
-    setAlertState({
-      open: true,
-      severity,
-      title,
-      message,
-    });
+  const selectedGroup = useMemo(() => {
+    return filteredGroups.find(
+      (group) => String(group.id) === String(modifierGroupId)
+    ) || null;
+  }, [filteredGroups, modifierGroupId]);
+
+  const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
+    setAlertState({ open: true, severity, title, message });
   };
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway") {
+      return;
+    }
+
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
+
+    setAlertState((prev) => ({ ...prev, open: false }));
+    setRulesValid(true);
 
     if (isEdit) {
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setSortOrder(String(editing?.sort_order ?? 0));
-      setIsActive(!!editing?.is_active);
-    } else {
-      setModifierGroupId(
-        filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
+      setIsActive(
+        editing?.is_active === true ||
+        editing?.is_active === 1 ||
+        editing?.is_active === "1"
       );
-      setSortOrder("0");
-      setIsActive(true);
+
+      setRules({
+        required_override: nullableBoolean(editing?.required_override),
+        min_selections_override: nullableNumber(editing?.min_selections_override),
+        max_selections_override: nullableNumber(editing?.max_selections_override),
+      });
+
+      return;
     }
+
+    setModifierGroupId(
+      filteredGroups?.[0]?.id
+        ? String(filteredGroups[0].id)
+        : ""
+    );
+    setSortOrder("0");
+    setIsActive(true);
+    setRules({ ...EMPTY_RULES });
   }, [open, isEdit, editing, filteredGroups]);
 
   const canSave = useMemo(() => {
-    if (!product?.id) return false;
-    if (!variant?.id) return false;
-    if (!modifierGroupId) return false;
+    if (!product?.id || !variant?.id || !modifierGroupId || !rulesValid || saving) {
+      return false;
+    }
+
+    if (requiresBranch && !effectiveBranchId) {
+      return false;
+    }
 
     const sort = Number(sortOrder);
-    if (!Number.isFinite(sort) || sort < 0) return false;
+
+    if (!Number.isFinite(sort) || sort < 0) {
+      return false;
+    }
 
     return true;
-  }, [product, variant, modifierGroupId, sortOrder]);
+  }, [
+    product,
+    variant,
+    modifierGroupId,
+    rulesValid,
+    saving,
+    requiresBranch,
+    effectiveBranchId,
+    sortOrder,
+  ]);
+
+  const handleGroupChange = (value) => {
+    setModifierGroupId(value);
+    setRules({ ...EMPTY_RULES });
+    setRulesValid(true);
+  };
 
   const save = async () => {
     if (!product?.id) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Aviso",
         message: "Selecciona un producto antes de continuar.",
       });
       return;
@@ -122,7 +176,7 @@ export default function VariantModifierGroupUpsertModal({
     if (!variant?.id) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Aviso",
         message: "Selecciona una variante antes de continuar.",
       });
       return;
@@ -131,29 +185,52 @@ export default function VariantModifierGroupUpsertModal({
     if (!modifierGroupId) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona un grupo para continuar.",
+        title: "Aviso",
+        message: "Selecciona un grupo antes de continuar.",
       });
       return;
     }
 
-    const payload = {
-      modifier_group_id: Number(modifierGroupId),
-      sort_order: Number(sortOrder),
-      is_active: isActive,
-    };
-
-    if (requiresBranch) {
-      payload.branch_id = effectiveBranchId;
+    if (requiresBranch && !effectiveBranchId) {
+      showAlert({
+        severity: "warning",
+        title: "Aviso",
+        message: "Selecciona una sucursal antes de continuar.",
+      });
+      return;
     }
 
-    if (!Number.isFinite(payload.sort_order) || payload.sort_order < 0) {
+    if (!rulesValid) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Revisa las reglas de selección antes de guardar.",
+      });
+      return;
+    }
+
+    const parsedSortOrder = Number(sortOrder);
+
+    if (!Number.isFinite(parsedSortOrder) || parsedSortOrder < 0) {
       showAlert({
         severity: "error",
         title: "Error",
         message: "El orden debe ser un número igual o mayor a 0.",
       });
       return;
+    }
+
+    const payload = {
+      modifier_group_id: Number(modifierGroupId),
+      required_override: rules?.required_override ?? null,
+      min_selections_override: rules?.min_selections_override ?? null,
+      max_selections_override: rules?.max_selections_override ?? null,
+      sort_order: parsedSortOrder,
+      is_active: isActive,
+    };
+
+    if (requiresBranch && effectiveBranchId) {
+      payload.branch_id = Number(effectiveBranchId);
     }
 
     setSaving(true);
@@ -183,14 +260,16 @@ export default function VariantModifierGroupUpsertModal({
         title: "Error",
         message:
           e?.response?.data?.message ||
-          "No se pudo guardar la asignación del grupo a la variante",
+          "No se pudo guardar la asignación del grupo a la variante.",
       });
     } finally {
       setSaving(false);
     }
   };
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <>
@@ -244,8 +323,8 @@ export default function VariantModifierGroupUpsertModal({
                 }}
               >
                 {isEdit
-                  ? "Actualiza el grupo asignado y su configuración dentro de la variante."
-                  : "Selecciona qué grupo de modificadores quieres asignar a esta variante."}
+                  ? "Actualiza el grupo asignado y sus reglas dentro de la variante."
+                  : "Selecciona el grupo de modificadores que deseas asignar a esta variante."}
               </Typography>
             </Box>
 
@@ -274,7 +353,10 @@ export default function VariantModifierGroupUpsertModal({
         >
           <Card
             sx={{
-              borderRadius: 0,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
               backgroundColor: "background.paper",
             }}
           >
@@ -297,7 +379,7 @@ export default function VariantModifierGroupUpsertModal({
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1,
-                      bgcolor: "#fff",
+                      bgcolor: "background.paper",
                     }}
                   >
                     <Typography
@@ -338,73 +420,90 @@ export default function VariantModifierGroupUpsertModal({
                   </Box>
                 ) : null}
 
-                <Stack spacing={2}>
+                <FieldBlock
+                  label="Grupo *"
+                  input={
+                    <TextField
+                      select
+                      fullWidth
+                      value={modifierGroupId}
+                      onChange={(e) => handleGroupChange(e.target.value)}
+                      disabled={!filteredGroups.length || saving}
+                    >
+                      {!filteredGroups.length ? (
+                        <MenuItem value="" disabled>
+                          No hay grupos disponibles
+                        </MenuItem>
+                      ) : null}
+
+                      {filteredGroups.map((group) => (
+                        <MenuItem key={group.id} value={String(group.id)}>
+                          {group.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  }
+                  help={
+                    !filteredGroups.length
+                      ? "No hay grupos disponibles para asignar a variantes."
+                      : null
+                  }
+                />
+
+                <ModifierAssignmentRulesFields
+                  group={selectedGroup}
+                  value={rules}
+                  onChange={setRules}
+                  disabled={saving || !selectedGroup}
+                  onValidityChange={setRulesValid}
+                />
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                   <FieldBlock
-                    label="Grupo *"
+                    label="Orden"
+                    help="Los valores menores aparecen primero."
                     input={
                       <TextField
-                        select
-                        value={modifierGroupId}
-                        onChange={(e) => setModifierGroupId(e.target.value)}
-                        disabled={filteredGroups.length === 0}
-                      >
-                        {filteredGroups.map((group) => (
-                          <MenuItem key={group.id} value={String(group.id)}>
-                            {group.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      filteredGroups.length === 0
-                        ? "No hay grupos disponibles para asignar a variantes en este contexto."
-                        : null
+                        fullWidth
+                        type="number"
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value)}
+                        disabled={saving}
+                        inputProps={{ min: 0, inputMode: "numeric" }}
+                        placeholder="0"
+                      />
                     }
                   />
 
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Orden"
-                      help="Entre más bajo, aparece primero."
-                      input={
-                        <TextField
-                          value={sortOrder}
-                          onChange={(e) => setSortOrder(e.target.value)}
-                          inputProps={{ inputMode: "numeric" }}
-                          placeholder="0"
+                  <Box sx={{ flex: 1, width: "100%" }}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "text.primary",
+                        mb: 1,
+                      }}
+                    >
+                      Estado
+                    </Typography>
+
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          checked={isActive}
+                          onChange={(e) => setIsActive(e.target.checked)}
+                          disabled={saving}
+                          color="primary"
                         />
                       }
+                      label={
+                        <Typography sx={switchLabelSx}>
+                          {isActive ? "Activo" : "Inactivo"}
+                        </Typography>
+                      }
                     />
-
-                    <Box sx={{ flex: 1, width: "100%" }}>
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color: "text.primary",
-                          mb: 1,
-                        }}
-                      >
-                        Estado
-                      </Typography>
-
-                      <FormControlLabel
-                        sx={{ m: 0 }}
-                        control={
-                          <Switch
-                            checked={isActive}
-                            onChange={(e) => setIsActive(e.target.checked)}
-                            color="primary"
-                          />
-                        }
-                        label={
-                          <Typography sx={switchLabelSx}>
-                            {isActive ? "Activo" : "Inactivo"}
-                          </Typography>
-                        }
-                      />
-                    </Box>
-                  </Stack>
+                  </Box>
                 </Stack>
 
                 <Stack
@@ -421,7 +520,6 @@ export default function VariantModifierGroupUpsertModal({
                     sx={{
                       minWidth: { xs: "100%", sm: 150 },
                       height: 44,
-                      borderRadius: 2,
                     }}
                   >
                     Cancelar
@@ -430,13 +528,12 @@ export default function VariantModifierGroupUpsertModal({
                   <Button
                     type="button"
                     onClick={save}
-                    disabled={!canSave || saving}
+                    disabled={!canSave}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{
                       minWidth: { xs: "100%", sm: 180 },
                       height: 44,
-                      borderRadius: 2,
                       fontWeight: 800,
                     }}
                   >
@@ -455,7 +552,7 @@ export default function VariantModifierGroupUpsertModal({
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
       />
     </>
   );

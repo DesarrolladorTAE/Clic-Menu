@@ -1,6 +1,11 @@
 import api from "../../api";
 import { getIngredients } from "../../inventory/ingredients/ingredients.service";
 
+const EFFECT_ADD = "add";
+const EFFECT_OMIT = "omit";
+const TYPE_INGREDIENT = "ingredient";
+const TYPE_PRODUCT = "product";
+
 export async function getModifierOptionConsumption(
   restaurantId,
   groupId,
@@ -19,9 +24,25 @@ export async function saveModifierOptionConsumption(
   optionId,
   payload
 ) {
+  const cleanPayload = {
+    effect: payload?.effect === EFFECT_OMIT ? EFFECT_OMIT : EFFECT_ADD,
+    consumption_type: payload?.consumption_type,
+    qty: Number(payload?.qty),
+    status: payload?.status === "inactive" ? "inactive" : "active",
+    notes: payload?.notes?.trim() || null,
+  };
+
+  if (cleanPayload.consumption_type === TYPE_INGREDIENT) {
+    cleanPayload.ingredient_id = Number(payload.ingredient_id);
+  }
+
+  if (cleanPayload.consumption_type === TYPE_PRODUCT) {
+    cleanPayload.product_id = Number(payload.product_id);
+  }
+
   const { data } = await api.put(
     `/restaurants/${restaurantId}/modifier-groups/${groupId}/options/${optionId}/consumption`,
-    payload
+    cleanPayload
   );
 
   return data?.data ?? null;
@@ -47,6 +68,7 @@ export async function resolveModifierOptionConsumption(
 ) {
   const cleanPayload = {
     branch_id: Number(payload.branch_id),
+    effect: payload?.effect === EFFECT_OMIT ? EFFECT_OMIT : EFFECT_ADD,
     option_quantity: Number(payload.option_quantity ?? 1),
   };
 
@@ -65,7 +87,7 @@ export async function resolveModifierOptionConsumption(
 export async function fetchCatalogIngredients(restaurantId, params = {}) {
   const response = await getIngredients(restaurantId, {
     only_active:
-      typeof params.only_active === "boolean" ? params.only_active : false,
+      typeof params.only_active === "boolean" ? params.only_active : true,
     q: params.q || "",
   });
 

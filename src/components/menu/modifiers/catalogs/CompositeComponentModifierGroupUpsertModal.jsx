@@ -9,6 +9,30 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../../../components/common/AppAlert";
+import ModifierAssignmentRulesFields from "./shared/ModifierAssignmentRulesFields";
+
+const EMPTY_RULES = {
+  required_override: null,
+  min_selections_override: null,
+  max_selections_override: null,
+};
+
+function nullableBoolean(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return value === true || value === 1 || value === "1";
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export default function CompositeComponentModifierGroupUpsertModal({
   open,
@@ -29,6 +53,12 @@ export default function CompositeComponentModifierGroupUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
+  const [componentProductId, setComponentProductId] = useState("");
+  const [modifierGroupId, setModifierGroupId] = useState("");
+  const [sortOrder, setSortOrder] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+  const [rules, setRules] = useState({ ...EMPTY_RULES });
+  const [rulesValid, setRulesValid] = useState(true);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -37,11 +67,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
     message: "",
   });
 
-  const [componentProductId, setComponentProductId] = useState("");
-  const [modifierGroupId, setModifierGroupId] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
-  const [isActive, setIsActive] = useState(true);
-
   const title = useMemo(
     () => (isEdit ? "Editar asignación" : "Asignar grupo"),
     [isEdit]
@@ -49,74 +74,124 @@ export default function CompositeComponentModifierGroupUpsertModal({
 
   const filteredGroups = useMemo(() => {
     return Array.isArray(availableGroups)
-      ? availableGroups.filter((g) => g?.id)
+      ? availableGroups.filter((group) => group?.id)
       : [];
   }, [availableGroups]);
 
   const filteredComponents = useMemo(() => {
     return Array.isArray(availableComponents)
-      ? availableComponents.filter((c) => c?.component_product_id)
+      ? availableComponents.filter((row) => row?.component_product_id)
       : [];
   }, [availableComponents]);
 
-  const showAlert = ({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
-    setAlertState({
-      open: true,
-      severity,
-      title,
-      message,
-    });
+  const selectedGroup = useMemo(() => {
+    return filteredGroups.find(
+      (group) => String(group.id) === String(modifierGroupId)
+    ) || null;
+  }, [filteredGroups, modifierGroupId]);
+
+  const selectedComponentRow = useMemo(() => {
+    return filteredComponents.find(
+      (row) => String(row?.component_product_id) === String(componentProductId)
+    ) || null;
+  }, [filteredComponents, componentProductId]);
+
+  const selectedComponent = selectedComponentRow?.component_product || null;
+
+  const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
+    setAlertState({ open: true, severity, title, message });
   };
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway") {
+      return;
+    }
+
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
+
+    setAlertState((prev) => ({ ...prev, open: false }));
+    setRulesValid(true);
 
     if (isEdit) {
       setComponentProductId(String(editing?.component_product_id || ""));
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setSortOrder(String(editing?.sort_order ?? 0));
-      setIsActive(!!editing?.is_active);
-    } else {
-      setComponentProductId(
-        component?.id
-          ? String(component.id)
-          : filteredComponents?.[0]?.component_product_id
-            ? String(filteredComponents[0].component_product_id)
-            : ""
+      setIsActive(
+        editing?.is_active === true ||
+        editing?.is_active === 1 ||
+        editing?.is_active === "1"
       );
-      setModifierGroupId(
-        filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
-      );
-      setSortOrder("0");
-      setIsActive(true);
+
+      setRules({
+        required_override: nullableBoolean(editing?.required_override),
+        min_selections_override: nullableNumber(editing?.min_selections_override),
+        max_selections_override: nullableNumber(editing?.max_selections_override),
+      });
+
+      return;
     }
+
+    setComponentProductId(
+      component?.id
+        ? String(component.id)
+        : filteredComponents?.[0]?.component_product_id
+          ? String(filteredComponents[0].component_product_id)
+          : ""
+    );
+
+    setModifierGroupId(
+      filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
+    );
+
+    setSortOrder("0");
+    setIsActive(true);
+    setRules({ ...EMPTY_RULES });
   }, [open, isEdit, editing, filteredGroups, filteredComponents, component]);
 
   const canSave = useMemo(() => {
-    if (!product?.id) return false;
-    if (!componentProductId) return false;
-    if (!modifierGroupId) return false;
+    if (!product?.id || !componentProductId || !modifierGroupId || !rulesValid || saving) {
+      return false;
+    }
+
+    if (requiresBranch && !effectiveBranchId) {
+      return false;
+    }
 
     const sort = Number(sortOrder);
-    if (!Number.isFinite(sort) || sort < 0) return false;
+
+    if (!Number.isFinite(sort) || sort < 0) {
+      return false;
+    }
 
     return true;
-  }, [product, componentProductId, modifierGroupId, sortOrder]);
+  }, [
+    product,
+    componentProductId,
+    modifierGroupId,
+    rulesValid,
+    saving,
+    requiresBranch,
+    effectiveBranchId,
+    sortOrder,
+  ]);
+
+  const handleGroupChange = (value) => {
+    setModifierGroupId(value);
+    setRules({ ...EMPTY_RULES });
+    setRulesValid(true);
+  };
 
   const save = async () => {
     if (!product?.id) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Aviso",
         message: "Selecciona un producto compuesto antes de continuar.",
       });
       return;
@@ -125,8 +200,8 @@ export default function CompositeComponentModifierGroupUpsertModal({
     if (!componentProductId) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona un componente para continuar.",
+        title: "Aviso",
+        message: "Selecciona un componente antes de continuar.",
       });
       return;
     }
@@ -134,8 +209,37 @@ export default function CompositeComponentModifierGroupUpsertModal({
     if (!modifierGroupId) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona un grupo para continuar.",
+        title: "Aviso",
+        message: "Selecciona un grupo antes de continuar.",
+      });
+      return;
+    }
+
+    if (requiresBranch && !effectiveBranchId) {
+      showAlert({
+        severity: "warning",
+        title: "Aviso",
+        message: "Selecciona una sucursal antes de continuar.",
+      });
+      return;
+    }
+
+    if (!rulesValid) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Revisa las reglas de selección antes de guardar.",
+      });
+      return;
+    }
+
+    const parsedSortOrder = Number(sortOrder);
+
+    if (!Number.isFinite(parsedSortOrder) || parsedSortOrder < 0) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "El orden debe ser un número igual o mayor a 0.",
       });
       return;
     }
@@ -143,21 +247,15 @@ export default function CompositeComponentModifierGroupUpsertModal({
     const payload = {
       component_product_id: Number(componentProductId),
       modifier_group_id: Number(modifierGroupId),
-      sort_order: Number(sortOrder),
+      required_override: rules?.required_override ?? null,
+      min_selections_override: rules?.min_selections_override ?? null,
+      max_selections_override: rules?.max_selections_override ?? null,
+      sort_order: parsedSortOrder,
       is_active: isActive,
     };
 
-    if (requiresBranch) {
-      payload.branch_id = effectiveBranchId;
-    }
-
-    if (!Number.isFinite(payload.sort_order) || payload.sort_order < 0) {
-      showAlert({
-        severity: "error",
-        title: "Error",
-        message: "El orden debe ser un número igual o mayor a 0.",
-      });
-      return;
+    if (requiresBranch && effectiveBranchId) {
+      payload.branch_id = Number(effectiveBranchId);
     }
 
     setSaving(true);
@@ -185,14 +283,16 @@ export default function CompositeComponentModifierGroupUpsertModal({
         title: "Error",
         message:
           e?.response?.data?.message ||
-          "No se pudo guardar la asignación del grupo al componente",
+          "No se pudo guardar la asignación del grupo al componente.",
       });
     } finally {
       setSaving(false);
     }
   };
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <>
@@ -246,8 +346,8 @@ export default function CompositeComponentModifierGroupUpsertModal({
                 }}
               >
                 {isEdit
-                  ? "Actualiza el grupo asignado y su configuración dentro del componente."
-                  : "Selecciona qué grupo de modificadores quieres asignar a este componente."}
+                  ? "Actualiza el grupo asignado y sus reglas dentro del componente."
+                  : "Selecciona el grupo de modificadores que deseas asignar a este componente."}
               </Typography>
             </Box>
 
@@ -276,7 +376,10 @@ export default function CompositeComponentModifierGroupUpsertModal({
         >
           <Card
             sx={{
-              borderRadius: 0,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
               backgroundColor: "background.paper",
             }}
           >
@@ -299,7 +402,7 @@ export default function CompositeComponentModifierGroupUpsertModal({
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1,
-                      bgcolor: "#fff",
+                      bgcolor: "background.paper",
                     }}
                   >
                     <Typography
@@ -325,7 +428,7 @@ export default function CompositeComponentModifierGroupUpsertModal({
                       {product.name}
                     </Typography>
 
-                    {component ? (
+                    {(selectedComponent || component) ? (
                       <Typography
                         sx={{
                           mt: 0.75,
@@ -334,22 +437,29 @@ export default function CompositeComponentModifierGroupUpsertModal({
                           fontWeight: 700,
                         }}
                       >
-                        Componente: {component.name}
+                        Componente: {selectedComponent?.name || component?.name}
                       </Typography>
                     ) : null}
                   </Box>
                 ) : null}
 
-                <Stack spacing={2}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                   <FieldBlock
                     label="Componente *"
                     input={
                       <TextField
                         select
+                        fullWidth
                         value={componentProductId}
                         onChange={(e) => setComponentProductId(e.target.value)}
-                        disabled={filteredComponents.length === 0}
+                        disabled={!filteredComponents.length || saving}
                       >
+                        {!filteredComponents.length ? (
+                          <MenuItem value="" disabled>
+                            No hay componentes disponibles
+                          </MenuItem>
+                        ) : null}
+
                         {filteredComponents.map((row) => (
                           <MenuItem
                             key={row.component_product_id}
@@ -361,8 +471,8 @@ export default function CompositeComponentModifierGroupUpsertModal({
                       </TextField>
                     }
                     help={
-                      filteredComponents.length === 0
-                        ? "Este producto compuesto no tiene componentes disponibles en este contexto."
+                      !filteredComponents.length
+                        ? "Este producto compuesto no tiene componentes disponibles."
                         : null
                     }
                   />
@@ -372,10 +482,17 @@ export default function CompositeComponentModifierGroupUpsertModal({
                     input={
                       <TextField
                         select
+                        fullWidth
                         value={modifierGroupId}
-                        onChange={(e) => setModifierGroupId(e.target.value)}
-                        disabled={filteredGroups.length === 0}
+                        onChange={(e) => handleGroupChange(e.target.value)}
+                        disabled={!filteredGroups.length || saving}
                       >
+                        {!filteredGroups.length ? (
+                          <MenuItem value="" disabled>
+                            No hay grupos disponibles
+                          </MenuItem>
+                        ) : null}
+
                         {filteredGroups.map((group) => (
                           <MenuItem key={group.id} value={String(group.id)}>
                             {group.name}
@@ -384,55 +501,67 @@ export default function CompositeComponentModifierGroupUpsertModal({
                       </TextField>
                     }
                     help={
-                      filteredGroups.length === 0
-                        ? "No hay grupos disponibles para asignar a componentes en este contexto."
+                      !filteredGroups.length
+                        ? "No hay grupos disponibles para asignar a componentes."
                         : null
                     }
                   />
+                </Stack>
 
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Orden"
-                      help="Entre más bajo, aparece primero."
-                      input={
-                        <TextField
-                          value={sortOrder}
-                          onChange={(e) => setSortOrder(e.target.value)}
-                          inputProps={{ inputMode: "numeric" }}
-                          placeholder="0"
+                <ModifierAssignmentRulesFields
+                  group={selectedGroup}
+                  value={rules}
+                  onChange={setRules}
+                  disabled={saving || !selectedGroup}
+                  onValidityChange={setRulesValid}
+                />
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <FieldBlock
+                    label="Orden"
+                    help="Los valores menores aparecen primero."
+                    input={
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value)}
+                        disabled={saving}
+                        inputProps={{ min: 0, inputMode: "numeric" }}
+                        placeholder="0"
+                      />
+                    }
+                  />
+
+                  <Box sx={{ flex: 1, width: "100%" }}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "text.primary",
+                        mb: 1,
+                      }}
+                    >
+                      Estado
+                    </Typography>
+
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          checked={isActive}
+                          onChange={(e) => setIsActive(e.target.checked)}
+                          disabled={saving}
+                          color="primary"
                         />
                       }
+                      label={
+                        <Typography sx={switchLabelSx}>
+                          {isActive ? "Activo" : "Inactivo"}
+                        </Typography>
+                      }
                     />
-
-                    <Box sx={{ flex: 1, width: "100%" }}>
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color: "text.primary",
-                          mb: 1,
-                        }}
-                      >
-                        Estado
-                      </Typography>
-
-                      <FormControlLabel
-                        sx={{ m: 0 }}
-                        control={
-                          <Switch
-                            checked={isActive}
-                            onChange={(e) => setIsActive(e.target.checked)}
-                            color="primary"
-                          />
-                        }
-                        label={
-                          <Typography sx={switchLabelSx}>
-                            {isActive ? "Activo" : "Inactivo"}
-                          </Typography>
-                        }
-                      />
-                    </Box>
-                  </Stack>
+                  </Box>
                 </Stack>
 
                 <Stack
@@ -449,7 +578,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
                     sx={{
                       minWidth: { xs: "100%", sm: 150 },
                       height: 44,
-                      borderRadius: 2,
                     }}
                   >
                     Cancelar
@@ -458,13 +586,12 @@ export default function CompositeComponentModifierGroupUpsertModal({
                   <Button
                     type="button"
                     onClick={save}
-                    disabled={!canSave || saving}
+                    disabled={!canSave}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{
                       minWidth: { xs: "100%", sm: 180 },
                       height: 44,
-                      borderRadius: 2,
                       fontWeight: 800,
                     }}
                   >
@@ -483,7 +610,7 @@ export default function CompositeComponentModifierGroupUpsertModal({
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
       />
     </>
   );

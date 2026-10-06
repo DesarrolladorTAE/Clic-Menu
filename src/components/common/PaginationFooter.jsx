@@ -23,8 +23,11 @@ export default function PaginationFooter({
       alignItems={{ xs: "stretch", sm: "center" }}
       spacing={1.5}
       sx={{
-        px: 2,
+        px: { xs: 1.25, sm: 2 },
         py: 1.5,
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
         borderTop: "1px solid",
         borderColor: "divider",
         backgroundColor: "#fff",
@@ -35,6 +38,8 @@ export default function PaginationFooter({
           fontSize: 13,
           color: "text.secondary",
           textAlign: { xs: "center", sm: "left" },
+          lineHeight: 1.45,
+          minWidth: 0,
         }}
       >
         Mostrando {startItem} - {endItem} de {total} {itemLabel}
@@ -43,9 +48,14 @@ export default function PaginationFooter({
       <Stack
         className="cm-pagination-controls"
         direction="row"
-        spacing={1}
+        spacing={{ xs: 0.5, sm: 1 }}
         justifyContent={{ xs: "center", sm: "flex-end" }}
         alignItems="center"
+        sx={{
+          width: { xs: "100%", sm: "auto" },
+          minWidth: 0,
+          maxWidth: "100%",
+        }}
       >
         <Button
           variant="outlined"
@@ -53,9 +63,20 @@ export default function PaginationFooter({
           onClick={onPrev}
           disabled={!hasPrev}
           sx={{
-            minWidth: 110,
+            minWidth: { xs: 0, sm: 110 },
+            flex: { xs: "1 1 0", sm: "0 0 auto" },
             height: 40,
-            borderRadius: 2,
+            px: { xs: 0.75, sm: 2 },
+            whiteSpace: "nowrap",
+            fontSize: { xs: 12, sm: 14 },
+            "& .MuiButton-startIcon": {
+              mr: { xs: 0.25, sm: 1 },
+              ml: 0,
+              flexShrink: 0,
+            },
+            "& .MuiButton-startIcon svg": {
+              fontSize: { xs: 18, sm: 20 },
+            },
           }}
         >
           Anterior
@@ -63,11 +84,14 @@ export default function PaginationFooter({
 
         <Typography
           sx={{
-            minWidth: 70,
+            minWidth: { xs: 42, sm: 70 },
+            px: { xs: 0.25, sm: 0 },
+            flexShrink: 0,
             textAlign: "center",
-            fontSize: 13,
+            fontSize: { xs: 12, sm: 13 },
             fontWeight: 700,
             color: "text.primary",
+            whiteSpace: "nowrap",
           }}
         >
           {page} / {totalPages}
@@ -79,9 +103,20 @@ export default function PaginationFooter({
           onClick={onNext}
           disabled={!hasNext}
           sx={{
-            minWidth: 110,
+            minWidth: { xs: 0, sm: 110 },
+            flex: { xs: "1 1 0", sm: "0 0 auto" },
             height: 40,
-            borderRadius: 2,
+            px: { xs: 0.75, sm: 2 },
+            whiteSpace: "nowrap",
+            fontSize: { xs: 12, sm: 14 },
+            "& .MuiButton-endIcon": {
+              ml: { xs: 0.25, sm: 1 },
+              mr: 0,
+              flexShrink: 0,
+            },
+            "& .MuiButton-endIcon svg": {
+              fontSize: { xs: 18, sm: 20 },
+            },
           }}
         >
           Siguiente

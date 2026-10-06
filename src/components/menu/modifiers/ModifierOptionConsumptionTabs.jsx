@@ -1,6 +1,10 @@
 import { Box, Tab, Tabs } from "@mui/material";
 
-export default function ModifierTabs({ tab, onChange }) {
+export default function ModifierOptionConsumptionTabs({
+  tab,
+  onChange,
+  testDisabled = false,
+}) {
   const handleChange = (_, newValue) => {
     onChange(newValue);
   };
@@ -9,7 +13,7 @@ export default function ModifierTabs({ tab, onChange }) {
     minHeight: 56,
     px: { xs: 2, sm: 2.5 },
     py: 1,
-    fontSize: { xs: 15, sm: 17 },
+    fontSize: { xs: 14, sm: 17 },
     fontWeight: 800,
     textTransform: "none",
     color: "text.secondary",
@@ -28,6 +32,9 @@ export default function ModifierTabs({ tab, onChange }) {
     },
     "&.Mui-focusVisible": {
       bgcolor: "rgba(255, 152, 0, 0.10)",
+    },
+    "&.Mui-disabled": {
+      color: "text.disabled",
     },
   };
 
@@ -59,15 +66,27 @@ export default function ModifierTabs({ tab, onChange }) {
         sx={{
           minHeight: 56,
           "& .MuiTabs-flexContainer": {
-            gap: { xs: 1, sm: 2 },
+            gap: { xs: 0.5, sm: 2 },
           },
           "& .MuiTabs-scrollButtons": {
             color: "text.secondary",
           },
         }}
       >
-        <Tab value="groups" label="Grupos" disableRipple sx={tabSx} />
-        <Tab value="options" label="Opciones" disableRipple sx={tabSx} />
+        <Tab
+          value="movimiento"
+          label="Movimiento de inventario"
+          disableRipple
+          sx={tabSx}
+        />
+
+        <Tab
+          value="prueba"
+          label="Prueba"
+          disableRipple
+          disabled={testDisabled}
+          sx={tabSx}
+        />
       </Tabs>
     </Box>
   );

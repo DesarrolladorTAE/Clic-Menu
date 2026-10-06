@@ -1,24 +1,5 @@
 import api from "../../api";
 
-export async function getCatalogProducts(restaurantId, params = {}) {
-  const { data } = await api.get(`/restaurants/${restaurantId}/products`, {
-    params: {
-      include_inactive: true,
-      ...params,
-    },
-  });
-
-  return data?.data ?? [];
-}
-
-export async function getProductVariants(restaurantId, productId) {
-  const { data } = await api.get(
-    `/restaurants/${restaurantId}/products/${productId}/variants`
-  );
-
-  return Array.isArray(data?.data) ? data.data : [];
-}
-
 export async function getVariantModifierGroups(
   restaurantId,
   productId,

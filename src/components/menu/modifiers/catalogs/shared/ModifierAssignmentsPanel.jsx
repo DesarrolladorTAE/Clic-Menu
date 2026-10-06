@@ -16,6 +16,30 @@ import {
   switchLabelSx,
 } from "./catalogShared";
 
+function hasCustomRules(row) {
+  return (
+    row?.required_override !== null && row?.required_override !== undefined
+  ) || (
+    row?.min_selections_override !== null && row?.min_selections_override !== undefined
+  ) || (
+    row?.max_selections_override !== null && row?.max_selections_override !== undefined
+  );
+}
+
+function RulesChip({ row }) {
+  const customized = hasCustomRules(row);
+
+  return (
+    <Chip
+      label={customized ? "Reglas personalizadas" : "Usa reglas del grupo"}
+      size="small"
+      color={customized ? "primary" : "default"}
+      variant={customized ? "filled" : "outlined"}
+      sx={{ fontWeight: 800 }}
+    />
+  );
+}
+
 export default function ModifierAssignmentsPanel({
   isMobile = false,
   title = "Grupos asignados",
@@ -49,7 +73,7 @@ export default function ModifierAssignmentsPanel({
       sx={{
         p: 0,
         overflow: "hidden",
-        borderRadius: 0,
+        borderRadius: 1,
         backgroundColor: "background.paper",
         border: "1px solid",
         borderColor: "divider",
@@ -69,13 +93,7 @@ export default function ModifierAssignmentsPanel({
           flexWrap: "wrap",
         }}
       >
-        <Typography
-          sx={{
-            fontSize: 18,
-            fontWeight: 800,
-            color: "text.primary",
-          }}
-        >
+        <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
           {title}
         </Typography>
 
@@ -87,7 +105,6 @@ export default function ModifierAssignmentsPanel({
           sx={{
             minWidth: { xs: "100%", sm: 170 },
             height: 42,
-            borderRadius: 2,
             fontWeight: 800,
           }}
         >
@@ -97,45 +114,21 @@ export default function ModifierAssignmentsPanel({
 
       {!hasSelection ? (
         <Box sx={{ px: 3, py: 5, textAlign: "center" }}>
-          <Typography
-            sx={{
-              fontSize: 20,
-              fontWeight: 800,
-              color: "text.primary",
-            }}
-          >
+          <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
             {missingSelectionTitle}
           </Typography>
 
-          <Typography
-            sx={{
-              mt: 1,
-              color: "text.secondary",
-              fontSize: 14,
-            }}
-          >
+          <Typography sx={{ mt: 1, color: "text.secondary", fontSize: 14 }}>
             {missingSelectionMessage}
           </Typography>
         </Box>
       ) : rows.length === 0 ? (
         <Box sx={{ px: 3, py: 5, textAlign: "center" }}>
-          <Typography
-            sx={{
-              fontSize: 20,
-              fontWeight: 800,
-              color: "text.primary",
-            }}
-          >
+          <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
             {emptyTitle}
           </Typography>
 
-          <Typography
-            sx={{
-              mt: 1,
-              color: "text.secondary",
-              fontSize: 14,
-            }}
-          >
+          <Typography sx={{ mt: 1, color: "text.secondary", fontSize: 14 }}>
             {emptyMessage}
           </Typography>
 
@@ -148,7 +141,6 @@ export default function ModifierAssignmentsPanel({
               mt: 2.5,
               minWidth: 220,
               height: 44,
-              borderRadius: 2,
               fontWeight: 800,
             }}
           >
@@ -163,19 +155,18 @@ export default function ModifierAssignmentsPanel({
                 const active = !!row.is_active;
                 const busy = isSaving(row.id);
                 const group = row.modifier_group || row.modifierGroup || {};
-                const optionsCount = Array.isArray(group?.options)
-                  ? group.options.length
-                  : 0;
+                const optionsCount = Array.isArray(group?.options) ? group.options.length : 0;
 
                 return (
                   <Card
                     key={row.id}
                     sx={{
+                      width: "100%",
                       borderRadius: 1,
                       boxShadow: "none",
                       border: "1px solid",
                       borderColor: "divider",
-                      backgroundColor: "#fff",
+                      backgroundColor: "background.paper",
                     }}
                   >
                     <Box sx={{ p: 2 }}>
@@ -224,15 +215,23 @@ export default function ModifierAssignmentsPanel({
                           />
                         </Stack>
 
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          useFlexGap
+                          flexWrap="wrap"
+                        >
                           <Chip
                             label={`${optionsCount} opción${optionsCount === 1 ? "" : "es"}`}
                             size="small"
                           />
+
                           <Chip
                             label={getAppliesToLabel(group?.applies_to)}
                             size="small"
                           />
+
+                          <RulesChip row={row} />
                         </Stack>
 
                         <Box
@@ -265,6 +264,7 @@ export default function ModifierAssignmentsPanel({
                             <Tooltip title="Editar">
                               <IconButton
                                 onClick={() => onEdit(row)}
+                                disabled={busy}
                                 sx={iconEditSx}
                               >
                                 <EditIcon fontSize="small" />
@@ -274,6 +274,7 @@ export default function ModifierAssignmentsPanel({
                             <Tooltip title="Eliminar">
                               <IconButton
                                 onClick={() => onDelete(row)}
+                                disabled={busy}
                                 sx={iconDeleteSx}
                               >
                                 <DeleteOutlineIcon fontSize="small" />
@@ -289,7 +290,7 @@ export default function ModifierAssignmentsPanel({
             </Stack>
           ) : (
             <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-              <Table sx={{ minWidth: 1080 }}>
+              <Table sx={{ minWidth: 1160 }}>
                 <TableHead>
                   <TableRow
                     sx={{
@@ -307,6 +308,7 @@ export default function ModifierAssignmentsPanel({
                     <TableCell>Descripción</TableCell>
                     <TableCell>Aplica para</TableCell>
                     <TableCell>Opciones</TableCell>
+                    <TableCell>Reglas</TableCell>
                     <TableCell>Orden</TableCell>
                     <TableCell align="center">Estado</TableCell>
                     <TableCell align="right">Acciones</TableCell>
@@ -318,9 +320,7 @@ export default function ModifierAssignmentsPanel({
                     const active = !!row.is_active;
                     const busy = isSaving(row.id);
                     const group = row.modifier_group || row.modifierGroup || {};
-                    const optionsCount = Array.isArray(group?.options)
-                      ? group.options.length
-                      : 0;
+                    const optionsCount = Array.isArray(group?.options) ? group.options.length : 0;
 
                     return (
                       <TableRow
@@ -351,8 +351,16 @@ export default function ModifierAssignmentsPanel({
                           {group?.description || "—"}
                         </TableCell>
 
-                        <TableCell>{getAppliesToLabel(group?.applies_to)}</TableCell>
+                        <TableCell>
+                          {getAppliesToLabel(group?.applies_to)}
+                        </TableCell>
+
                         <TableCell>{optionsCount}</TableCell>
+
+                        <TableCell>
+                          <RulesChip row={row} />
+                        </TableCell>
+
                         <TableCell>{row.sort_order ?? 0}</TableCell>
 
                         <TableCell align="center">
@@ -379,6 +387,7 @@ export default function ModifierAssignmentsPanel({
                             <Tooltip title="Editar">
                               <IconButton
                                 onClick={() => onEdit(row)}
+                                disabled={busy}
                                 sx={iconEditSx}
                               >
                                 <EditIcon fontSize="small" />
@@ -388,6 +397,7 @@ export default function ModifierAssignmentsPanel({
                             <Tooltip title="Eliminar">
                               <IconButton
                                 onClick={() => onDelete(row)}
+                                disabled={busy}
                                 sx={iconDeleteSx}
                               >
                                 <DeleteOutlineIcon fontSize="small" />

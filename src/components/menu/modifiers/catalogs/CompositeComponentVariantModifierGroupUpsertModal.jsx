@@ -1,20 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, MenuItem, Stack, Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -22,6 +9,30 @@ import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
 
 import AppAlert from "../../../../components/common/AppAlert";
+import ModifierAssignmentRulesFields from "./shared/ModifierAssignmentRulesFields";
+
+const EMPTY_RULES = {
+  required_override: null,
+  min_selections_override: null,
+  max_selections_override: null,
+};
+
+function nullableBoolean(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return value === true || value === 1 || value === "1";
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export default function CompositeComponentVariantModifierGroupUpsertModal({
   open,
@@ -34,7 +45,6 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
   effectiveBranchId,
   availableGroups,
   availableComponents,
-  availableVariants,
   editing,
   onSaved,
   api,
@@ -44,6 +54,16 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
+  const [loadingVariants, setLoadingVariants] = useState(false);
+
+  const [componentProductId, setComponentProductId] = useState("");
+  const [componentVariantId, setComponentVariantId] = useState("");
+  const [modifierGroupId, setModifierGroupId] = useState("");
+  const [variantRows, setVariantRows] = useState([]);
+  const [sortOrder, setSortOrder] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+  const [rules, setRules] = useState({ ...EMPTY_RULES });
+  const [rulesValid, setRulesValid] = useState(true);
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -52,12 +72,6 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
     message: "",
   });
 
-  const [componentProductId, setComponentProductId] = useState("");
-  const [componentVariantId, setComponentVariantId] = useState("");
-  const [modifierGroupId, setModifierGroupId] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
-  const [isActive, setIsActive] = useState(true);
-
   const title = useMemo(
     () => (isEdit ? "Editar asignación" : "Asignar grupo"),
     [isEdit]
@@ -65,117 +79,279 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
 
   const filteredGroups = useMemo(() => {
     return Array.isArray(availableGroups)
-      ? availableGroups.filter((g) => g?.id)
+      ? availableGroups.filter((group) => group?.id)
       : [];
   }, [availableGroups]);
 
   const filteredComponents = useMemo(() => {
     return Array.isArray(availableComponents)
-      ? availableComponents.filter((c) => c?.component_product_id)
+      ? availableComponents.filter(
+          (row) => row?.component_product_id && !!row?.allow_variant
+        )
       : [];
   }, [availableComponents]);
 
-  const filteredVariants = useMemo(() => {
-    return Array.isArray(availableVariants)
-      ? availableVariants.filter((v) => v?.variant?.id)
-      : [];
-  }, [availableVariants]);
+  const selectedGroup = useMemo(() => {
+    return filteredGroups.find(
+      (group) => String(group.id) === String(modifierGroupId)
+    ) || null;
+  }, [filteredGroups, modifierGroupId]);
 
-  const showAlert = ({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
-    setAlertState({
-      open: true,
-      severity,
-      title,
-      message,
-    });
+  const selectedComponentRow = useMemo(() => {
+    return filteredComponents.find(
+      (row) => String(row?.component_product_id) === String(componentProductId)
+    ) || null;
+  }, [filteredComponents, componentProductId]);
+
+  const selectedComponent = selectedComponentRow?.component_product || null;
+
+  const selectedVariantRow = useMemo(() => {
+    return variantRows.find(
+      (row) => String(row?.variant?.id) === String(componentVariantId)
+    ) || null;
+  }, [variantRows, componentVariantId]);
+
+  const selectedVariant = selectedVariantRow?.variant || null;
+  const getComponentVariants = api?.getComponentProductVariants;
+
+  const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
+    setAlertState({ open: true, severity, title, message });
   };
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway") {
+      return;
+    }
+
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
+
+    setAlertState((prev) => ({ ...prev, open: false }));
+    setRulesValid(true);
 
     if (isEdit) {
       setComponentProductId(String(editing?.component_product_id || ""));
       setComponentVariantId(String(editing?.component_variant_id || ""));
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setSortOrder(String(editing?.sort_order ?? 0));
-      setIsActive(!!editing?.is_active);
-    } else {
-      setComponentProductId(
-        component?.id
-          ? String(component.id)
-          : filteredComponents?.[0]?.component_product_id
-            ? String(filteredComponents[0].component_product_id)
-            : ""
+      setIsActive(
+        editing?.is_active === true ||
+        editing?.is_active === 1 ||
+        editing?.is_active === "1"
       );
-      setComponentVariantId(
-        variant?.id
-          ? String(variant.id)
-          : filteredVariants?.[0]?.variant?.id
-            ? String(filteredVariants[0].variant.id)
-            : ""
-      );
-      setModifierGroupId(
-        filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
-      );
-      setSortOrder("0");
-      setIsActive(true);
+
+      setRules({
+        required_override: nullableBoolean(editing?.required_override),
+        min_selections_override: nullableNumber(editing?.min_selections_override),
+        max_selections_override: nullableNumber(editing?.max_selections_override),
+      });
+
+      return;
     }
+
+    const initialComponentId = component?.id
+      ? String(component.id)
+      : filteredComponents?.[0]?.component_product_id
+        ? String(filteredComponents[0].component_product_id)
+        : "";
+
+    setComponentProductId(initialComponentId);
+    setComponentVariantId(variant?.id ? String(variant.id) : "");
+    setModifierGroupId(
+      filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
+    );
+    setSortOrder("0");
+    setIsActive(true);
+    setRules({ ...EMPTY_RULES });
   }, [
     open,
     isEdit,
     editing,
     filteredGroups,
     filteredComponents,
-    filteredVariants,
     component,
     variant,
   ]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (!componentProductId) {
+      setVariantRows([]);
+      setComponentVariantId("");
+      return;
+    }
+
+    if (typeof getComponentVariants !== "function") {
+      setVariantRows([]);
+      setComponentVariantId("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadVariants = async () => {
+      setLoadingVariants(true);
+
+      try {
+        const rows = await getComponentVariants(
+          restaurantId,
+          componentProductId
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const safeRows = Array.isArray(rows)
+          ? rows.filter((row) => row?.variant?.id)
+          : [];
+
+        setVariantRows(safeRows);
+
+        setComponentVariantId((current) => {
+          const preferredEditingId =
+            isEdit &&
+            String(editing?.component_product_id || "") === String(componentProductId)
+              ? String(editing?.component_variant_id || "")
+              : "";
+
+          const preferredPageId =
+            !isEdit &&
+            String(component?.id || "") === String(componentProductId)
+              ? String(variant?.id || "")
+              : "";
+
+          const preferredId = preferredEditingId || current || preferredPageId;
+
+          if (
+            preferredId &&
+            safeRows.some(
+              (row) => String(row?.variant?.id) === String(preferredId)
+            )
+          ) {
+            return String(preferredId);
+          }
+
+          return safeRows?.[0]?.variant?.id
+            ? String(safeRows[0].variant.id)
+            : "";
+        });
+      } catch (e) {
+        if (cancelled) {
+          return;
+        }
+
+        setVariantRows([]);
+        setComponentVariantId("");
+
+        showAlert({
+          severity: "error",
+          title: "Error",
+          message:
+            e?.response?.data?.message ||
+            "No se pudieron cargar las variantes del componente seleccionado.",
+        });
+      } finally {
+        if (!cancelled) {
+          setLoadingVariants(false);
+        }
+      }
+    };
+
+    loadVariants();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    restaurantId,
+    componentProductId,
+    getComponentVariants,
+    isEdit,
+    editing?.component_product_id,
+    editing?.component_variant_id,
+    component?.id,
+    variant?.id,
+  ]);
+
+  const handleComponentChange = (value) => {
+    setComponentProductId(value);
+    setComponentVariantId("");
+    setVariantRows([]);
+  };
+
+  const handleGroupChange = (value) => {
+    setModifierGroupId(value);
+    setRules({ ...EMPTY_RULES });
+    setRulesValid(true);
+  };
+
   const canSave = useMemo(() => {
-    if (!product?.id) return false;
-    if (!componentProductId) return false;
-    if (!componentVariantId) return false;
-    if (!modifierGroupId) return false;
+    if (!product?.id || !selectedComponentRow || !selectedVariantRow || !modifierGroupId) {
+      return false;
+    }
+
+    if (!rulesValid || saving || loadingVariants) {
+      return false;
+    }
+
+    if (requiresBranch && !effectiveBranchId) {
+      return false;
+    }
 
     const sort = Number(sortOrder);
-    if (!Number.isFinite(sort) || sort < 0) return false;
+
+    if (!Number.isFinite(sort) || sort < 0) {
+      return false;
+    }
 
     return true;
-  }, [product, componentProductId, componentVariantId, modifierGroupId, sortOrder]);
+  }, [
+    product,
+    selectedComponentRow,
+    selectedVariantRow,
+    modifierGroupId,
+    rulesValid,
+    saving,
+    loadingVariants,
+    requiresBranch,
+    effectiveBranchId,
+    sortOrder,
+  ]);
 
   const save = async () => {
     if (!product?.id) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Aviso",
         message: "Selecciona un producto compuesto antes de continuar.",
       });
       return;
     }
 
-    if (!componentProductId) {
+    if (!selectedComponentRow) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona un componente para continuar.",
+        title: "Aviso",
+        message: "Selecciona un componente que permita variantes.",
       });
       return;
     }
 
-    if (!componentVariantId) {
+    if (!selectedVariantRow) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona una variante del componente para continuar.",
+        title: "Aviso",
+        message: "Selecciona una variante válida para este componente.",
       });
       return;
     }
@@ -183,8 +359,37 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
     if (!modifierGroupId) {
       showAlert({
         severity: "warning",
-        title: "Nota",
-        message: "Selecciona un grupo para continuar.",
+        title: "Aviso",
+        message: "Selecciona un grupo antes de continuar.",
+      });
+      return;
+    }
+
+    if (requiresBranch && !effectiveBranchId) {
+      showAlert({
+        severity: "warning",
+        title: "Aviso",
+        message: "Selecciona una sucursal antes de continuar.",
+      });
+      return;
+    }
+
+    if (!rulesValid) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "Revisa las reglas de selección antes de guardar.",
+      });
+      return;
+    }
+
+    const parsedSortOrder = Number(sortOrder);
+
+    if (!Number.isFinite(parsedSortOrder) || parsedSortOrder < 0) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "El orden debe ser un número igual o mayor a 0.",
       });
       return;
     }
@@ -193,21 +398,15 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
       component_product_id: Number(componentProductId),
       component_variant_id: Number(componentVariantId),
       modifier_group_id: Number(modifierGroupId),
-      sort_order: Number(sortOrder),
+      required_override: rules?.required_override ?? null,
+      min_selections_override: rules?.min_selections_override ?? null,
+      max_selections_override: rules?.max_selections_override ?? null,
+      sort_order: parsedSortOrder,
       is_active: isActive,
     };
 
-    if (requiresBranch) {
-      payload.branch_id = effectiveBranchId;
-    }
-
-    if (!Number.isFinite(payload.sort_order) || payload.sort_order < 0) {
-      showAlert({
-        severity: "error",
-        title: "Error",
-        message: "El orden debe ser un número igual o mayor a 0.",
-      });
-      return;
+    if (requiresBranch && effectiveBranchId) {
+      payload.branch_id = Number(effectiveBranchId);
     }
 
     setSaving(true);
@@ -235,14 +434,16 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
         title: "Error",
         message:
           e?.response?.data?.message ||
-          "No se pudo guardar la asignación del grupo a la variante del componente",
+          "No se pudo guardar la asignación del grupo a la variante del componente.",
       });
     } finally {
       setSaving(false);
     }
   };
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
     <>
@@ -296,8 +497,8 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                 }}
               >
                 {isEdit
-                  ? "Actualiza el grupo asignado y su configuración dentro de la variante del componente."
-                  : "Selecciona qué grupo de modificadores quieres asignar a una variante específica del componente."}
+                  ? "Actualiza el grupo asignado y sus reglas para esta variante del componente."
+                  : "Selecciona el componente, su variante y el grupo de modificadores que deseas asignar."}
               </Typography>
             </Box>
 
@@ -326,7 +527,10 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
         >
           <Card
             sx={{
-              borderRadius: 0,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
               backgroundColor: "background.paper",
             }}
           >
@@ -349,7 +553,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1,
-                      bgcolor: "#fff",
+                      bgcolor: "background.paper",
                     }}
                   >
                     <Typography
@@ -375,7 +579,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                       {product.name}
                     </Typography>
 
-                    {component ? (
+                    {selectedComponent ? (
                       <Typography
                         sx={{
                           mt: 0.75,
@@ -384,11 +588,11 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                           fontWeight: 700,
                         }}
                       >
-                        Componente: {component.name}
+                        Componente: {selectedComponent.name}
                       </Typography>
                     ) : null}
 
-                    {variant ? (
+                    {selectedVariant ? (
                       <Typography
                         sx={{
                           mt: 0.35,
@@ -397,22 +601,29 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                           fontWeight: 700,
                         }}
                       >
-                        Variante: {variant.name}
+                        Variante: {selectedVariant.name}
                       </Typography>
                     ) : null}
                   </Box>
                 ) : null}
 
-                <Stack spacing={2}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                   <FieldBlock
                     label="Componente *"
                     input={
                       <TextField
                         select
+                        fullWidth
                         value={componentProductId}
-                        onChange={(e) => setComponentProductId(e.target.value)}
-                        disabled={filteredComponents.length === 0}
+                        onChange={(e) => handleComponentChange(e.target.value)}
+                        disabled={!filteredComponents.length || saving}
                       >
+                        {!filteredComponents.length ? (
+                          <MenuItem value="" disabled>
+                            No hay componentes disponibles
+                          </MenuItem>
+                        ) : null}
+
                         {filteredComponents.map((row) => (
                           <MenuItem
                             key={row.component_product_id}
@@ -424,8 +635,8 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                       </TextField>
                     }
                     help={
-                      filteredComponents.length === 0
-                        ? "Este producto compuesto no tiene componentes con variantes disponibles en este contexto."
+                      !filteredComponents.length
+                        ? "Este producto compuesto no tiene componentes que permitan variantes."
                         : null
                     }
                   />
@@ -435,93 +646,125 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                     input={
                       <TextField
                         select
+                        fullWidth
                         value={componentVariantId}
                         onChange={(e) => setComponentVariantId(e.target.value)}
-                        disabled={filteredVariants.length === 0}
+                        disabled={!componentProductId || loadingVariants || !variantRows.length || saving}
                       >
-                        {filteredVariants.map((row) => (
+                        {loadingVariants ? (
+                          <MenuItem value="" disabled>
+                            Cargando variantes…
+                          </MenuItem>
+                        ) : null}
+
+                        {!loadingVariants && !variantRows.length ? (
+                          <MenuItem value="" disabled>
+                            No hay variantes disponibles
+                          </MenuItem>
+                        ) : null}
+
+                        {variantRows.map((row) => (
                           <MenuItem
                             key={row.variant.id}
                             value={String(row.variant.id)}
                           >
-                            {row.variant.name}
+                            {row.variant.name || "Variante sin nombre"}
                           </MenuItem>
                         ))}
                       </TextField>
                     }
                     help={
-                      filteredVariants.length === 0
-                        ? "No hay variantes disponibles para este componente."
+                      componentProductId && !loadingVariants && !variantRows.length
+                        ? "El componente seleccionado no tiene variantes disponibles."
                         : null
                     }
                   />
+                </Stack>
 
+                <FieldBlock
+                  label="Grupo *"
+                  input={
+                    <TextField
+                      select
+                      fullWidth
+                      value={modifierGroupId}
+                      onChange={(e) => handleGroupChange(e.target.value)}
+                      disabled={!filteredGroups.length || saving}
+                    >
+                      {!filteredGroups.length ? (
+                        <MenuItem value="" disabled>
+                          No hay grupos disponibles
+                        </MenuItem>
+                      ) : null}
+
+                      {filteredGroups.map((group) => (
+                        <MenuItem key={group.id} value={String(group.id)}>
+                          {group.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  }
+                  help={
+                    !filteredGroups.length
+                      ? "No hay grupos disponibles para asignar a variantes."
+                      : null
+                  }
+                />
+
+                <ModifierAssignmentRulesFields
+                  group={selectedGroup}
+                  value={rules}
+                  onChange={setRules}
+                  disabled={saving || !selectedGroup}
+                  onValidityChange={setRulesValid}
+                />
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                   <FieldBlock
-                    label="Grupo *"
+                    label="Orden"
+                    help="Los valores menores aparecen primero."
                     input={
                       <TextField
-                        select
-                        value={modifierGroupId}
-                        onChange={(e) => setModifierGroupId(e.target.value)}
-                        disabled={filteredGroups.length === 0}
-                      >
-                        {filteredGroups.map((group) => (
-                          <MenuItem key={group.id} value={String(group.id)}>
-                            {group.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      filteredGroups.length === 0
-                        ? "No hay grupos disponibles para asignar a variantes en este contexto."
-                        : null
+                        fullWidth
+                        type="number"
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value)}
+                        disabled={saving}
+                        inputProps={{ min: 0, inputMode: "numeric" }}
+                        placeholder="0"
+                      />
                     }
                   />
 
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                    <FieldBlock
-                      label="Orden"
-                      help="Entre más bajo, aparece primero."
-                      input={
-                        <TextField
-                          value={sortOrder}
-                          onChange={(e) => setSortOrder(e.target.value)}
-                          inputProps={{ inputMode: "numeric" }}
-                          placeholder="0"
+                  <Box sx={{ flex: 1, width: "100%" }}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "text.primary",
+                        mb: 1,
+                      }}
+                    >
+                      Estado
+                    </Typography>
+
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          checked={isActive}
+                          onChange={(e) => setIsActive(e.target.checked)}
+                          disabled={saving}
+                          color="primary"
                         />
                       }
+                      label={
+                        <Typography sx={switchLabelSx}>
+                          {isActive ? "Activo" : "Inactivo"}
+                        </Typography>
+                      }
                     />
-
-                    <Box sx={{ flex: 1, width: "100%" }}>
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color: "text.primary",
-                          mb: 1,
-                        }}
-                      >
-                        Estado
-                      </Typography>
-
-                      <FormControlLabel
-                        sx={{ m: 0 }}
-                        control={
-                          <Switch
-                            checked={isActive}
-                            onChange={(e) => setIsActive(e.target.checked)}
-                            color="primary"
-                          />
-                        }
-                        label={
-                          <Typography sx={switchLabelSx}>
-                            {isActive ? "Activo" : "Inactivo"}
-                          </Typography>
-                        }
-                      />
-                    </Box>
-                  </Stack>
+                  </Box>
                 </Stack>
 
                 <Stack
@@ -538,7 +781,6 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                     sx={{
                       minWidth: { xs: "100%", sm: 150 },
                       height: 44,
-                      borderRadius: 2,
                     }}
                   >
                     Cancelar
@@ -547,13 +789,12 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                   <Button
                     type="button"
                     onClick={save}
-                    disabled={!canSave || saving}
+                    disabled={!canSave}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{
                       minWidth: { xs: "100%", sm: 180 },
                       height: 44,
-                      borderRadius: 2,
                       fontWeight: 800,
                     }}
                   >
@@ -572,7 +813,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
       />
     </>
   );

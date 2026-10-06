@@ -1,20 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-  useMediaQuery,
+  Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel,
+  IconButton, MenuItem, Stack, Switch, TextField, Typography, useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
@@ -34,7 +22,6 @@ export default function ModifierOptionUpsertModal({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
@@ -57,27 +44,20 @@ export default function ModifierOptionUpsertModal({
   const [sortOrder, setSortOrder] = useState("0");
   const [isActive, setIsActive] = useState(true);
 
-  const title = useMemo(
-    () => (isEdit ? "Editar opción" : "Nueva opción"),
-    [isEdit]
-  );
+  const title = useMemo(() => {
+    return isEdit ? "Editar opción" : "Nueva opción";
+  }, [isEdit]);
 
-  const activeGroups = useMemo(
-    () => (Array.isArray(groups) ? groups.filter((g) => g?.id) : []),
-    [groups]
-  );
-
-  const showAlert = ({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
-    setAlertState({
-      open: true,
-      severity,
-      title,
-      message,
+  const availableGroups = useMemo(() => {
+    return [...(Array.isArray(groups) ? groups : [])].sort((a, b) => {
+      const byOrder = Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
+      if (byOrder !== 0) return byOrder;
+      return (a.name || "").localeCompare(b.name || "", "es", { sensitivity: "base" });
     });
+  }, [groups]);
+
+  const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
+    setAlertState({ open: true, severity, title, message });
   };
 
   const closeAlert = (_, reason) => {
@@ -85,51 +65,91 @@ export default function ModifierOptionUpsertModal({
     setAlertState((prev) => ({ ...prev, open: false }));
   };
 
+  const getBackendMessage = (e, fallback) => {
+    const data = e?.response?.data;
+    const errors = data?.errors && typeof data.errors === "object"
+      ? Object.values(data.errors).flat().filter(Boolean)
+      : [];
+
+    if (errors[0]) return errors[0];
+
+    switch (data?.code) {
+      case "MODIFIER_INVENTORY_CONFIGURATION_REQUIRED_BEFORE_ACTIVATION":
+        return "Configura primero el consumo físico de la opción y después actívala.";
+      case "MODIFIER_EFFECT_NOT_ALLOWED_BY_PLAN":
+        return "Tu plan actual no permite activar esta configuración de inventario.";
+      case "DUPLICATE_MODIFIER_OPTION_NAME":
+        return "Ya existe una opción con ese nombre dentro del grupo.";
+      default:
+        return data?.message || fallback;
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
+
+    setAlertState({
+      open: false,
+      severity: "error",
+      title: "",
+      message: "",
+    });
 
     if (isEdit) {
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setName(editing?.name || "");
       setDescription(editing?.description || "");
       setPrice(String(editing?.price ?? 0));
-      setMaxQuantityPerSelection(
-        String(editing?.max_quantity_per_selection ?? 1)
-      );
+      setMaxQuantityPerSelection(String(editing?.max_quantity_per_selection ?? 1));
       setIsDefault(!!editing?.is_default);
-      setAffectsTotal(
-        editing?.affects_total === undefined ? true : !!editing?.affects_total
-      );
+      setAffectsTotal(editing?.affects_total === undefined ? true : !!editing?.affects_total);
       setTrackInventory(!!editing?.track_inventory);
       setSortOrder(String(editing?.sort_order ?? 0));
       setIsActive(!!editing?.is_active);
-    } else {
-      setModifierGroupId(
-        activeGroups?.[0]?.id ? String(activeGroups[0].id) : ""
-      );
-      setName("");
-      setDescription("");
-      setPrice("0");
-      setMaxQuantityPerSelection("1");
-      setIsDefault(false);
-      setAffectsTotal(true);
-      setTrackInventory(false);
-      setSortOrder("0");
-      setIsActive(true);
+      return;
     }
-  }, [open, isEdit, editing, activeGroups]);
+
+    setModifierGroupId(availableGroups?.[0]?.id ? String(availableGroups[0].id) : "");
+    setName("");
+    setDescription("");
+    setPrice("0");
+    setMaxQuantityPerSelection("1");
+    setIsDefault(false);
+    setAffectsTotal(true);
+    setTrackInventory(false);
+    setSortOrder("0");
+    setIsActive(true);
+  }, [open, isEdit, editing, availableGroups]);
+
+  const handleTrackInventoryChange = (checked) => {
+    setTrackInventory(checked);
+
+    if (!checked) return;
+
+    if (!isEdit || !editing?.track_inventory) {
+      setIsActive(false);
+    }
+  };
+
+  const willRequireConsumptionBeforeActivation = useMemo(() => {
+    if (!trackInventory) return false;
+    if (!isEdit) return true;
+    return !editing?.track_inventory;
+  }, [trackInventory, isEdit, editing]);
 
   const canSave = useMemo(() => {
-    if (!modifierGroupId) return false;
-    if (!name.trim()) return false;
+    if (!modifierGroupId || !name.trim()) return false;
+    if (String(price).trim() === "" || String(maxQuantityPerSelection).trim() === "" || String(sortOrder).trim() === "") {
+      return false;
+    }
 
     const parsedPrice = Number(price);
     const parsedMaxQty = Number(maxQuantityPerSelection);
     const parsedSort = Number(sortOrder);
 
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return false;
-    if (!Number.isFinite(parsedMaxQty) || parsedMaxQty < 1) return false;
-    if (!Number.isFinite(parsedSort) || parsedSort < 0) return false;
+    if (!Number.isInteger(parsedMaxQty) || parsedMaxQty < 1) return false;
+    if (!Number.isInteger(parsedSort) || parsedSort < 0) return false;
 
     return true;
   }, [modifierGroupId, name, price, maxQuantityPerSelection, sortOrder]);
@@ -140,59 +160,71 @@ export default function ModifierOptionUpsertModal({
     if (!groupId) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Grupo requerido",
         message: "Selecciona un grupo para continuar.",
       });
       return;
     }
 
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || null,
-      price: Number(price),
-      max_quantity_per_selection: Number(maxQuantityPerSelection),
-      is_default: isDefault,
-      affects_total: affectsTotal,
-      track_inventory: trackInventory,
-      sort_order: Number(sortOrder),
-      is_active: isActive,
-    };
-
-    if (!payload.name) {
+    if (!name.trim()) {
       showAlert({
         severity: "warning",
-        title: "Nota",
+        title: "Dato requerido",
         message: "El nombre de la opción es obligatorio.",
       });
       return;
     }
 
-    if (
-      !Number.isFinite(payload.price) ||
-      payload.price < 0 ||
-      !Number.isFinite(payload.max_quantity_per_selection) ||
-      payload.max_quantity_per_selection < 1 ||
-      !Number.isFinite(payload.sort_order) ||
-      payload.sort_order < 0
-    ) {
+    const parsedPrice = Number(price);
+    const parsedMaxQty = Number(maxQuantityPerSelection);
+    const parsedSort = Number(sortOrder);
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
       showAlert({
         severity: "error",
-        title: "Error",
-        message: "Revisa los campos numéricos del formulario.",
+        title: "Precio inválido",
+        message: "El precio debe ser un número igual o mayor a 0.",
       });
       return;
     }
+
+    if (!Number.isInteger(parsedMaxQty) || parsedMaxQty < 1) {
+      showAlert({
+        severity: "error",
+        title: "Cantidad inválida",
+        message: "La cantidad máxima por selección debe ser un número entero de al menos 1.",
+      });
+      return;
+    }
+
+    if (!Number.isInteger(parsedSort) || parsedSort < 0) {
+      showAlert({
+        severity: "error",
+        title: "Orden inválido",
+        message: "El orden debe ser un número entero igual o mayor a 0.",
+      });
+      return;
+    }
+
+    const forceInactive = trackInventory && (!isEdit || !editing?.track_inventory);
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || null,
+      price: parsedPrice,
+      max_quantity_per_selection: parsedMaxQty,
+      is_default: isDefault,
+      affects_total: affectsTotal,
+      track_inventory: trackInventory,
+      sort_order: parsedSort,
+      is_active: forceInactive ? false : isActive,
+    };
 
     setSaving(true);
 
     try {
       if (isEdit) {
-        await api.updateModifierOption(
-          restaurantId,
-          groupId,
-          editing.id,
-          payload
-        );
+        await api.updateModifierOption(restaurantId, groupId, editing.id, payload);
       } else {
         await api.createModifierOption(restaurantId, groupId, payload);
       }
@@ -202,9 +234,7 @@ export default function ModifierOptionUpsertModal({
       showAlert({
         severity: "error",
         title: "Error",
-        message:
-          e?.response?.data?.message ||
-          "No se pudo guardar la opción de modificador",
+        message: getBackendMessage(e, "No se pudo guardar la opción."),
       });
     } finally {
       setSaving(false);
@@ -239,12 +269,7 @@ export default function ModifierOptionUpsertModal({
             color: "#fff",
           }}
         >
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="flex-start"
-            spacing={2}
-          >
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
             <Box>
               <Typography
                 sx={{
@@ -257,26 +282,20 @@ export default function ModifierOptionUpsertModal({
                 {title}
               </Typography>
 
-              <Typography
-                sx={{
-                  mt: 0.5,
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.82)",
-                }}
-              >
+              <Typography sx={{ mt: 0.5, fontSize: 13, color: "rgba(255,255,255,0.82)" }}>
                 {isEdit
-                  ? "Actualiza la información de la opción."
-                  : "Agrega una opción dentro de uno de tus grupos de modificadores."}
+                  ? "Actualiza la información y configuración de la opción."
+                  : "Agrega una nueva opción dentro de uno de tus grupos."}
               </Typography>
             </Box>
 
             <IconButton
+              aria-label="Cerrar"
               onClick={onClose}
               disabled={saving}
               sx={{
                 color: "#fff",
                 bgcolor: "rgba(255,255,255,0.08)",
-                borderRadius: 1,
                 "&:hover": {
                   bgcolor: "rgba(255,255,255,0.16)",
                 },
@@ -287,16 +306,14 @@ export default function ModifierOptionUpsertModal({
           </Stack>
         </DialogTitle>
 
-        <DialogContent
-          sx={{
-            p: { xs: 2, sm: 3 },
-            bgcolor: "background.default",
-          }}
-        >
+        <DialogContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: "background.default" }}>
           <Card
             sx={{
-              borderRadius: 0,
+              borderRadius: 1,
               backgroundColor: "background.paper",
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
             }}
           >
             <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
@@ -314,13 +331,16 @@ export default function ModifierOptionUpsertModal({
                 <Stack spacing={2}>
                   <FieldBlock
                     label="Grupo *"
+                    help={isEdit ? "La opción permanece dentro del grupo donde fue creada." : null}
                     input={
                       <TextField
                         select
                         value={modifierGroupId}
                         onChange={(e) => setModifierGroupId(e.target.value)}
+                        disabled={saving || isEdit}
+                        fullWidth
                       >
-                        {activeGroups.map((group) => (
+                        {availableGroups.map((group) => (
                           <MenuItem key={group.id} value={String(group.id)}>
                             {group.name}
                           </MenuItem>
@@ -336,6 +356,9 @@ export default function ModifierOptionUpsertModal({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Ej. Queso extra"
+                        disabled={saving}
+                        inputProps={{ maxLength: 120 }}
+                        fullWidth
                       />
                     }
                   />
@@ -349,34 +372,39 @@ export default function ModifierOptionUpsertModal({
                         placeholder="Opcional"
                         multiline
                         minRows={3}
+                        disabled={saving}
+                        fullWidth
                       />
                     }
                   />
 
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
-                      label="Precio extra"
-                      help="Usa 0 si no modifica el total."
+                      label="Precio"
+                      help="Es el importe configurado para esta opción."
                       input={
                         <TextField
                           value={price}
                           onChange={(e) => setPrice(e.target.value)}
-                          inputProps={{ inputMode: "decimal" }}
-                          placeholder="0"
+                          inputProps={{ inputMode: "decimal", min: 0 }}
+                          placeholder="0.00"
+                          disabled={saving}
+                          fullWidth
                         />
                       }
                     />
 
                     <FieldBlock
-                      label="Cantidad máxima por selección"
+                      label="Máximo de esta opción"
+                      help="Indica cuántas veces puede elegir esta misma opción el cliente."
                       input={
                         <TextField
                           value={maxQuantityPerSelection}
-                          onChange={(e) =>
-                            setMaxQuantityPerSelection(e.target.value)
-                          }
-                          inputProps={{ inputMode: "numeric" }}
+                          onChange={(e) => setMaxQuantityPerSelection(e.target.value)}
+                          inputProps={{ inputMode: "numeric", min: 1, step: 1 }}
                           placeholder="1"
+                          disabled={saving}
+                          fullWidth
                         />
                       }
                     />
@@ -385,25 +413,21 @@ export default function ModifierOptionUpsertModal({
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                     <FieldBlock
                       label="Orden"
+                      help="Entre más bajo sea el número, antes aparecerá la opción."
                       input={
                         <TextField
                           value={sortOrder}
                           onChange={(e) => setSortOrder(e.target.value)}
-                          inputProps={{ inputMode: "numeric" }}
+                          inputProps={{ inputMode: "numeric", min: 0, step: 1 }}
                           placeholder="0"
+                          disabled={saving}
+                          fullWidth
                         />
                       }
                     />
 
                     <Box sx={{ flex: 1, width: "100%" }}>
-                      <Typography
-                        sx={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color: "text.primary",
-                          mb: 1,
-                        }}
-                      >
+                      <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", mb: 1 }}>
                         Configuración
                       </Typography>
 
@@ -415,6 +439,7 @@ export default function ModifierOptionUpsertModal({
                               checked={isDefault}
                               onChange={(e) => setIsDefault(e.target.checked)}
                               color="primary"
+                              disabled={saving}
                             />
                           }
                           label={
@@ -431,13 +456,12 @@ export default function ModifierOptionUpsertModal({
                               checked={affectsTotal}
                               onChange={(e) => setAffectsTotal(e.target.checked)}
                               color="primary"
+                              disabled={saving}
                             />
                           }
                           label={
                             <Typography sx={switchLabelSx}>
-                              {affectsTotal
-                                ? "Afecta total"
-                                : "No afecta total"}
+                              {affectsTotal ? "Se suma al total" : "No se suma al total"}
                             </Typography>
                           }
                         />
@@ -447,39 +471,63 @@ export default function ModifierOptionUpsertModal({
                           control={
                             <Switch
                               checked={trackInventory}
-                              onChange={(e) =>
-                                setTrackInventory(e.target.checked)
-                              }
+                              onChange={(e) => handleTrackInventoryChange(e.target.checked)}
                               color="primary"
+                              disabled={saving}
                             />
                           }
                           label={
                             <Typography sx={switchLabelSx}>
-                              {trackInventory
-                                ? "Controla inventario"
-                                : "Sin inventario"}
+                              {trackInventory ? "Controla inventario" : "Sin control de inventario"}
                             </Typography>
                           }
                         />
 
-                        {!isEdit && (
+                        {!isEdit ? (
                           <FormControlLabel
                             sx={{ m: 0 }}
                             control={
                               <Switch
-                                checked={isActive}
+                                checked={trackInventory ? false : isActive}
                                 onChange={(e) => setIsActive(e.target.checked)}
                                 color="primary"
+                                disabled={saving || trackInventory}
                               />
                             }
                             label={
                               <Typography sx={switchLabelSx}>
-                                {isActive ? "Activo" : "Inactivo"}
+                                {trackInventory ? "Inactiva hasta configurar su consumo" : isActive ? "Activo" : "Inactivo"}
                               </Typography>
                             }
                           />
-                        )}
+                        ) : null}
                       </Stack>
+
+                      {willRequireConsumptionBeforeActivation ? (
+                        <Typography
+                          sx={{
+                            mt: 1,
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                            color: "text.secondary",
+                          }}
+                        >
+                          Al controlar inventario, esta opción se guardará inactiva. Después configura su consumo desde la lista y actívala cuando esté lista.
+                        </Typography>
+                      ) : null}
+
+                      {isEdit ? (
+                        <Typography
+                          sx={{
+                            mt: 1,
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                            color: "text.secondary",
+                          }}
+                        >
+                          El estado activo o inactivo se controla desde la lista principal.
+                        </Typography>
+                      ) : null}
                     </Box>
                   </Stack>
                 </Stack>
@@ -495,11 +543,7 @@ export default function ModifierOptionUpsertModal({
                     onClick={onClose}
                     disabled={saving}
                     variant="outlined"
-                    sx={{
-                      minWidth: { xs: "100%", sm: 150 },
-                      height: 44,
-                      borderRadius: 2,
-                    }}
+                    sx={{ minWidth: { xs: "100%", sm: 150 }, height: 44 }}
                   >
                     Cancelar
                   </Button>
@@ -510,12 +554,7 @@ export default function ModifierOptionUpsertModal({
                     disabled={!canSave || saving}
                     variant="contained"
                     startIcon={<SaveIcon />}
-                    sx={{
-                      minWidth: { xs: "100%", sm: 180 },
-                      height: 44,
-                      borderRadius: 2,
-                      fontWeight: 800,
-                    }}
+                    sx={{ minWidth: { xs: "100%", sm: 180 }, height: 44, fontWeight: 800 }}
                   >
                     {saving ? "Guardando…" : "Guardar"}
                   </Button>
@@ -532,7 +571,7 @@ export default function ModifierOptionUpsertModal({
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4000}
+        autoHideDuration={3000}
       />
     </>
   );
@@ -541,28 +580,14 @@ export default function ModifierOptionUpsertModal({
 function FieldBlock({ label, input, help }) {
   return (
     <Box sx={{ flex: 1, width: "100%" }}>
-      <Typography
-        sx={{
-          fontSize: 14,
-          fontWeight: 800,
-          color: "text.primary",
-          mb: 1,
-        }}
-      >
+      <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", mb: 1 }}>
         {label}
       </Typography>
 
       {input}
 
       {help ? (
-        <Typography
-          sx={{
-            mt: 0.75,
-            fontSize: 12,
-            color: "text.secondary",
-            lineHeight: 1.45,
-          }}
-        >
+        <Typography sx={{ mt: 0.75, fontSize: 12, color: "text.secondary", lineHeight: 1.45 }}>
           {help}
         </Typography>
       ) : null}

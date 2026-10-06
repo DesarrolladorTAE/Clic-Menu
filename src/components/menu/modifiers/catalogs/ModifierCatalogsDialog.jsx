@@ -1,10 +1,11 @@
 import React from "react";
 import {
-  Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, Grid, IconButton,
-  Stack,Typography, useMediaQuery,
+  Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton,
+  Stack, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
+
 import CloseIcon from "@mui/icons-material/Close";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ViewInArOutlinedIcon from "@mui/icons-material/ViewInArOutlined";
@@ -26,7 +27,6 @@ const cards = [
     icon: <ViewInArOutlinedIcon sx={{ fontSize: 30 }} />,
     disabled: false,
   },
-  
   {
     key: "components",
     title: "Componentes",
@@ -84,7 +84,7 @@ export default function ModifierCatalogsDialog({
           alignItems="flex-start"
           spacing={2}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography
               sx={{
                 fontWeight: 800,
@@ -113,6 +113,7 @@ export default function ModifierCatalogsDialog({
               color: "#fff",
               bgcolor: "rgba(255,255,255,0.08)",
               borderRadius: 1,
+              flexShrink: 0,
               "&:hover": {
                 bgcolor: "rgba(255,255,255,0.16)",
               },
@@ -129,108 +130,145 @@ export default function ModifierCatalogsDialog({
           bgcolor: "background.default",
         }}
       >
-        <Grid container spacing={2}>
-          {cards.map((item) => (
-            <Grid item xs={12} sm={6} key={item.key}>
-              <Card
-                sx={{
-                  height: "100%",
-                  borderRadius: 1,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  boxShadow: "none",
-                  backgroundColor: "background.paper",
-                }}
-              >
-                <CardContent sx={{ p: 2.5 }}>
-                  <Stack spacing={2} sx={{ height: "100%" }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                      spacing={1.5}
-                    >
-                      <Box
-                        sx={{
-                          width: 52,
-                          height: 52,
-                          borderRadius: 2,
-                          display: "grid",
-                          placeItems: "center",
-                          bgcolor: "rgba(255,152,0,0.12)",
-                          color: "primary.main",
-                          flexShrink: 0,
-                        }}
+        <Card
+          sx={{
+            width: "100%",
+            borderRadius: 0,
+            backgroundColor: "background.paper",
+            boxShadow: "none",
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 3 }, "&:last-child": { pb: { xs: 2, sm: 3 } } }}>
+            <Box
+              sx={{
+                width: "100%",
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "minmax(0, 1fr)",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                },
+                gap: 2,
+                alignItems: "stretch",
+              }}
+            >
+              {cards.map((item) => (
+                <Card
+                  key={item.key}
+                  sx={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: "100%",
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    boxShadow: "none",
+                    backgroundColor: "background.paper",
+                    display: "flex",
+                  }}
+                >
+                  <CardContent
+                    sx={{
+                      width: "100%",
+                      p: { xs: 2, sm: 2.5 },
+                      display: "flex",
+                      flexDirection: "column",
+                      "&:last-child": {
+                        pb: { xs: 2, sm: 2.5 },
+                      },
+                    }}
+                  >
+                    <Stack spacing={2} sx={{ width: "100%", height: "100%" }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                        spacing={1.5}
                       >
-                        {item.icon}
+                        <Box
+                          sx={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 2,
+                            display: "grid",
+                            placeItems: "center",
+                            bgcolor: "rgba(255,152,0,0.12)",
+                            color: "primary.main",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.icon}
+                        </Box>
+
+                        {item.disabled ? (
+                          <Chip
+                            label="Próximamente"
+                            size="small"
+                            sx={{
+                              bgcolor: "#FFF3E0",
+                              color: "#A75A00",
+                              fontWeight: 800,
+                            }}
+                          />
+                        ) : (
+                          <Chip
+                            label="Disponible"
+                            size="small"
+                            color="success"
+                            sx={{ fontWeight: 800 }}
+                          />
+                        )}
+                      </Stack>
+
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            fontSize: { xs: 17, sm: 18 },
+                            fontWeight: 800,
+                            color: "text.primary",
+                            lineHeight: 1.3,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {item.title}
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            mt: 0.8,
+                            fontSize: 14,
+                            color: "text.secondary",
+                            lineHeight: 1.55,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {item.description}
+                        </Typography>
                       </Box>
 
-                      {item.disabled ? (
-                        <Chip
-                          label="Próximamente"
-                          size="small"
+                      <Box sx={{ pt: 0.5, mt: "auto" }}>
+                        <Button
+                          variant={item.disabled ? "outlined" : "contained"}
+                          fullWidth
+                          disabled={item.disabled}
+                          onClick={() => {
+                            if (item.disabled) return;
+                            onSelect?.(item.key);
+                          }}
                           sx={{
-                            bgcolor: "#FFF3E0",
-                            color: "#A75A00",
+                            minHeight: 44,
                             fontWeight: 800,
                           }}
-                        />
-                      ) : (
-                        <Chip
-                          label="Disponible"
-                          size="small"
-                          color="success"
-                        />
-                      )}
+                        >
+                          {item.disabled ? "Aún no disponible" : "Administrar"}
+                        </Button>
+                      </Box>
                     </Stack>
-
-                    <Box>
-                      <Typography
-                        sx={{
-                          fontSize: 18,
-                          fontWeight: 800,
-                          color: "text.primary",
-                        }}
-                      >
-                        {item.title}
-                      </Typography>
-
-                      <Typography
-                        sx={{
-                          mt: 0.8,
-                          fontSize: 14,
-                          color: "text.secondary",
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        {item.description}
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ pt: 0.5, mt: "auto" }}>
-                      <Button
-                        variant={item.disabled ? "outlined" : "contained"}
-                        fullWidth
-                        disabled={item.disabled}
-                        onClick={() => {
-                          if (item.disabled) return;
-                          onSelect?.(item.key);
-                        }}
-                        sx={{
-                          height: 44,
-                          borderRadius: 2,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {item.disabled ? "Aún no disponible" : "Administrar"}
-                      </Button>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
       </DialogContent>
     </Dialog>
   );

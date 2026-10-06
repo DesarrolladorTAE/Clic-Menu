@@ -78,7 +78,7 @@ import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 //Menu 2
 import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
 
-import ModifierManager from "../pages/menu/ModifierManager";
+import ModifierManager from "../pages/menu/modifiers/ModifierManager";
 import ProductModifierCatalogPage from "../pages/menu/modifiers/catalogs/ProductModifierCatalogPage";
 import VariantModifierCatalogPage from "../pages/menu/modifiers/catalogs/VariantModifierCatalogPage";
 import CompositeComponentModifierCatalogPage from "../pages/menu/modifiers/catalogs/CompositeComponentModifierCatalogPage";
