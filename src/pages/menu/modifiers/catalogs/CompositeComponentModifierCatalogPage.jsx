@@ -71,6 +71,9 @@ export default function CompositeComponentModifierCatalogPage() {
 
     groups,
 
+    catalogEmpty,
+    catalogEmptyMessage,
+
     productsAreByBranch,
     modifiersAreByBranch,
     needsBranchSelector,
@@ -85,6 +88,7 @@ export default function CompositeComponentModifierCatalogPage() {
     changeProduct,
   } = useModifierCatalogBase({
     restaurantId,
+    catalogContext: "component",
     allowedGroupAppliesTo: ["component", "any"],
   });
 
@@ -114,10 +118,12 @@ export default function CompositeComponentModifierCatalogPage() {
     clearCatalogError();
   }, [catalogError]);
 
+  /*
+   * El backend ya entrega únicamente productos válidos para el contexto
+   * "component". No volvemos a decidir aquí qué producto compuesto aplica.
+   */
   const compositeProducts = useMemo(() => {
-    return (Array.isArray(filteredProducts) ? filteredProducts : []).filter(
-      (product) => product?.product_type === "composite"
-    );
+    return Array.isArray(filteredProducts) ? filteredProducts : [];
   }, [filteredProducts]);
 
   const effectiveSelectedProductId = useMemo(() => {
@@ -129,9 +135,7 @@ export default function CompositeComponentModifierCatalogPage() {
       return String(selectedProductId);
     }
 
-    return compositeProducts?.[0]?.id
-      ? String(compositeProducts[0].id)
-      : "";
+    return compositeProducts?.[0]?.id ? String(compositeProducts[0].id) : "";
   }, [compositeProducts, selectedProductId]);
 
   const selectedProduct = useMemo(() => {
@@ -155,8 +159,7 @@ export default function CompositeComponentModifierCatalogPage() {
 
     return assignments
       .filter(
-        (row) =>
-          String(row?.component_product_id) === String(selectedComponentId)
+        (row) => String(row?.component_product_id) === String(selectedComponentId)
       )
       .sort((a, b) => {
         const byOrder = Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0);
@@ -165,19 +168,10 @@ export default function CompositeComponentModifierCatalogPage() {
           return byOrder;
         }
 
-        const aName =
-          a?.modifier_group?.name ||
-          a?.modifierGroup?.name ||
-          "";
+        const aName = a?.modifier_group?.name || a?.modifierGroup?.name || "";
+        const bName = b?.modifier_group?.name || b?.modifierGroup?.name || "";
 
-        const bName =
-          b?.modifier_group?.name ||
-          b?.modifierGroup?.name ||
-          "";
-
-        return aName.localeCompare(bName, "es", {
-          sensitivity: "base",
-        });
+        return aName.localeCompare(bName, "es", { sensitivity: "base" });
       });
   }, [assignments, selectedComponentId]);
 
@@ -200,10 +194,7 @@ export default function CompositeComponentModifierCatalogPage() {
   });
 
   const setSaving = (assignmentId, value) => {
-    setSavingMap((prev) => ({
-      ...prev,
-      [assignmentId]: value,
-    }));
+    setSavingMap((prev) => ({ ...prev, [assignmentId]: value }));
   };
 
   const isSaving = (assignmentId) => !!savingMap[assignmentId];
@@ -213,24 +204,22 @@ export default function CompositeComponentModifierCatalogPage() {
       return {};
     }
 
-    return {
-      branch_id: effectiveBranchId,
-    };
+    return { branch_id: effectiveBranchId };
   };
 
+  /*
+   * Para componentes el mismo branch_id puede ser requerido por el contexto
+   * de productos, por modificadores o por ambos.
+   */
   const getAssignmentParams = () => {
     if (!needsBranchSelector || !effectiveBranchId) {
       return {};
     }
 
-    return {
-      branch_id: effectiveBranchId,
-    };
+    return { branch_id: effectiveBranchId };
   };
 
-  const refreshAssignments = async (
-    productId = effectiveSelectedProductId
-  ) => {
+  const refreshAssignments = async (productId = effectiveSelectedProductId) => {
     if (!productId) {
       setAssignments([]);
       return [];
@@ -242,10 +231,7 @@ export default function CompositeComponentModifierCatalogPage() {
       getAssignmentParams()
     );
 
-    const rows = Array.isArray(response?.data)
-      ? response.data
-      : [];
-
+    const rows = Array.isArray(response?.data) ? response.data : [];
     setAssignments(rows);
 
     return rows;
@@ -256,10 +242,7 @@ export default function CompositeComponentModifierCatalogPage() {
       return;
     }
 
-    if (
-      needsBranchSelector &&
-      !effectiveBranchId
-    ) {
+    if (needsBranchSelector && !effectiveBranchId) {
       setComponents([]);
       setSelectedComponentId("");
       setAssignments([]);
@@ -300,9 +283,7 @@ export default function CompositeComponentModifierCatalogPage() {
 
         const safeComponents = Array.isArray(componentRows)
           ? componentRows.filter(
-              (row) =>
-                row?.component_product_id &&
-                row?.component_product
+              (row) => row?.component_product_id && row?.component_product
             )
           : [];
 
@@ -318,9 +299,7 @@ export default function CompositeComponentModifierCatalogPage() {
           return;
         }
 
-        setSelectedComponentId(
-          String(safeComponents[0].component_product_id)
-        );
+        setSelectedComponentId(String(safeComponents[0].component_product_id));
       } catch (e) {
         if (!active) {
           return;
@@ -389,7 +368,6 @@ export default function CompositeComponentModifierCatalogPage() {
       Number(row?.is_active) === 1;
 
     const nextActive = !currentActive;
-
     setSaving(assignmentId, true);
 
     try {
@@ -414,10 +392,7 @@ export default function CompositeComponentModifierCatalogPage() {
       setAssignments((prev) =>
         prev.map((item) =>
           String(item.id) === String(assignmentId)
-            ? {
-                ...item,
-                is_active: nextActive,
-              }
+            ? { ...item, is_active: nextActive }
             : item
         )
       );
@@ -456,10 +431,7 @@ export default function CompositeComponentModifierCatalogPage() {
       );
 
       setAssignments((prev) =>
-        prev.filter(
-          (item) =>
-            String(item.id) !== String(row.id)
-        )
+        prev.filter((item) => String(item.id) !== String(row.id))
       );
 
       showAlert({
@@ -481,22 +453,11 @@ export default function CompositeComponentModifierCatalogPage() {
   if (loading) {
     return (
       <PageContainer>
-        <Box
-          sx={{
-            minHeight: "60vh",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
+        <Box sx={{ minHeight: "60vh", display: "grid", placeItems: "center" }}>
           <Stack spacing={2} alignItems="center">
             <CircularProgress color="primary" />
 
-            <Typography
-              sx={{
-                color: "text.secondary",
-                fontSize: 14,
-              }}
-            >
+            <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
               Cargando catálogo por componente…
             </Typography>
           </Stack>
@@ -504,6 +465,10 @@ export default function CompositeComponentModifierCatalogPage() {
       </PageContainer>
     );
   }
+
+  const noComponentProductsMessage =
+    catalogEmptyMessage ||
+    "No cuentas con productos compuestos que tengan componentes configurados.";
 
   return (
     <PageContainer>
@@ -538,11 +503,7 @@ export default function CompositeComponentModifierCatalogPage() {
           </Box>
 
           <Button
-            onClick={() =>
-              nav(
-                `/owner/restaurants/${restaurantId}/operation/modifiers`
-              )
-            }
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/operation/modifiers`)}
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             sx={{
@@ -578,135 +539,124 @@ export default function CompositeComponentModifierCatalogPage() {
 
         <ModifierCatalogSelectionCard
           title="Ubica el producto compuesto"
-          description="Puedes reducir la lista seleccionando una sección y una categoría."
+          description="Solo se muestran secciones y categorías que contienen productos compuestos con componentes configurados."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Sección"
-            value={sectionId || ""}
-            onChange={(e) =>
-              changeSection(e.target.value)
-            }
-          >
-            <MenuItem value="">
-              Todas las secciones
-            </MenuItem>
-
-            {sections.map((section) => (
-              <MenuItem
-                key={section.id}
-                value={String(section.id)}
+            input={
+              <TextField
+                select
+                fullWidth
+                value={sectionId || ""}
+                onChange={(e) => changeSection(e.target.value)}
+                disabled={catalogEmpty || !sections.length}
               >
-                {section.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                <MenuItem value="">Todas las secciones</MenuItem>
 
-          <TextField
-            select
-            fullWidth
+                {sections.map((section) => (
+                  <MenuItem key={section.id} value={String(section.id)}>
+                    {section.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
+
+          <FieldBlock
             label="Categoría"
-            value={categoryId || ""}
-            onChange={(e) =>
-              changeCategory(e.target.value)
-            }
-            disabled={!visibleCategories.length}
-          >
-            <MenuItem value="">
-              Todas las categorías
-            </MenuItem>
-
-            {visibleCategories.map((category) => (
-              <MenuItem
-                key={category.id}
-                value={String(category.id)}
+            input={
+              <TextField
+                select
+                fullWidth
+                value={categoryId || ""}
+                onChange={(e) => changeCategory(e.target.value)}
+                disabled={catalogEmpty || !visibleCategories.length}
               >
-                {category.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                <MenuItem value="">Todas las categorías</MenuItem>
+
+                {visibleCategories.map((category) => (
+                  <MenuItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierCatalogSelectionCard
           title="Producto compuesto y componente"
           description="Selecciona el producto compuesto y después uno de los componentes que realmente tiene configurados."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Producto compuesto"
-            value={effectiveSelectedProductId}
-            onChange={(e) =>
-              changeProduct(e.target.value)
+            input={
+              <TextField
+                select
+                fullWidth
+                value={effectiveSelectedProductId}
+                onChange={(e) => changeProduct(e.target.value)}
+                disabled={catalogEmpty || !compositeProducts.length}
+              >
+                {catalogEmpty ? (
+                  <MenuItem value="" disabled>
+                    {noComponentProductsMessage}
+                  </MenuItem>
+                ) : !compositeProducts.length ? (
+                  <MenuItem value="" disabled>
+                    No hay productos compuestos con componentes en los filtros seleccionados
+                  </MenuItem>
+                ) : null}
+
+                {compositeProducts.map((product) => (
+                  <MenuItem key={product.id} value={String(product.id)}>
+                    {product.name}
+                  </MenuItem>
+                ))}
+              </TextField>
             }
-            disabled={!compositeProducts.length}
-          >
-            {!compositeProducts.length && (
-              <MenuItem
-                value=""
-                disabled
-              >
-                No hay productos compuestos disponibles
-              </MenuItem>
-            )}
+            help={catalogEmpty ? noComponentProductsMessage : null}
+          />
 
-            {compositeProducts.map((product) => (
-              <MenuItem
-                key={product.id}
-                value={String(product.id)}
-              >
-                {product.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Componente"
-            value={selectedComponentId || ""}
-            onChange={(e) =>
-              setSelectedComponentId(e.target.value)
-            }
-            disabled={
-              !selectedProduct ||
-              componentLoading ||
-              !components.length
-            }
-          >
-            {componentLoading && (
-              <MenuItem
-                value=""
-                disabled
+            input={
+              <TextField
+                select
+                fullWidth
+                value={selectedComponentId || ""}
+                onChange={(e) => setSelectedComponentId(e.target.value)}
+                disabled={
+                  catalogEmpty ||
+                  !selectedProduct ||
+                  componentLoading ||
+                  !components.length
+                }
               >
-                Cargando componentes…
-              </MenuItem>
-            )}
+                {componentLoading ? (
+                  <MenuItem value="" disabled>
+                    Cargando componentes…
+                  </MenuItem>
+                ) : null}
 
-            {!componentLoading &&
-              !components.length && (
-                <MenuItem
-                  value=""
-                  disabled
-                >
-                  No hay componentes disponibles
-                </MenuItem>
-              )}
+                {!componentLoading && !components.length ? (
+                  <MenuItem value="" disabled>
+                    No hay componentes disponibles
+                  </MenuItem>
+                ) : null}
 
-            {!componentLoading &&
-              components.map((row) => (
-                <MenuItem
-                  key={row.component_product_id}
-                  value={String(
-                    row.component_product_id
-                  )}
-                >
-                  {row?.component_product?.name ||
-                    "Componente sin nombre"}
-                </MenuItem>
-              ))}
-          </TextField>
+                {!componentLoading &&
+                  components.map((row) => (
+                    <MenuItem
+                      key={row.component_product_id}
+                      value={String(row.component_product_id)}
+                    >
+                      {row?.component_product?.name || "Componente sin nombre"}
+                    </MenuItem>
+                  ))}
+              </TextField>
+            }
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierAssignmentsPanel
@@ -716,14 +666,18 @@ export default function CompositeComponentModifierCatalogPage() {
           emptyTitle="No hay grupos asignados"
           emptyMessage="Asigna tu primer grupo de modificadores a este componente."
           missingSelectionTitle={
-            !selectedProduct
-              ? "Selecciona un producto compuesto"
-              : "Selecciona un componente"
+            catalogEmpty
+              ? "No hay productos compuestos con componentes"
+              : !selectedProduct
+                ? "Selecciona un producto compuesto"
+                : "Selecciona un componente"
           }
           missingSelectionMessage={
-            !selectedProduct
-              ? "Primero elige un producto compuesto para consultar sus componentes."
-              : "Elige el componente al que deseas asignar grupos de modificadores."
+            catalogEmpty
+              ? noComponentProductsMessage
+              : !selectedProduct
+                ? "Primero elige un producto compuesto para consultar sus componentes."
+                : "Elige el componente al que deseas asignar grupos de modificadores."
           }
           canAssign={
             !!selectedProduct &&
@@ -763,7 +717,6 @@ export default function CompositeComponentModifierCatalogPage() {
         requiresBranch={needsBranchSelector}
         effectiveBranchId={effectiveBranchId}
         availableGroups={groups}
-        availableComponents={components}
         editing={editing}
         onSaved={async () => {
           setModalOpen(false);
@@ -774,9 +727,7 @@ export default function CompositeComponentModifierCatalogPage() {
           }
 
           try {
-            await refreshAssignments(
-              selectedProduct.id
-            );
+            await refreshAssignments(selectedProduct.id);
           } catch (e) {
             showAlert({
               severity: "error",
@@ -802,5 +753,39 @@ export default function CompositeComponentModifierCatalogPage() {
         autoHideDuration={3000}
       />
     </PageContainer>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      {label ? (
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "text.primary",
+            mb: 1,
+          }}
+        >
+          {label}
+        </Typography>
+      ) : null}
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }

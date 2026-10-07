@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getRestaurantSettings } from "../../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../../services/restaurant/branch.service";
-import { getMenuSections } from "../../../services/menu/menuSections.service";
-import { getCategories } from "../../../services/menu/categories.service";
 import { getModifierGroups } from "../../../services/menu/modifiers/modifierGroups.service";
-import { getCatalogProducts } from "../../../services/menu/modifiers/modifierCatalog.service";
+import { getModifierCatalog } from "../../../services/menu/modifiers/modifierCatalog.service";
 
 const normalizeArray = (value) => {
   if (Array.isArray(value)) {
@@ -37,15 +35,12 @@ const normalizeId = (value) => {
 };
 
 const getErrorMessage = (error, fallback) => {
-  return (
-    error?.response?.data?.message ||
-    error?.message ||
-    fallback
-  );
+  return error?.response?.data?.message || error?.message || fallback;
 };
 
 export default function useModifierCatalogBase({
   restaurantId,
+  catalogContext = "product",
   allowedGroupAppliesTo = [],
   productFilter = null,
 } = {}) {
@@ -63,6 +58,9 @@ export default function useModifierCatalogBase({
   const [selectedProductId, setSelectedProductId] = useState("");
 
   const [groups, setGroups] = useState([]);
+
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
+  const [catalogEmptyMessage, setCatalogEmptyMessage] = useState("");
 
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
@@ -92,7 +90,7 @@ export default function useModifierCatalogBase({
   }, [categories, sectionId]);
 
   const filteredProducts = useMemo(() => {
-    const activeProducts = products.filter((product) => {
+    const validProducts = products.filter((product) => {
       if (product?.status && String(product.status) !== "active") {
         return false;
       }
@@ -105,7 +103,7 @@ export default function useModifierCatalogBase({
     });
 
     if (categoryId !== "") {
-      return activeProducts.filter((product) => sameId(product?.category_id, categoryId));
+      return validProducts.filter((product) => sameId(product?.category_id, categoryId));
     }
 
     if (sectionId !== "") {
@@ -113,7 +111,7 @@ export default function useModifierCatalogBase({
         visibleCategories.map((category) => String(category?.id))
       );
 
-      return activeProducts.filter((product) => {
+      return validProducts.filter((product) => {
         if (product?.category_id === null || product?.category_id === undefined) {
           return false;
         }
@@ -122,7 +120,7 @@ export default function useModifierCatalogBase({
       });
     }
 
-    return activeProducts;
+    return validProducts;
   }, [products, productFilter, categoryId, sectionId, visibleCategories]);
 
   const selectedProduct = useMemo(() => {
@@ -130,10 +128,9 @@ export default function useModifierCatalogBase({
       return null;
     }
 
-    return (
-      filteredProducts.find((product) => sameId(product?.id, selectedProductId)) ??
-      null
-    );
+    return filteredProducts.find(
+      (product) => sameId(product?.id, selectedProductId)
+    ) ?? null;
   }, [filteredProducts, selectedProductId]);
 
   const filteredGroups = useMemo(() => {
@@ -162,27 +159,20 @@ export default function useModifierCatalogBase({
     setError("");
   }, []);
 
-  const changeSection = useCallback(
-    (value) => {
-      const nextSectionId = normalizeId(value);
-      setSectionId(nextSectionId);
+  const changeSection = useCallback((value) => {
+    const nextSectionId = normalizeId(value);
+    setSectionId(nextSectionId);
 
-      if (categoryId !== "") {
-        const currentCategory = categories.find((category) =>
-          sameId(category?.id, categoryId)
-        );
+    if (categoryId !== "") {
+      const currentCategory = categories.find((category) =>
+        sameId(category?.id, categoryId)
+      );
 
-        if (
-          !currentCategory ||
-          (nextSectionId !== "" &&
-            !sameId(currentCategory?.section_id, nextSectionId))
-        ) {
-          setCategoryId("");
-        }
+      if (!currentCategory || (nextSectionId !== "" && !sameId(currentCategory?.section_id, nextSectionId))) {
+        setCategoryId("");
       }
-    },
-    [categories, categoryId]
-  );
+    }
+  }, [categories, categoryId]);
 
   const changeCategory = useCallback((value) => {
     setCategoryId(normalizeId(value));
@@ -205,6 +195,8 @@ export default function useModifierCatalogBase({
     setProducts([]);
     setSelectedProductId("");
     setGroups([]);
+    setCatalogEmpty(false);
+    setCatalogEmptyMessage("");
     setError("");
 
     if (!restaurantId) {
@@ -305,6 +297,14 @@ export default function useModifierCatalogBase({
   }, [restaurantId, settings, needsBranchSelector]);
 
   useEffect(() => {
+    setSectionId("");
+    setCategoryId("");
+    setSelectedProductId("");
+    setCatalogEmpty(false);
+    setCatalogEmptyMessage("");
+  }, [catalogContext]);
+
+  useEffect(() => {
     let cancelled = false;
 
     if (!restaurantId || !settings) {
@@ -323,11 +323,9 @@ export default function useModifierCatalogBase({
       setLoadingCatalog(true);
       setError("");
 
-      const productQuery = {
-        status: "active",
-        ...(productsAreByBranch && effectiveBranchId
-          ? { branch_id: effectiveBranchId }
-          : {}),
+      const catalogQuery = {
+        context: catalogContext,
+        ...(effectiveBranchId ? { branch_id: effectiveBranchId } : {}),
       };
 
       const modifierQuery =
@@ -336,29 +334,36 @@ export default function useModifierCatalogBase({
           : {};
 
       try {
-        const [sectionRows, categoryRows, productRows, groupResponse] =
-          await Promise.all([
-            getMenuSections(restaurantId, productQuery),
-            getCategories(restaurantId, productQuery),
-            getCatalogProducts(
-              restaurantId,
-              productsAreByBranch && effectiveBranchId
-                ? { branch_id: effectiveBranchId }
-                : {}
-            ),
-            getModifierGroups(restaurantId, modifierQuery),
-          ]);
+        const [catalogResponse, groupResponse] = await Promise.all([
+          getModifierCatalog(restaurantId, catalogQuery),
+          getModifierGroups(restaurantId, modifierQuery),
+        ]);
 
         if (cancelled) {
           return;
         }
 
-        setSections(normalizeArray(sectionRows));
-        setCategories(normalizeArray(categoryRows));
-        setProducts(normalizeArray(productRows));
+        setSections(normalizeArray(catalogResponse?.sections));
+        setCategories(normalizeArray(catalogResponse?.categories));
+        setProducts(normalizeArray(catalogResponse?.products));
         setGroups(normalizeArray(groupResponse));
+
+        setCatalogEmpty(Boolean(catalogResponse?.empty));
+        setCatalogEmptyMessage(
+          catalogResponse?.empty_message
+            ? String(catalogResponse.empty_message)
+            : ""
+        );
       } catch (err) {
         if (!cancelled) {
+          setSections([]);
+          setCategories([]);
+          setProducts([]);
+          setSelectedProductId("");
+          setGroups([]);
+          setCatalogEmpty(false);
+          setCatalogEmptyMessage("");
+
           setError(
             getErrorMessage(
               err,
@@ -381,12 +386,27 @@ export default function useModifierCatalogBase({
   }, [
     restaurantId,
     settings,
+    catalogContext,
     needsBranchSelector,
     effectiveBranchId,
-    productsAreByBranch,
     modifiersAreByBranch,
     catalogVersion,
   ]);
+
+  useEffect(() => {
+    if (sectionId === "") {
+      return;
+    }
+
+    const sectionStillExists = sections.some((section) =>
+      sameId(section?.id, sectionId)
+    );
+
+    if (!sectionStillExists) {
+      setSectionId("");
+      setCategoryId("");
+    }
+  }, [sections, sectionId]);
 
   useEffect(() => {
     if (categoryId === "") {
@@ -439,6 +459,10 @@ export default function useModifierCatalogBase({
     selectedProduct,
 
     groups: filteredGroups,
+
+    catalogContext,
+    catalogEmpty,
+    catalogEmptyMessage,
 
     productsAreByBranch,
     modifiersAreByBranch,

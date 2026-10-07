@@ -72,6 +72,9 @@ export default function VariantModifierCatalogPage() {
 
     groups,
 
+    catalogEmpty,
+    catalogEmptyMessage,
+
     productsAreByBranch,
     modifiersAreByBranch,
     needsBranchSelector,
@@ -86,6 +89,7 @@ export default function VariantModifierCatalogPage() {
     changeProduct,
   } = useModifierCatalogBase({
     restaurantId,
+    catalogContext: "variant",
     allowedGroupAppliesTo: ["variant", "any"],
   });
 
@@ -341,7 +345,6 @@ export default function VariantModifierCatalogPage() {
       row?.is_active === true || Number(row?.is_active) === 1;
 
     const nextActive = !currentActive;
-
     setSaving(assignmentId, true);
 
     try {
@@ -445,6 +448,9 @@ export default function VariantModifierCatalogPage() {
     );
   }
 
+  const noVariantProductsMessage =
+    catalogEmptyMessage || "No cuentas con productos que tengan variantes.";
+
   return (
     <PageContainer>
       <Stack spacing={3}>
@@ -478,9 +484,7 @@ export default function VariantModifierCatalogPage() {
           </Box>
 
           <Button
-            onClick={() =>
-              nav(`/owner/restaurants/${restaurantId}/operation/modifiers`)
-            }
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/operation/modifiers`)}
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             sx={{
@@ -498,7 +502,7 @@ export default function VariantModifierCatalogPage() {
             needsBranchSelector
               ? "Selecciona la sucursal en la que deseas trabajar."
               : "La configuración de este restaurante se aplica de forma general.",
-            "Usa la sección y la categoría para encontrar más rápido el producto.",
+            "Usa la sección y la categoría para encontrar más rápido un producto que tenga variantes.",
             "Selecciona el producto, elige su variante y administra los grupos que tendrá disponibles.",
           ]}
         />
@@ -516,102 +520,129 @@ export default function VariantModifierCatalogPage() {
 
         <ModifierCatalogSelectionCard
           title="Ubica el producto"
-          description="Puedes reducir la lista seleccionando una sección y una categoría."
+          description="Solo se muestran secciones y categorías que contienen productos con variantes."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Sección"
-            value={sectionId || ""}
-            onChange={(e) => changeSection(e.target.value)}
-          >
-            <MenuItem value="">Todas las secciones</MenuItem>
+            input={
+              <TextField
+                select
+                fullWidth
+                value={sectionId || ""}
+                onChange={(e) => changeSection(e.target.value)}
+                disabled={catalogEmpty || !sections.length}
+              >
+                <MenuItem value="">Todas las secciones</MenuItem>
 
-            {sections.map((section) => (
-              <MenuItem key={section.id} value={String(section.id)}>
-                {section.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                {sections.map((section) => (
+                  <MenuItem key={section.id} value={String(section.id)}>
+                    {section.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
 
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Categoría"
-            value={categoryId || ""}
-            onChange={(e) => changeCategory(e.target.value)}
-            disabled={!visibleCategories.length}
-          >
-            <MenuItem value="">Todas las categorías</MenuItem>
+            input={
+              <TextField
+                select
+                fullWidth
+                value={categoryId || ""}
+                onChange={(e) => changeCategory(e.target.value)}
+                disabled={catalogEmpty || !visibleCategories.length}
+              >
+                <MenuItem value="">Todas las categorías</MenuItem>
 
-            {visibleCategories.map((category) => (
-              <MenuItem key={category.id} value={String(category.id)}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                {visibleCategories.map((category) => (
+                  <MenuItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierCatalogSelectionCard
           title="Producto y variante"
-          description="Selecciona el producto y después la variante que deseas configurar."
+          description="Selecciona un producto con variantes y después la variante que deseas configurar."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Producto"
-            value={selectedProductId || ""}
-            onChange={(e) => changeProduct(e.target.value)}
-            disabled={!filteredProducts.length}
-          >
-            {!filteredProducts.length && (
-              <MenuItem value="" disabled>
-                No hay productos disponibles
-              </MenuItem>
-            )}
-
-            {filteredProducts.map((product) => (
-              <MenuItem key={product.id} value={String(product.id)}>
-                {product.name}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            fullWidth
-            label="Variante"
-            value={selectedVariantId || ""}
-            onChange={(e) => setSelectedVariantId(e.target.value)}
-            disabled={!selectedProduct || variantLoading || !variants.length}
-          >
-            {variantLoading && (
-              <MenuItem value="" disabled>
-                Cargando variantes…
-              </MenuItem>
-            )}
-
-            {!variantLoading && !variants.length && (
-              <MenuItem value="" disabled>
-                No hay variantes disponibles
-              </MenuItem>
-            )}
-
-            {!variantLoading &&
-              variants.map((row) => {
-                const variant = row?.variant;
-                const inactive =
-                  variant?.is_enabled === false ||
-                  Number(variant?.is_enabled) === 0;
-
-                return (
-                  <MenuItem key={variant.id} value={String(variant.id)}>
-                    {variant.name || "Variante sin nombre"}
-                    {inactive ? " · Inactiva" : ""}
+            input={
+              <TextField
+                select
+                fullWidth
+                value={selectedProductId || ""}
+                onChange={(e) => changeProduct(e.target.value)}
+                disabled={catalogEmpty || !filteredProducts.length}
+              >
+                {catalogEmpty ? (
+                  <MenuItem value="" disabled>
+                    {noVariantProductsMessage}
                   </MenuItem>
-                );
-              })}
-          </TextField>
+                ) : !filteredProducts.length ? (
+                  <MenuItem value="" disabled>
+                    No hay productos con variantes en los filtros seleccionados
+                  </MenuItem>
+                ) : null}
+
+                {filteredProducts.map((product) => (
+                  <MenuItem key={product.id} value={String(product.id)}>
+                    {product.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+            help={catalogEmpty ? noVariantProductsMessage : null}
+          />
+
+          <FieldBlock
+            label="Variante"
+            input={
+              <TextField
+                select
+                fullWidth
+                value={selectedVariantId || ""}
+                onChange={(e) => setSelectedVariantId(e.target.value)}
+                disabled={
+                  catalogEmpty ||
+                  !selectedProduct ||
+                  variantLoading ||
+                  !variants.length
+                }
+              >
+                {variantLoading ? (
+                  <MenuItem value="" disabled>
+                    Cargando variantes…
+                  </MenuItem>
+                ) : null}
+
+                {!variantLoading && !variants.length ? (
+                  <MenuItem value="" disabled>
+                    No hay variantes disponibles
+                  </MenuItem>
+                ) : null}
+
+                {!variantLoading &&
+                  variants.map((row) => {
+                    const variant = row?.variant;
+                    const inactive =
+                      variant?.is_enabled === false ||
+                      Number(variant?.is_enabled) === 0;
+
+                    return (
+                      <MenuItem key={variant.id} value={String(variant.id)}>
+                        {variant.name || "Variante sin nombre"}
+                        {inactive ? " · Inactiva" : ""}
+                      </MenuItem>
+                    );
+                  })}
+              </TextField>
+            }
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierAssignmentsPanel
@@ -621,14 +652,18 @@ export default function VariantModifierCatalogPage() {
           emptyTitle="No hay grupos asignados"
           emptyMessage="Asigna tu primer grupo de modificadores a esta variante."
           missingSelectionTitle={
-            !selectedProduct
-              ? "Selecciona un producto"
-              : "Selecciona una variante"
+            catalogEmpty
+              ? "No hay productos con variantes"
+              : !selectedProduct
+                ? "Selecciona un producto"
+                : "Selecciona una variante"
           }
           missingSelectionMessage={
-            !selectedProduct
-              ? "Primero elige un producto para consultar sus variantes."
-              : "Elige la variante a la que deseas asignar grupos de modificadores."
+            catalogEmpty
+              ? noVariantProductsMessage
+              : !selectedProduct
+                ? "Primero elige un producto para consultar sus variantes."
+                : "Elige la variante a la que deseas asignar grupos de modificadores."
           }
           canAssign={
             !!selectedProduct &&
@@ -702,5 +737,39 @@ export default function VariantModifierCatalogPage() {
         autoHideDuration={3000}
       />
     </PageContainer>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      {label ? (
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "text.primary",
+            mb: 1,
+          }}
+        >
+          {label}
+        </Typography>
+      ) : null}
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }

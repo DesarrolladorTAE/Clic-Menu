@@ -190,18 +190,17 @@ export default function ModifierAssignmentsPanel({
                               {group?.name || "Grupo sin nombre"}
                             </Typography>
 
-                            {group?.description ? (
-                              <Typography
-                                sx={{
-                                  mt: 0.5,
-                                  fontSize: 13,
-                                  color: "text.secondary",
-                                  wordBreak: "break-word",
-                                }}
-                              >
-                                {group.description}
-                              </Typography>
-                            ) : null}
+                            <Typography
+                              sx={{
+                                mt: 0.5,
+                                fontSize: 13,
+                                color: "text.secondary",
+                                lineHeight: 1.4,
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {group?.description || "Sin descripción"}
+                            </Typography>
                           </Box>
 
                           <Chip
@@ -290,7 +289,7 @@ export default function ModifierAssignmentsPanel({
             </Stack>
           ) : (
             <TableContainer sx={{ width: "100%", overflowX: "auto" }}>
-              <Table sx={{ minWidth: 1160 }}>
+              <Table sx={{ minWidth: 940 }}>
                 <TableHead>
                   <TableRow
                     sx={{
@@ -305,7 +304,6 @@ export default function ModifierAssignmentsPanel({
                     }}
                   >
                     <TableCell>Grupo</TableCell>
-                    <TableCell>Descripción</TableCell>
                     <TableCell>Aplica para</TableCell>
                     <TableCell>Opciones</TableCell>
                     <TableCell>Reglas</TableCell>
@@ -336,19 +334,35 @@ export default function ModifierAssignmentsPanel({
                           },
                         }}
                       >
-                        <TableCell>
-                          <Typography sx={{ fontWeight: 800 }}>
-                            {group?.name || "Grupo sin nombre"}
-                          </Typography>
-                        </TableCell>
-
                         <TableCell
                           sx={{
+                            minWidth: 220,
+                            maxWidth: 320,
                             whiteSpace: "normal !important",
-                            minWidth: 260,
                           }}
                         >
-                          {group?.description || "—"}
+                          <Typography
+                            sx={{
+                              fontWeight: 800,
+                              color: "text.primary",
+                              lineHeight: 1.3,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {group?.name || "Grupo sin nombre"}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.4,
+                              fontSize: 12.5,
+                              color: "text.secondary",
+                              lineHeight: 1.4,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {group?.description || "Sin descripción"}
+                          </Typography>
                         </TableCell>
 
                         <TableCell>

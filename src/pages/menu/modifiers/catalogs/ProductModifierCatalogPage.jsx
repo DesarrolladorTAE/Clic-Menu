@@ -67,6 +67,9 @@ export default function ProductModifierCatalogPage() {
 
     groups,
 
+    catalogEmpty,
+    catalogEmptyMessage,
+
     productsAreByBranch,
     modifiersAreByBranch,
     needsBranchSelector,
@@ -81,6 +84,7 @@ export default function ProductModifierCatalogPage() {
     changeProduct,
   } = useModifierCatalogBase({
     restaurantId,
+    catalogContext: "product",
     allowedGroupAppliesTo: ["product", "any"],
   });
 
@@ -352,6 +356,8 @@ export default function ProductModifierCatalogPage() {
     );
   }
 
+  const noProductsMessage = catalogEmptyMessage || "No cuentas con productos disponibles.";
+
   return (
     <PageContainer>
       <Stack spacing={3}>
@@ -385,9 +391,7 @@ export default function ProductModifierCatalogPage() {
           </Box>
 
           <Button
-            onClick={() =>
-              nav(`/owner/restaurants/${restaurantId}/operation/modifiers`)
-            }
+            onClick={() => nav(`/owner/restaurants/${restaurantId}/operation/modifiers`)}
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             sx={{
@@ -425,64 +429,82 @@ export default function ProductModifierCatalogPage() {
           title="Ubica el producto"
           description="Puedes reducir la lista seleccionando una sección y una categoría."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Sección"
-            value={sectionId || ""}
-            onChange={(e) => changeSection(e.target.value)}
-          >
-            <MenuItem value="">Todas las secciones</MenuItem>
+            input={
+              <TextField
+                select
+                fullWidth
+                value={sectionId || ""}
+                onChange={(e) => changeSection(e.target.value)}
+                disabled={catalogEmpty || !sections.length}
+              >
+                <MenuItem value="">Todas las secciones</MenuItem>
 
-            {sections.map((section) => (
-              <MenuItem key={section.id} value={String(section.id)}>
-                {section.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                {sections.map((section) => (
+                  <MenuItem key={section.id} value={String(section.id)}>
+                    {section.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
 
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Categoría"
-            value={categoryId || ""}
-            onChange={(e) => changeCategory(e.target.value)}
-            disabled={!visibleCategories.length}
-          >
-            <MenuItem value="">Todas las categorías</MenuItem>
+            input={
+              <TextField
+                select
+                fullWidth
+                value={categoryId || ""}
+                onChange={(e) => changeCategory(e.target.value)}
+                disabled={catalogEmpty || !visibleCategories.length}
+              >
+                <MenuItem value="">Todas las categorías</MenuItem>
 
-            {visibleCategories.map((category) => (
-              <MenuItem key={category.id} value={String(category.id)}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                {visibleCategories.map((category) => (
+                  <MenuItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierCatalogSelectionCard
           title="Producto"
           description="Selecciona el producto al que deseas asignar grupos de modificadores."
         >
-          <TextField
-            select
-            fullWidth
+          <FieldBlock
             label="Producto"
-            value={selectedProductId || ""}
-            onChange={(e) => changeProduct(e.target.value)}
-            disabled={!filteredProducts.length}
-          >
-            {!filteredProducts.length && (
-              <MenuItem value="" disabled>
-                No hay productos disponibles
-              </MenuItem>
-            )}
+            input={
+              <TextField
+                select
+                fullWidth
+                value={selectedProductId || ""}
+                onChange={(e) => changeProduct(e.target.value)}
+                disabled={catalogEmpty || !filteredProducts.length}
+              >
+                {catalogEmpty ? (
+                  <MenuItem value="" disabled>
+                    {noProductsMessage}
+                  </MenuItem>
+                ) : !filteredProducts.length ? (
+                  <MenuItem value="" disabled>
+                    No hay productos disponibles con los filtros seleccionados
+                  </MenuItem>
+                ) : null}
 
-            {filteredProducts.map((product) => (
-              <MenuItem key={product.id} value={String(product.id)}>
-                {product.name}
-              </MenuItem>
-            ))}
-          </TextField>
+                {filteredProducts.map((product) => (
+                  <MenuItem key={product.id} value={String(product.id)}>
+                    {product.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            }
+            help={catalogEmpty ? noProductsMessage : null}
+          />
         </ModifierCatalogSelectionCard>
 
         <ModifierAssignmentsPanel
@@ -491,8 +513,12 @@ export default function ProductModifierCatalogPage() {
           addButtonText="Asignar grupo"
           emptyTitle="No hay grupos asignados"
           emptyMessage="Asigna tu primer grupo de modificadores a este producto."
-          missingSelectionTitle="Selecciona un producto"
-          missingSelectionMessage="Primero elige un producto para administrar sus grupos de modificadores."
+          missingSelectionTitle={catalogEmpty ? "No hay productos disponibles" : "Selecciona un producto"}
+          missingSelectionMessage={
+            catalogEmpty
+              ? noProductsMessage
+              : "Primero elige un producto para administrar sus grupos de modificadores."
+          }
           canAssign={!!selectedProduct && groups.length > 0}
           hasSelection={!!selectedProduct}
           rows={sortedAssignments}
@@ -557,5 +583,39 @@ export default function ProductModifierCatalogPage() {
         autoHideDuration={3000}
       />
     </PageContainer>
+  );
+}
+
+function FieldBlock({ label, input, help }) {
+  return (
+    <Box sx={{ flex: 1, width: "100%" }}>
+      {label ? (
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "text.primary",
+            mb: 1,
+          }}
+        >
+          {label}
+        </Typography>
+      ) : null}
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }

@@ -194,7 +194,13 @@ export default function ModifierAssignmentRulesFields({
       return;
     }
 
-    const valueAsNumber = toIntegerOrNull(event.target.value);
+    const rawValue = event.target.value;
+
+    if (!/^\d*$/.test(rawValue)) {
+      return;
+    }
+
+    const valueAsNumber = toIntegerOrNull(rawValue);
 
     updateValue({
       min_selections_override:
@@ -207,8 +213,14 @@ export default function ModifierAssignmentRulesFields({
       return;
     }
 
+    const rawValue = event.target.value;
+
+    if (!/^\d*$/.test(rawValue)) {
+      return;
+    }
+
     updateValue({
-      max_selections_override: toIntegerOrNull(event.target.value),
+      max_selections_override: toIntegerOrNull(rawValue),
     });
   };
 
@@ -320,15 +332,9 @@ export default function ModifierAssignmentRulesFields({
             />
           </Box>
 
-          <TextField
-            fullWidth
-            type="number"
+          <FieldBlock
             label="Mínimo de selecciones"
-            value={isSingle ? (effectiveRequired ? 1 : 0) : effectiveMin}
-            onChange={handleMinChange}
-            disabled={disabled || isSingle || !effectiveRequired}
-            error={Boolean(validation.min)}
-            helperText={
+            help={
               validation.min ||
               (isSingle
                 ? "Se ajusta automáticamente según sea obligatorio u opcional."
@@ -336,27 +342,81 @@ export default function ModifierAssignmentRulesFields({
                   ? "Un grupo opcional utiliza mínimo 0."
                   : "Cantidad mínima que debe seleccionar el cliente.")
             }
-            inputProps={{ min: effectiveRequired ? 1 : 0, step: 1 }}
+            error={Boolean(validation.min)}
+            input={
+              <TextField
+                fullWidth
+                type="text"
+                value={isSingle ? (effectiveRequired ? 1 : 0) : effectiveMin}
+                onChange={handleMinChange}
+                disabled={disabled || isSingle || !effectiveRequired}
+                error={Boolean(validation.min)}
+                inputProps={{
+                  inputMode: "numeric",
+                  pattern: "[0-9]*",
+                }}
+              />
+            }
           />
 
-          <TextField
-            fullWidth
-            type="number"
+          <FieldBlock
             label="Máximo de selecciones"
-            value={isSingle ? 1 : effectiveMax ?? ""}
-            onChange={handleMaxChange}
-            disabled={disabled || isSingle}
-            error={Boolean(validation.max)}
-            helperText={
+            help={
               validation.max ||
               (isSingle
                 ? "En grupos de una sola opción, el máximo siempre es 1."
                 : "Déjalo vacío para no establecer un máximo.")
             }
-            inputProps={{ min: 1, step: 1 }}
+            error={Boolean(validation.max)}
+            input={
+              <TextField
+                fullWidth
+                type="text"
+                value={isSingle ? 1 : effectiveMax ?? ""}
+                onChange={handleMaxChange}
+                disabled={disabled || isSingle}
+                error={Boolean(validation.max)}
+                inputProps={{
+                  inputMode: "numeric",
+                  pattern: "[0-9]*",
+                }}
+              />
+            }
           />
         </Box>
       )}
+    </Box>
+  );
+}
+
+function FieldBlock({ label, input, help, error = false }) {
+  return (
+    <Box sx={{ width: "100%", minWidth: 0 }}>
+      <Typography
+        sx={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: error ? "error.main" : "text.primary",
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
+
+      {input}
+
+      {help ? (
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 12,
+            color: error ? "error.main" : "text.secondary",
+            lineHeight: 1.45,
+          }}
+        >
+          {help}
+        </Typography>
+      ) : null}
     </Box>
   );
 }

@@ -43,7 +43,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
   requiresBranch,
   effectiveBranchId,
   availableGroups,
-  availableComponents,
   editing,
   onSaved,
   api,
@@ -53,7 +52,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
-  const [componentProductId, setComponentProductId] = useState("");
   const [modifierGroupId, setModifierGroupId] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
   const [isActive, setIsActive] = useState(true);
@@ -78,25 +76,11 @@ export default function CompositeComponentModifierGroupUpsertModal({
       : [];
   }, [availableGroups]);
 
-  const filteredComponents = useMemo(() => {
-    return Array.isArray(availableComponents)
-      ? availableComponents.filter((row) => row?.component_product_id)
-      : [];
-  }, [availableComponents]);
-
   const selectedGroup = useMemo(() => {
     return filteredGroups.find(
       (group) => String(group.id) === String(modifierGroupId)
     ) || null;
   }, [filteredGroups, modifierGroupId]);
-
-  const selectedComponentRow = useMemo(() => {
-    return filteredComponents.find(
-      (row) => String(row?.component_product_id) === String(componentProductId)
-    ) || null;
-  }, [filteredComponents, componentProductId]);
-
-  const selectedComponent = selectedComponentRow?.component_product || null;
 
   const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
@@ -119,7 +103,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
     setRulesValid(true);
 
     if (isEdit) {
-      setComponentProductId(String(editing?.component_product_id || ""));
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setSortOrder(String(editing?.sort_order ?? 0));
       setIsActive(
@@ -137,25 +120,30 @@ export default function CompositeComponentModifierGroupUpsertModal({
       return;
     }
 
-    setComponentProductId(
-      component?.id
-        ? String(component.id)
-        : filteredComponents?.[0]?.component_product_id
-          ? String(filteredComponents[0].component_product_id)
-          : ""
-    );
-
     setModifierGroupId(
       filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
     );
-
     setSortOrder("0");
     setIsActive(true);
     setRules({ ...EMPTY_RULES });
-  }, [open, isEdit, editing, filteredGroups, filteredComponents, component]);
+  }, [open, isEdit, editing, filteredGroups]);
+
+  const handleGroupChange = (value) => {
+    setModifierGroupId(value);
+    setRules({ ...EMPTY_RULES });
+    setRulesValid(true);
+  };
+
+  const handleSortOrderChange = (event) => {
+    const nextValue = event.target.value;
+
+    if (/^\d*$/.test(nextValue)) {
+      setSortOrder(nextValue);
+    }
+  };
 
   const canSave = useMemo(() => {
-    if (!product?.id || !componentProductId || !modifierGroupId || !rulesValid || saving) {
+    if (!product?.id || !component?.id || !modifierGroupId || !rulesValid || saving) {
       return false;
     }
 
@@ -163,16 +151,20 @@ export default function CompositeComponentModifierGroupUpsertModal({
       return false;
     }
 
+    if (sortOrder === "") {
+      return false;
+    }
+
     const sort = Number(sortOrder);
 
-    if (!Number.isFinite(sort) || sort < 0) {
+    if (!Number.isInteger(sort) || sort < 0) {
       return false;
     }
 
     return true;
   }, [
     product,
-    componentProductId,
+    component,
     modifierGroupId,
     rulesValid,
     saving,
@@ -180,12 +172,6 @@ export default function CompositeComponentModifierGroupUpsertModal({
     effectiveBranchId,
     sortOrder,
   ]);
-
-  const handleGroupChange = (value) => {
-    setModifierGroupId(value);
-    setRules({ ...EMPTY_RULES });
-    setRulesValid(true);
-  };
 
   const save = async () => {
     if (!product?.id) {
@@ -197,7 +183,7 @@ export default function CompositeComponentModifierGroupUpsertModal({
       return;
     }
 
-    if (!componentProductId) {
+    if (!component?.id) {
       showAlert({
         severity: "warning",
         title: "Aviso",
@@ -233,19 +219,28 @@ export default function CompositeComponentModifierGroupUpsertModal({
       return;
     }
 
-    const parsedSortOrder = Number(sortOrder);
-
-    if (!Number.isFinite(parsedSortOrder) || parsedSortOrder < 0) {
+    if (sortOrder === "") {
       showAlert({
         severity: "error",
         title: "Error",
-        message: "El orden debe ser un número igual o mayor a 0.",
+        message: "Ingresa el orden de la asignación.",
+      });
+      return;
+    }
+
+    const parsedSortOrder = Number(sortOrder);
+
+    if (!Number.isInteger(parsedSortOrder) || parsedSortOrder < 0) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "El orden debe ser un número entero igual o mayor a 0.",
       });
       return;
     }
 
     const payload = {
-      component_product_id: Number(componentProductId),
+      component_product_id: Number(component.id),
       modifier_group_id: Number(modifierGroupId),
       required_override: rules?.required_override ?? null,
       min_selections_override: rules?.min_selections_override ?? null,
@@ -428,85 +423,49 @@ export default function CompositeComponentModifierGroupUpsertModal({
                       {product.name}
                     </Typography>
 
-                    {(selectedComponent || component) ? (
-                      <Typography
-                        sx={{
-                          mt: 0.75,
-                          fontSize: 14,
-                          color: "text.secondary",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Componente: {selectedComponent?.name || component?.name}
-                      </Typography>
-                    ) : null}
+                    <Typography
+                      sx={{
+                        mt: 0.75,
+                        fontSize: 14,
+                        color: "text.secondary",
+                        fontWeight: 700,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      Componente: {component?.name || "Sin componente"}
+                    </Typography>
                   </Box>
                 ) : null}
 
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                  <FieldBlock
-                    label="Componente *"
-                    input={
-                      <TextField
-                        select
-                        fullWidth
-                        value={componentProductId}
-                        onChange={(e) => setComponentProductId(e.target.value)}
-                        disabled={!filteredComponents.length || saving}
-                      >
-                        {!filteredComponents.length ? (
-                          <MenuItem value="" disabled>
-                            No hay componentes disponibles
-                          </MenuItem>
-                        ) : null}
+                <FieldBlock
+                  label="Grupo *"
+                  input={
+                    <TextField
+                      select
+                      fullWidth
+                      value={modifierGroupId}
+                      onChange={(e) => handleGroupChange(e.target.value)}
+                      disabled={!filteredGroups.length || saving}
+                    >
+                      {!filteredGroups.length ? (
+                        <MenuItem value="" disabled>
+                          No hay grupos disponibles
+                        </MenuItem>
+                      ) : null}
 
-                        {filteredComponents.map((row) => (
-                          <MenuItem
-                            key={row.component_product_id}
-                            value={String(row.component_product_id)}
-                          >
-                            {row.component_product?.name || "Componente sin nombre"}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      !filteredComponents.length
-                        ? "Este producto compuesto no tiene componentes disponibles."
-                        : null
-                    }
-                  />
-
-                  <FieldBlock
-                    label="Grupo *"
-                    input={
-                      <TextField
-                        select
-                        fullWidth
-                        value={modifierGroupId}
-                        onChange={(e) => handleGroupChange(e.target.value)}
-                        disabled={!filteredGroups.length || saving}
-                      >
-                        {!filteredGroups.length ? (
-                          <MenuItem value="" disabled>
-                            No hay grupos disponibles
-                          </MenuItem>
-                        ) : null}
-
-                        {filteredGroups.map((group) => (
-                          <MenuItem key={group.id} value={String(group.id)}>
-                            {group.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      !filteredGroups.length
-                        ? "No hay grupos disponibles para asignar a componentes."
-                        : null
-                    }
-                  />
-                </Stack>
+                      {filteredGroups.map((group) => (
+                        <MenuItem key={group.id} value={String(group.id)}>
+                          {group.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  }
+                  help={
+                    !filteredGroups.length
+                      ? "No hay grupos disponibles para asignar a componentes."
+                      : null
+                  }
+                />
 
                 <ModifierAssignmentRulesFields
                   group={selectedGroup}
@@ -523,12 +482,15 @@ export default function CompositeComponentModifierGroupUpsertModal({
                     input={
                       <TextField
                         fullWidth
-                        type="number"
+                        type="text"
                         value={sortOrder}
-                        onChange={(e) => setSortOrder(e.target.value)}
+                        onChange={handleSortOrderChange}
                         disabled={saving}
-                        inputProps={{ min: 0, inputMode: "numeric" }}
                         placeholder="0"
+                        inputProps={{
+                          inputMode: "numeric",
+                          pattern: "[0-9]*",
+                        }}
                       />
                     }
                   />

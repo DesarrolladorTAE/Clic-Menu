@@ -44,7 +44,6 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
   requiresBranch,
   effectiveBranchId,
   availableGroups,
-  availableComponents,
   editing,
   onSaved,
   api,
@@ -54,12 +53,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
   const isEdit = !!editing?.id;
 
   const [saving, setSaving] = useState(false);
-  const [loadingVariants, setLoadingVariants] = useState(false);
-
-  const [componentProductId, setComponentProductId] = useState("");
-  const [componentVariantId, setComponentVariantId] = useState("");
   const [modifierGroupId, setModifierGroupId] = useState("");
-  const [variantRows, setVariantRows] = useState([]);
   const [sortOrder, setSortOrder] = useState("0");
   const [isActive, setIsActive] = useState(true);
   const [rules, setRules] = useState({ ...EMPTY_RULES });
@@ -83,36 +77,27 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
       : [];
   }, [availableGroups]);
 
-  const filteredComponents = useMemo(() => {
-    return Array.isArray(availableComponents)
-      ? availableComponents.filter(
-          (row) => row?.component_product_id && !!row?.allow_variant
-        )
-      : [];
-  }, [availableComponents]);
-
   const selectedGroup = useMemo(() => {
     return filteredGroups.find(
       (group) => String(group.id) === String(modifierGroupId)
     ) || null;
   }, [filteredGroups, modifierGroupId]);
 
-  const selectedComponentRow = useMemo(() => {
-    return filteredComponents.find(
-      (row) => String(row?.component_product_id) === String(componentProductId)
-    ) || null;
-  }, [filteredComponents, componentProductId]);
+  const contextIsValid = useMemo(() => {
+    if (!product?.id || !component?.id || !variant?.id) {
+      return false;
+    }
 
-  const selectedComponent = selectedComponentRow?.component_product || null;
+    if (
+      variant?.product_id !== null &&
+      variant?.product_id !== undefined &&
+      String(variant.product_id) !== String(component.id)
+    ) {
+      return false;
+    }
 
-  const selectedVariantRow = useMemo(() => {
-    return variantRows.find(
-      (row) => String(row?.variant?.id) === String(componentVariantId)
-    ) || null;
-  }, [variantRows, componentVariantId]);
-
-  const selectedVariant = selectedVariantRow?.variant || null;
-  const getComponentVariants = api?.getComponentProductVariants;
+    return true;
+  }, [product, component, variant]);
 
   const showAlert = ({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
@@ -135,8 +120,6 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
     setRulesValid(true);
 
     if (isEdit) {
-      setComponentProductId(String(editing?.component_product_id || ""));
-      setComponentVariantId(String(editing?.component_variant_id || ""));
       setModifierGroupId(String(editing?.modifier_group_id || ""));
       setSortOrder(String(editing?.sort_order ?? 0));
       setIsActive(
@@ -154,140 +137,13 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
       return;
     }
 
-    const initialComponentId = component?.id
-      ? String(component.id)
-      : filteredComponents?.[0]?.component_product_id
-        ? String(filteredComponents[0].component_product_id)
-        : "";
-
-    setComponentProductId(initialComponentId);
-    setComponentVariantId(variant?.id ? String(variant.id) : "");
     setModifierGroupId(
       filteredGroups?.[0]?.id ? String(filteredGroups[0].id) : ""
     );
     setSortOrder("0");
     setIsActive(true);
     setRules({ ...EMPTY_RULES });
-  }, [
-    open,
-    isEdit,
-    editing,
-    filteredGroups,
-    filteredComponents,
-    component,
-    variant,
-  ]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (!componentProductId) {
-      setVariantRows([]);
-      setComponentVariantId("");
-      return;
-    }
-
-    if (typeof getComponentVariants !== "function") {
-      setVariantRows([]);
-      setComponentVariantId("");
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadVariants = async () => {
-      setLoadingVariants(true);
-
-      try {
-        const rows = await getComponentVariants(
-          restaurantId,
-          componentProductId
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        const safeRows = Array.isArray(rows)
-          ? rows.filter((row) => row?.variant?.id)
-          : [];
-
-        setVariantRows(safeRows);
-
-        setComponentVariantId((current) => {
-          const preferredEditingId =
-            isEdit &&
-            String(editing?.component_product_id || "") === String(componentProductId)
-              ? String(editing?.component_variant_id || "")
-              : "";
-
-          const preferredPageId =
-            !isEdit &&
-            String(component?.id || "") === String(componentProductId)
-              ? String(variant?.id || "")
-              : "";
-
-          const preferredId = preferredEditingId || current || preferredPageId;
-
-          if (
-            preferredId &&
-            safeRows.some(
-              (row) => String(row?.variant?.id) === String(preferredId)
-            )
-          ) {
-            return String(preferredId);
-          }
-
-          return safeRows?.[0]?.variant?.id
-            ? String(safeRows[0].variant.id)
-            : "";
-        });
-      } catch (e) {
-        if (cancelled) {
-          return;
-        }
-
-        setVariantRows([]);
-        setComponentVariantId("");
-
-        showAlert({
-          severity: "error",
-          title: "Error",
-          message:
-            e?.response?.data?.message ||
-            "No se pudieron cargar las variantes del componente seleccionado.",
-        });
-      } finally {
-        if (!cancelled) {
-          setLoadingVariants(false);
-        }
-      }
-    };
-
-    loadVariants();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    open,
-    restaurantId,
-    componentProductId,
-    getComponentVariants,
-    isEdit,
-    editing?.component_product_id,
-    editing?.component_variant_id,
-    component?.id,
-    variant?.id,
-  ]);
-
-  const handleComponentChange = (value) => {
-    setComponentProductId(value);
-    setComponentVariantId("");
-    setVariantRows([]);
-  };
+  }, [open, isEdit, editing, filteredGroups]);
 
   const handleGroupChange = (value) => {
     setModifierGroupId(value);
@@ -296,11 +152,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
   };
 
   const canSave = useMemo(() => {
-    if (!product?.id || !selectedComponentRow || !selectedVariantRow || !modifierGroupId) {
-      return false;
-    }
-
-    if (!rulesValid || saving || loadingVariants) {
+    if (!contextIsValid || !modifierGroupId || !rulesValid || saving) {
       return false;
     }
 
@@ -316,13 +168,10 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
 
     return true;
   }, [
-    product,
-    selectedComponentRow,
-    selectedVariantRow,
+    contextIsValid,
     modifierGroupId,
     rulesValid,
     saving,
-    loadingVariants,
     requiresBranch,
     effectiveBranchId,
     sortOrder,
@@ -338,20 +187,33 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
       return;
     }
 
-    if (!selectedComponentRow) {
+    if (!component?.id) {
       showAlert({
         severity: "warning",
         title: "Aviso",
-        message: "Selecciona un componente que permita variantes.",
+        message: "Selecciona un componente antes de continuar.",
       });
       return;
     }
 
-    if (!selectedVariantRow) {
+    if (!variant?.id) {
       showAlert({
         severity: "warning",
         title: "Aviso",
-        message: "Selecciona una variante válida para este componente.",
+        message: "Selecciona una variante del componente antes de continuar.",
+      });
+      return;
+    }
+
+    if (
+      variant?.product_id !== null &&
+      variant?.product_id !== undefined &&
+      String(variant.product_id) !== String(component.id)
+    ) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "La variante seleccionada no pertenece al componente actual.",
       });
       return;
     }
@@ -395,8 +257,8 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
     }
 
     const payload = {
-      component_product_id: Number(componentProductId),
-      component_variant_id: Number(componentVariantId),
+      component_product_id: Number(component.id),
+      component_variant_id: Number(variant.id),
       modifier_group_id: Number(modifierGroupId),
       required_override: rules?.required_override ?? null,
       min_selections_override: rules?.min_selections_override ?? null,
@@ -498,7 +360,7 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
               >
                 {isEdit
                   ? "Actualiza el grupo asignado y sus reglas para esta variante del componente."
-                  : "Selecciona el componente, su variante y el grupo de modificadores que deseas asignar."}
+                  : "Selecciona el grupo de modificadores y configura sus reglas para la variante elegida."}
               </Typography>
             </Box>
 
@@ -579,107 +441,39 @@ export default function CompositeComponentVariantModifierGroupUpsertModal({
                       {product.name}
                     </Typography>
 
-                    {selectedComponent ? (
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={{ xs: 0.5, sm: 4 }}
+                      sx={{ mt: 0.75 }}
+                    >
                       <Typography
                         sx={{
-                          mt: 0.75,
                           fontSize: 14,
                           color: "text.secondary",
                           fontWeight: 700,
+                          minWidth: 0,
+                          flex: 1,
+                          wordBreak: "break-word",
                         }}
                       >
-                        Componente: {selectedComponent.name}
+                        Componente: {component?.name || "Sin componente"}
                       </Typography>
-                    ) : null}
 
-                    {selectedVariant ? (
                       <Typography
                         sx={{
-                          mt: 0.35,
                           fontSize: 14,
                           color: "text.secondary",
                           fontWeight: 700,
+                          minWidth: 0,
+                          flex: 1,
+                          wordBreak: "break-word",
                         }}
                       >
-                        Variante: {selectedVariant.name}
+                        Variante: {variant?.name || "Sin variante"}
                       </Typography>
-                    ) : null}
+                    </Stack>
                   </Box>
                 ) : null}
-
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                  <FieldBlock
-                    label="Componente *"
-                    input={
-                      <TextField
-                        select
-                        fullWidth
-                        value={componentProductId}
-                        onChange={(e) => handleComponentChange(e.target.value)}
-                        disabled={!filteredComponents.length || saving}
-                      >
-                        {!filteredComponents.length ? (
-                          <MenuItem value="" disabled>
-                            No hay componentes disponibles
-                          </MenuItem>
-                        ) : null}
-
-                        {filteredComponents.map((row) => (
-                          <MenuItem
-                            key={row.component_product_id}
-                            value={String(row.component_product_id)}
-                          >
-                            {row.component_product?.name || "Componente sin nombre"}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      !filteredComponents.length
-                        ? "Este producto compuesto no tiene componentes que permitan variantes."
-                        : null
-                    }
-                  />
-
-                  <FieldBlock
-                    label="Variante del componente *"
-                    input={
-                      <TextField
-                        select
-                        fullWidth
-                        value={componentVariantId}
-                        onChange={(e) => setComponentVariantId(e.target.value)}
-                        disabled={!componentProductId || loadingVariants || !variantRows.length || saving}
-                      >
-                        {loadingVariants ? (
-                          <MenuItem value="" disabled>
-                            Cargando variantes…
-                          </MenuItem>
-                        ) : null}
-
-                        {!loadingVariants && !variantRows.length ? (
-                          <MenuItem value="" disabled>
-                            No hay variantes disponibles
-                          </MenuItem>
-                        ) : null}
-
-                        {variantRows.map((row) => (
-                          <MenuItem
-                            key={row.variant.id}
-                            value={String(row.variant.id)}
-                          >
-                            {row.variant.name || "Variante sin nombre"}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    }
-                    help={
-                      componentProductId && !loadingVariants && !variantRows.length
-                        ? "El componente seleccionado no tiene variantes disponibles."
-                        : null
-                    }
-                  />
-                </Stack>
 
                 <FieldBlock
                   label="Grupo *"

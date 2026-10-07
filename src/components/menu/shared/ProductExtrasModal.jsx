@@ -1,5 +1,5 @@
-// src/components/menu/shared/ProductExtrasModal.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import {
   buildModifierContextSections,
@@ -9,15 +9,61 @@ import {
   isAvailabilityBlocked,
   money,
 } from "../../../hooks/public/publicMenu.utils";
+
 import usePagination from "../../../hooks/usePagination";
 import PaginationFooter from "../../common/PaginationFooter";
+import ProductExtrasReadOnlyNavigator from "./product-extras/ProductExtrasReadOnlyNavigator";
 
-function isValidColor(color) {
-  return /^#[0-9A-Fa-f]{6}$/.test(String(color || ""));
-}
+import {
+  getSafeModifierThemeColor,
+  modifierHexToRgba,
+  ModifierGroupCard,
+  ModifierOptionCard,
+  ModifierOptionsArea,
+} from "./product-extras/ModifierCardShells";
 
-function getSafeThemeColor(themeColor) {
-  return isValidColor(themeColor) ? themeColor : "#FF7A00";
+const GROUP_PAGE_SIZE = 2;
+const OPTION_PAGE_SIZE = 4;
+const MOBILE_BREAKPOINT = 600;
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+
+    const handleChange = (event) => {
+      setIsMobile(event.matches);
+    };
+
+    setIsMobile(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange);
+      };
+    }
+
+    mediaQuery.addListener(handleChange);
+
+    return () => {
+      mediaQuery.removeListener(handleChange);
+    };
+  }, []);
+
+  return isMobile;
 }
 
 function makeGroupSelectionKey(section, group) {
@@ -68,149 +114,243 @@ function buildPreparedSections(product, sections) {
 
     return {
       ...section,
-      groups: (Array.isArray(section?.groups) ? section.groups : []).map(
-        (group) => ({
-          ...group,
-          __selection_key: makeGroupSelectionKey(section, group),
-          __context_source: contextSource,
-          __applies_to_level: appliesToLevel,
-          __context_label: contextLabel,
-          __component_product_id: componentProductId,
-          __component_variant_id: componentVariantId,
-        }),
-      ),
+      groups: (Array.isArray(section?.groups) ? section.groups : []).map((group) => ({
+        ...group,
+        __selection_key: makeGroupSelectionKey(section, group),
+        __context_source: contextSource,
+        __applies_to_level: appliesToLevel,
+        __context_label: contextLabel,
+        __component_product_id: componentProductId,
+        __component_variant_id: componentVariantId,
+      })),
     };
   });
 }
 
 function countDistinctSelectedOptions(selectedMapForGroup) {
-  const values = Object.values(selectedMapForGroup || {});
-  return values.filter((qty) => Number(qty || 0) > 0).length;
+  return Object.values(selectedMapForGroup || {}).filter(
+    (qty) => Number(qty || 0) > 0,
+  ).length;
 }
 
 function countTotalSelectedUnits(selectedMapForGroup) {
   return Object.values(selectedMapForGroup || {}).reduce(
-    (sum, qty) => sum + Number(qty || 0),
+    (sum, qty) => sum + Math.max(0, Number(qty || 0)),
     0,
   );
+}
+
+function getGroupMinSelect(group) {
+  const min = Number(group?.min_select || 0);
+  const normalizedMin = Number.isFinite(min) ? Math.max(0, Math.floor(min)) : 0;
+
+  if (group?.is_required) {
+    return Math.max(1, normalizedMin);
+  }
+
+  return normalizedMin;
+}
+
+function getGroupMaxSelect(group) {
+  if (
+    group?.max_select === null ||
+    group?.max_select === undefined ||
+    group?.max_select === ""
+  ) {
+    return null;
+  }
+
+  const max = Number(group.max_select);
+
+  if (!Number.isFinite(max)) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor(max));
+}
+
+function getGroupCompliance(group, selected) {
+  const totalUnits = countTotalSelectedUnits(selected);
+  const distinctOptions = countDistinctSelectedOptions(selected);
+  const min = getGroupMinSelect(group);
+  const max = getGroupMaxSelect(group);
+  const mode = String(group?.selection_mode || "").trim().toLowerCase();
+
+  const missingUnits = Math.max(0, min - totalUnits);
+  const exceedsMax = max !== null && totalUnits > max;
+  const violatesSingle = mode === "single" && distinctOptions > 1;
+  const hasRequirement = min > 0;
+
+  let status = "optional";
+  let label = "○ Opcional";
+
+  if (missingUnits > 0) {
+    status = "required";
+    label =
+      missingUnits === 1
+        ? " Falta 1 selección"
+        : ` Faltan ${missingUnits} selecciones`;
+  } else if (exceedsMax) {
+    status = "required";
+    label = `! Máximo ${max}`;
+  } else if (violatesSingle) {
+    status = "required";
+    label = "! Solo una opción distinta";
+  } else if (hasRequirement || totalUnits > 0) {
+    status = "completed";
+    label = "✓ Completado";
+  }
+
+  return {
+    status,
+    label,
+    min,
+    max,
+    totalUnits,
+    distinctOptions,
+    missingUnits,
+    hasRequirement,
+    isValid: missingUnits <= 0 && !exceedsMax && !violatesSingle,
+  };
 }
 
 function buildInitialSelectionMap(initialValue, preparedSections) {
   const groups = Array.isArray(initialValue) ? initialValue : [];
   const map = {};
 
-  const allPreparedGroups = preparedSections.flatMap(
-    (section) => section.groups || [],
-  );
+  preparedSections
+    .flatMap((section) => section.groups || [])
+    .forEach((preparedGroup) => {
+      const match = groups.find((group) => {
+        return (
+          Number(group?.modifier_group_id || group?.id || 0) ===
+            Number(preparedGroup?.id || 0) &&
+          String(group?.applies_to_level || "order_item") ===
+            String(preparedGroup?.__applies_to_level || "order_item") &&
+          Number(group?.component_product_id || 0) ===
+            Number(preparedGroup?.__component_product_id || 0) &&
+          Number(group?.component_variant_id || 0) ===
+            Number(preparedGroup?.__component_variant_id || 0)
+        );
+      });
 
-  allPreparedGroups.forEach((pg) => {
-    const match = groups.find((g) => {
-      return (
-        Number(g?.modifier_group_id || g?.id || 0) === Number(pg?.id || 0) &&
-        String(g?.applies_to_level || "order_item") ===
-          String(pg?.__applies_to_level || "order_item") &&
-        Number(g?.component_product_id || 0) ===
-          Number(pg?.__component_product_id || 0) &&
-        Number(g?.component_variant_id || 0) ===
-          Number(pg?.__component_variant_id || 0)
-      );
-    });
+      if (!match) {
+        return;
+      }
 
-    if (!match) return;
+      const optionMap = {};
 
-    const optMap = {};
-    (Array.isArray(match?.options) ? match.options : []).forEach((opt) => {
-      const optionId = Number(opt?.modifier_option_id || opt?.id || 0);
-      const qty = Number(opt?.quantity || 0);
-      if (optionId > 0 && qty > 0) {
-        optMap[optionId] = qty;
+      (Array.isArray(match?.options) ? match.options : []).forEach((option) => {
+        const optionId = Number(option?.modifier_option_id || option?.id || 0);
+        const quantity = Number(option?.quantity || 0);
+
+        if (optionId > 0 && quantity > 0) {
+          optionMap[optionId] = quantity;
+        }
+      });
+
+      if (Object.keys(optionMap).length > 0) {
+        map[preparedGroup.__selection_key] = optionMap;
       }
     });
-
-    if (Object.keys(optMap).length > 0) {
-      map[pg.__selection_key] = optMap;
-    }
-  });
 
   return map;
 }
 
 function normalizeSelectionForResult(preparedSections, selectionMap) {
-  const allPreparedGroups = preparedSections.flatMap(
-    (section) => section.groups || [],
-  );
   const normalized = [];
 
-  allPreparedGroups.forEach((group) => {
-    const selected = selectionMap?.[group.__selection_key] || {};
-    const options = Array.isArray(group?.options) ? group.options : [];
+  preparedSections
+    .flatMap((section) => section.groups || [])
+    .forEach((group) => {
+      const selected = selectionMap?.[group.__selection_key] || {};
+      const options = Array.isArray(group?.options) ? group.options : [];
 
-    const normalizedOptions = options
-      .map((opt) => {
-        const optionId = Number(opt?.id || 0);
-        const qty = Number(selected?.[optionId] || 0);
-        if (!optionId || qty <= 0) return null;
+      const normalizedOptions = options
+        .map((option) => {
+          const optionId = Number(option?.id || 0);
+          const quantity = Number(selected?.[optionId] || 0);
 
-        const unitPrice = Number(opt?.price || 0);
-        const affectsTotal = !!opt?.affects_total;
-        const totalPrice = affectsTotal ? unitPrice * qty : 0;
+          if (!optionId || quantity <= 0) {
+            return null;
+          }
 
-        return {
-          id: optionId,
-          modifier_group_id: Number(group?.id || 0),
-          modifier_option_id: optionId,
-          name: String(opt?.name || "Extra"),
-          name_snapshot: String(opt?.name || "Extra"),
-          quantity: qty,
-          unit_price: unitPrice,
-          total_price: Math.round(totalPrice * 100) / 100,
-          affects_total: affectsTotal,
-          description_snapshot: opt?.description || null,
-          meta: {
-            track_inventory: !!opt?.track_inventory,
-            is_default: !!opt?.is_default,
-            max_quantity_per_selection: Number(
-              opt?.max_quantity_per_selection || 1,
-            ),
-            availability: opt?.availability || null,
-            is_available:
-              typeof opt?.is_available === "boolean" ? opt.is_available : true,
-            availability_label: opt?.availability_label || null,
-          },
-        };
-      })
-      .filter(Boolean);
+          const unitPrice = Number(option?.price || 0);
+          const affectsTotal = !!option?.affects_total;
+          const totalPrice = affectsTotal ? unitPrice * quantity : 0;
 
-    if (!normalizedOptions.length) return;
+          return {
+            id: optionId,
+            modifier_group_id: Number(group?.id || 0),
+            modifier_option_id: optionId,
+            name: String(option?.name || "Extra"),
+            name_snapshot: String(option?.name || "Extra"),
+            quantity,
+            unit_price: unitPrice,
+            total_price: Math.round(totalPrice * 100) / 100,
+            affects_total: affectsTotal,
+            description_snapshot: option?.description || null,
+            meta: {
+              track_inventory: !!option?.track_inventory,
+              is_default: !!option?.is_default,
+              max_quantity_per_selection: Number(
+                option?.max_quantity_per_selection || 1,
+              ),
+              availability: option?.availability || null,
+              is_available:
+                typeof option?.is_available === "boolean"
+                  ? option.is_available
+                  : true,
+              availability_label: option?.availability_label || null,
+            },
+          };
+        })
+        .filter(Boolean);
 
-    normalized.push({
-      id: Number(group?.id || 0),
-      modifier_group_id: Number(group?.id || 0),
-      applies_to_level: String(group?.__applies_to_level || "order_item"),
-      component_product_id: group?.__component_product_id || null,
-      component_variant_id: group?.__component_variant_id || null,
-      group_name_snapshot: String(group?.name || "Extras"),
-      context_source: String(group?.__context_source || "product"),
-      context_label: String(group?.__context_label || ""),
-      group_description_snapshot: group?.description || null,
-      selection_mode: String(group?.selection_mode || ""),
-      is_required: !!group?.is_required,
-      min_select: Number(group?.min_select || 0),
-      max_select:
-        group?.max_select == null || group?.max_select === ""
-          ? null
-          : Number(group.max_select),
-      options: normalizedOptions,
+      if (!normalizedOptions.length) {
+        return;
+      }
+
+      normalized.push({
+        id: Number(group?.id || 0),
+        modifier_group_id: Number(group?.id || 0),
+        applies_to_level: String(group?.__applies_to_level || "order_item"),
+        component_product_id: group?.__component_product_id || null,
+        component_variant_id: group?.__component_variant_id || null,
+        group_name_snapshot: String(group?.name || "Extras"),
+        context_source: String(group?.__context_source || "product"),
+        context_label: String(group?.__context_label || ""),
+        group_description_snapshot: group?.description || null,
+        selection_mode: String(group?.selection_mode || ""),
+        is_required: !!group?.is_required,
+        min_select: Number(group?.min_select || 0),
+        max_select:
+          group?.max_select === null ||
+          group?.max_select === undefined ||
+          group?.max_select === ""
+            ? null
+            : Number(group.max_select),
+        options: normalizedOptions,
+      });
     });
-  });
 
   const parentModifiers = normalized.filter(
-    (g) => String(g.applies_to_level) === "order_item",
+    (group) => String(group.applies_to_level) === "order_item",
   );
 
   const componentModifiers = normalized.filter(
-    (g) => String(g.applies_to_level) === "composite_component",
+    (group) => String(group.applies_to_level) === "composite_component",
   );
+
+  const total = normalized.reduce((acc, group) => {
+    return (
+      acc +
+      (Array.isArray(group?.options) ? group.options : []).reduce(
+        (sum, option) => sum + Number(option?.total_price || 0),
+        0,
+      )
+    );
+  }, 0);
 
   return {
     parentModifiers,
@@ -218,16 +358,7 @@ function normalizeSelectionForResult(preparedSections, selectionMap) {
     parentDisplayGroups: buildModifierDisplayGroupsFromApiGroups(parentModifiers),
     componentDisplayGroups:
       buildModifierDisplayGroupsFromApiGroups(componentModifiers),
-    total:
-      Math.round(
-        normalized.reduce((acc, g) => {
-          const groupTotal = (Array.isArray(g.options) ? g.options : []).reduce(
-            (sum, opt) => sum + Number(opt?.total_price || 0),
-            0,
-          );
-          return acc + groupTotal;
-        }, 0) * 100,
-      ) / 100,
+    total: Math.round(total * 100) / 100,
   };
 }
 
@@ -237,28 +368,30 @@ function validatePreparedSections(preparedSections, selectionMap) {
   preparedSections.forEach((section) => {
     (Array.isArray(section?.groups) ? section.groups : []).forEach((group) => {
       const selected = selectionMap?.[group.__selection_key] || {};
-      const distinctCount = countDistinctSelectedOptions(selected);
+      const compliance = getGroupCompliance(group, selected);
 
-      const min = Number(group?.min_select || 0);
-      const max =
-        group?.max_select == null || group?.max_select === ""
-          ? null
-          : Number(group.max_select);
-
-      if (group?.is_required && distinctCount <= 0) {
-        errors.push(`Debes seleccionar al menos una opción en "${group?.name}".`);
+      if (compliance.missingUnits > 0) {
+        errors.push(
+          compliance.missingUnits === 1
+            ? `El grupo "${group?.name || "Extras"}" requiere 1 selección más.`
+            : `El grupo "${group?.name || "Extras"}" requiere ${compliance.missingUnits} selecciones más.`,
+        );
         return;
       }
 
-      if (min > 0 && distinctCount < min) {
+      if (compliance.max !== null && compliance.totalUnits > compliance.max) {
         errors.push(
-          `El grupo "${group?.name}" requiere mínimo ${min} opción(es) diferente(s).`,
+          `El grupo "${group?.name || "Extras"}" permite máximo ${compliance.max} selecciones.`,
         );
+        return;
       }
 
-      if (max !== null && distinctCount > max) {
+      if (
+        String(group?.selection_mode || "").toLowerCase() === "single" &&
+        compliance.distinctOptions > 1
+      ) {
         errors.push(
-          `El grupo "${group?.name}" permite máximo ${max} opción(es) diferente(s).`,
+          `El grupo "${group?.name || "Extras"}" permite únicamente una opción distinta.`,
         );
       }
     });
@@ -268,15 +401,13 @@ function validatePreparedSections(preparedSections, selectionMap) {
 }
 
 function getOptionQuantityLimit(option) {
-  const configuredMax = Math.max(
-    1,
-    Math.floor(
-      Number(option?.max_quantity_per_selection || 1),
-    ),
-  );
+  const configuredValue = Number(option?.max_quantity_per_selection || 1);
 
-  const availabilityMaxRaw =
-    option?.availability?.max_available_qty;
+  const configuredMax = Number.isFinite(configuredValue)
+    ? Math.max(1, Math.floor(configuredValue))
+    : 1;
+
+  const availabilityMaxRaw = option?.availability?.max_available_qty;
 
   const hasAvailabilityMax =
     availabilityMaxRaw !== null &&
@@ -285,38 +416,32 @@ function getOptionQuantityLimit(option) {
     Number.isFinite(Number(availabilityMaxRaw));
 
   const availabilityMax = hasAvailabilityMax
-    ? Math.max(
-        0,
-        Math.floor(Number(availabilityMaxRaw)),
-      )
+    ? Math.max(0, Math.floor(Number(availabilityMaxRaw)))
     : null;
-
-  const effectiveMax =
-    availabilityMax === null
-      ? configuredMax
-      : Math.min(configuredMax, availabilityMax);
 
   return {
     configuredMax,
     availabilityMax,
-    effectiveMax,
+    effectiveMax:
+      availabilityMax === null
+        ? configuredMax
+        : Math.min(configuredMax, availabilityMax),
   };
 }
 
 function getAvailabilityUi(option) {
   const availability =
-    option?.availability && typeof option.availability === "object"
+    option?.availability &&
+    typeof option.availability === "object" &&
+    !Array.isArray(option.availability)
       ? option.availability
       : null;
 
-  /*
-   * El estado del backend sigue siendo la autoridad para bloquear.
-   * availability_label solo se conserva como compatibilidad cuando
-   * no existe un objeto availability.
-   */
   const status = String(
     availability?.status || option?.availability_label || "available",
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
 
   const maxQty = availability?.max_available_qty ?? null;
   const explicitlyUnavailable = option?.is_available === false;
@@ -341,7 +466,7 @@ function getAvailabilityUi(option) {
     ? getPublicAvailabilityPresentation(availability)
     : null;
 
-  const safeFallbackLabels = {
+  const fallbackLabels = {
     agotado: "Agotado",
     out_of_stock: "Agotado",
     stock_insuficiente: "Disponibilidad limitada",
@@ -356,7 +481,7 @@ function getAvailabilityUi(option) {
 
   const label = isAvailable
     ? presentation?.label || "Disponible"
-    : presentationLabel || safeFallbackLabels[status] || "No disponible";
+    : presentationLabel || fallbackLabels[status] || "No disponible";
 
   const caption = isAvailable
     ? presentation?.caption || label
@@ -364,25 +489,24 @@ function getAvailabilityUi(option) {
         ? presentation?.caption
         : "") || label;
 
-  const limited =
-    ["insufficient_stock", "stock_insuficiente"].includes(status);
+  const limited = ["insufficient_stock", "stock_insuficiente"].includes(status);
 
   const colors = isAvailable
     ? {
-        bg: "#e8f7ee",
-        color: "#18794e",
-        border: "rgba(24,121,78,0.18)",
+        bg: "#E7F7ED",
+        color: "#147A48",
+        border: "#A7DCC0",
       }
     : limited
       ? {
-          bg: "#fff4e5",
-          color: "#b26a00",
-          border: "rgba(178,106,0,0.18)",
+          bg: "#FFF2DD",
+          color: "#A65E00",
+          border: "#F2C98D",
         }
       : {
-          bg: "#fdecec",
-          color: "#b42318",
-          border: "rgba(180,35,24,0.18)",
+          bg: "#FDE9E8",
+          color: "#B42318",
+          border: "#F2B8B5",
         };
 
   return {
@@ -395,238 +519,323 @@ function getAvailabilityUi(option) {
   };
 }
 
-function formatMaxQty(value) {
-  const num = Number(value || 0);
-  if (!Number.isFinite(num)) return null;
-  if (Math.floor(num) === num) return String(num);
-  return String(num);
+function getOptionSelectionState(group, option, selected) {
+  const optionId = Number(option?.id || 0);
+  const currentQty = Number(selected?.[optionId] || 0);
+  const groupTotal = countTotalSelectedUnits(selected);
+  const groupMax = getGroupMaxSelect(group);
+  const mode = String(group?.selection_mode || "").toLowerCase();
+
+  const availability = getAvailabilityUi(option);
+  const quantityLimit = getOptionQuantityLimit(option);
+
+  const groupRemaining =
+    groupMax === null
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, groupMax - groupTotal);
+
+  const canSelectSingle =
+    mode === "single" &&
+    (groupMax === null || groupMax >= 1);
+
+  const canSelectMultiple =
+    mode !== "single" &&
+    groupRemaining >= 1;
+
+  const canSelect =
+    optionId > 0 &&
+    availability.isAvailable &&
+    quantityLimit.effectiveMax >= 1 &&
+    (canSelectSingle || canSelectMultiple);
+
+  const canIncrement =
+    optionId > 0 &&
+    currentQty > 0 &&
+    availability.isAvailable &&
+    currentQty < quantityLimit.effectiveMax &&
+    groupRemaining >= 1;
+
+  const maxReachableQty =
+    groupRemaining === Number.POSITIVE_INFINITY
+      ? quantityLimit.effectiveMax
+      : Math.min(
+          quantityLimit.effectiveMax,
+          currentQty + groupRemaining,
+        );
+
+  return {
+    currentQty,
+    groupTotal,
+    groupMax,
+    groupRemaining,
+    availability,
+    quantityLimit,
+    canSelect,
+    canIncrement,
+    maxReachableQty,
+  };
+}
+
+function getStatusStyles(status) {
+  if (status === "completed") {
+    return {
+      background: "#E7F7ED",
+      color: "#147A48",
+      border: "#A7DCC0",
+    };
+  }
+
+  if (status === "required") {
+    return {
+      background: "#FFF1DC",
+      color: "#A85C00",
+      border: "#F0C27D",
+    };
+  }
+
+  return {
+    background: "#EEF1F6",
+    color: "#555B6A",
+    border: "#CCD2DD",
+  };
+}
+
+function getSectionDisplayLabel(section, product) {
+  const productName = product?.display_name || product?.name || "Producto";
+
+  if (section?.context_type === "variant") {
+    const variantName = section?.variant?.name || "Variante";
+    return `${productName} · ${variantName}`;
+  }
+
+  if (section?.context_type === "component") {
+    return (
+      section?.component?.component_product?.display_name ||
+      section?.component?.component_product?.name ||
+      section?.component?.name ||
+      section?.subtitle ||
+      "Componente"
+    );
+  }
+
+  if (section?.context_type === "component_variant") {
+    const componentName =
+      section?.component?.component_product?.display_name ||
+      section?.component?.component_product?.name ||
+      section?.component?.name ||
+      "Componente";
+
+    const variantName =
+      section?.option?.label ||
+      section?.option?.name ||
+      section?.option?.variant_name ||
+      "Variante";
+
+    return `${componentName} · ${variantName}`;
+  }
+
+  return productName;
+}
+
+function buildSelectionContextLabels(product, sections) {
+  const rows = Array.isArray(sections) ? sections : [];
+  const labels = [];
+
+  rows.forEach((section) => {
+    const label = getSectionDisplayLabel(section, product);
+
+    if (label && !labels.includes(label)) {
+      labels.push(label);
+    }
+  });
+
+  return labels;
 }
 
 function OptionRow({
   group,
   option,
-  selectedQty,
-  readOnly,
+  selected,
   themeColor,
   onSelectOption,
   onIncrementQty,
   onDecrementQty,
   onRemoveOption,
 }) {
-  const safeThemeColor = getSafeThemeColor(themeColor);
+  const safeThemeColor = getSafeModifierThemeColor(themeColor);
+  const state = getOptionSelectionState(group, option, selected);
+
+  const selectedQty = state.currentQty;
+  const availabilityUi = state.availability;
   const affectsPrice = !!option?.affects_total;
   const price = Number(option?.price || 0);
+  const maxPerSelection = state.quantityLimit.configuredMax;
 
-  const quantityLimit = getOptionQuantityLimit(option);
-  const maxPerSelection = quantityLimit.configuredMax;
-  const effectiveMaxQty = quantityLimit.effectiveMax;
-
-  const availabilityUi = getAvailabilityUi(option);
-
-  const disabledByAvailability =
-    !availabilityUi.isAvailable ||
-    effectiveMaxQty <= 0;
+  const incrementTitle = !availabilityUi.isAvailable
+    ? "Esta opción ya no está disponible"
+    : selectedQty >= state.quantityLimit.effectiveMax
+      ? "Se alcanzó el máximo permitido para esta opción"
+      : state.groupRemaining <= 0
+        ? "El grupo ya alcanzó su máximo"
+        : "Sumar";
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 10,
-        padding: "12px",
-        borderRadius: 10,
-        border: "1px solid rgba(0,0,0,0.08)",
-        background: selectedQty > 0 ? `${safeThemeColor}0F` : "#fff",
-        opacity: disabledByAvailability && selectedQty <= 0 ? 0.78 : 1,
-      }}
+    <ModifierOptionCard
+      themeColor={safeThemeColor}
+      selected={selectedQty > 0}
+      muted={!availabilityUi.isAvailable && selectedQty <= 0}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 10,
-          alignItems: "start",
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ minWidth: 0, flex: 1 }}>
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 900,
+            color: "#3F3A52",
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+          }}
+        >
+          {option?.name || "Opción"}
+        </div>
+
+        {option?.description ? (
           <div
             style={{
-              fontWeight: 900,
-              fontSize: 14,
-              color: "#3F3A52",
-              lineHeight: 1.25,
-            }}
-          >
-            {option?.name || "Opción"}
-          </div>
-
-          {option?.description ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: "#6E6A6A",
-                marginTop: 4,
-                lineHeight: 1.45,
-              }}
-            >
-              {option.description}
-            </div>
-          ) : null}
-
-          <div
-            style={{
+              marginTop: 4,
               fontSize: 12,
               color: "#6E6A6A",
-              marginTop: 6,
               lineHeight: 1.45,
             }}
           >
-            {affectsPrice ? `Ajuste: ${money(price)}` : "Sin ajuste al total"}
-            {maxPerSelection > 1
-              ? ` · Máx. por selección: ${maxPerSelection}`
-              : ""}
-            {option?.is_default ? " · Sugerido por defecto" : ""}
+            {option.description}
           </div>
+        ) : null}
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              alignItems: "center",
-              marginTop: 8,
-            }}
-          >
-            <span
-              title={availabilityUi.caption || availabilityUi.label}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "4px 10px",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 900,
-                background: availabilityUi.bg,
-                color: availabilityUi.color,
-                border: `1px solid ${availabilityUi.border}`,
-              }}
-            >
-              {availabilityUi.label}
-            </span>
-
-            {availabilityUi.maxQty !== null &&
-            availabilityUi.maxQty !== undefined &&
-            Number(availabilityUi.maxQty) > 0 ? (
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: "#6E6A6A",
-                }}
-              >
-                Máx. disponible: {formatMaxQty(availabilityUi.maxQty)}
-              </span>
-            ) : null}
-          </div>
-
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 12,
+            color: "#6E6A6A",
+            lineHeight: 1.45,
+          }}
+        >
+          {affectsPrice ? `Ajuste: ${money(price)}` : "Sin ajuste al total"}
+          {maxPerSelection > 1
+            ? ` · Máx. por selección: ${maxPerSelection}`
+            : ""}
+          {option?.is_default ? " · Sugerido por defecto" : ""}
         </div>
 
-        {readOnly ? (
-          <div
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center",
+            marginTop: 8,
+          }}
+        >
+          <span
+            title={availabilityUi.caption || availabilityUi.label}
             style={{
-              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "4px 9px",
+              borderRadius: 999,
+              border: `1px solid ${availabilityUi.border}`,
+              background: availabilityUi.bg,
+              color: availabilityUi.color,
+              fontSize: 11,
               fontWeight: 900,
-              color: "#6E6A6A",
-              alignSelf: "center",
             }}
           >
-            {selectedQty > 0 ? `Seleccionado (${selectedQty})` : "Solo vista"}
-          </div>
-        ) : selectedQty > 0 ? (
+            {availabilityUi.label}
+          </span>
+        </div>
+      </div>
+
+      {selectedQty > 0 ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <div
             style={{
-              display: "grid",
+              display: "inline-flex",
               gap: 8,
-              minWidth: 132,
+              alignItems: "center",
             }}
           >
+            <PillButton
+              tone="default"
+              onClick={() => onDecrementQty?.(group, option)}
+              disabled={selectedQty <= 0}
+              title="Restar"
+            >
+              −
+            </PillButton>
+
             <div
               style={{
-                display: "inline-flex",
-                gap: 8,
-                alignItems: "center",
-                justifyContent: "flex-end",
+                minWidth: 30,
+                textAlign: "center",
+                fontWeight: 950,
+                color: "#3F3A52",
               }}
             >
-              <PillButton
-                tone="default"
-                onClick={() => onDecrementQty?.(group, option)}
-                disabled={selectedQty <= 0}
-                title="Restar"
-              >
-                −
-              </PillButton>
-
-              <div
-                style={{
-                  minWidth: 28,
-                  textAlign: "center",
-                  fontWeight: 900,
-                  color: "#3F3A52",
-                }}
-              >
-                {selectedQty}
-              </div>
-
-              <PillButton
-                tone="soft"
-                onClick={() => onIncrementQty?.(group, option)}
-                disabled={
-                  selectedQty >= effectiveMaxQty ||
-                  disabledByAvailability
-                }
-                title={
-                  selectedQty >= effectiveMaxQty
-                    ? "Se alcanzó el máximo disponible"
-                    : "Sumar"
-                }
-              >
-                +
-              </PillButton>
+              {selectedQty}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <PillButton
-                tone="soft"
-                onClick={() => onRemoveOption?.(group, option)}
-                title="Quitar opción"
-              >
-                Quitar
-              </PillButton>
-            </div>
+            <PillButton
+              tone="soft"
+              themeColor={safeThemeColor}
+              onClick={() => onIncrementQty?.(group, option)}
+              disabled={!state.canIncrement}
+              title={incrementTitle}
+            >
+              +
+            </PillButton>
           </div>
-        ) : (
+
           <PillButton
-            tone={disabledByAvailability ? "default" : "soft"}
+            tone="soft"
+            themeColor={safeThemeColor}
+            onClick={() => onRemoveOption?.(group, option)}
+            title="Quitar opción"
+          >
+            Quitar
+          </PillButton>
+        </div>
+      ) : (
+        <div>
+          <PillButton
+            tone={state.canSelect ? "orange" : "default"}
+            themeColor={safeThemeColor}
             onClick={() => onSelectOption?.(group, option)}
-            disabled={disabledByAvailability}
+            disabled={!state.canSelect}
             title={
-              disabledByAvailability
-                ? "Esta opción no está disponible"
-                : "Seleccionar"
+              state.canSelect
+                ? "Seleccionar"
+                : !availabilityUi.isAvailable
+                  ? "Esta opción no está disponible"
+                  : "El grupo ya alcanzó su máximo"
             }
           >
-            {disabledByAvailability ? "No disponible" : "Seleccionar"}
+            {availabilityUi.isAvailable ? "Seleccionar" : "No disponible"}
           </PillButton>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </ModifierOptionCard>
   );
 }
 
 function GroupCard({
   group,
-  readOnly,
   selectedMap,
   themeColor,
   onSelectOption,
@@ -634,112 +843,168 @@ function GroupCard({
   onDecrementQty,
   onRemoveOption,
 }) {
+  const safeThemeColor = getSafeModifierThemeColor(themeColor);
   const options = Array.isArray(group?.options) ? group.options : [];
-  const distinctCount = countDistinctSelectedOptions(
-    selectedMap?.[group.__selection_key] || {},
-  );
+  const selected = selectedMap?.[group.__selection_key] || {};
+  const compliance = getGroupCompliance(group, selected);
+  const statusStyles = getStatusStyles(compliance.status);
+
+  const {
+    page,
+    nextPage,
+    prevPage,
+    total,
+    totalPages,
+    startItem,
+    endItem,
+    hasPrev,
+    hasNext,
+    paginatedItems,
+  } = usePagination({
+    items: options,
+    initialPage: 1,
+    pageSize: OPTION_PAGE_SIZE,
+    mode: "frontend",
+  });
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 12,
-        padding: "14px",
-        borderRadius: 10,
-        border: "1px solid #D9D3D3",
-        background: "#FBF8F8",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-      }}
-    >
-      <div>
-        <div
-          style={{
-            fontWeight: 900,
-            fontSize: 15,
-            color: "#3F3A52",
-            lineHeight: 1.2,
-          }}
-        >
-          {group?.name || "Grupo de extras"}
-        </div>
-
-        {group?.description ? (
+    <ModifierGroupCard themeColor={safeThemeColor}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
+              fontWeight: 900,
+              fontSize: 15,
+              color: "#3F3A52",
+              lineHeight: 1.25,
+            }}
+          >
+            {group?.name || "Grupo de extras"}
+          </div>
+
+          {group?.description ? (
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: "#6E6A6A",
+                lineHeight: 1.45,
+              }}
+            >
+              {group.description}
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              marginTop: 6,
               fontSize: 12,
               color: "#6E6A6A",
-              marginTop: 4,
               lineHeight: 1.45,
             }}
           >
-            {group.description}
+            {formatModifierGroupMeta(group)}
           </div>
-        ) : null}
 
-        <div
-          style={{
-            fontSize: 12,
-            color: "#6E6A6A",
-            marginTop: 6,
-            lineHeight: 1.45,
-          }}
-        >
-          {formatModifierGroupMeta(group)}
-        </div>
-
-        {!readOnly ? (
           <div
             style={{
-              fontSize: 12,
+              marginTop: 5,
+              fontSize: 11,
               color: "#6E6A6A",
-              marginTop: 6,
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
-            Opciones elegidas: {distinctCount}
+            Seleccionadas: {compliance.totalUnits}
+            {compliance.max !== null ? ` de ${compliance.max}` : ""}
           </div>
-        ) : null}
+        </div>
+
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "5px 10px",
+            borderRadius: 999,
+            border: `1px solid ${statusStyles.border}`,
+            background: statusStyles.background,
+            color: statusStyles.color,
+            fontSize: 11,
+            fontWeight: 950,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {compliance.label}
+        </span>
       </div>
 
       {options.length > 0 ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          {options.map((option) => {
-            const selectedQty = Number(
-              selectedMap?.[group.__selection_key]?.[Number(option?.id || 0)] ||
-                0,
-            );
-
-            return (
+        <ModifierOptionsArea>
+          <div className="cm-extras-selection-option-grid">
+            {paginatedItems.map((option, index) => (
               <OptionRow
-                key={option?.id}
+                key={
+                  Number(option?.id || 0) ||
+                  `${group?.__selection_key}-${index}`
+                }
                 group={group}
                 option={option}
-                selectedQty={selectedQty}
-                readOnly={readOnly}
-                themeColor={themeColor}
+                selected={selected}
+                themeColor={safeThemeColor}
                 onSelectOption={onSelectOption}
                 onIncrementQty={onIncrementQty}
                 onDecrementQty={onDecrementQty}
                 onRemoveOption={onRemoveOption}
               />
-            );
-          })}
-        </div>
+            ))}
+          </div>
+
+          {totalPages > 1 ? (
+            <div
+              style={{
+                overflow: "hidden",
+                borderRadius: 10,
+                border: `1px solid ${modifierHexToRgba(safeThemeColor, 0.14)}`,
+                background: modifierHexToRgba(safeThemeColor, 0.025),
+              }}
+            >
+              <PaginationFooter
+                page={page}
+                totalPages={totalPages}
+                startItem={startItem}
+                endItem={endItem}
+                total={total}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                onPrev={prevPage}
+                onNext={nextPage}
+                itemLabel="opciones"
+              />
+            </div>
+          ) : null}
+        </ModifierOptionsArea>
       ) : (
         <div
           style={{
-            fontSize: 12,
-            color: "#6E6A6A",
-            padding: "12px",
+            padding: 12,
             borderRadius: 10,
-            background: "#fff",
-            border: "1px dashed rgba(0,0,0,0.12)",
+            border: `1px dashed ${modifierHexToRgba(safeThemeColor, 0.25)}`,
+            background: modifierHexToRgba(safeThemeColor, 0.035),
+            color: "#6E6A6A",
+            fontSize: 12,
           }}
         >
           Este grupo no tiene opciones visibles en este contexto.
         </div>
       )}
-    </div>
+    </ModifierGroupCard>
   );
 }
 
@@ -756,18 +1021,25 @@ export default function ProductExtrasModal({
   confirmLabel = "Continuar",
   selectionScope = "all",
 }) {
-  const safeThemeColor = getSafeThemeColor(themeColor);
+  const safeThemeColor = getSafeModifierThemeColor(themeColor);
+  const isMobileViewport = useIsMobileViewport();
+  const readOnlyNavigationRef = useRef(null);
+
+  const [readOnlyCanGoBack, setReadOnlyCanGoBack] = useState(false);
+  const [selectionMap, setSelectionMap] = useState({});
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const contextSections = useMemo(() => {
+    return buildModifierContextSections(product, {
+      variantId,
+      compositeDraft,
+      selectionScope,
+    });
+  }, [product, variantId, compositeDraft, selectionScope]);
 
   const sections = useMemo(() => {
-    return buildPreparedSections(
-      product,
-      buildModifierContextSections(product, {
-        variantId,
-        compositeDraft,
-        selectionScope,
-      }),
-    );
-  }, [product, variantId, compositeDraft, selectionScope]);
+    return buildPreparedSections(product, contextSections);
+  }, [product, contextSections]);
 
   const flatGroups = useMemo(() => {
     return sections.flatMap((section) =>
@@ -775,19 +1047,26 @@ export default function ProductExtrasModal({
         sectionKey: section?.key || "section",
         sectionTitle: section?.title || "Extras",
         sectionSubtitle: section?.subtitle || "",
+        section,
         group,
       })),
     );
   }, [sections]);
 
-  const [selectionMap, setSelectionMap] = useState({});
-  const [errorMsg, setErrorMsg] = useState("");
-
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
+
     setSelectionMap(buildInitialSelectionMap(initialValue, sections));
     setErrorMsg("");
   }, [open, initialValue, sections]);
+
+  useEffect(() => {
+    if (!open || !readOnly) {
+      setReadOnlyCanGoBack(false);
+    }
+  }, [open, readOnly, product?.id]);
 
   const {
     page,
@@ -803,57 +1082,83 @@ export default function ProductExtrasModal({
   } = usePagination({
     items: flatGroups,
     initialPage: 1,
-    pageSize: 5,
+    pageSize: GROUP_PAGE_SIZE,
     mode: "frontend",
   });
 
   const paginatedGroupsBySection = useMemo(() => {
     const grouped = {};
+
     paginatedItems.forEach((item) => {
       if (!grouped[item.sectionKey]) {
         grouped[item.sectionKey] = {
           sectionKey: item.sectionKey,
           sectionTitle: item.sectionTitle,
           sectionSubtitle: item.sectionSubtitle,
+          section: item.section,
           items: [],
         };
       }
+
       grouped[item.sectionKey].items.push(item.group);
     });
 
     return Object.values(grouped);
   }, [paginatedItems]);
 
-  if (!product) return null;
+  const complianceSummary = useMemo(() => {
+    const rows = flatGroups.map(({ group }) => {
+      const selected = selectionMap?.[group.__selection_key] || {};
+      return getGroupCompliance(group, selected);
+    });
+
+    const invalidCount = rows.filter((row) => !row.isValid).length;
+    const completedCount = rows.filter(
+      (row) => row.status === "completed",
+    ).length;
+
+    return {
+      total: rows.length,
+      invalidCount,
+      completedCount,
+      isValid: invalidCount === 0,
+    };
+  }, [flatGroups, selectionMap]);
+
+  const selectionContextLabels = useMemo(() => {
+    return buildSelectionContextLabels(product, sections);
+  }, [product, sections]);
+
+  if (!product) {
+    return null;
+  }
 
   const title = product?.display_name || product?.name || "Producto";
 
   const updateGroupMap = (group, nextOptionMap) => {
-    setSelectionMap((prev) => ({
-      ...prev,
+    setSelectionMap((previous) => ({
+      ...previous,
       [group.__selection_key]: nextOptionMap,
     }));
+
+    setErrorMsg("");
   };
 
   const handleSelectOption = (group, option) => {
     const optionId = Number(option?.id || 0);
 
+    if (!optionId) {
+      return;
+    }
+
     const current = {
       ...(selectionMap?.[group.__selection_key] || {}),
     };
 
-    const mode = String(
-      group?.selection_mode || "",
-    ).toLowerCase();
+    const mode = String(group?.selection_mode || "").toLowerCase();
+    const state = getOptionSelectionState(group, option, current);
 
-    const availabilityUi = getAvailabilityUi(option);
-    const quantityLimit = getOptionQuantityLimit(option);
-
-    if (
-      !optionId ||
-      !availabilityUi.isAvailable ||
-      quantityLimit.effectiveMax < 1
-    ) {
+    if (!state.canSelect) {
       return;
     }
 
@@ -871,52 +1176,34 @@ export default function ProductExtrasModal({
   const handleIncrementQty = (group, option) => {
     const optionId = Number(option?.id || 0);
 
+    if (!optionId) {
+      return;
+    }
+
     const current = {
       ...(selectionMap?.[group.__selection_key] || {}),
     };
 
-    const mode = String(
-      group?.selection_mode || "",
-    ).toLowerCase();
-
-    const distinctCount =
-      countDistinctSelectedOptions(current);
-
-    const maxDistinct =
-      group?.max_select == null ||
-      group?.max_select === ""
-        ? null
-        : Number(group.max_select);
-
-    const availabilityUi = getAvailabilityUi(option);
-    const quantityLimit = getOptionQuantityLimit(option);
-    const effectiveMaxQty = quantityLimit.effectiveMax;
-
-    const currentQty = Number(
-      current?.[optionId] || 0,
-    );
+    const state = getOptionSelectionState(group, option, current);
+    const mode = String(group?.selection_mode || "").toLowerCase();
+    const currentQty = Number(current?.[optionId] || 0);
 
     if (
-      !optionId ||
-      !availabilityUi.isAvailable ||
-      effectiveMaxQty < 1 ||
-      currentQty >= effectiveMaxQty
+      !state.availability.isAvailable ||
+      state.quantityLimit.effectiveMax < 1
     ) {
       return;
     }
 
-    if (!currentQty) {
+    if (currentQty <= 0) {
+      if (!state.canSelect) {
+        return;
+      }
+
       if (mode === "single") {
         updateGroupMap(group, {
           [optionId]: 1,
         });
-        return;
-      }
-
-      if (
-        maxDistinct !== null &&
-        distinctCount >= maxDistinct
-      ) {
         return;
       }
 
@@ -925,18 +1212,39 @@ export default function ProductExtrasModal({
       return;
     }
 
-    current[optionId] = Math.min(
-      effectiveMaxQty,
+    if (!state.canIncrement) {
+      return;
+    }
+
+    const nextQty = Math.min(
       currentQty + 1,
+      state.maxReachableQty,
+      state.quantityLimit.effectiveMax,
     );
 
+    if (nextQty <= currentQty) {
+      return;
+    }
+
+    current[optionId] = nextQty;
     updateGroupMap(group, current);
   };
 
   const handleDecrementQty = (group, option) => {
     const optionId = Number(option?.id || 0);
-    const current = { ...(selectionMap?.[group.__selection_key] || {}) };
-    const nextQty = Math.max(0, Number(current?.[optionId] || 0) - 1);
+
+    if (!optionId) {
+      return;
+    }
+
+    const current = {
+      ...(selectionMap?.[group.__selection_key] || {}),
+    };
+
+    const nextQty = Math.max(
+      0,
+      Number(current?.[optionId] || 0) - 1,
+    );
 
     if (nextQty <= 0) {
       delete current[optionId];
@@ -949,7 +1257,15 @@ export default function ProductExtrasModal({
 
   const handleRemoveOption = (group, option) => {
     const optionId = Number(option?.id || 0);
-    const current = { ...(selectionMap?.[group.__selection_key] || {}) };
+
+    if (!optionId) {
+      return;
+    }
+
+    const current = {
+      ...(selectionMap?.[group.__selection_key] || {}),
+    };
+
     delete current[optionId];
     updateGroupMap(group, current);
   };
@@ -961,21 +1277,22 @@ export default function ProductExtrasModal({
     }
 
     for (const section of sections) {
-      for (const group of Array.isArray(section?.groups) ? section.groups : []) {
+      const groups = Array.isArray(section?.groups) ? section.groups : [];
+
+      for (const group of groups) {
         const selected = selectionMap?.[group.__selection_key] || {};
         const options = Array.isArray(group?.options) ? group.options : [];
 
         for (const option of options) {
           const optionId = Number(option?.id || 0);
-          const qty = Number(selected?.[optionId] || 0);
+          const quantity = Number(selected?.[optionId] || 0);
 
-          if (qty <= 0) {
+          if (quantity <= 0) {
             continue;
           }
 
           const availabilityUi = getAvailabilityUi(option);
           const quantityLimit = getOptionQuantityLimit(option);
-          const effectiveMaxQty = quantityLimit.effectiveMax;
 
           if (!availabilityUi.isAvailable) {
             setErrorMsg(
@@ -984,11 +1301,10 @@ export default function ProductExtrasModal({
             return;
           }
 
-          if (qty > effectiveMaxQty) {
+          if (quantity > quantityLimit.effectiveMax) {
             setErrorMsg(
-              `La opción "${option?.name || "Extra"}" permite actualmente un máximo de ${effectiveMaxQty}.`,
+              `La opción "${option?.name || "Extra"}" permite actualmente un máximo de ${quantityLimit.effectiveMax}.`,
             );
-
             return;
           }
         }
@@ -996,64 +1312,66 @@ export default function ProductExtrasModal({
     }
 
     const errors = validatePreparedSections(sections, selectionMap);
+
     if (errors.length > 0) {
       setErrorMsg(errors[0]);
       return;
     }
 
-    const normalized = normalizeSelectionForResult(sections, selectionMap);
+    const normalized = normalizeSelectionForResult(
+      sections,
+      selectionMap,
+    );
+
     setErrorMsg("");
     onConfirm?.(normalized);
   };
 
-  const totalDistinctSelected = sections.reduce((acc, section) => {
-    return (
-      acc +
-      (Array.isArray(section?.groups) ? section.groups : []).reduce(
-        (sum, group) => {
-          return (
-            sum +
-            countDistinctSelectedOptions(
-              selectionMap?.[group.__selection_key] || {},
-            )
-          );
-        },
-        0,
-      )
-    );
-  }, 0);
-
-  const totalUnitsSelected = sections.reduce((acc, section) => {
-    return (
-      acc +
-      (Array.isArray(section?.groups) ? section.groups : []).reduce(
-        (sum, group) => {
-          return (
-            sum +
-            countTotalSelectedUnits(selectionMap?.[group.__selection_key] || {})
-          );
-        },
-        0,
-      )
-    );
-  }, 0);
+  const handleReadOnlyBack = () => {
+    readOnlyNavigationRef.current?.goBack?.();
+  };
 
   return (
     <Modal
       open={open}
       title={`Extras: ${title}`}
       onClose={onClose}
-      width="min(920px, 96vw)"
-      maxHeight="min(88vh, 920px)"
-      bodyPadding={16}
+      width={isMobileViewport ? "100vw" : "920px"}
+      maxHeight={isMobileViewport ? "100dvh" : "650px"}
+      bodyPadding={0}
       backdropBlur={false}
       fullScreenMobile
       contentStyle={{
-        borderRadius: 18,
+        borderRadius: isMobileViewport ? 0 : 18,
+        width: isMobileViewport ? "100vw" : "920px",
+        maxWidth: isMobileViewport ? "100vw" : "920px",
+        height: isMobileViewport ? "100dvh" : "650px",
+        minHeight: isMobileViewport ? "100dvh" : "650px",
+        maxHeight: isMobileViewport ? "100dvh" : "650px",
+        margin: 0,
+        boxSizing: "border-box",
+      }}
+      bodyStyle={{
+        background: "#F5F3F3",
+        boxSizing: "border-box",
       }}
       actions={
         <>
-          <PillButton tone="default" onClick={onClose} title="Cerrar">
+          {readOnly && readOnlyCanGoBack ? (
+            <PillButton
+              tone="default"
+              onClick={handleReadOnlyBack}
+              title="Regresar"
+            >
+              Regresar
+            </PillButton>
+          ) : null}
+
+          <PillButton
+            tone="default"
+            onClick={onClose}
+            title="Cerrar"
+          >
             {readOnly ? "Cerrar" : "Cancelar"}
           </PillButton>
 
@@ -1061,10 +1379,13 @@ export default function ProductExtrasModal({
             tone={readOnly ? "soft" : "orange"}
             themeColor={safeThemeColor}
             onClick={handleConfirm}
+            disabled={!readOnly && !complianceSummary.isValid}
             title={
               readOnly
                 ? "Cerrar vista de extras"
-                : "Continuar con la selección actual"
+                : complianceSummary.isValid
+                  ? "Guardar configuración de extras"
+                  : "Completa los grupos requeridos antes de continuar"
             }
           >
             {readOnly ? "Listo" : confirmLabel}
@@ -1072,188 +1393,230 @@ export default function ProductExtrasModal({
         </>
       }
     >
-      <div style={{ display: "grid", gap: 14 }}>
-        <div
-          style={{
-            border: "1px solid #D9D3D3",
-            borderRadius: 10,
-            background: "#FBF8F8",
-            padding: 14,
-            display: "grid",
-            gap: 8,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 900,
-              color: "#3F3A52",
-            }}
-          >
-            Configuración de modificadores
-          </div>
+      <div
+        style={{
+          width: "calc(100% - 32px)",
+          minHeight: "calc(100% - 16px)",
+          margin: "0 16px 16px",
+          boxSizing: "border-box",
+          padding: 16,
+          border: "1px solid rgba(47,42,61,0.08)",
+          borderTop: "none",
+          borderRadius: "0 0 10px 10px",
+          background: "#FFFFFF",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.035)",
+        }}
+      >
+        {readOnly ? (
+          <ProductExtrasReadOnlyNavigator
+            product={product}
+            sections={contextSections}
+            themeColor={safeThemeColor}
+            navigationRef={readOnlyNavigationRef}
+            onCanGoBackChange={setReadOnlyCanGoBack}
+          />
+        ) : (
+          <div style={{ display: "grid", gap: 14 }}>
+            <style>
+              {`
+                .cm-extras-selection-option-grid {
+                  display: grid;
+                  grid-template-columns: repeat(2, minmax(0, 1fr));
+                  gap: 8px;
+                }
 
-          <div
-            style={{
-              fontSize: 13,
-              color: "#6E6A6A",
-              lineHeight: 1.55,
-            }}
-          >
-            Aquí se muestran los extras disponibles según su contexto real:
-            producto, variante, componente o variante del componente.
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "4px 10px",
-                borderRadius: 999,
-                border: "1px solid rgba(0,0,0,0.10)",
-                background: "#fff",
-                color: "#3F3A52",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
-              Opciones distintas: {totalDistinctSelected}
-            </span>
-
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "4px 10px",
-                borderRadius: 999,
-                border: "1px solid rgba(0,0,0,0.10)",
-                background: "#fff",
-                color: "#3F3A52",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
-              Cantidad total: {totalUnitsSelected}
-            </span>
-          </div>
-        </div>
-
-        {errorMsg ? (
-          <div
-            style={{
-              border: "1px solid rgba(242,100,42,0.28)",
-              background: "#ffecec",
-              color: "#a10000",
-              borderRadius: 10,
-              padding: "10px 12px",
-              fontSize: 12,
-              fontWeight: 900,
-            }}
-          >
-            {errorMsg}
-          </div>
-        ) : null}
-
-        {total > 0 ? (
-          <>
-            <div style={{ display: "grid", gap: 12 }}>
-              {paginatedGroupsBySection.map((section) => (
-                <div
-                  key={section.sectionKey}
-                  style={{
-                    display: "grid",
-                    gap: 10,
-                    padding: "14px",
-                    borderRadius: 10,
-                    border: "1px solid #D9D3D3",
-                    background: "#fff",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 900,
-                        fontSize: 15,
-                        color: "#3F3A52",
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      {section.sectionTitle}
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#6E6A6A",
-                        marginTop: 4,
-                      }}
-                    >
-                      {section.sectionSubtitle}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {section.items.map((group) => (
-                      <GroupCard
-                        key={group.__selection_key}
-                        group={group}
-                        readOnly={readOnly}
-                        selectedMap={selectionMap}
-                        themeColor={safeThemeColor}
-                        onSelectOption={handleSelectOption}
-                        onIncrementQty={handleIncrementQty}
-                        onDecrementQty={handleDecrementQty}
-                        onRemoveOption={handleRemoveOption}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+                @media (max-width: 600px) {
+                  .cm-extras-selection-option-grid {
+                    grid-template-columns: minmax(0, 1fr);
+                  }
+                }
+              `}
+            </style>
 
             <div
               style={{
-                border: "1px solid #D9D3D3",
+                display: "grid",
+                gap: 8,
+                padding: 14,
                 borderRadius: 10,
-                overflow: "hidden",
-                background: "#fff",
+                border: "1px solid #D9D3D3",
+                background: "#FBF8F8",
               }}
             >
-              <PaginationFooter
-                page={page}
-                totalPages={totalPages}
-                startItem={startItem}
-                endItem={endItem}
-                total={total}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                onPrev={prevPage}
-                onNext={nextPage}
-                itemLabel="grupos"
-              />
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 950,
+                  color: "#3F3A52",
+                  lineHeight: 1.25,
+                }}
+              >
+                Configura tus extras
+              </div>
+
+              {selectionContextLabels.length > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 7,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {selectionContextLabels.map((label) => (
+                    <span
+                      key={label}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "5px 9px",
+                        borderRadius: 999,
+                        border: `1px solid ${modifierHexToRgba(safeThemeColor, 0.22)}`,
+                        background: modifierHexToRgba(safeThemeColor, 0.05),
+                        color: "#3F3A52",
+                        fontSize: 11,
+                        fontWeight: 850,
+                      }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              {complianceSummary.total > 0 ? (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#6E6A6A",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {complianceSummary.isValid
+                    ? "Todos los grupos requeridos están completos."
+                    : complianceSummary.invalidCount === 1
+                      ? "Falta completar 1 grupo requerido."
+                      : `Faltan completar ${complianceSummary.invalidCount} grupos requeridos.`}
+                </div>
+              ) : null}
             </div>
-          </>
-        ) : (
-          <div
-            style={{
-              fontSize: 13,
-              color: "#6E6A6A",
-              padding: "16px",
-              borderRadius: 10,
-              border: "1px dashed rgba(0,0,0,0.12)",
-              background: "#FBF8F8",
-            }}
-          >
-            Este producto no tiene extras visibles para este contexto.
+
+            {errorMsg ? (
+              <div
+                role="alert"
+                style={{
+                  border: "1px solid rgba(180,35,24,0.22)",
+                  background: "#FDECEC",
+                  color: "#A10000",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  lineHeight: 1.45,
+                }}
+              >
+                {errorMsg}
+              </div>
+            ) : null}
+
+            {total > 0 ? (
+              <>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {paginatedGroupsBySection.map((section) => (
+                    <div
+                      key={section.sectionKey}
+                      style={{
+                        display: "grid",
+                        gap: 10,
+                        padding: 14,
+                        borderRadius: 10,
+                        border: "1px solid #D9D3D3",
+                        background: "#FFFFFF",
+                        boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            fontSize: 15,
+                            color: "#3F3A52",
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {section.sectionTitle}
+                        </div>
+
+                        {section.sectionSubtitle ? (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontSize: 12,
+                              color: "#6E6A6A",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {section.sectionSubtitle}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {section.items.map((group) => (
+                          <GroupCard
+                            key={group.__selection_key}
+                            group={group}
+                            selectedMap={selectionMap}
+                            themeColor={safeThemeColor}
+                            onSelectOption={handleSelectOption}
+                            onIncrementQty={handleIncrementQty}
+                            onDecrementQty={handleDecrementQty}
+                            onRemoveOption={handleRemoveOption}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 ? (
+                  <div
+                    style={{
+                      overflow: "hidden",
+                      borderRadius: 10,
+                      border: "1px solid #D9D3D3",
+                      background: "#FFFFFF",
+                    }}
+                  >
+                    <PaginationFooter
+                      page={page}
+                      totalPages={totalPages}
+                      startItem={startItem}
+                      endItem={endItem}
+                      total={total}
+                      hasPrev={hasPrev}
+                      hasNext={hasNext}
+                      onPrev={prevPage}
+                      onNext={nextPage}
+                      itemLabel="grupos"
+                    />
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 10,
+                  border: "1px dashed rgba(0,0,0,0.12)",
+                  background: "#FBF8F8",
+                  color: "#6E6A6A",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
+              >
+                Este producto no tiene extras configurables para la selección actual.
+              </div>
+            )}
           </div>
         )}
       </div>
