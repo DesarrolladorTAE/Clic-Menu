@@ -11,6 +11,7 @@ export default function PublicMenuProductsGrid({
   categoryNameById,
   canSelect,
   showSelectBtn,
+  allowReadOnlyDetails = false,
   themeColor,
   onAddSimple,
   onAddVariant,
@@ -47,6 +48,7 @@ export default function PublicMenuProductsGrid({
               }
               canSelect={canSelect}
               showSelectBtn={showSelectBtn}
+              allowReadOnlyDetails={allowReadOnlyDetails}
               themeColor={themeColor}
               onAddSimple={onAddSimple}
               onAddVariant={onAddVariant}

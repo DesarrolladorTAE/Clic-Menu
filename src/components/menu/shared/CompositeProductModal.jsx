@@ -330,8 +330,7 @@ export default function CompositeProductModal({
               lineHeight: 1.5,
             }}
           >
-            Configura los componentes del producto. Aquí sí va lo opcional,
-            variantes, avisos de precio y demás civilización mínima.
+            Configura los componentes del producto.
           </div>
 
           {(draft || []).map((c) => {

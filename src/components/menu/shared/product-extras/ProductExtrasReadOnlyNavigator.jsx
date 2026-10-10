@@ -1,13 +1,9 @@
+//src/components/menu/shared/product-extras/ProductExtrasReadOnlyNavigator.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Box, Typography } from "@mui/material";
-
-import RestaurantMenuOutlinedIcon from "@mui/icons-material/RestaurantMenuOutlined";
-import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
-import WidgetsOutlinedIcon from "@mui/icons-material/WidgetsOutlined";
-import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 
 import {
-  formatModifierGroupMeta,
+  formatModifierGroupSelectionInstruction,
+  formatModifierOptionRepeatInstruction,
   getAvailabilityTone,
   getPublicAvailabilityPresentation,
   money,
@@ -24,241 +20,24 @@ import {
   ModifierOptionsArea,
 } from "./ModifierCardShells";
 
+import ModifierGroupCarousel, {
+  getModifierGroupCarouselKey,
+} from "./ModifierGroupCarousel";
+
+import {
+  buildContextCards,
+  ContextCard,
+  EntityCard,
+  getContextTitle,
+  getEntityLabel,
+  getEntityScreenTitle,
+  getProductLabel,
+  getSectionGroupCount,
+  pluralize,
+} from "./ProductExtrasNavigationShared";
+
 const ENTITY_PAGE_SIZE = 6;
-const GROUP_PAGE_SIZE = 2;
 const OPTION_PAGE_SIZE = 4;
-
-function pluralize(count, singular, plural) {
-  return Number(count) === 1 ? singular : plural;
-}
-
-function getSectionGroupCount(section) {
-  return Array.isArray(section?.groups) ? section.groups.length : 0;
-}
-
-function getProductLabel(product) {
-  return product?.display_name || product?.name || "Producto";
-}
-
-function getEntityLabel(section) {
-  if (section?.entity_label) {
-    return String(section.entity_label);
-  }
-
-  if (section?.context_type === "variant") {
-    return section?.variant?.name || "Variante";
-  }
-
-  if (section?.context_type === "component") {
-    return (
-      section?.component?.component_product?.display_name ||
-      section?.component?.component_product?.name ||
-      section?.component?.name ||
-      "Componente"
-    );
-  }
-
-  if (section?.context_type === "component_variant") {
-    const componentName =
-      section?.component?.component_product?.display_name ||
-      section?.component?.component_product?.name ||
-      section?.component?.name ||
-      "Componente";
-
-    const variantName =
-      section?.option?.label ||
-      section?.option?.name ||
-      section?.option?.variant_name ||
-      "Variante";
-
-    return `${componentName} · ${variantName}`;
-  }
-
-  return section?.subtitle || "Producto";
-}
-
-function getContextTitle(contextType) {
-  const titles = {
-    product: "Producto",
-    variant: "Variantes",
-    component: "Componentes",
-    component_variant: "Variantes de componente",
-  };
-
-  return titles[contextType] || "Extras";
-}
-
-function getContextIcon(contextType) {
-  const icons = {
-    product: RestaurantMenuOutlinedIcon,
-    variant: TuneOutlinedIcon,
-    component: WidgetsOutlinedIcon,
-    component_variant: AccountTreeOutlinedIcon,
-  };
-
-  return icons[contextType] || RestaurantMenuOutlinedIcon;
-}
-
-function getEntityScreenTitle(contextType) {
-  const titles = {
-    variant: "Variantes con extras",
-    component: "Componentes con extras",
-    component_variant: "Variantes de componente con extras",
-  };
-
-  return titles[contextType] || "Extras disponibles";
-}
-
-function getContextDescription(contextType, sections) {
-  const rows = Array.isArray(sections) ? sections : [];
-
-  if (contextType === "product") {
-    const groupCount = rows.reduce(
-      (total, section) => total + getSectionGroupCount(section),
-      0,
-    );
-
-    if (groupCount <= 0) {
-      return {
-        description: "Sin extras",
-        detail: "No tiene extras generales",
-      };
-    }
-
-    return {
-      description: "Extras generales",
-      detail: `${groupCount} ${pluralize(groupCount, "grupo", "grupos")}`,
-    };
-  }
-
-  const entityCount = rows.length;
-
-  if (contextType === "variant") {
-    return {
-      description: "Extras específicos",
-      detail: `${entityCount} ${pluralize(
-        entityCount,
-        "variante con extras",
-        "variantes con extras",
-      )}`,
-    };
-  }
-
-  if (contextType === "component") {
-    return {
-      description: "Extras por componente",
-      detail: `${entityCount} ${pluralize(
-        entityCount,
-        "componente con extras",
-        "componentes con extras",
-      )}`,
-    };
-  }
-
-  return {
-    description: "Extras por variante",
-    detail: `${entityCount} ${pluralize(
-      entityCount,
-      "variante con extras",
-      "variantes con extras",
-    )}`,
-  };
-}
-
-function buildContextCards(product, sections) {
-  const rows = Array.isArray(sections) ? sections : [];
-
-  const grouped = {
-    product: rows.filter((section) => section?.context_type === "product"),
-    variant: rows.filter((section) => section?.context_type === "variant"),
-    component: rows.filter((section) => section?.context_type === "component"),
-    component_variant: rows.filter(
-      (section) => section?.context_type === "component_variant",
-    ),
-  };
-
-  const cards = [];
-
-  if (grouped.product.length > 0) {
-    const info = getContextDescription("product", grouped.product);
-    const groupCount = grouped.product.reduce(
-      (total, section) => total + getSectionGroupCount(section),
-      0,
-    );
-
-    cards.push({
-      type: "product",
-      title: "PRODUCTO",
-      description: info.description,
-      detail: info.detail,
-      sections: grouped.product,
-      disabled: groupCount <= 0,
-      directToGroups: true,
-    });
-  }
-
-  if (grouped.variant.length > 0) {
-    const info = getContextDescription("variant", grouped.variant);
-
-    cards.push({
-      type: "variant",
-      title: "VARIANTES",
-      description: info.description,
-      detail: info.detail,
-      sections: grouped.variant,
-      disabled: false,
-      directToGroups: false,
-    });
-  }
-
-  if (grouped.component.length > 0) {
-    const info = getContextDescription("component", grouped.component);
-
-    cards.push({
-      type: "component",
-      title: "COMPONENTES",
-      description: info.description,
-      detail: info.detail,
-      sections: grouped.component,
-      disabled: false,
-      directToGroups: false,
-    });
-  }
-
-  if (grouped.component_variant.length > 0) {
-    const info = getContextDescription(
-      "component_variant",
-      grouped.component_variant,
-    );
-
-    cards.push({
-      type: "component_variant",
-      title: "VARIANTES DE COMPONENTE",
-      description: info.description,
-      detail: info.detail,
-      sections: grouped.component_variant,
-      disabled: false,
-      directToGroups: false,
-    });
-  }
-
-  if (
-    cards.length > 0 &&
-    !cards.some((card) => card.type === "product")
-  ) {
-    cards.unshift({
-      type: "product",
-      title: "PRODUCTO",
-      description: "Sin extras",
-      detail: "No tiene extras generales",
-      sections: [],
-      disabled: true,
-      directToGroups: true,
-    });
-  }
-
-  return cards;
-}
 
 function getAvailabilityDataForOption(option) {
   if (
@@ -316,7 +95,7 @@ function getAvailabilityColors(status) {
   };
 }
 
-function OptionReadOnlyCard({ option, themeColor }) {
+function OptionReadOnlyCard({ group, option, themeColor }) {
   const safeThemeColor = getSafeModifierThemeColor(themeColor);
   const availability = getAvailabilityDataForOption(option);
   const presentation = getPublicAvailabilityPresentation(availability);
@@ -328,10 +107,7 @@ function OptionReadOnlyCard({ option, themeColor }) {
   const colors = getAvailabilityColors(status);
   const affectsTotal = !!option?.affects_total;
   const price = Number(option?.price || 0);
-  const maxPerSelection = Math.max(
-    1,
-    Number(option?.max_quantity_per_selection || 1),
-  );
+  const repeatInstruction = formatModifierOptionRepeatInstruction(option, group);
 
   return (
     <ModifierOptionCard themeColor={safeThemeColor}>
@@ -370,19 +146,20 @@ function OptionReadOnlyCard({ option, themeColor }) {
             lineHeight: 1.45,
           }}
         >
-          {affectsTotal ? `Ajuste: ${money(price)}` : "Sin ajuste al total"}
+          {affectsTotal ? `Extra: ${money(price)}` : "Sin costo extra"}
         </div>
 
-        {maxPerSelection > 1 ? (
+        {repeatInstruction ? (
           <div
             style={{
-              marginTop: 3,
-              fontSize: 11,
-              color: "#6E6A6A",
+              marginTop: 4,
+              fontSize: 11.5,
+              fontWeight: 800,
+              color: "#3F3A52",
               lineHeight: 1.4,
             }}
           >
-            Máx. por selección: {maxPerSelection}
+            {repeatInstruction}
           </div>
         ) : null}
       </div>
@@ -421,6 +198,7 @@ function OptionReadOnlyCard({ option, themeColor }) {
 function GroupReadOnlyCard({ group, themeColor }) {
   const safeThemeColor = getSafeModifierThemeColor(themeColor);
   const options = Array.isArray(group?.options) ? group.options : [];
+  const groupInstruction = formatModifierGroupSelectionInstruction(group);
 
   const {
     page,
@@ -469,13 +247,14 @@ function GroupReadOnlyCard({ group, themeColor }) {
 
         <div
           style={{
-            marginTop: 6,
+            marginTop: 7,
             fontSize: 12,
-            color: "#6E6A6A",
+            fontWeight: 850,
+            color: "#3F3A52",
             lineHeight: 1.45,
           }}
         >
-          {formatModifierGroupMeta(group)}
+          {groupInstruction}
         </div>
       </div>
 
@@ -490,6 +269,7 @@ function GroupReadOnlyCard({ group, themeColor }) {
               return (
                 <OptionReadOnlyCard
                   key={optionKey}
+                  group={group}
                   option={option}
                   themeColor={safeThemeColor}
                 />
@@ -500,7 +280,11 @@ function GroupReadOnlyCard({ group, themeColor }) {
           {totalPages > 1 ? (
             <div
               style={{
+                width: "100%",
+                minWidth: 0,
+                maxWidth: "100%",
                 overflow: "hidden",
+                boxSizing: "border-box",
                 borderRadius: 10,
                 border: `1px solid ${modifierHexToRgba(safeThemeColor, 0.16)}`,
                 background: modifierHexToRgba(safeThemeColor, 0.025),
@@ -540,172 +324,6 @@ function GroupReadOnlyCard({ group, themeColor }) {
   );
 }
 
-function ContextCard({ context, themeColor, onClick }) {
-  const accentColor = getSafeModifierThemeColor(themeColor);
-  const disabled = !!context?.disabled;
-  const ContextIcon = getContextIcon(context?.type);
-
-  return (
-    <Box
-      component="button"
-      type="button"
-      disabled={disabled}
-      onClick={() => {
-        if (disabled) {
-          return;
-        }
-
-        onClick?.(context);
-      }}
-      sx={{
-        width: "100%",
-        minWidth: 0,
-        minHeight: { xs: 118, sm: 132 },
-        p: { xs: 1.25, sm: 1.5 },
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        gap: 0.7,
-        font: "inherit",
-        color: disabled ? "#8A858F" : "text.primary",
-        border: "1px solid",
-        borderColor: disabled ? "rgba(47,42,61,0.10)" : "divider",
-        borderRadius: 2,
-        backgroundColor: disabled ? "#F1EFEF" : "#FFFFFF",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.65 : 1,
-        boxShadow: "none",
-        transition:
-          "border-color 160ms ease, background-color 160ms ease, transform 160ms ease",
-        "&:hover": disabled
-          ? {}
-          : {
-              borderColor: accentColor,
-              backgroundColor: modifierHexToRgba(accentColor, 0.035),
-              transform: "translateY(-1px)",
-            },
-      }}
-    >
-      <Box
-        sx={{
-          width: { xs: 38, sm: 42 },
-          height: { xs: 38, sm: 42 },
-          flexShrink: 0,
-          borderRadius: "50%",
-          display: "grid",
-          placeItems: "center",
-          color: disabled ? "#928D96" : accentColor,
-          backgroundColor: disabled
-            ? "rgba(47,42,61,0.07)"
-            : modifierHexToRgba(accentColor, 0.1),
-        }}
-      >
-        <ContextIcon sx={{ fontSize: { xs: 21, sm: 23 } }} />
-      </Box>
-
-      <Typography
-        sx={{
-          mt: 0.15,
-          fontSize: { xs: 12.5, sm: 14 },
-          fontWeight: 850,
-          lineHeight: 1.2,
-          color: disabled ? "#8A858F" : "text.primary",
-        }}
-      >
-        {context?.title || "EXTRAS"}
-      </Typography>
-
-      <Typography
-        sx={{
-          fontSize: 11.5,
-          fontWeight: 700,
-          lineHeight: 1.3,
-          color: disabled ? "#928D96" : "text.secondary",
-        }}
-      >
-        {context?.description || "Extras"}
-      </Typography>
-
-      {context?.detail ? (
-        <Typography
-          sx={{
-            maxWidth: 260,
-            fontSize: 11,
-            fontWeight: 700,
-            lineHeight: 1.3,
-            color: disabled ? "#928D96" : "text.secondary",
-          }}
-        >
-          {context.detail}
-        </Typography>
-      ) : null}
-    </Box>
-  );
-}
-
-function EntityCard({ section, themeColor, onClick }) {
-  const safeThemeColor = getSafeModifierThemeColor(themeColor);
-  const groupCount = getSectionGroupCount(section);
-  const label = getEntityLabel(section);
-
-  return (
-    <button
-      type="button"
-      onClick={() => onClick?.(section)}
-      style={{
-        width: "100%",
-        minHeight: 112,
-        display: "grid",
-        alignContent: "center",
-        gap: 7,
-        padding: 15,
-        borderRadius: 12,
-        border: `1px solid ${modifierHexToRgba(safeThemeColor, 0.25)}`,
-        borderLeft: `4px solid ${safeThemeColor}`,
-        background: "#FFFFFF",
-        color: "#3F3A52",
-        boxShadow: "0 4px 15px rgba(47,42,61,0.055)",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "transform 160ms ease, box-shadow 160ms ease",
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.transform = "translateY(-1px)";
-        event.currentTarget.style.boxShadow =
-          "0 8px 20px rgba(47,42,61,0.09)";
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.transform = "translateY(0)";
-        event.currentTarget.style.boxShadow =
-          "0 4px 15px rgba(47,42,61,0.055)";
-      }}
-    >
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 900,
-          lineHeight: 1.3,
-          wordBreak: "break-word",
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 800,
-          color: "#6E6A6A",
-        }}
-      >
-        {groupCount} {pluralize(groupCount, "grupo de extras", "grupos de extras")}
-      </div>
-    </button>
-  );
-}
-
 function EntityListView({ context, themeColor, onSelectSection }) {
   const sections = Array.isArray(context?.sections)
     ? context.sections.filter((section) => getSectionGroupCount(section) > 0)
@@ -730,8 +348,17 @@ function EntityListView({ context, themeColor, onSelectSection }) {
   });
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div>
+    <div
+      style={{
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        display: "grid",
+        gap: 14,
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
         <div
           style={{
             fontSize: 16,
@@ -784,7 +411,11 @@ function EntityListView({ context, themeColor, onSelectSection }) {
       {totalPages > 1 ? (
         <div
           style={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: "100%",
             overflow: "hidden",
+            boxSizing: "border-box",
             borderRadius: 10,
             border: "1px solid #D9D3D3",
             background: "#FFFFFF",
@@ -809,26 +440,61 @@ function EntityListView({ context, themeColor, onSelectSection }) {
 }
 
 function GroupsView({ context, section, product, themeColor }) {
-  const groups = Array.isArray(section?.groups) ? section.groups : [];
+  const safeThemeColor = getSafeModifierThemeColor(themeColor);
+
+  const groups = useMemo(() => {
+    return Array.isArray(section?.groups) ? section.groups : [];
+  }, [section]);
+
   const productLabel = getProductLabel(product);
 
-  const {
-    page,
-    nextPage,
-    prevPage,
-    total,
-    totalPages,
-    startItem,
-    endItem,
-    hasPrev,
-    hasNext,
-    paginatedItems,
-  } = usePagination({
-    items: groups,
-    initialPage: 1,
-    pageSize: GROUP_PAGE_SIZE,
-    mode: "frontend",
+  const [selectedGroupKey, setSelectedGroupKey] = useState(() => {
+    if (groups.length === 0) {
+      return null;
+    }
+
+    return getModifierGroupCarouselKey(groups[0], 0);
   });
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      if (selectedGroupKey !== null) {
+        setSelectedGroupKey(null);
+      }
+
+      return;
+    }
+
+    const selectedStillExists = groups.some((group, index) => {
+      return getModifierGroupCarouselKey(group, index) === selectedGroupKey;
+    });
+
+    if (!selectedStillExists) {
+      setSelectedGroupKey(getModifierGroupCarouselKey(groups[0], 0));
+    }
+  }, [groups, selectedGroupKey]);
+
+  const selectedGroupIndex = useMemo(() => {
+    if (groups.length === 0) {
+      return -1;
+    }
+
+    const index = groups.findIndex((group, groupIndex) => {
+      return getModifierGroupCarouselKey(group, groupIndex) === selectedGroupKey;
+    });
+
+    return index >= 0 ? index : 0;
+  }, [groups, selectedGroupKey]);
+
+  const selectedGroup =
+    selectedGroupIndex >= 0
+      ? groups[selectedGroupIndex] || null
+      : null;
+
+  const effectiveSelectedGroupKey =
+    selectedGroup && selectedGroupIndex >= 0
+      ? getModifierGroupCarouselKey(selectedGroup, selectedGroupIndex)
+      : null;
 
   const entityLabel =
     context?.type === "product"
@@ -836,14 +502,24 @@ function GroupsView({ context, section, product, themeColor }) {
       : getEntityLabel(section);
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div>
+    <div
+      style={{
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        display: "grid",
+        gap: 14,
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
         <div
           style={{
             fontSize: 16,
             fontWeight: 950,
             color: "#3F3A52",
             lineHeight: 1.25,
+            wordBreak: "break-word",
           }}
         >
           {entityLabel}
@@ -863,18 +539,75 @@ function GroupsView({ context, section, product, themeColor }) {
       </div>
 
       {groups.length > 0 ? (
-        <div style={{ display: "grid", gap: 12 }}>
-          {paginatedItems.map((group, index) => (
-            <GroupReadOnlyCard
-              key={
-                Number(group?.id || group?.modifier_group_id || 0) ||
-                `${section?.key || "section"}-${index}`
-              }
-              group={group}
-              themeColor={themeColor}
+        <>
+          <div
+            style={{
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
+              boxSizing: "border-box",
+              display: "grid",
+              gap: 10,
+              padding: "12px 13px",
+              borderRadius: 10,
+              border: `1px solid ${modifierHexToRgba(safeThemeColor, 0.16)}`,
+              background: modifierHexToRgba(safeThemeColor, 0.035),
+            }}
+          >
+            <div
+              style={{
+                minWidth: 0,
+                color: "#3F3A52",
+                fontSize: 14,
+                fontWeight: 950,
+                lineHeight: 1.25,
+              }}
+            >
+              Selecciona un grupo
+            </div>
+
+            <div
+              style={{
+                minWidth: 0,
+                color: "#6E6A6A",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+            >
+              Elige el grupo que quieras consultar para ver sus opciones disponibles.
+            </div>
+
+            <ModifierGroupCarousel
+              groups={groups}
+              selectedGroupKey={effectiveSelectedGroupKey}
+              themeColor={safeThemeColor}
+              onSelectGroup={(group, groupKey) => {
+                if (!group || !groupKey) {
+                  return;
+                }
+
+                setSelectedGroupKey(groupKey);
+              }}
             />
-          ))}
-        </div>
+          </div>
+
+          {selectedGroup ? (
+            <div
+              style={{
+                width: "100%",
+                minWidth: 0,
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              <GroupReadOnlyCard
+                key={effectiveSelectedGroupKey}
+                group={selectedGroup}
+                themeColor={safeThemeColor}
+              />
+            </div>
+          ) : null}
+        </>
       ) : (
         <div
           style={{
@@ -889,30 +622,6 @@ function GroupsView({ context, section, product, themeColor }) {
           Este contexto no tiene grupos de extras.
         </div>
       )}
-
-      {totalPages > 1 ? (
-        <div
-          style={{
-            overflow: "hidden",
-            borderRadius: 10,
-            border: "1px solid #D9D3D3",
-            background: "#FFFFFF",
-          }}
-        >
-          <PaginationFooter
-            page={page}
-            totalPages={totalPages}
-            startItem={startItem}
-            endItem={endItem}
-            total={total}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-            onPrev={prevPage}
-            onNext={nextPage}
-            itemLabel="grupos"
-          />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1007,16 +716,37 @@ export default function ProductExtrasReadOnlyNavigator({
   }, [navigationRef, handleBack]);
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div
+      className="cm-extras-readonly-navigator"
+      style={{
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        display: "grid",
+        gap: 14,
+        boxSizing: "border-box",
+      }}
+    >
       <style>
         {`
+          .cm-extras-readonly-navigator,
+          .cm-extras-readonly-navigator * {
+            box-sizing: border-box;
+          }
+
           .cm-extras-readonly-card-grid {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
           }
 
           .cm-extras-readonly-option-grid {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
@@ -1035,9 +765,13 @@ export default function ProductExtrasReadOnlyNavigator({
         <>
           <div
             style={{
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
               display: "grid",
               gap: 5,
               padding: 14,
+              boxSizing: "border-box",
               borderRadius: 10,
               border: "1px solid #D9D3D3",
               background: "#FBF8F8",

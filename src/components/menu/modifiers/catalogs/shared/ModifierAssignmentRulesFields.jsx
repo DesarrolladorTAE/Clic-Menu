@@ -20,12 +20,12 @@ const toIntegerOrNull = (value) => {
 
 const hasCustomRules = (value) => {
   return (
-    value?.required_override !== null &&
-      value?.required_override !== undefined ||
-    value?.min_selections_override !== null &&
-      value?.min_selections_override !== undefined ||
-    value?.max_selections_override !== null &&
-      value?.max_selections_override !== undefined
+    (value?.required_override !== null &&
+      value?.required_override !== undefined) ||
+    (value?.min_selections_override !== null &&
+      value?.min_selections_override !== undefined) ||
+    (value?.max_selections_override !== null &&
+      value?.max_selections_override !== undefined)
   );
 };
 
@@ -56,16 +56,21 @@ export default function ModifierAssignmentRulesFields({
       ? Boolean(value.required_override)
       : groupRequired;
 
+  /*
+   * Durante la edición se permite conservar "".
+   * No convertimos inmediatamente a Number porque eso impediría
+   * borrar un valor para sustituirlo por otro.
+   */
   const effectiveMin =
     value?.min_selections_override !== null &&
     value?.min_selections_override !== undefined
-      ? Number(value.min_selections_override)
+      ? value.min_selections_override
       : groupMin;
 
   const effectiveMax =
     value?.max_selections_override !== null &&
     value?.max_selections_override !== undefined
-      ? Number(value.max_selections_override)
+      ? value.max_selections_override
       : groupMax;
 
   const validation = useMemo(() => {
@@ -73,8 +78,35 @@ export default function ModifierAssignmentRulesFields({
       return { valid: true, min: "", max: "" };
     }
 
+    if (
+      effectiveMin === "" ||
+      effectiveMin === null ||
+      effectiveMin === undefined
+    ) {
+      return {
+        valid: false,
+        min: "El mínimo es obligatorio.",
+        max: "",
+      };
+    }
+
+    if (
+      !isSingle &&
+      (
+        effectiveMax === "" ||
+        effectiveMax === null ||
+        effectiveMax === undefined
+      )
+    ) {
+      return {
+        valid: false,
+        min: "",
+        max: "El máximo es obligatorio.",
+      };
+    }
+
     const min = Number(effectiveMin);
-    const max = effectiveMax === null ? null : Number(effectiveMax);
+    const max = isSingle ? 1 : Number(effectiveMax);
 
     if (!Number.isInteger(min) || min < 0) {
       return {
@@ -100,7 +132,7 @@ export default function ModifierAssignmentRulesFields({
       };
     }
 
-    if (max !== null && (!Number.isInteger(max) || max < 1)) {
+    if (!Number.isInteger(max) || max < 1) {
       return {
         valid: false,
         min: "",
@@ -108,7 +140,7 @@ export default function ModifierAssignmentRulesFields({
       };
     }
 
-    if (max !== null && min > max) {
+    if (min > max) {
       return {
         valid: false,
         min: "",
@@ -200,11 +232,25 @@ export default function ModifierAssignmentRulesFields({
       return;
     }
 
+    /*
+     * Se conserva vacío mientras el usuario sustituye el valor.
+     * La validación desactiva Guardar durante este estado.
+     */
+    if (rawValue === "") {
+      updateValue({
+        min_selections_override: "",
+      });
+      return;
+    }
+
     const valueAsNumber = toIntegerOrNull(rawValue);
 
+    if (valueAsNumber === null) {
+      return;
+    }
+
     updateValue({
-      min_selections_override:
-        valueAsNumber === null ? 1 : Math.max(1, valueAsNumber),
+      min_selections_override: Math.max(1, valueAsNumber),
     });
   };
 
@@ -219,8 +265,26 @@ export default function ModifierAssignmentRulesFields({
       return;
     }
 
+    /*
+     * Igual que mínimo, conservamos "" durante la edición.
+     * No lo convertimos a null porque null haría que effectiveMax
+     * volviera inmediatamente al máximo original del grupo.
+     */
+    if (rawValue === "") {
+      updateValue({
+        max_selections_override: "",
+      });
+      return;
+    }
+
+    const valueAsNumber = toIntegerOrNull(rawValue);
+
+    if (valueAsNumber === null) {
+      return;
+    }
+
     updateValue({
-      max_selections_override: toIntegerOrNull(rawValue),
+      max_selections_override: valueAsNumber,
     });
   };
 
@@ -365,7 +429,7 @@ export default function ModifierAssignmentRulesFields({
               validation.max ||
               (isSingle
                 ? "En grupos de una sola opción, el máximo siempre es 1."
-                : "Déjalo vacío para no establecer un máximo.")
+                : "Cantidad máxima que puede seleccionar el cliente.")
             }
             error={Boolean(validation.max)}
             input={

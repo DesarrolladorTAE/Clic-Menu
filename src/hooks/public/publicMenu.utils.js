@@ -52,6 +52,123 @@ export function money(n) {
   }
 }
 
+/* =========================
+   Modifier selection presentation helpers
+========================= */
+
+/**
+ * Devuelve una instrucción clara sobre cuántas selecciones totales
+ * permite o exige un grupo de modificadores.
+ *
+ * Importante:
+ * - min_select y max_select cuentan unidades seleccionadas.
+ * - No cuentan únicamente opciones distintas.
+ * - Si el grupo es obligatorio, el mínimo efectivo nunca es menor a 1.
+ */
+export function formatModifierGroupSelectionInstruction(group) {
+  const rawMin = Number(group?.min_select || 0);
+  const minSelect = Number.isFinite(rawMin)
+    ? Math.max(0, Math.floor(rawMin))
+    : 0;
+
+  const effectiveMin = group?.is_required
+    ? Math.max(1, minSelect)
+    : minSelect;
+
+  const rawMax = group?.max_select;
+  const hasMax =
+    rawMax !== null &&
+    rawMax !== undefined &&
+    rawMax !== "" &&
+    Number.isFinite(Number(rawMax));
+
+  const maxSelect = hasMax
+    ? Math.max(0, Math.floor(Number(rawMax)))
+    : null;
+
+  if (effectiveMin > 0 && maxSelect !== null && effectiveMin === maxSelect) {
+    return effectiveMin === 1
+      ? "Debes hacer 1 selección en este grupo."
+      : `Debes hacer ${effectiveMin} selecciones en este grupo.`;
+  }
+
+  if (effectiveMin > 0 && maxSelect !== null && maxSelect > effectiveMin) {
+    return `Debes hacer entre ${effectiveMin} y ${maxSelect} selecciones en este grupo.`;
+  }
+
+  if (effectiveMin > 0 && maxSelect === null) {
+    return effectiveMin === 1
+      ? "Debes hacer al menos 1 selección en este grupo."
+      : `Debes hacer al menos ${effectiveMin} selecciones en este grupo.`;
+  }
+
+  if (effectiveMin === 0 && maxSelect !== null) {
+    if (maxSelect === 0) {
+      return "Este grupo no permite selecciones.";
+    }
+
+    return maxSelect === 1
+      ? "Puedes hacer hasta 1 selección en este grupo."
+      : `Puedes hacer hasta ${maxSelect} selecciones en este grupo.`;
+  }
+
+  return "Puedes elegir las opciones que prefieras.";
+}
+
+/**
+ * Explica únicamente cuándo una opción concreta puede repetirse.
+ *
+ * El límite mostrado respeta:
+ * - max_quantity_per_selection de la opción;
+ * - max_select del grupo;
+ * - availability.max_available_qty cuando exista.
+ *
+ * Así evitamos mostrar, por ejemplo, "puedes repetir 2 veces" cuando
+ * el grupo completo solamente admite 1 selección.
+ */
+export function formatModifierOptionRepeatInstruction(option, group = null) {
+  const configuredRaw = Number(option?.max_quantity_per_selection || 1);
+  const configuredMax = Number.isFinite(configuredRaw)
+    ? Math.max(1, Math.floor(configuredRaw))
+    : 1;
+
+  let effectiveMax = configuredMax;
+
+  const groupMaxRaw = group?.max_select;
+  const hasGroupMax =
+    groupMaxRaw !== null &&
+    groupMaxRaw !== undefined &&
+    groupMaxRaw !== "" &&
+    Number.isFinite(Number(groupMaxRaw));
+
+  if (hasGroupMax) {
+    effectiveMax = Math.min(
+      effectiveMax,
+      Math.max(0, Math.floor(Number(groupMaxRaw))),
+    );
+  }
+
+  const availabilityMaxRaw = option?.availability?.max_available_qty;
+  const hasAvailabilityMax =
+    availabilityMaxRaw !== null &&
+    availabilityMaxRaw !== undefined &&
+    availabilityMaxRaw !== "" &&
+    Number.isFinite(Number(availabilityMaxRaw));
+
+  if (hasAvailabilityMax) {
+    effectiveMax = Math.min(
+      effectiveMax,
+      Math.max(0, Math.floor(Number(availabilityMaxRaw))),
+    );
+  }
+
+  if (effectiveMax <= 1) {
+    return "";
+  }
+
+  return `Puedes elegir esta opción hasta ${effectiveMax} veces.`;
+}
+
 export function translateStatus(value) {
   const v = String(value || "").toLowerCase();
 

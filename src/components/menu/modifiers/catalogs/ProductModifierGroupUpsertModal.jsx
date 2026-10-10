@@ -138,9 +138,13 @@ export default function ProductModifierGroupUpsertModal({
       return false;
     }
 
+    if (sortOrder === "") {
+      return false;
+    }
+
     const sort = Number(sortOrder);
 
-    if (!Number.isFinite(sort) || sort < 0) {
+    if (!Number.isInteger(sort) || sort < 0) {
       return false;
     }
 
@@ -159,6 +163,14 @@ export default function ProductModifierGroupUpsertModal({
     setModifierGroupId(value);
     setRules({ ...EMPTY_RULES });
     setRulesValid(true);
+  };
+
+  const handleSortOrderChange = (event) => {
+    const nextValue = event.target.value;
+
+    if (/^\d*$/.test(nextValue)) {
+      setSortOrder(nextValue);
+    }
   };
 
   const save = async () => {
@@ -198,13 +210,22 @@ export default function ProductModifierGroupUpsertModal({
       return;
     }
 
-    const parsedSortOrder = Number(sortOrder);
-
-    if (!Number.isFinite(parsedSortOrder) || parsedSortOrder < 0) {
+    if (sortOrder === "") {
       showAlert({
         severity: "error",
         title: "Error",
-        message: "El orden debe ser un número igual o mayor a 0.",
+        message: "Ingresa el orden de la asignación.",
+      });
+      return;
+    }
+
+    const parsedSortOrder = Number(sortOrder);
+
+    if (!Number.isInteger(parsedSortOrder) || parsedSortOrder < 0) {
+      showAlert({
+        severity: "error",
+        title: "Error",
+        message: "El orden debe ser un número entero igual o mayor a 0.",
       });
       return;
     }
@@ -439,12 +460,15 @@ export default function ProductModifierGroupUpsertModal({
                     input={
                       <TextField
                         fullWidth
-                        type="number"
+                        type="text"
                         value={sortOrder}
-                        onChange={(e) => setSortOrder(e.target.value)}
+                        onChange={handleSortOrderChange}
                         disabled={saving}
-                        inputProps={{ min: 0, inputMode: "numeric" }}
                         placeholder="0"
+                        inputProps={{
+                          inputMode: "numeric",
+                          pattern: "[0-9]*",
+                        }}
                       />
                     }
                   />

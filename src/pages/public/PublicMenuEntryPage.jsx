@@ -214,6 +214,7 @@ export default function PublicMenuEntryPage() {
 
   const canSelect = !!uiFlags?.can_select_products;
   const showSelectBtn = !!uiFlags?.show_select_button && canSelect;
+  const allowReadOnlyDetails = !canSelect && !hasTable && !isWebOrderingFlow;
 
   const showCallBtn =
     isPhysicalSalonFlow &&
@@ -1424,6 +1425,7 @@ export default function PublicMenuEntryPage() {
           categoryNameById={categoryNameById}
           canSelect={canSelect}
           showSelectBtn={showSelectBtn}
+          allowReadOnlyDetails={allowReadOnlyDetails}
           themeColor={themeColor}
           onAddSimple={openProductSelectionFlow}
           onAddVariant={openVariantSelectionFlow}

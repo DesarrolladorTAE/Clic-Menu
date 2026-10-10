@@ -130,6 +130,7 @@ export default function MenuProductCard({
   categoryName = "Sin categoría",
   canSelect = true,
   showSelectBtn = true,
+  allowReadOnlyDetails = false,
   themeColor,
   onAddSimple,
   onAddVariant,
@@ -176,6 +177,8 @@ export default function MenuProductCard({
   const productAvailabilityLabel = productAvailabilityUi.label || "No disponible";
   const productAvailabilityCaption = productAvailabilityUi.caption || "No disponible";
 
+  const canOpenDetails = canSelect || allowReadOnlyDetails;
+
   const canChooseMain =
     showSelectBtn &&
     canSelect &&
@@ -199,7 +202,10 @@ export default function MenuProductCard({
   };
 
   const handleOpenVariants = () => {
-    if (!hasVariants || !canSelect || productBlocked) return;
+    if (!hasVariants || !canOpenDetails || productBlocked) {
+      return;
+    }
+
     onOpenVariants?.(product);
   };
 
@@ -544,7 +550,7 @@ export default function MenuProductCard({
                       ? productAvailabilityCaption
                       : "Ver variantes disponibles"
                   }
-                  disabled={!onOpenVariants || !canSelect || productBlocked}
+                  disabled={!onOpenVariants || !canOpenDetails || productBlocked}
                 >
                   Variantes ({variants.length})
                 </PillButton>
@@ -554,7 +560,10 @@ export default function MenuProductCard({
                 <PillButton
                   tone="soft"
                   onClick={() => {
-                    if (!canSelect || productBlocked) return;
+                    if (!canOpenDetails || productBlocked) {
+                      return;
+                    }
+
                     onOpenExtras?.(product);
                   }}
                   title={
@@ -562,7 +571,7 @@ export default function MenuProductCard({
                       ? productAvailabilityCaption
                       : "Ver extras disponibles de este producto"
                   }
-                  disabled={!canSelect || productBlocked}
+                  disabled={!canOpenDetails || productBlocked}
                 >
                   Extras
                 </PillButton>
