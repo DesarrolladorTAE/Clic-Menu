@@ -128,6 +128,17 @@ export default function CashierOnlineOrderDetailView({
           ) : null}
 
           <DestinationSnapshot snapshot={order?.destination?.destination_snapshot} />
+
+          {order?.fulfillment_type === "home_delivery" &&
+            order?.destination?.delivery_address ? (
+            <>
+              <Divider />
+              <InfoBlock
+                label="Dirección de entrega"
+                value={order.destination.delivery_address}
+              />
+            </>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Pago">

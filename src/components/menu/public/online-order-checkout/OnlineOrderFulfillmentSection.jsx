@@ -178,6 +178,7 @@ export default function OnlineOrderFulfillmentSection({
   timingType,
   requestedForAt,
   deliveryConceptId,
+  deliveryAddress,
   deliveryConcepts,
   selectedDeliveryConcept,
   scheduledPointId,
@@ -194,6 +195,7 @@ export default function OnlineOrderFulfillmentSection({
   onTimingTypeChange,
   onRequestedForAtChange,
   onDeliveryConceptChange,
+  onDeliveryAddressChange,
   onScheduledPointChange,
   onScheduledDateChange,
   onBlockChange,
@@ -456,6 +458,29 @@ export default function OnlineOrderFulfillmentSection({
                     </MenuItem>
                   ))}
                 </TextField>
+              }
+            />
+          ) : null}
+
+          {fulfillmentType === "home_delivery" && selectedDeliveryConcept ? (
+            <FieldBlock
+              label="Dirección de entrega *"
+              help="Escribe la calle, número, colonia y las referencias necesarias para encontrar tu domicilio."
+              input={
+                <TextField
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  value={deliveryAddress}
+                  onChange={(e) => onDeliveryAddressChange?.(e.target.value)}
+                  placeholder="Ej. Av. Revolución 201, Col. Centro, casa de portón negro"
+                  inputProps={{
+                    maxLength: 500,
+                  }}
+                  disabled={disabled}
+                  sx={selectFieldSx(accentColor)}
+                />
               }
             />
           ) : null}

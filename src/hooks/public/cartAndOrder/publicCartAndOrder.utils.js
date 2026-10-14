@@ -251,6 +251,7 @@ export function buildOnlineOrderPublicErrorMessage(error, fallback) {
     timing_type: "Selecciona cuándo quieres recibir tu pedido.",
     requested_for_at: "Selecciona una fecha y hora válidas para tu pedido.",
     delivery_concept_id: "Selecciona una zona, código postal o ubicación disponible.",
+    delivery_address: "Escribe una dirección de entrega válida, de máximo 500 caracteres.",
     scheduled_point_id: "Selecciona un punto de entrega disponible.",
     scheduled_point_time_block_id: "Selecciona un horario disponible.",
     scheduled_date: "Selecciona una fecha válida.",

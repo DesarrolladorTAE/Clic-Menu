@@ -11,8 +11,10 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DoneAllRoundedIcon from "@mui/icons-material/DoneAllRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
+import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import WhereToVoteRoundedIcon from "@mui/icons-material/WhereToVoteRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
@@ -55,6 +57,8 @@ export default function CashierOnlineOrderCard({
 
   const orderMissing = order?.order_missing === true;
   const scheduledValue = order?.requested_for_at || order?.estimated_for_at;
+  const deliveryAddress = String(order?.delivery_address ?? "").trim();
+  const customerNotes = String(order?.customer_notes ?? "").trim();
   const actionsDisabled = disabled || Boolean(busyAction);
 
   const backendActions = Array.isArray(order?.actions) ? order.actions : [];
@@ -253,6 +257,14 @@ export default function CashierOnlineOrderCard({
               value={fulfillmentLabel(order?.fulfillment_type)}
             />
 
+            {order?.fulfillment_type === "home_delivery" && deliveryAddress ? (
+              <DetailRow
+                icon={<PlaceRoundedIcon fontSize="small" />}
+                label="Dirección de entrega"
+                value={deliveryAddress}
+              />
+            ) : null}
+
             <DetailRow
               icon={<AccessTimeRoundedIcon fontSize="small" />}
               label="Horario"
@@ -268,6 +280,14 @@ export default function CashierOnlineOrderCard({
               label="Pago"
               value={paymentTypeLabel(order?.payment_type)}
             />
+
+            {customerNotes ? (
+              <DetailRow
+                icon={<NotesRoundedIcon fontSize="small" />}
+                label="Notas del cliente"
+                value={customerNotes}
+              />
+            ) : null}
           </Stack>
 
           <Box
@@ -366,7 +386,17 @@ function DetailRow({ icon, label, value }) {
           {label}
         </Typography>
 
-        <Typography sx={{ mt: 0.2, fontSize: 13, fontWeight: 700, color: "text.primary", wordBreak: "break-word" }}>
+        <Typography
+          sx={{
+            mt: 0.2,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "text.primary",
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "pre-wrap",
+          }}
+        >
           {value || "—"}
         </Typography>
       </Box>

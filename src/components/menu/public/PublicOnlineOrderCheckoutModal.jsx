@@ -141,6 +141,7 @@ export default function PublicOnlineOrderCheckoutModal({
   const [requestedForAt, setRequestedForAt] = useState("");
 
   const [deliveryConceptId, setDeliveryConceptId] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [scheduledPointId, setScheduledPointId] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledPointTimeBlockId, setScheduledPointTimeBlockId] = useState("");
@@ -229,6 +230,15 @@ export default function PublicOnlineOrderCheckoutModal({
       !isDeliveryConcept ||
       Boolean(deliveryConceptId && selectedDeliveryConcept);
 
+    const normalizedDeliveryAddress = String(deliveryAddress || "").trim();
+
+    const deliveryAddressValid =
+      fulfillmentType !== "home_delivery" ||
+      (
+        normalizedDeliveryAddress.length > 0 &&
+        normalizedDeliveryAddress.length <= 500
+      );
+
     const requestedForAtValid =
       isScheduledPoint ||
       resolvedTiming !== "scheduled" ||
@@ -270,6 +280,7 @@ export default function PublicOnlineOrderCheckoutModal({
       fulfillmentType: fulfillmentValid,
       timingType: timingValid,
       deliveryConceptId: deliveryConceptValid,
+      deliveryAddress: deliveryAddressValid,
       requestedForAt: requestedForAtValid,
       scheduledPointId: scheduledPointValid,
       scheduledDate: scheduledDateValid,
@@ -286,6 +297,7 @@ export default function PublicOnlineOrderCheckoutModal({
     timingType,
     deliveryConceptId,
     selectedDeliveryConcept,
+    deliveryAddress,
     requestedForAt,
     scheduledPointId,
     selectedPoint,
@@ -321,6 +333,10 @@ export default function PublicOnlineOrderCheckoutModal({
 
     if (!fieldValidity.deliveryConceptId) {
       fields.push(fulfillmentType === "home_delivery" ? "zona o código postal" : "ubicación");
+    }
+
+    if (!fieldValidity.deliveryAddress) {
+      fields.push("dirección de entrega");
     }
 
     if (!fieldValidity.requestedForAt) fields.push("fecha y hora");
@@ -373,6 +389,7 @@ export default function PublicOnlineOrderCheckoutModal({
     timingType,
     requestedForAt,
     deliveryConceptId,
+    deliveryAddress,
     scheduledPointId,
     scheduledDate,
     scheduledPointTimeBlockId,
@@ -389,10 +406,16 @@ export default function PublicOnlineOrderCheckoutModal({
     setTimingType(defaultTimingForFulfillment(fulfillment));
     setRequestedForAt("");
     setDeliveryConceptId("");
+    setDeliveryAddress("");
     setScheduledPointId("");
     setScheduledDate("");
     setScheduledPointTimeBlockId("");
     setScheduledTime("");
+  }
+
+  function handleDeliveryConceptChange(value) {
+    setDeliveryConceptId(value);
+    setDeliveryAddress("");
   }
 
   function handleTimingTypeChange(value) {
@@ -423,6 +446,7 @@ export default function PublicOnlineOrderCheckoutModal({
     const phone = String(customerPhone || "").trim();
     const email = String(customerEmail || "").trim();
     const notes = String(customerNotes || "").trim();
+    const address = String(deliveryAddress || "").trim();
 
     if (!name) return { ok: false, message: "Escribe el nombre para tu pedido." };
 
@@ -475,6 +499,22 @@ export default function PublicOnlineOrderCheckoutModal({
       };
     }
 
+    if (fulfillmentType === "home_delivery") {
+      if (!address) {
+        return {
+          ok: false,
+          message: "Escribe la dirección donde deseas recibir tu pedido.",
+        };
+      }
+
+      if (address.length > 500) {
+        return {
+          ok: false,
+          message: "La dirección de entrega no puede superar los 500 caracteres.",
+        };
+      }
+    }
+
     if (!paymentType) {
       return {
         ok: false,
@@ -496,6 +536,10 @@ export default function PublicOnlineOrderCheckoutModal({
 
     if (isDeliveryConcept) {
       payload.delivery_concept_id = Number(deliveryConceptId);
+    }
+
+    if (fulfillmentType === "home_delivery") {
+      payload.delivery_address = address;
     }
 
     if (isScheduledPoint) {
@@ -565,7 +609,13 @@ export default function PublicOnlineOrderCheckoutModal({
     }
 
     try {
-      const result = await onQuote?.(selection.payload);
+      const quotePayload = {
+        ...selection.payload,
+      };
+
+      delete quotePayload.delivery_address;
+
+      const result = await onQuote?.(quotePayload);
 
       if (!result?.ok) {
         setErrorMessage(result?.message || "No se pudo calcular el total del pedido.");
@@ -779,6 +829,7 @@ export default function PublicOnlineOrderCheckoutModal({
             timingType={timingType}
             requestedForAt={requestedForAt}
             deliveryConceptId={deliveryConceptId}
+            deliveryAddress={deliveryAddress}
             deliveryConcepts={deliveryConcepts}
             selectedDeliveryConcept={selectedDeliveryConcept}
             scheduledPointId={scheduledPointId}
@@ -794,7 +845,8 @@ export default function PublicOnlineOrderCheckoutModal({
             onFulfillmentChange={handleFulfillmentChange}
             onTimingTypeChange={handleTimingTypeChange}
             onRequestedForAtChange={setRequestedForAt}
-            onDeliveryConceptChange={setDeliveryConceptId}
+            onDeliveryConceptChange={handleDeliveryConceptChange}
+            onDeliveryAddressChange={setDeliveryAddress}
             onScheduledPointChange={handleScheduledPointChange}
             onScheduledDateChange={handleScheduledDateChange}
             onBlockChange={handleBlockChange}
