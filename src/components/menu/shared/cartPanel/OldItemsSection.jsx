@@ -552,7 +552,7 @@ function OldItemCard({
               ? `${child.product_name} · ${child.variant_name}`
               : child.product_name || `Producto #${child.product_id}`;
 
-            const childCancellation = resolveCancellationState(child);
+            const childCancellation = resolveOrderItemCancellationState(child);
 
             const childSubtotal = safeNum(
               child?.line_total,
