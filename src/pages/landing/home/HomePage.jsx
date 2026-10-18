@@ -20,7 +20,7 @@ import HomeFaqSection from "../../../components/landing/home/HomeFaqSection";
 import LandingFooter from "../../../components/landing/footer/LandingFooter";
 import SEO from "../../../components/seo/SEO";
 
-export default function HomePage() {
+export default function HomePage({ skipSeo = false }) {
   const navigate = useNavigate();
 
   const handleRegister = () => {
@@ -32,16 +32,18 @@ export default function HomePage() {
   };
 
   return (
-    <>
+  <>
+    {!skipSeo && (
       <SEO
         title="Clic Menu | Menú QR y Punto de Venta para Restaurantes"
         description="Digitaliza tu restaurante con Clic Menu. Menú QR, punto de venta, pedidos, caja, inventarios y reportes en una sola plataforma."
         keywords="menú qr restaurante, punto de venta restaurante, software para restaurantes, sistema para restaurantes, pos restaurante, comandas digitales"
         url="https://clicmenu.com.mx"
       />
+    )}
 
-      <Box
-        component="main"
+    <Box
+      component="main"
         sx={{
           minHeight: "100vh",
           bgcolor: landingColors.white,

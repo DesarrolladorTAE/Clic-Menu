@@ -29,7 +29,7 @@ function PublicHomeNavigation() {
     window.location.replace(destination);
   }, [location.pathname, location.search, location.hash]);
 
-  return <HomePage />;
+  return <HomePage skipSeo />;
 }
 
 // Comparte el mismo contenido para el prerenderizado y la hidratación.
