@@ -309,10 +309,40 @@ function removeExistingSeo(html) {
   return result;
 }
 
-function normalizeMeta(
-  entity,
-  kind
-) {
+function normalizeStructuredData(value, kind, canonicalUrl) {
+  let data = value;
+
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+
+  if (kind !== "post" || !data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+
+  let mainEntityOfPage = canonicalUrl;
+  const page = data.mainEntityOfPage;
+
+  if (page && typeof page === "object" && !Array.isArray(page)) {
+    mainEntityOfPage = { ...page, "@id": canonicalUrl };
+
+    if ("url" in page) {
+      mainEntityOfPage.url = canonicalUrl;
+    }
+  }
+
+  return {
+    ...data,
+    url: canonicalUrl,
+    mainEntityOfPage,
+  };
+}
+
+function normalizeMeta(entity, kind, slug = null) {
   const seo =
     entity?.seo || {};
 
@@ -341,14 +371,12 @@ function normalizeMeta(
     "Contenido relacionado con restaurantes, menús digitales, ventas y administración gastronómica.";
 
   const canonicalUrl =
-    seo.canonical_url ||
-    openGraph.url ||
-    entity?.url ||
-    (
-      kind === "blog"
-        ? `${SITE_URL}/blog`
-        : SITE_URL
-    );
+    kind === "post" && slug
+      ? `${SITE_URL}/blog/${slug}`
+      : seo.canonical_url ||
+        openGraph.url ||
+        entity?.url ||
+        (kind === "blog" ? `${SITE_URL}/blog` : SITE_URL);
 
   const imageObject =
     openGraph.image ||
@@ -442,9 +470,11 @@ function normalizeMeta(
           .filter(Boolean)
       : [],
 
-    structuredData:
-      entity?.structured_data ||
-      null,
+    structuredData: normalizeStructuredData(
+      entity?.structured_data || null,
+      kind,
+      canonicalUrl
+    ),
   };
 }
 
@@ -890,14 +920,10 @@ async function main() {
         );
       }
 
-      const postHtml =
-        injectSeo(
-          template,
-          normalizeMeta(
-            post,
-            "post"
-          )
-        );
+      const postHtml = injectSeo(
+        template,
+        normalizeMeta(post, "post", slug)
+      );
 
       generatedFiles.push(
         await writeRouteHtml(

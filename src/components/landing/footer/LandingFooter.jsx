@@ -20,10 +20,10 @@ import {
   landingTypography,
 } from "../../../theme/landingTheme";
 
+
 const footerLinks = [
   { label: "Inicio", href: "/" },
   { label: "Planes", href: "/planes" },
-  { label: "Sobre nosotros", href: "/sobre-nosotros" },
   { label: "Contactos", href: "/contacto" },
   { label: "Términos y condiciones", href: "/terminos-y-condiciones" },
 ];

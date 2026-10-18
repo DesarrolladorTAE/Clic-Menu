@@ -3,17 +3,22 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  
   "scripts": {
     "dev": "vite",
     "build:vite": "vite build",
     "prerender:blog": "node scripts/prerender-blog.mjs",
-    "build": "npm run build:vite && npm run prerender:blog",
+    "prerender:public": "node scripts/prerender-public.mjs",
+    "preview:public": "node scripts/prerender-public.mjs --preview",
+    "build": "npm run build:vite && npm run prerender:blog && npm run prerender:public",
     "build:seo": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
+    "@emotion/server": "^11.11.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
