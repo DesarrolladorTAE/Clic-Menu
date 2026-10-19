@@ -46,15 +46,17 @@ const contactItems = [
   },
 ];
 
-export default function LandingContactPage() {
+export default function LandingContactPage({ skipSeo = false }) {
   return (
     <>
-      <SEO
-        title="Contacta Clic Menu | Digitaliza tu Restaurante"
-        description="Habla con el equipo de Clic Menu y comienza a digitalizar la operación de tu restaurante con menú QR y herramientas administrativas."
-        keywords="contactar software restaurante, asesoría sistema restaurante, digitalizar restaurante, implementar menú qr"
-        url="https://clicmenu.com.mx/contacto"
-      />
+      {!skipSeo && (
+        <SEO
+          title="Contacta Clic Menu | Digitaliza tu Restaurante"
+          description="Habla con el equipo de Clic Menu y comienza a digitalizar la operación de tu restaurante con menú QR y herramientas administrativas."
+          keywords="contactar software restaurante, asesoría sistema restaurante, digitalizar restaurante, implementar menú qr"
+          url="https://clicmenu.com.mx/contacto"
+        />
+      )}
 
       <Box
         component="main"

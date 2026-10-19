@@ -310,6 +310,25 @@ function cleanBlogHtml(html = "") {
       }
     });
 
+    documentResult
+      .querySelectorAll("h1")
+      .forEach((heading) => {
+        const replacement =
+          documentResult.createElement("h2");
+
+        for (const attribute of heading.attributes) {
+          replacement.setAttribute(
+            attribute.name,
+            attribute.value
+          );
+        }
+
+        replacement.innerHTML =
+          heading.innerHTML;
+
+        heading.replaceWith(replacement);
+      });
+
   return documentResult.body.innerHTML;
 }
 
@@ -881,10 +900,20 @@ function RecentPostsCard({
   );
 }
 
-export default function BlogPostDetailPage() {
+export default function BlogPostDetailPage({
+  skipSeo = false,
+  initialPost = null,
+  postSlugOverride = null,
+}) {
   const navigate = useNavigate();
 
-  const { postSlug } = useParams();
+  const { postSlug: routePostSlug } = useParams();
+
+  const postSlug = postSlugOverride || routePostSlug;
+
+  const hasInitialPost =
+    initialPost !== null &&
+    initialPost?.slug === postSlug;
 
   const theme = useTheme();
 
@@ -892,8 +921,9 @@ export default function BlogPostDetailPage() {
     theme.breakpoints.up("lg")
   );
 
-  const [post, setPost] =
-    useState(null);
+  const [post, setPost] = useState(() => {
+    return hasInitialPost ? initialPost : null;
+  });
 
   const [
     recentPosts,
@@ -901,7 +931,7 @@ export default function BlogPostDetailPage() {
   ] = useState([]);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(!hasInitialPost);
 
   const [error, setError] =
     useState("");
@@ -910,7 +940,10 @@ export default function BlogPostDetailPage() {
     let active = true;
 
     async function loadPost() {
-      setLoading(true);
+      if (!hasInitialPost) {
+        setLoading(true);
+      }
+
       setError("");
 
       try {
@@ -971,16 +1004,22 @@ export default function BlogPostDetailPage() {
           return;
         }
 
+        const status = requestError?.response?.status;
+
+        // Conservar el artículo prerenderizado si falla la conexión.
+        if (hasInitialPost && (!status || status >= 500)) {
+          setRecentPosts([]);
+          return;
+        }
+
         setPost(null);
         setRecentPosts([]);
 
         setError(
-          requestError?.response
-            ?.status === 404
+          status === 404
             ? "La publicación solicitada no está disponible."
-            : requestError?.response
-                ?.data?.message ||
-                "No fue posible cargar la publicación."
+            : requestError?.response?.data?.message ||
+              "No fue posible cargar la publicación."
         );
       } finally {
         if (active) {
@@ -1029,10 +1068,14 @@ export default function BlogPostDetailPage() {
   }, [post]);
 
   const cleanedContent = useMemo(() => {
+    if (post?.__prerendered === true) {
+      return post.content || "";
+    }
+
     return cleanBlogHtml(
       post?.content || ""
     );
-  }, [post?.content]);
+  }, [post]);
 
   const postAds = useMemo(() => {
     return getPostAds(post);
@@ -1086,7 +1129,7 @@ export default function BlogPostDetailPage() {
 
   return (
     <>
-      {post && (
+      {post && !skipSeo && (
         <SEO
           replaceDefaultSeo
           title={

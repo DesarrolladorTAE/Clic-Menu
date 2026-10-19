@@ -1,44 +1,40 @@
 // scripts/prerender-blog.mjs
+
 import axios from "axios";
-import { loadEnv } from "vite";
+import { loadEnv, createServer as createViteServer } from "vite";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import React from "react";
+import { renderToString } from "react-dom/server";
+import createCache from "@emotion/cache";
+import createEmotionServer from "@emotion/server/create-instance";
+import sanitizeHtml from "sanitize-html";
+
 const ROOT_DIR = process.cwd();
 const DIST_DIR = path.join(ROOT_DIR, "dist");
-const TEMPLATE_PATH = path.join(
-  DIST_DIR,
-  "index.html"
-);
+const TEMPLATE_PATH = path.join(DIST_DIR, "index.html");
 
-const env = loadEnv(
-  process.env.MODE || "production",
-  ROOT_DIR,
-  ""
-);
+const env = loadEnv(process.env.MODE || "production", ROOT_DIR, "");
 
 const SYSTEM_SLUG = "clic-menu";
 const BLOG_SLUG = "blog-clicmenu";
 
-const BLOG_ROUTE =
-  `/public/v1/${SYSTEM_SLUG}/blogs/${BLOG_SLUG}`;
+const BLOG_ROUTE = `/public/v1/${SYSTEM_SLUG}/blogs/${BLOG_SLUG}`;
 
-const DEFAULT_SITE_URL =
-  "https://clicmenu.com.mx";
-
-const DEFAULT_IMAGE =
-  `${DEFAULT_SITE_URL}/images/seo/clic-menu-preview.png`;
+const DEFAULT_SITE_URL = "https://clicmenu.com.mx";
+const DEFAULT_IMAGE = `${DEFAULT_SITE_URL}/images/seo/clic-menu-preview.png`;
 
 const SITE_URL = normalizeBaseUrl(
   env.VITE_PUBLIC_SITE_URL ||
-    env.VITE_SITE_URL ||
-    DEFAULT_SITE_URL
+  env.VITE_SITE_URL ||
+  DEFAULT_SITE_URL
 );
 
 const API_BASE_URL = normalizeApiBaseUrl(
   env.VITE_BLOG_API_BASE_URL ||
-    "https://api.tecnologiasadministrativas.com/api"
+  "https://api.tecnologiasadministrativas.com/api"
 );
 
 const api = axios.create({
@@ -49,10 +45,93 @@ const api = axios.create({
   },
 });
 
+/*
+ * Identificador de los datos iniciales del artículo.
+ * React los utilizará para hidratar el HTML prerenderizado.
+ */
+const BLOG_POST_DATA_ID = "clicmenu-initial-blog-post";
+
+/*
+ * Configuración del HTML editorial.
+ * Conserva los elementos habituales de los artículos,
+ * pero elimina etiquetas y atributos no permitidos.
+ *
+ * El H1 del editor se transforma en H2 porque
+ * BlogPostDetailPage ya genera el H1 principal.
+ */
+const BLOG_CONTENT_SANITIZE_OPTIONS = {
+  allowedTags: [
+    ...sanitizeHtml.defaults.allowedTags,
+    "img",
+    "figure",
+    "figcaption",
+    "div",
+    "span",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "th",
+    "td",
+    "pre",
+    "code",
+    "hr",
+  ],
+
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+
+    "*": ["class", "style"],
+
+    a: ["href", "name", "target", "rel", "class", "style"],
+
+    img: [
+      "src",
+      "alt",
+      "title",
+      "width",
+      "height",
+      "loading",
+      "class",
+      "style",
+    ],
+  },
+
+  allowedStyles: {
+    "*": {
+      "text-align": [/^(left|right|center|justify)$/],
+
+      color: [
+        /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|[a-zA-Z]+)$/,
+      ],
+
+      "background-color": [
+        /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|[a-zA-Z]+)$/,
+      ],
+
+      "font-size": [/^\d+(\.\d+)?(px|em|rem|%)$/],
+
+      "font-weight": [/^(normal|bold|[1-9]00)$/],
+
+      "font-family": [/^[\w,\s'"-]+$/],
+    },
+  },
+
+  allowedSchemes: ["http", "https", "mailto", "tel"],
+
+  transformTags: {
+    h1: "h2",
+  },
+};
+
 function normalizeBaseUrl(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\/+$/, "");
+  return String(value || "").trim().replace(/\/+$/, "");
 }
 
 function normalizeApiBaseUrl(value) {
@@ -73,28 +152,28 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+/*
+ * Escapa caracteres especiales dentro de JSON insertado
+ * en HTML, sin alterar los datos originales del objeto.
+ */
 function escapeJsonForHtml(value) {
   return JSON.stringify(value)
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026");
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 function normalizeKeywords(value) {
   if (Array.isArray(value)) {
     return value
-      .filter(
-        (item) =>
-          typeof item === "string" &&
-          item.trim() !== ""
-      )
+      .filter((item) => typeof item === "string" && item.trim() !== "")
       .map((item) => item.trim())
       .join(", ");
   }
 
-  return typeof value === "string"
-    ? value.trim()
-    : "";
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function unwrapEntity(payload) {
@@ -149,21 +228,12 @@ function resolveLastPage(payload) {
   return Number(value || 1);
 }
 
-async function getJson(
-  route,
-  params = {}
-) {
-  const response = await api.get(route, {
-    params,
-  });
-
+async function getJson(route, params = {}) {
+  const response = await api.get(route, { params });
   return response.data;
 }
 
-async function getAllPages(
-  route,
-  extraParams = {}
-) {
+async function getAllPages(route, extraParams = {}) {
   const records = [];
 
   let page = 1;
@@ -176,13 +246,9 @@ async function getAllPages(
       per_page: 50,
     });
 
-    records.push(
-      ...unwrapItems(payload)
-    );
+    records.push(...unwrapItems(payload));
 
-    lastPage =
-      resolveLastPage(payload);
-
+    lastPage = resolveLastPage(payload);
     page += 1;
   } while (page <= lastPage);
 
@@ -193,42 +259,32 @@ function deduplicateBySlug(items) {
   const seen = new Set();
 
   return items.filter((item) => {
-    const slug = String(
-      item?.slug || ""
-    ).trim();
+    const slug = String(item?.slug || "").trim();
 
     if (!slug || seen.has(slug)) {
       return false;
     }
 
     seen.add(slug);
-
     return true;
   });
 }
 
-function assertSafeSlug(
-  value,
-  label
-) {
-  const slug = String(
-    value || ""
-  ).trim();
+function assertSafeSlug(value, label) {
+  const slug = String(value || "").trim();
 
-  if (
-    !slug ||
-    !/^[a-z0-9][a-z0-9_-]*$/i.test(
-      slug
-    )
-  ) {
-    throw new Error(
-      `${label} inválido para prerenderizado: ${slug}`
-    );
+  if (!slug || !/^[a-z0-9][a-z0-9_-]*$/i.test(slug)) {
+    throw new Error(`${label} inválido para prerenderizado: ${slug}`);
   }
 
   return slug;
 }
 
+/*
+ * Eliminar metadatos originales del index de Vite.
+ * Posteriormente serán sustituidos por los metadatos
+ * específicos de cada página del blog.
+ */
 function removeExistingSeo(html) {
   let result = html;
 
@@ -241,8 +297,8 @@ function removeExistingSeo(html) {
   );
 
   /*
-   * Metadatos que serán sustituidos
-   * por los específicos de cada ruta.
+   * Metadatos que serán sustituidos por los específicos
+   * de cada ruta.
    */
   const metaKeys = [
     "description",
@@ -273,12 +329,7 @@ function removeExistingSeo(html) {
     "theme-color",
     "author",
   ]
-    .map((item) =>
-      item.replace(
-        /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
-      )
-    )
+    .map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
 
   result = result.replace(
@@ -320,7 +371,12 @@ function normalizeStructuredData(value, kind, canonicalUrl) {
     }
   }
 
-  if (kind !== "post" || !data || typeof data !== "object" || Array.isArray(data)) {
+  if (
+    kind !== "post" ||
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
     return data;
   }
 
@@ -343,24 +399,13 @@ function normalizeStructuredData(value, kind, canonicalUrl) {
 }
 
 function normalizeMeta(entity, kind, slug = null) {
-  const seo =
-    entity?.seo || {};
+  const seo = entity?.seo || {};
+  const openGraph = entity?.open_graph || {};
 
-  const openGraph =
-    entity?.open_graph || {};
+  const fallbackTitle = entity?.title || entity?.name || "Blog Clic Menu";
+  const rawTitle = seo.title || fallbackTitle;
 
-  const fallbackTitle =
-    entity?.title ||
-    entity?.name ||
-    "Blog Clic Menu";
-
-  const rawTitle =
-    seo.title ||
-    fallbackTitle;
-
-  const title = String(
-    rawTitle
-  ).includes("Clic Menu")
+  const title = String(rawTitle).includes("Clic Menu")
     ? String(rawTitle)
     : `${rawTitle} | Clic Menu`;
 
@@ -378,54 +423,26 @@ function normalizeMeta(entity, kind, slug = null) {
         entity?.url ||
         (kind === "blog" ? `${SITE_URL}/blog` : SITE_URL);
 
-  const imageObject =
-    openGraph.image ||
-    entity?.cover ||
-    {};
+  const imageObject = openGraph.image || entity?.cover || {};
+  const imageUrl = imageObject?.url || DEFAULT_IMAGE;
 
-  const imageUrl =
-    imageObject?.url ||
-    DEFAULT_IMAGE;
-
-  const ogTitle =
-    openGraph.title ||
-    title;
-
-  const ogDescription =
-    openGraph.description ||
-    description;
+  const ogTitle = openGraph.title || title;
+  const ogDescription = openGraph.description || description;
 
   const robots = [
-    seo.robots_index === false
-      ? "noindex"
-      : "index",
-
-    seo.robots_follow === false
-      ? "nofollow"
-      : "follow",
+    seo.robots_index === false ? "noindex" : "index",
+    seo.robots_follow === false ? "nofollow" : "follow",
   ].join(", ");
 
   return {
     title,
     description,
-
-    keywords: normalizeKeywords(
-      seo.keywords
-    ),
-
+    keywords: normalizeKeywords(seo.keywords),
     canonicalUrl,
-
     imageUrl,
 
-    imageWidth:
-      Number(
-        imageObject?.width
-      ) || null,
-
-    imageHeight:
-      Number(
-        imageObject?.height
-      ) || null,
+    imageWidth: Number(imageObject?.width) || null,
+    imageHeight: Number(imageObject?.height) || null,
 
     imageAlt:
       imageObject?.alt_text ||
@@ -434,39 +451,18 @@ function normalizeMeta(entity, kind, slug = null) {
       entity?.name ||
       "Clic Menu",
 
-    ogType:
-      openGraph.type ||
-      (
-        kind === "post"
-          ? "article"
-          : "website"
-      ),
-
+    ogType: openGraph.type || (kind === "post" ? "article" : "website"),
     ogTitle,
     ogDescription,
     robots,
 
-    publishedTime:
-      entity?.published_at ||
-      null,
+    publishedTime: entity?.published_at || null,
+    modifiedTime: entity?.updated_at || null,
+    section: entity?.category?.name || null,
 
-    modifiedTime:
-      entity?.updated_at ||
-      null,
-
-    section:
-      entity?.category?.name ||
-      null,
-
-    tags: Array.isArray(
-      entity?.tags
-    )
+    tags: Array.isArray(entity?.tags)
       ? entity.tags
-          .map((tag) =>
-            typeof tag === "string"
-              ? tag
-              : tag?.name
-          )
+          .map((tag) => typeof tag === "string" ? tag : tag?.name)
           .filter(Boolean)
       : [],
 
@@ -478,61 +474,35 @@ function normalizeMeta(entity, kind, slug = null) {
   };
 }
 
+/*
+ * Construye los metadatos SEO correspondientes
+ * a cada página del blog.
+ */
 function createSeoMarkup(meta) {
   const lines = [
-    `    <title>${escapeHtml(
-      meta.title
-    )}</title>`,
-
+    `    <title>${escapeHtml(meta.title)}</title>`,
     "",
-
-    `    <meta name="description" content="${escapeHtml(
-      meta.description
-    )}" />`,
+    `    <meta name="description" content="${escapeHtml(meta.description)}" />`,
   ];
 
   if (meta.keywords) {
     lines.push(
-      `    <meta name="keywords" content="${escapeHtml(
-        meta.keywords
-      )}" />`
+      `    <meta name="keywords" content="${escapeHtml(meta.keywords)}" />`
     );
   }
 
   lines.push(
-    `    <meta name="robots" content="${escapeHtml(
-      meta.robots
-    )}" />`,
-
-    `    <link rel="canonical" href="${escapeHtml(
-      meta.canonicalUrl
-    )}" />`,
+    `    <meta name="robots" content="${escapeHtml(meta.robots)}" />`,
+    `    <link rel="canonical" href="${escapeHtml(meta.canonicalUrl)}" />`,
 
     "",
 
-    `    <meta property="og:type" content="${escapeHtml(
-      meta.ogType
-    )}" />`,
-
-    `    <meta property="og:title" content="${escapeHtml(
-      meta.ogTitle
-    )}" />`,
-
-    `    <meta property="og:description" content="${escapeHtml(
-      meta.ogDescription
-    )}" />`,
-
-    `    <meta property="og:image" content="${escapeHtml(
-      meta.imageUrl
-    )}" />`,
-
-    `    <meta property="og:image:secure_url" content="${escapeHtml(
-      meta.imageUrl
-    )}" />`,
-
-    `    <meta property="og:image:alt" content="${escapeHtml(
-      meta.imageAlt
-    )}" />`
+    `    <meta property="og:type" content="${escapeHtml(meta.ogType)}" />`,
+    `    <meta property="og:title" content="${escapeHtml(meta.ogTitle)}" />`,
+    `    <meta property="og:description" content="${escapeHtml(meta.ogDescription)}" />`,
+    `    <meta property="og:image" content="${escapeHtml(meta.imageUrl)}" />`,
+    `    <meta property="og:image:secure_url" content="${escapeHtml(meta.imageUrl)}" />`,
+    `    <meta property="og:image:alt" content="${escapeHtml(meta.imageAlt)}" />`
   );
 
   if (meta.imageWidth) {
@@ -548,55 +518,32 @@ function createSeoMarkup(meta) {
   }
 
   lines.push(
-    `    <meta property="og:url" content="${escapeHtml(
-      meta.canonicalUrl
-    )}" />`,
-
+    `    <meta property="og:url" content="${escapeHtml(meta.canonicalUrl)}" />`,
     `    <meta property="og:site_name" content="Clic Menu" />`
   );
 
-  if (
-    meta.ogType === "article" &&
-    meta.publishedTime
-  ) {
+  if (meta.ogType === "article" && meta.publishedTime) {
     lines.push(
-      `    <meta property="article:published_time" content="${escapeHtml(
-        meta.publishedTime
-      )}" />`
+      `    <meta property="article:published_time" content="${escapeHtml(meta.publishedTime)}" />`
     );
   }
 
-  if (
-    meta.ogType === "article" &&
-    meta.modifiedTime
-  ) {
+  if (meta.ogType === "article" && meta.modifiedTime) {
     lines.push(
-      `    <meta property="article:modified_time" content="${escapeHtml(
-        meta.modifiedTime
-      )}" />`
+      `    <meta property="article:modified_time" content="${escapeHtml(meta.modifiedTime)}" />`
     );
   }
 
-  if (
-    meta.ogType === "article" &&
-    meta.section
-  ) {
+  if (meta.ogType === "article" && meta.section) {
     lines.push(
-      `    <meta property="article:section" content="${escapeHtml(
-        meta.section
-      )}" />`
+      `    <meta property="article:section" content="${escapeHtml(meta.section)}" />`
     );
   }
 
-  if (
-    meta.ogType === "article" &&
-    Array.isArray(meta.tags)
-  ) {
+  if (meta.ogType === "article" && Array.isArray(meta.tags)) {
     for (const tag of meta.tags) {
       lines.push(
-        `    <meta property="article:tag" content="${escapeHtml(
-          tag
-        )}" />`
+        `    <meta property="article:tag" content="${escapeHtml(tag)}" />`
       );
     }
   }
@@ -605,59 +552,32 @@ function createSeoMarkup(meta) {
     "",
 
     `    <meta name="twitter:card" content="summary_large_image" />`,
-
-    `    <meta name="twitter:title" content="${escapeHtml(
-      meta.ogTitle
-    )}" />`,
-
-    `    <meta name="twitter:description" content="${escapeHtml(
-      meta.ogDescription
-    )}" />`,
-
-    `    <meta name="twitter:image" content="${escapeHtml(
-      meta.imageUrl
-    )}" />`,
+    `    <meta name="twitter:title" content="${escapeHtml(meta.ogTitle)}" />`,
+    `    <meta name="twitter:description" content="${escapeHtml(meta.ogDescription)}" />`,
+    `    <meta name="twitter:image" content="${escapeHtml(meta.imageUrl)}" />`,
 
     "",
 
     `    <meta name="theme-color" content="#C95A3B" />`,
-
     `    <meta name="author" content="Clic Menu" />`
   );
 
   if (meta.structuredData) {
     lines.push(
       "",
-
-      `    <script type="application/ld+json" data-blog-structured-data="true">${escapeJsonForHtml(
-        meta.structuredData
-      )}</script>`
+      `    <script type="application/ld+json" data-blog-structured-data="true">${escapeJsonForHtml(meta.structuredData)}</script>`
     );
   }
 
   return lines.join("\n");
 }
 
-function injectSeo(
-  template,
-  meta
-) {
-  const cleanTemplate =
-    removeExistingSeo(
-      template
-    );
+function injectSeo(template, meta) {
+  const cleanTemplate = removeExistingSeo(template);
+  const markup = createSeoMarkup(meta);
 
-  const markup =
-    createSeoMarkup(meta);
-
-  if (
-    !/<\/head>/i.test(
-      cleanTemplate
-    )
-  ) {
-    throw new Error(
-      "No se encontró </head> en dist/index.html."
-    );
+  if (!/<\/head>/i.test(cleanTemplate)) {
+    throw new Error("No se encontró </head> en dist/index.html.");
   }
 
   return cleanTemplate.replace(
@@ -666,107 +586,62 @@ function injectSeo(
   );
 }
 
-async function writeRouteHtml(
-  routePath,
-  html
-) {
+async function writeRouteHtml(routePath, html) {
   const segments = routePath
     .split("/")
     .filter(Boolean)
-    .map((segment) =>
-      assertSafeSlug(
-        segment,
-        "Segmento de ruta"
-      )
-    );
+    .map((segment) => assertSafeSlug(segment, "Segmento de ruta"));
 
-  const outputDir = path.join(
-    DIST_DIR,
-    ...segments
-  );
+  const outputDir = path.join(DIST_DIR, ...segments);
 
-  await fs.mkdir(
-    outputDir,
-    {
-      recursive: true,
-    }
-  );
+  await fs.mkdir(outputDir, { recursive: true });
 
-  const outputPath =
-    path.join(
-      outputDir,
-      "index.html"
-    );
+  const outputPath = path.join(outputDir, "index.html");
 
-  await fs.writeFile(
-    outputPath,
-    html,
-    "utf8"
-  );
+  await fs.writeFile(outputPath, html, "utf8");
 
   return outputPath;
 }
 
-async function mapWithConcurrency(
-  items,
-  limit,
-  callback
-) {
+/*
+ * Mantiene el control original de concurrencia
+ * de las consultas y generación de publicaciones.
+ */
+async function mapWithConcurrency(items, limit, callback) {
   const results = [];
-
   let cursor = 0;
 
   async function worker() {
-    while (
-      cursor < items.length
-    ) {
-      const currentIndex =
-        cursor;
-
+    while (cursor < items.length) {
+      const currentIndex = cursor;
       cursor += 1;
 
-      results[currentIndex] =
-        await callback(
-          items[currentIndex],
-          currentIndex
-        );
+      results[currentIndex] = await callback(
+        items[currentIndex],
+        currentIndex
+      );
     }
   }
 
-  const workers =
-    Array.from(
-      {
-        length: Math.min(
-          limit,
-          items.length
-        ),
-      },
-      () => worker()
-    );
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker()
+  );
 
   await Promise.all(workers);
 
   return results;
 }
 
-function buildFilteredPageEntity(
-  item,
-  type
-) {
-  const label =
-    type === "category"
-      ? "categoría"
-      : "etiqueta";
+/*
+ * Construye la información SEO utilizada por
+ * páginas de categorías y etiquetas.
+ */
+function buildFilteredPageEntity(item, type) {
+  const label = type === "category" ? "categoría" : "etiqueta";
+  const routeSegment = type === "category" ? "categorias" : "etiquetas";
 
-  const routeSegment =
-    type === "category"
-      ? "categorias"
-      : "etiquetas";
-
-  const name =
-    item?.name ||
-    item?.title ||
-    item?.slug;
+  const name = item?.name || item?.title || item?.slug;
 
   const canonicalUrl =
     item?.url ||
@@ -774,9 +649,7 @@ function buildFilteredPageEntity(
 
   return {
     ...item,
-
     name,
-
     url: canonicalUrl,
 
     seo: {
@@ -798,17 +671,14 @@ function buildFilteredPageEntity(
     open_graph: {
       ...(item?.open_graph || {}),
 
-      type:
-        item?.open_graph?.type ||
-        "website",
+      type: item?.open_graph?.type || "website",
 
       title:
         item?.open_graph?.title ||
         `${name} | Blog Clic Menu`,
 
       description:
-        item?.open_graph
-          ?.description ||
+        item?.open_graph?.description ||
         `Publicaciones de la ${label} ${name}.`,
 
       url:
@@ -817,40 +687,140 @@ function buildFilteredPageEntity(
 
       image:
         item?.open_graph?.image ||
-        {
-          url: DEFAULT_IMAGE,
-        },
+        { url: DEFAULT_IMAGE },
     },
   };
 }
 
+/*
+ * Prepara el contenido real del artículo.
+ * Se utiliza el HTML recibido desde la API,
+ * sin modificar el documento almacenado en Laravel.
+ */
+function preparePrerenderPost(post) {
+  if (
+    !post ||
+    typeof post !== "object" ||
+    typeof post.content !== "string"
+  ) {
+    throw new Error(
+      `La publicación ${post?.slug || "desconocida"} no contiene un documento HTML válido.`
+    );
+  }
+
+  const cleanedContent = sanitizeHtml(
+    post.content,
+    BLOG_CONTENT_SANITIZE_OPTIONS
+  );
+
+  if (!cleanedContent.trim()) {
+    throw new Error(
+      `La publicación ${post.slug} no contiene texto HTML válido.`
+    );
+  }
+
+  return {
+    ...post,
+    content: cleanedContent,
+    __prerendered: true,
+  };
+}
+
+/*
+ * Carga el componente React original de las
+ * páginas públicas utilizando Vite SSR.
+ *
+ * El renderizador se utiliza para generar
+ * el contenido visual de cada artículo.
+ */
+async function createBlogSsrRenderer() {
+  const vite = await createViteServer({
+    server: {
+      middlewareMode: true,
+      hmr: false,
+    },
+
+    appType: "custom",
+    logLevel: "error",
+
+    optimizeDeps: {
+      noDiscovery: true,
+      include: [],
+    },
+  });
+
+  try {
+    const module = await vite.ssrLoadModule(
+      "/src/seo/PublicPrerenderApp.jsx"
+    );
+
+    const PublicPrerenderApp = module.default;
+
+    if (typeof PublicPrerenderApp !== "function") {
+      throw new Error(
+        "No se pudo cargar el renderizador del blog."
+      );
+    }
+
+    return {
+      render(post) {
+        const cache = createCache({ key: "css" });
+        const helmetContext = {};
+
+        const {
+          extractCriticalToChunks,
+          constructStyleTagsFromChunks,
+        } = createEmotionServer(cache);
+
+        const content = renderToString(
+          React.createElement(PublicPrerenderApp, {
+            page: "blog-post",
+            postSlug: post.slug,
+            initialPost: post,
+            server: true,
+            emotionCache: cache,
+            helmetContext,
+          })
+        );
+
+        const chunks = extractCriticalToChunks(content);
+        const styles = constructStyleTagsFromChunks(chunks);
+
+        return {
+          content,
+          styles,
+        };
+      },
+
+      async close() {
+        await vite.close();
+      },
+    };
+  } catch (error) {
+    await vite.close();
+    throw error;
+  }
+}
+
+/*
+ * Proceso principal del prerenderizado del blog.
+ */
 async function main() {
   /*
    * Leer el index generado por Vite.
    */
-  const template =
-    await fs.readFile(
-      TEMPLATE_PATH,
-      "utf8"
-    );
+  const template = await fs.readFile(TEMPLATE_PATH, "utf8");
 
-  console.log(
-    `API del blog: ${API_BASE_URL}${BLOG_ROUTE}`
-  );
+  console.log(`API del blog: ${API_BASE_URL}${BLOG_ROUTE}`);
 
   /*
-   * Prerenderizar página principal
-   * del blog.
+   * Prerenderizar página principal del blog.
+   *
+   * Se conserva el funcionamiento actual:
+   * generación de metadatos SEO.
    */
-  const blogPayload =
-    await getJson(
-      BLOG_ROUTE
-    );
-
-  const blog =
-    unwrapEntity(
-      blogPayload
-    );
+  const blogPayload = await getJson(BLOG_ROUTE);
+  const blog = unwrapEntity(blogPayload);
 
   if (!blog) {
     throw new Error(
@@ -860,79 +830,162 @@ async function main() {
 
   const generatedFiles = [];
 
-  const blogHtml =
-    injectSeo(
-      template,
-      normalizeMeta(
-        blog,
-        "blog"
-      )
-    );
+  const blogHtml = injectSeo(
+    template,
+    normalizeMeta(blog, "blog")
+  );
 
   generatedFiles.push(
-    await writeRouteHtml(
-      "/blog",
-      blogHtml
-    )
+    await writeRouteHtml("/blog", blogHtml)
   );
 
   /*
    * Obtener todas las publicaciones.
    */
-  const postSummaries =
-    deduplicateBySlug(
-      await getAllPages(
-        `${BLOG_ROUTE}/posts`,
-        {
-          order: "latest",
-        }
-      )
-    );
+  const postSummaries = deduplicateBySlug(
+    await getAllPages(`${BLOG_ROUTE}/posts`, {
+      order: "latest",
+    })
+  );
 
   /*
    * Prerenderizar cada publicación.
+   *
+   * Ahora se genera el contenido real con React,
+   * además de sus metadatos SEO.
    */
-  await mapWithConcurrency(
-    postSummaries,
-    5,
-    async (postSummary) => {
-      const slug =
-        assertSafeSlug(
+  const renderer = await createBlogSsrRenderer();
+
+  try {
+    await mapWithConcurrency(
+      postSummaries,
+      5,
+      async (postSummary) => {
+        const slug = assertSafeSlug(
           postSummary.slug,
           "Slug de publicación"
         );
 
-      const postPayload =
-        await getJson(
-          `${BLOG_ROUTE}/posts/${encodeURIComponent(
-            slug
-          )}`
+        const postPayload = await getJson(
+          `${BLOG_ROUTE}/posts/${encodeURIComponent(slug)}`
         );
 
-      const post =
-        unwrapEntity(
-          postPayload
+        const post = unwrapEntity(postPayload);
+
+        if (!post) {
+          throw new Error(
+            `No fue posible obtener la publicación ${slug}.`
+          );
+        }
+
+        /*
+         * Preparar el contenido HTML del artículo.
+         */
+        const prerenderPost = preparePrerenderPost(post);
+
+        /*
+         * Generar el contenido con el componente
+         * React original del detalle del blog.
+         */
+        const { content, styles } = renderer.render(prerenderPost);
+
+        /*
+         * Validar que exista exactamente un H1.
+         */
+        const h1Count = (content.match(/<h1(?:\s|>)/gi) || []).length;
+
+        if (h1Count !== 1) {
+          throw new Error(
+            `El artículo ${slug} debe tener un H1. Encontrados: ${h1Count}.`
+          );
+        }
+
+        /*
+         * Comprobar que se generó el contenido del artículo.
+         */
+        if (!content.includes("blog-post-content")) {
+          throw new Error(
+            `No se generó el contenido del artículo ${slug}.`
+          );
+        }
+
+        /*
+         * Comprobar que se extrajeron los estilos de Emotion.
+         */
+        if (!styles.includes('data-emotion="css')) {
+          throw new Error(
+            `No se pudieron generar los estilos del artículo ${slug}.`
+          );
+        }
+
+        /*
+         * Preparar el contenedor prerenderizado.
+         */
+        const marker = 'data-public-prerender="blog-post"';
+        const root = `<div id="root" ${marker}>${content}</div>`;
+
+        /*
+         * Incorporar los datos iniciales que React
+         * utilizará durante la hidratación.
+         */
+        const initialPostJson = escapeJsonForHtml(prerenderPost);
+
+        const initialPostScript =
+          `<script id="${BLOG_POST_DATA_ID}" type="application/json">` +
+          initialPostJson +
+          `</script>`;
+
+        /*
+         * Conservar la generación SEO existente.
+         */
+        let postHtml = injectSeo(
+          template,
+          normalizeMeta(post, "post", slug)
         );
 
-      if (!post) {
-        throw new Error(
-          `No fue posible obtener la publicación ${slug}.`
+        if (!postHtml.includes('<div id="root"></div>')) {
+          throw new Error(
+            "No se encontró el contenedor de React en dist/index.html."
+          );
+        }
+
+        /*
+         * Incorporar el contenido renderizado,
+         * los estilos y los datos iniciales.
+         */
+        postHtml = postHtml
+          .replace('<div id="root"></div>', root)
+          .replace("</head>", `${styles}\n</head>`)
+          .replace("</body>", `${initialPostScript}\n</body>`);
+
+        /*
+         * Comprobar que los elementos necesarios
+         * para la hidratación estén presentes.
+         */
+        if (
+          !postHtml.includes(marker) ||
+          !postHtml.includes(`id="${BLOG_POST_DATA_ID}"`)
+        ) {
+          throw new Error(
+            `No se pudo preparar el HTML del artículo ${slug}.`
+          );
+        }
+
+        /*
+         * Guardar el HTML completo del artículo.
+         */
+        generatedFiles.push(
+          await writeRouteHtml(`/blog/${slug}`, postHtml)
         );
       }
-
-      const postHtml = injectSeo(
-        template,
-        normalizeMeta(post, "post", slug)
-      );
-
-      generatedFiles.push(
-        await writeRouteHtml(
-          `/blog/${slug}`,
-          postHtml
-        )
-      );
-    }
-  );
+    );
+  } finally {
+    /*
+     * Cerrar el servidor temporal de Vite
+     * incluso cuando falle alguna publicación.
+     */
+    await renderer.close();
+  }
 
   /*
    * Prerenderizar categorías.
@@ -940,38 +993,27 @@ async function main() {
    * no se interrumpe el build completo.
    */
   try {
-    const categories =
-      deduplicateBySlug(
-        await getAllPages(
-          `${BLOG_ROUTE}/categories`
-        )
+    const categories = deduplicateBySlug(
+      await getAllPages(`${BLOG_ROUTE}/categories`)
+    );
+
+    for (const category of categories) {
+      const slug = assertSafeSlug(
+        category.slug,
+        "Slug de categoría"
       );
 
-    for (
-      const category of categories
-    ) {
-      const slug =
-        assertSafeSlug(
-          category.slug,
-          "Slug de categoría"
-        );
-
-      const pageEntity =
-        buildFilteredPageEntity(
-          category,
-          "category"
-        );
+      const pageEntity = buildFilteredPageEntity(
+        category,
+        "category"
+      );
 
       generatedFiles.push(
         await writeRouteHtml(
           `/blog/categorias/${slug}`,
-
           injectSeo(
             template,
-            normalizeMeta(
-              pageEntity,
-              "category"
-            )
+            normalizeMeta(pageEntity, "category")
           )
         )
       );
@@ -979,8 +1021,7 @@ async function main() {
   } catch (error) {
     console.warn(
       "No se prerenderizaron las categorías:",
-      error?.message ||
-        error
+      error?.message || error
     );
   }
 
@@ -990,38 +1031,27 @@ async function main() {
    * no se interrumpe el build completo.
    */
   try {
-    const tags =
-      deduplicateBySlug(
-        await getAllPages(
-          `${BLOG_ROUTE}/tags`
-        )
+    const tags = deduplicateBySlug(
+      await getAllPages(`${BLOG_ROUTE}/tags`)
+    );
+
+    for (const tag of tags) {
+      const slug = assertSafeSlug(
+        tag.slug,
+        "Slug de etiqueta"
       );
 
-    for (
-      const tag of tags
-    ) {
-      const slug =
-        assertSafeSlug(
-          tag.slug,
-          "Slug de etiqueta"
-        );
-
-      const pageEntity =
-        buildFilteredPageEntity(
-          tag,
-          "tag"
-        );
+      const pageEntity = buildFilteredPageEntity(
+        tag,
+        "tag"
+      );
 
       generatedFiles.push(
         await writeRouteHtml(
           `/blog/etiquetas/${slug}`,
-
           injectSeo(
             template,
-            normalizeMeta(
-              pageEntity,
-              "tag"
-            )
+            normalizeMeta(pageEntity, "tag")
           )
         )
       );
@@ -1029,45 +1059,23 @@ async function main() {
   } catch (error) {
     console.warn(
       "No se prerenderizaron las etiquetas:",
-      error?.message ||
-        error
+      error?.message || error
     );
   }
 
   console.log("");
+  console.log("Prerenderizado del blog completado.");
+  console.log(`Archivos generados: ${generatedFiles.length}`);
 
-  console.log(
-    "Prerenderizado del blog completado."
-  );
-
-  console.log(
-    `Archivos generados: ${generatedFiles.length}`
-  );
-
-  generatedFiles.forEach(
-    (filePath) => {
-      console.log(
-        `- ${path.relative(
-          ROOT_DIR,
-          filePath
-        )}`
-      );
-    }
-  );
+  generatedFiles.forEach((filePath) => {
+    console.log(`- ${path.relative(ROOT_DIR, filePath)}`);
+  });
 }
 
 main().catch((error) => {
   console.error("");
-
-  console.error(
-    "Falló el prerenderizado del blog."
-  );
-
-  console.error(
-    error?.response?.data ||
-      error?.message ||
-      error
-  );
+  console.error("Falló el prerenderizado del blog.");
+  console.error(error?.response?.data || error?.message || error);
 
   process.exitCode = 1;
 });

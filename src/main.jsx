@@ -1,4 +1,3 @@
-
 // src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -45,19 +44,83 @@ if (!rootElement) {
   throw new Error("No se encontró el contenedor principal de Clic Menu.");
 }
 
-const isPrerenderedHome =
-  window.location.pathname === "/" &&
-  rootElement.getAttribute("data-public-prerender") === "home";
+const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
 
-if (isPrerenderedHome) {
+const prerenderedPage = rootElement.getAttribute("data-public-prerender");
+
+const publicPageByPath = {
+  "/": "home",
+  "/contacto": "contact",
+  "/planes": "plans",
+  "/terminos-y-condiciones": "terms",
+};
+
+const blogPostMatch = pathname.match(
+  /^\/blog\/([a-z0-9][a-z0-9_-]*)$/i
+);
+
+let expectedPage =
+  publicPageByPath[pathname] ?? null;
+
+let initialPost = null;
+
+if (
+  blogPostMatch &&
+  prerenderedPage === "blog-post"
+) {
+  const postElement = document.getElementById(
+    "clicmenu-initial-blog-post"
+  );
+
+  if (postElement) {
+    try {
+      const parsedPost = JSON.parse(
+        postElement.textContent || "null"
+      );
+
+      if (
+        parsedPost &&
+        parsedPost.slug === blogPostMatch[1] &&
+        parsedPost.__prerendered === true &&
+        typeof parsedPost.content === "string"
+      ) {
+        initialPost = parsedPost;
+        expectedPage = "blog-post";
+      }
+    } catch (error) {
+      console.error(
+        "No se pudieron recuperar los datos del artículo.",
+        error
+      );
+    }
+  }
+}
+
+const shouldHydrate =
+  expectedPage !== null &&
+  prerenderedPage === expectedPage &&
+  (
+    expectedPage !== "blog-post" ||
+    initialPost !== null
+  );
+
+if (shouldHydrate) {
   const emotionCache = createCache({ key: "css" });
 
   ReactDOM.hydrateRoot(
     rootElement,
-    <PublicPrerenderApp emotionCache={emotionCache} />,
+    <PublicPrerenderApp
+      page={expectedPage}
+      emotionCache={emotionCache}
+      postSlug={blogPostMatch?.[1] ?? null}
+      initialPost={initialPost}
+    />,
     {
       onRecoverableError(error) {
-        console.error("Error de hidratación en la portada:", error);
+        console.error(
+          `Error de hidratación en la página ${expectedPage}:`,
+          error
+        );
       },
     }
   );

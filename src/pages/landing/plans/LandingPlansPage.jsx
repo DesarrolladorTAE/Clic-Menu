@@ -70,7 +70,7 @@ const billingConfig = {
   },
 };
 
-export default function LandingPlansPage() {
+export default function LandingPlansPage({ skipSeo = false }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [plansError, setPlansError] = useState("");
@@ -116,53 +116,16 @@ export default function LandingPlansPage() {
       .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
   }, [plans]);
 
-  if (loading) {
-    return (
-      <>
+  return (
+    <>
+      {!skipSeo && (
         <SEO
           title="Planes Clic Menu | Software para Restaurantes a tu Medida"
           description="Conoce los planes de Clic Menu y elige las herramientas que necesita tu restaurante: menú QR, ventas, inventarios, reportes y más."
           keywords="planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio"
           url="https://clicmenu.com.mx/planes"
         />
-
-        <Box
-          component="main"
-          sx={{
-            minHeight: "100vh",
-            bgcolor: landingColors.bg,
-            overflowX: "hidden",
-          }}
-        >
-          <LandingMenu />
-
-          <Box
-            sx={{
-              minHeight: {
-                xs: "calc(100vh - 72px)",
-                md: "calc(100vh - 84px)",
-              },
-              display: "grid",
-              placeItems: "center",
-              px: 2,
-              bgcolor: landingColors.bg,
-            }}
-          >
-            <LoadingCard />
-          </Box>
-        </Box>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <SEO
-        title="Planes Clic Menu | Software para Restaurantes a tu Medida"
-        description="Conoce los planes de Clic Menu y elige las herramientas que necesita tu restaurante: menú QR, ventas, inventarios, reportes y más."
-        keywords="planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio"
-        url="https://clicmenu.com.mx/planes"
-      />
+      )}
 
       <Box
         component="main"
@@ -287,7 +250,17 @@ export default function LandingPlansPage() {
           }}
         >
           <Container>
-            {plansError ? (
+            {loading ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                <LoadingCard />
+              </Box>
+            ) : plansError ? (
               <ErrorCard message={plansError} />
             ) : (
               <>

@@ -399,7 +399,7 @@ export default function BlogFilteredPostsPage({ type }) {
                     >
                       <CardActionArea
                         onClick={() =>
-                          navigate(`/blogs/${post.slug}`)
+                          navigate(`/blog/${post.slug}`)
                         }
                         sx={{
                           height: "100%",

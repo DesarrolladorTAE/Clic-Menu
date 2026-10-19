@@ -18,96 +18,58 @@ import {
 
 import { getClicmenuTerms } from "../../../services/legal/legalDocuments.service";
 
-export default function LandingTermsPage() {
+export default function LandingTermsPage({ skipSeo = false }) {
   const [terms, setTerms] = useState(null);
   const [loading, setLoading] = useState(true);
   const [termsError, setTermsError] = useState("");
 
-    useEffect(() => {
-        let mounted = true;
+  useEffect(() => {
+      let mounted = true;
 
-        const loadTerms = async () => {
-        setLoading(true);
-        setTermsError("");
+      const loadTerms = async () => {
+      setLoading(true);
+      setTermsError("");
 
-        try {
-            const data = await getClicmenuTerms();
+      try {
+          const data = await getClicmenuTerms();
 
-            if (!mounted) return;
+          if (!mounted) return;
 
-            setTerms(data || null);
-        } catch (e) {
-            if (!mounted) return;
+          setTerms(data || null);
+      } catch (e) {
+          if (!mounted) return;
 
-            setTerms(null);
-            setTermsError(
-            e?.response?.data?.message ||
-                e?.message ||
-                "No se pudieron cargar los términos y condiciones."
-            );
-        } finally {
-            if (mounted) {
-            setLoading(false);
-            }
-        }
-        };
+          setTerms(null);
+          setTermsError(
+          e?.response?.data?.message ||
+              e?.message ||
+              "No se pudieron cargar los términos y condiciones."
+          );
+      } finally {
+          if (mounted) {
+          setLoading(false);
+          }
+      }
+      };
 
-        loadTerms();
+      loadTerms();
 
-        return () => {
-        mounted = false;
-        };
-    }, []);
-
-    if (loading) {
-      return (
-        <>
-          <SEO
-            title="Términos y Condiciones | Clic Menu"
-            description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
-            keywords="terminos clic menu, condiciones servicio clic menu"
-            url="https://clicmenu.com.mx/terminos-y-condiciones"
-            robots="index, follow"
-          />
-
-          <Box
-            component="main"
-            sx={{
-                minHeight: "100vh",
-                bgcolor: landingColors.bg,
-                overflowX: "hidden",
-            }}
-          >
-            <LandingMenu />
-
-            <Box
-              sx={{
-                  minHeight: {
-                  xs: "calc(100vh - 72px)",
-                  md: "calc(100vh - 84px)",
-                  },
-                  display: "grid",
-                  placeItems: "center",
-                  px: 2,
-                  bgcolor: landingColors.bg,
-              }}
-            >
-              <LoadingCard />
-            </Box>
-          </Box>
-        </>
-      );
-    }
+      return () => {
+      mounted = false;
+      };
+  }, []);
 
   return (
     <>
-      <SEO
-        title="Términos y Condiciones | Clic Menu"
-        description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
-        keywords="terminos clic menu, condiciones servicio clic menu"
-        url="https://clicmenu.com.mx/terminos-y-condiciones"
-        robots="index, follow"
-      />
+      {!skipSeo && (
+        <SEO
+          title="Términos y Condiciones | Clic Menu"
+          description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
+          keywords="terminos clic menu, condiciones servicio clic menu"
+          url="https://clicmenu.com.mx/terminos-y-condiciones"
+          robots="index, follow"
+        />
+      )}
 
       <Box
         component="main"
@@ -242,7 +204,13 @@ export default function LandingTermsPage() {
               >
                 <HeroBadge
                   icon={<ArticleRoundedIcon fontSize="small" />}
-                  label={terms?.version ? `Versión ${terms.version}` : "Versión vigente"}
+                  label={
+                    loading
+                      ? "Consultando versión"
+                      : terms?.version
+                        ? `Versión ${terms.version}`
+                        : "Versión vigente"
+                  }
                 />
 
                 <HeroBadge
@@ -266,7 +234,24 @@ export default function LandingTermsPage() {
           }}
         >
           <Container>
-            {termsError ? (
+            {loading ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  width: "100%",
+                }}
+              >
+                <Box
+                  sx={{
+                    width: "100%",
+                    maxWidth: 560,
+                  }}
+                >
+                  <LoadingCard />
+                </Box>
+              </Box>
+            ) : termsError ? (
               <ErrorCard message={termsError} />
             ) : (
               <Paper

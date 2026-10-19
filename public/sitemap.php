@@ -94,6 +94,7 @@ function getSitemapUrls(): array
         SITE_URL . '/contacto' => null,
         SITE_URL . '/terminos-y-condiciones' => null,
         SITE_URL . '/blog' => null,
+        SITE_URL . '/recursos/menu-qr-con-canva' => null,
     ];
 
     $page = 1;
@@ -109,6 +110,10 @@ function getSitemapUrls(): array
             $slug = trim((string) ($post['slug'] ?? ''));
 
             if ($slug === '' || preg_match('/^[a-z0-9][a-z0-9_-]*$/i', $slug) !== 1) {
+                continue;
+            }
+
+            if (strtolower($slug) === 'prueba') {
                 continue;
             }
 

@@ -26,6 +26,10 @@ const footerLinks = [
   { label: "Planes", href: "/planes" },
   { label: "Contactos", href: "/contacto" },
   { label: "Términos y condiciones", href: "/terminos-y-condiciones" },
+  {
+    label: "Menú QR con Canva",
+    href: "/recursos/menu-qr-con-canva",
+  },
 ];
 
 const socialLinks = [
