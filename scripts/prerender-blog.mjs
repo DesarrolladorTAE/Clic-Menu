@@ -50,6 +50,7 @@ const api = axios.create({
  * React los utilizará para hidratar el HTML prerenderizado.
  */
 const BLOG_POST_DATA_ID = "clicmenu-initial-blog-post";
+const BLOG_INDEX_DATA_ID = "clicmenu-initial-blog";
 
 /*
  * Configuración del HTML editorial.
@@ -763,6 +764,32 @@ async function createBlogSsrRenderer() {
     }
 
     return {
+      renderBlog(blog, posts, meta) {
+        const cache = createCache({ key: "css" });
+        const helmetContext = {};
+
+        const { extractCriticalToChunks, constructStyleTagsFromChunks } =
+          createEmotionServer(cache);
+
+        const content = renderToString(
+          React.createElement(PublicPrerenderApp, {
+            page: "blog",
+            initialBlog: blog,
+            initialPosts: posts,
+            initialMeta: meta,
+            server: true,
+            emotionCache: cache,
+            helmetContext,
+          })
+        );
+
+        const styles = constructStyleTagsFromChunks(
+          extractCriticalToChunks(content)
+        );
+
+        return { content, styles };
+      },
+
       render(post) {
         const cache = createCache({ key: "css" });
         const helmetContext = {};
@@ -830,18 +857,9 @@ async function main() {
 
   const generatedFiles = [];
 
-  const blogHtml = injectSeo(
-    template,
-    normalizeMeta(blog, "blog")
-  );
-
-  generatedFiles.push(
-    await writeRouteHtml("/blog", blogHtml)
-  );
-
   /*
-   * Obtener todas las publicaciones.
-   */
+  * Obtener todas las publicaciones.
+  */
   const postSummaries = deduplicateBySlug(
     await getAllPages(`${BLOG_ROUTE}/posts`, {
       order: "latest",
@@ -849,14 +867,114 @@ async function main() {
   );
 
   /*
-   * Prerenderizar cada publicación.
-   *
-   * Ahora se genera el contenido real con React,
-   * además de sus metadatos SEO.
-   */
+  * Prerenderizar el listado principal y cada publicación.
+  *
+  * Se utiliza el mismo renderizador React para ambos,
+  * conservando los estilos de Material UI.
+  */
   const renderer = await createBlogSsrRenderer();
 
   try {
+    /*
+    * Obtener la primera página del listado.
+    * Debe coincidir con la consulta inicial de BlogPostsPage.
+    */
+    const firstPagePayload = await getJson(`${BLOG_ROUTE}/posts`, {
+      page: 1,
+      per_page: 9,
+      order: "latest",
+    });
+
+    const initialPosts = unwrapItems(firstPagePayload);
+    const initialMeta = firstPagePayload?.meta ?? firstPagePayload?.data?.meta ?? null;
+
+    if (initialPosts.length === 0) {
+      throw new Error("No se encontraron publicaciones para prerenderizar /blog.");
+    }
+
+    /*
+    * Generar el HTML visible del listado.
+    */
+    const { content: blogContent, styles: blogStyles } =
+      renderer.renderBlog(blog, initialPosts, initialMeta);
+
+    const blogH1Count = (blogContent.match(/<h1(?:\s|>)/gi) || []).length;
+
+    if (blogH1Count !== 1) {
+      throw new Error(`El listado del blog debe tener un H1. Encontrados: ${blogH1Count}.`);
+    }
+
+    if (!blogContent.includes("Ideas para vender mejor y operar con control")) {
+      throw new Error("No se encontró el encabezado principal del blog.");
+    }
+
+    if (!blogContent.includes("Leer publicación")) {
+      throw new Error("No se generaron las tarjetas de publicaciones del blog.");
+    }
+
+    if (!blogStyles.includes('data-emotion="css')) {
+      throw new Error("No se pudieron generar los estilos del listado del blog.");
+    }
+
+    /*
+    * Incorporar el HTML del listado al documento de Vite.
+    */
+    const blogMarker = 'data-public-prerender="blog"';
+    const blogRoot = `<div id="root" ${blogMarker}>${blogContent}</div>`;
+
+    /*
+    * Guardar los datos iniciales para la hidratación.
+    */
+    const initialBlogJson = escapeJsonForHtml({
+      blog,
+      posts: initialPosts,
+      meta: initialMeta,
+    });
+
+    const initialBlogScript =
+      `<script id="${BLOG_INDEX_DATA_ID}" type="application/json">` +
+      initialBlogJson +
+      `</script>`;
+
+    /*
+    * Mantener los metadatos SEO originales del blog.
+    */
+    const blogSeo = normalizeMeta(blog, "blog");
+    let blogHtml = injectSeo(template, blogSeo);
+
+    if (!blogHtml.includes('<div id="root"></div>')) {
+      throw new Error("No se encontró el contenedor de React para /blog.");
+    }
+
+    blogHtml = blogHtml
+      .replace('<div id="root"></div>', blogRoot)
+      .replace("</head>", `${blogStyles}\n</head>`)
+      .replace("</body>", `${initialBlogScript}\n</body>`);
+
+    if (
+      !blogHtml.includes(blogMarker) ||
+      !blogHtml.includes(`id="${BLOG_INDEX_DATA_ID}"`)
+    ) {
+      throw new Error("No fue posible preparar el HTML inicial del blog.");
+    }
+
+    if (!blogHtml.includes(`href="${escapeHtml(blogSeo.canonicalUrl)}"`)) {
+      throw new Error("No se encontró la canonical del listado del blog.");
+    }
+
+    /*
+    * Guardar el listado principal.
+    */
+    generatedFiles.push(
+      await writeRouteHtml("/blog", blogHtml)
+    );
+
+    console.log("Listado principal del blog generado con H1 y publicaciones.");
+
+    /*
+    * Prerenderizar cada artículo individual.
+    * Se conserva toda la lógica existente.
+    */
     await mapWithConcurrency(
       postSummaries,
       5,

@@ -53,6 +53,7 @@ const publicPageByPath = {
   "/contacto": "contact",
   "/planes": "plans",
   "/terminos-y-condiciones": "terms",
+  "/blog": "blog",
 };
 
 const blogPostMatch = pathname.match(
@@ -96,13 +97,34 @@ if (
   }
 }
 
+let initialBlogData = null;
+
+if (pathname === "/blog" && prerenderedPage === "blog") {
+  const blogElement = document.getElementById("clicmenu-initial-blog");
+
+  if (blogElement) {
+    try {
+      const parsedData = JSON.parse(blogElement.textContent || "null");
+
+      if (
+        parsedData &&
+        parsedData.blog &&
+        typeof parsedData.blog === "object" &&
+        Array.isArray(parsedData.posts)
+      ) {
+        initialBlogData = parsedData;
+      }
+    } catch (error) {
+      console.error("No se pudieron recuperar los datos del blog.", error);
+    }
+  }
+}
+
 const shouldHydrate =
   expectedPage !== null &&
   prerenderedPage === expectedPage &&
-  (
-    expectedPage !== "blog-post" ||
-    initialPost !== null
-  );
+  (expectedPage !== "blog-post" || initialPost !== null) &&
+  (expectedPage !== "blog" || initialBlogData !== null);
 
 if (shouldHydrate) {
   const emotionCache = createCache({ key: "css" });
@@ -114,6 +136,9 @@ if (shouldHydrate) {
       emotionCache={emotionCache}
       postSlug={blogPostMatch?.[1] ?? null}
       initialPost={initialPost}
+      initialBlog={initialBlogData?.blog ?? null}
+      initialPosts={initialBlogData?.posts ?? null}
+      initialMeta={initialBlogData?.meta ?? null}
     />,
     {
       onRecoverableError(error) {

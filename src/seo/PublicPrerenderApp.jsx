@@ -20,12 +20,14 @@ import LandingContactPage from "../pages/landing/contact/LandingContactPage.jsx"
 import LandingPlansPage from "../pages/landing/plans/LandingPlansPage.jsx";
 import LandingTermsPage from "../pages/landing/terms/LandingTermsPage.jsx";
 import BlogPostDetailPage from "../pages/landing/blog/BlogPostDetailPage.jsx";
+import BlogPostsPage from "../pages/landing/blog/BlogPostsPage.jsx";
 
 const PUBLIC_PAGES = {
   home: "/",
   contact: "/contacto",
   plans: "/planes",
   terms: "/terminos-y-condiciones",
+  blog: "/blog",
 };
 
 function normalizePathname(pathname) {
@@ -39,6 +41,9 @@ function PublicPageNavigation({
   page,
   postSlug = null,
   initialPost = null,
+  initialBlog = null,
+  initialPosts = null,
+  initialMeta = null,
 }) {
   const location = useLocation();
   const leavingRef = useRef(false);
@@ -87,6 +92,17 @@ function PublicPageNavigation({
     return <LandingTermsPage skipSeo />;
   }
 
+  if (page === "blog") {
+    return (
+      <BlogPostsPage
+        skipSeo
+        initialBlog={initialBlog}
+        initialPosts={initialPosts}
+        initialMeta={initialMeta}
+      />
+    );
+  }
+
   if (page === "blog-post") {
     return (
       <BlogPostDetailPage
@@ -109,6 +125,9 @@ export default function PublicPrerenderApp({
   helmetContext,
   postSlug = null,
   initialPost = null,
+  initialBlog = null,
+  initialPosts = null,
+  initialMeta = null,
 }) {
   if (
     page !== "blog-post" &&
@@ -124,6 +143,12 @@ export default function PublicPrerenderApp({
       initialPost.slug !== postSlug
     ) {
       throw new Error("Faltan los datos iniciales del artículo.");
+    }
+  }
+
+  if (page === "blog") {
+    if (!initialBlog || !Array.isArray(initialPosts)) {
+      throw new Error("Faltan los datos iniciales del blog.");
     }
   }
 
@@ -156,6 +181,9 @@ export default function PublicPrerenderApp({
                 page={page}
                 postSlug={postSlug}
                 initialPost={initialPost}
+                initialBlog={initialBlog}
+                initialPosts={initialPosts}
+                initialMeta={initialMeta}
               />
             </Router>
           </ThemeProvider>

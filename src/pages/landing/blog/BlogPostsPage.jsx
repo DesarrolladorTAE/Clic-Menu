@@ -1,19 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Container,
-  InputAdornment,
-  Pagination,
-  Stack,
-  TextField,
-  Typography,
+  Alert, Box, Button, Card, CardActionArea, CardContent, Chip, CircularProgress, Container, InputAdornment, Pagination, Stack, TextField, Typography,
 } from "@mui/material";
 
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -56,6 +43,7 @@ function formatPublishedDate(value) {
     day: "2-digit",
     month: "long",
     year: "numeric",
+    timeZone: "America/Mexico_City",
   }).format(date);
 }
 
@@ -143,26 +131,36 @@ function PostCover({ post }) {
   );
 }
 
-export default function BlogPostsPage() {
+export default function BlogPostsPage({
+  skipSeo = false,
+  initialBlog = null,
+  initialPosts = null,
+  initialMeta = null,
+}) {
   const navigate = useNavigate();
 
-  const [blog, setBlog] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [meta, setMeta] = useState(null);
+  const hasInitialBlog = initialBlog !== null;
+  const hasInitialPosts = Array.isArray(initialPosts);
+
+  const [blog, setBlog] = useState(initialBlog);
+  const [posts, setPosts] = useState(() => hasInitialPosts ? initialPosts : []);
+  const [meta, setMeta] = useState(initialMeta);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const [loadingBlog, setLoadingBlog] = useState(true);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [loadingBlog, setLoadingBlog] = useState(!hasInitialBlog);
+  const [loadingPosts, setLoadingPosts] = useState(!hasInitialPosts);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
 
     async function loadBlog() {
-      setLoadingBlog(true);
+      if (!hasInitialBlog) {
+        setLoadingBlog(true);
+      }
 
       try {
         const result = await getClicMenuBlog();
@@ -171,7 +169,7 @@ export default function BlogPostsPage() {
           setBlog(result);
         }
       } catch (requestError) {
-        if (active) {
+        if (active && !hasInitialBlog) {
           setError(
             requestError?.response?.data?.message ||
               "No fue posible cargar la información del blog."
@@ -186,16 +184,21 @@ export default function BlogPostsPage() {
 
     loadBlog();
 
-    return () => {
+      return () => {
       active = false;
     };
-  }, []);
+  }, [hasInitialBlog]);
 
   useEffect(() => {
     let active = true;
 
+    const usingInitialPosts = hasInitialPosts && page === 1 && search === "";
+
     async function loadPosts() {
-      setLoadingPosts(true);
+      if (!usingInitialPosts) {
+        setLoadingPosts(true);
+      }
+
       setError("");
 
       try {
@@ -222,13 +225,18 @@ export default function BlogPostsPage() {
           return;
         }
 
-        setPosts([]);
-        setMeta(null);
+        if (usingInitialPosts) {
+          setPosts(initialPosts);
+          setMeta(initialMeta);
+        } else {
+          setPosts([]);
+          setMeta(null);
 
-        setError(
-          requestError?.response?.data?.message ||
-            "No fue posible cargar las publicaciones."
-        );
+          setError(
+            requestError?.response?.data?.message ||
+              "No fue posible cargar las publicaciones."
+          );
+        }
       } finally {
         if (active) {
           setLoadingPosts(false);
@@ -241,7 +249,7 @@ export default function BlogPostsPage() {
     return () => {
       active = false;
     };
-  }, [page, search]);
+  }, [page, search, hasInitialPosts, initialPosts, initialMeta]);
 
   const seoKeywords = useMemo(() => {
     const keywords =
@@ -325,30 +333,30 @@ export default function BlogPostsPage() {
 
   return (
     <>
-      <SEO
-        replaceDefaultSeo
-        title={title}
-        description={description}
-        keywords={seoKeywords}
-        image={seoImage}
-        url={seoUrl}
-        robots={seoRobots}
-        ogType={
-          blog?.open_graph?.type ||
-          "website"
-        }
-        ogTitle={
-          blog?.open_graph?.title ||
-          null
-        }
-        ogDescription={
-          blog?.open_graph?.description ||
-          null
-        }
-        structuredData={
-          structuredData
-        }
-      />
+      {!skipSeo && (
+        <SEO
+          replaceDefaultSeo
+          title={title}
+          description={description}
+          keywords={seoKeywords}
+          image={seoImage}
+          url={seoUrl}
+          robots={seoRobots}
+          ogType={
+            blog?.open_graph?.type ||
+            "website"
+          }
+          ogTitle={
+            blog?.open_graph?.title ||
+            null
+          }
+          ogDescription={
+            blog?.open_graph?.description ||
+            null
+          }
+          structuredData={structuredData}
+        />
+      )}
 
       <Box
         component="main"
