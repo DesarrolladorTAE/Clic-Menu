@@ -13,25 +13,14 @@ DirectoryIndex index.html
     Header always set Cache-Control "public, max-age=31536000, immutable" env=clicmenu_vite_asset
 </IfModule>
 
-
 RewriteEngine On
 
 # Servir la portada real prerenderizada únicamente en /.
 RewriteRule ^$ landing.html [L]
 
-## Servir el mapa del sitio desde PHP.
+# Servir el mapa del sitio desde PHP.
 # Utiliza sitemap.php para generar las URLs públicas.
 RewriteRule ^sitemap\.xml$ sitemap.php [L]
-
-# Servir el artículo estático de Menú QR con Canva.
-# URL pública:
-# /recursos/menu-qr-con-canva
-#
-# Archivo físico:
-# /resources/menu-qr-con-canva/index.html
-#
-# No debe pasar por React.
-RewriteRule ^recursos/menu-qr-con-canva/?$ resources/menu-qr-con-canva/index.html [L]
 
 # Servir internamente el HTML prerenderizado de una ruta limpia.
 # Ejemplo:
