@@ -54,6 +54,8 @@ const publicPageByPath = {
   "/planes": "plans",
   "/terminos-y-condiciones": "terms",
   "/blog": "blog",
+  "/recursos/menu-qr-con-canva": "resource-canva",
+  "/recursos/como-elegir-menu-qr": "resource-choose-menu-qr",
 };
 
 const blogPostMatch = pathname.match(

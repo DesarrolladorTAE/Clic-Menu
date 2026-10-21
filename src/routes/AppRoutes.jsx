@@ -14,6 +14,10 @@ import LandingTermsPage from "../pages/landing/terms/LandingTermsPage";
 import LandingContactPage from "../pages/landing/contact/LandingContactPage";
 import LandingPlansPage from "../pages/landing/plans/LandingPlansPage";
 
+//Guías y recursos públicos
+import MenuQrCanvaPage from "../pages/landing/resources/MenuQrCanvaPage";
+import ComoElegirMenuQrPage from "../pages/landing/resources/ComoElegirMenuQrPage";
+
 //Registro administrador
 import SystemAdminLogin from "../pages/system-admin/SystemAdminLogin";
 
@@ -168,6 +172,12 @@ export default function AppRoutes() {
       <Route path="/planes" element={<LandingPlansPage />} />
       <Route path="/contacto" element={<LandingContactPage />} />
       <Route path="/terminos-y-condiciones" element={<LandingTermsPage />} />
+
+      {/* GUÍAS Y RECURSOS */}
+      <Route path="/recursos/menu-qr-con-canva" element={<MenuQrCanvaPage />} />
+      <Route path="/recursos/como-elegir-menu-qr" element={<ComoElegirMenuQrPage />} />
+
+      {/* Menus QRS */}
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
       <Route path="/order/:trackingToken" element={<PublicOnlineOrderTrackingPage />} />
       <Route path="/invoice/:token" element={<PublicInvoicePage />} />

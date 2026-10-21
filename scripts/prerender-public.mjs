@@ -35,7 +35,29 @@ const TERMS_OUTPUT_PATH = path.join(
   "index.html"
 );
 
+/*
+ * Guías públicas de Clic Menu.
+ * Sus metadatos se recuperan directamente de sus componentes React.
+ */
+const RESOURCE_PAGES = [
+  {
+    page: "resource-canva",
+    slug: "menu-qr-con-canva",
+    modulePath: "/src/pages/landing/resources/MenuQrCanvaPage.jsx",
+    seoExport: "MENU_QR_CANVA_SEO",
+    expectedContent: "Las cinco señales de que ya te quedó chico",
+  },
+  {
+    page: "resource-choose-menu-qr",
+    slug: "como-elegir-menu-qr",
+    modulePath: "/src/pages/landing/resources/ComoElegirMenuQrPage.jsx",
+    seoExport: "COMO_ELEGIR_MENU_QR_SEO",
+    expectedContent: "Siete preguntas antes de firmar",
+  },
+];
+
 const ROOT_ELEMENT = '<div id="root"></div>';
+
 const MARKER = 'data-public-prerender="home"';
 
 // Datos estructurados de Clic Menu para buscadores.
@@ -237,6 +259,85 @@ function preparePageSeo(template, seo) {
   return html;
 }
 
+/*
+ * Agregar o actualizar un metadato sin duplicarlo.
+ * Se utiliza únicamente para las guías públicas.
+ */
+function upsertResourceMeta(html, attributeName, attributeValue, content) {
+  const identifierRegex = new RegExp(
+    `\\b${attributeName}\\s*=\\s*["']${escapeRegex(attributeValue)}["']`,
+    "i"
+  );
+
+  const matches = [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .filter(([tag]) => identifierRegex.test(tag));
+
+  if (matches.length > 1) {
+    throw new Error(`Metadato SEO duplicado: ${attributeValue}.`);
+  }
+
+  if (matches.length === 1) {
+    return replaceTagAttribute(
+      html, "meta", attributeName, attributeValue, "content", content
+    );
+  }
+
+  const tag = `<meta ${attributeName}="${attributeValue}" content="${escapeHtmlAttribute(content)}" />`;
+  return html.replace("</head>", `  ${tag}\n</head>`);
+}
+
+/*
+ * Preparar el SEO completo de una guía.
+ *
+ * Conservar título, descripción y canonical.
+ * Agregar Open Graph, Twitter y datos estructurados.
+ */
+function prepareResourceSeo(template, seo) {
+  if (!seo?.title || !seo?.description || !seo?.url || !seo?.structuredData) {
+    throw new Error("La guía no contiene todos sus metadatos SEO.");
+  }
+
+  let html = preparePageSeo(template, seo);
+
+  /*
+   * Retirar únicamente los datos estructurados predeterminados
+   * de la plantilla para evitar duplicarlos en estas páginas.
+   */
+  html = html.replace(
+    /<script\b(?=[^>]*\btype\s*=\s*["']application\/ld\+json["'])[^>]*>[\s\S]*?<\/script>\s*/gi,
+    ""
+  );
+
+  const metaTags = [
+    ["name", "robots", seo.robots || "index, follow"],
+    ["name", "keywords", seo.keywords || ""],
+    ["property", "og:type", seo.ogType || "article"],
+    ["property", "og:site_name", "Clic Menu"],
+    ["property", "og:title", seo.ogTitle || seo.title],
+    ["property", "og:description", seo.ogDescription || seo.description],
+    ["property", "og:url", seo.url],
+    ["property", "og:locale", "es_MX"],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", seo.ogTitle || seo.title],
+    ["name", "twitter:description", seo.ogDescription || seo.description],
+  ];
+
+  for (const [attributeName, attributeValue, content] of metaTags) {
+    html = upsertResourceMeta(html, attributeName, attributeValue, content);
+  }
+
+  /*
+   * Utilizar el JSON-LD original del componente.
+   * Incluye Article, FAQPage y SoftwareApplication.
+   */
+  const structuredData = JSON.stringify(seo.structuredData)
+    .replace(/</g, "\\u003c");
+
+  const jsonLd = `<script type="application/ld+json" data-resource-structured-data="true">${structuredData}</script>`;
+
+  return html.replace("</head>", `  ${jsonLd}\n</head>`);
+}
+
 async function renderPage(page = "home") {
   const vite = await createViteServer({
     server: { middlewareMode: true, hmr: false },
@@ -256,6 +357,21 @@ async function renderPage(page = "home") {
       throw new Error("No se pudo cargar la portada original.");
     }
 
+    /*
+     * Recuperar los metadatos originales cuando se renderiza una guía.
+     */
+    let resourceSeo = null;
+    const resource = RESOURCE_PAGES.find((item) => item.page === page);
+
+    if (resource) {
+      const resourceModule = await vite.ssrLoadModule(resource.modulePath);
+      resourceSeo = resourceModule[resource.seoExport];
+
+      if (!resourceSeo?.structuredData) {
+        throw new Error(`No se encontraron los datos SEO de ${resource.slug}.`);
+      }
+    }
+
     const cache = createCache({ key: "css" });
     const helmetContext = {};
     const { extractCriticalToChunks, constructStyleTagsFromChunks } =
@@ -273,7 +389,7 @@ async function renderPage(page = "home") {
     const chunks = extractCriticalToChunks(content);
     const styles = constructStyleTagsFromChunks(chunks);
 
-    return { content, styles };
+    return { content, styles, resourceSeo };
   } finally {
     await vite.close();
   }
@@ -340,6 +456,13 @@ async function generate() {
   await generateContact(template);
   await generatePlans(template);
   await generateTerms(template);
+
+  /*
+   * Generar las guías públicas de Clic Menu.
+   */
+  for (const resource of RESOURCE_PAGES) {
+    await generateResource(template, resource);
+  }
 }
 
 async function generateContact(template) {
@@ -597,9 +720,103 @@ async function generateTerms(template) {
 
   console.log("Archivo: dist/terminos-y-condiciones/index.html");
 
-  console.log( "Contenido informativo y H1 incluidos.");
+  console.log("Contenido informativo y H1 incluidos.");
 
-  console.log( "Documento legal dinámico conservado.");
+  console.log("Documento legal dinámico conservado.");
+}
+
+/*
+ * Generar una guía pública completa desde su componente React.
+ *
+ * Conserva el contenido editorial, los metadatos SEO,
+ * los datos estructurados y los estilos de Material UI.
+ */
+async function generateResource(template, resource) {
+  const { content, styles, resourceSeo } = await renderPage(resource.page);
+
+  /*
+   * Validar encabezado principal.
+   */
+  const h1Count = (content.match(/<h1(?:\s|>)/gi) || []).length;
+
+  if (h1Count !== 1) {
+    throw new Error(`La guía ${resource.slug} debe tener un H1. Encontrados: ${h1Count}.`);
+  }
+
+  /*
+   * Validar que React generó el contenido editorial.
+   */
+  if (!content.includes(resource.expectedContent)) {
+    throw new Error(`No se encontró el contenido principal de ${resource.slug}.`);
+  }
+
+  if (!content.includes("cm-resource-article-body")) {
+    throw new Error(`No se generó el contenedor editorial de ${resource.slug}.`);
+  }
+
+  /*
+   * Validar que se utilizaron los componentes originales.
+   */
+  if (!content.includes("clicmenu-naranja.png")) {
+    throw new Error(`No se encontró el menú oficial de ${resource.slug}.`);
+  }
+
+  if (!content.includes("clicmenu-blanco.png")) {
+    throw new Error(`No se encontró el footer oficial de ${resource.slug}.`);
+  }
+
+  if (!styles.includes('data-emotion="css')) {
+    throw new Error(`No se pudieron extraer los estilos de ${resource.slug}.`);
+  }
+
+  /*
+   * Preparar el HTML completo con SEO propio.
+   */
+  const resourceTemplate = prepareResourceSeo(template, resourceSeo);
+  const marker = `data-public-prerender="${resource.page}"`;
+  const root = `<div id="root" ${marker}>${content}</div>`;
+
+  let html = resourceTemplate
+    .replace(ROOT_ELEMENT, root)
+    .replace("</head>", `${styles}\n</head>`);
+
+  /*
+   * Validar el resultado final.
+   */
+  if (!html.includes(marker)) {
+    throw new Error(`No se pudo agregar el marcador de ${resource.slug}.`);
+  }
+
+  if (!html.includes(`href="${escapeHtmlAttribute(resourceSeo.url)}"`)) {
+    throw new Error(`La guía ${resource.slug} no contiene su canonical correcta.`);
+  }
+
+  if (!html.includes('data-resource-structured-data="true"')) {
+    throw new Error(`La guía ${resource.slug} no contiene datos estructurados.`);
+  }
+
+  for (const type of ["Article", "FAQPage", "SoftwareApplication"]) {
+    if (!html.includes(`"@type":"${type}"`)) {
+      throw new Error(`Faltan los datos estructurados ${type} en ${resource.slug}.`);
+    }
+  }
+
+  /*
+   * Guardar la guía en su propia ruta.
+   */
+  const outputPath = path.join(
+    DIST_DIR, "recursos", resource.slug, "index.html"
+  );
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const temporaryPath = `${outputPath}.tmp`;
+  await fs.writeFile(temporaryPath, html, "utf8");
+  await fs.rename(temporaryPath, outputPath);
+
+  console.log(`Guía ${resource.slug} generada correctamente.`);
+  console.log(`Archivo: dist/recursos/${resource.slug}/index.html`);
+  console.log("H1, contenido editorial, SEO y estilos incluidos.");
 }
 
 // Servidor de prueba: únicamente localhost, nunca producción.

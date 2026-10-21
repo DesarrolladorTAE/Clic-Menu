@@ -22,12 +22,17 @@ import LandingTermsPage from "../pages/landing/terms/LandingTermsPage.jsx";
 import BlogPostDetailPage from "../pages/landing/blog/BlogPostDetailPage.jsx";
 import BlogPostsPage from "../pages/landing/blog/BlogPostsPage.jsx";
 
+import MenuQrCanvaPage from "../pages/landing/resources/MenuQrCanvaPage.jsx";
+import ComoElegirMenuQrPage from "../pages/landing/resources/ComoElegirMenuQrPage.jsx";
+
 const PUBLIC_PAGES = {
   home: "/",
   contact: "/contacto",
   plans: "/planes",
   terms: "/terminos-y-condiciones",
   blog: "/blog",
+  "resource-canva": "/recursos/menu-qr-con-canva",
+  "resource-choose-menu-qr": "/recursos/como-elegir-menu-qr",
 };
 
 function normalizePathname(pathname) {
@@ -90,6 +95,14 @@ function PublicPageNavigation({
 
   if (page === "terms") {
     return <LandingTermsPage skipSeo />;
+  }
+
+  if (page === "resource-canva") {
+    return <MenuQrCanvaPage skipSeo />;
+  }
+
+  if (page === "resource-choose-menu-qr") {
+    return <ComoElegirMenuQrPage skipSeo />;
   }
 
   if (page === "blog") {

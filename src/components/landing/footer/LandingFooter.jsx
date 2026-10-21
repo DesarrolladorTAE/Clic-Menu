@@ -24,12 +24,9 @@ import {
 const footerLinks = [
   { label: "Inicio", href: "/" },
   { label: "Planes", href: "/planes" },
-  { label: "Contactos", href: "/contacto" },
+  { label: "Contáctanos", href: "/contacto" },
   { label: "Términos y condiciones", href: "/terminos-y-condiciones" },
-  {
-    label: "Menú QR con Canva",
-    href: "/recursos/menu-qr-con-canva",
-  },
+  { label: "Blogs", href: "/blog" },
 ];
 
 const socialLinks = [

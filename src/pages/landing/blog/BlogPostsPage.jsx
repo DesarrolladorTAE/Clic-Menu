@@ -28,6 +28,25 @@ import {
 
 const POSTS_PER_PAGE = 9;
 
+/*
+ * Guías administradas directamente por Clic Menu.
+ * No pertenecen a la API externa del blog.
+ */
+const RESOURCE_GUIDES = [
+  {
+    title: "Menú QR con Canva: hasta dónde alcanza",
+    description: "Descubre qué puedes hacer con Canva, cuáles son sus límites y cuándo conviene utilizar un sistema para tu restaurante.",
+    href: "/recursos/menu-qr-con-canva",
+    category: "Menú digital",
+  },
+  {
+    title: "Cómo elegir un menú QR para tu restaurante",
+    description: "Conoce las siete preguntas que debes hacer antes de contratar un menú digital para tu negocio.",
+    href: "/recursos/como-elegir-menu-qr",
+    category: "Guía práctica",
+  },
+];
+
 function formatPublishedDate(value) {
   if (!value) {
     return "";
@@ -633,6 +652,164 @@ export default function BlogPostsPage({
             </Stack>
           </Box>
         </Container>
+
+        {/* Guías y recursos propios de Clic Menu */}
+        <Box
+          component="section"
+          aria-labelledby="blog-resources-title"
+          sx={{ pt: { xs: 7, md: 9 }, pb: { xs: 2, md: 3 } }}
+        >
+          <Container>
+            <Box sx={{ mb: { xs: 3, md: 4 } }}>
+              <Typography
+                sx={{
+                  color: landingColors.primary,
+                  fontSize: 11,
+                  fontWeight: 950,
+                  letterSpacing: "0.13em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Aprende y toma mejores decisiones
+              </Typography>
+
+              <Typography
+                id="blog-resources-title"
+                component="h2"
+                sx={{
+                  mt: 0.8,
+                  color: landingColors.title,
+                  fontSize: { xs: 28, md: 38 },
+                  fontWeight: 950,
+                  letterSpacing: "-0.04em",
+                }}
+              >
+                Guías y recursos
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 1.5,
+                  maxWidth: 740,
+                  color: "#64748b",
+                  fontSize: { xs: 15, md: 16 },
+                  lineHeight: 1.7,
+                }}
+              >
+                Información práctica para elegir herramientas digitales,
+                organizar tu restaurante y mejorar su operación.
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                gap: { xs: 2.5, md: 3 },
+              }}
+            >
+              {RESOURCE_GUIDES.map((guide) => (
+                <Card
+                  key={guide.href}
+                  variant="outlined"
+                  sx={{
+                    height: "100%",
+                    overflow: "hidden",
+                    borderRadius: { xs: 3, md: 4 },
+                    bgcolor: "#ffffff",
+                    borderColor: "rgba(15,23,42,0.10)",
+                    boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+                    transition: "transform 0.25s ease, box-shadow 0.25s ease",
+                    "&:hover": {
+                      transform: "translateY(-5px)",
+                      boxShadow: "0 18px 40px rgba(15,23,42,0.12)",
+                    },
+                  }}
+                >
+                  <CardActionArea
+                    component="a"
+                    href={guide.href}
+                    sx={{
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: 8,
+                        bgcolor: landingColors.primary,
+                      }}
+                    />
+
+                    <CardContent
+                      sx={{
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        p: { xs: 3, md: 3.5 },
+                        "&:last-child": { pb: { xs: 3, md: 3.5 } },
+                      }}
+                    >
+                      <Chip
+                        label={guide.category}
+                        size="small"
+                        sx={{
+                          mb: 2.5,
+                          bgcolor: landingColors.primarySoft,
+                          color: landingColors.primary,
+                          fontSize: 12,
+                          fontWeight: 900,
+                        }}
+                      />
+
+                      <Typography
+                        component="h3"
+                        sx={{
+                          color: landingColors.title,
+                          fontSize: { xs: 22, md: 25 },
+                          fontWeight: 950,
+                          lineHeight: 1.25,
+                          letterSpacing: "-0.03em",
+                        }}
+                      >
+                        {guide.title}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 1.5,
+                          mb: 3,
+                          color: "#64748b",
+                          fontSize: 14,
+                          lineHeight: 1.75,
+                        }}
+                      >
+                        {guide.description}
+                      </Typography>
+
+                      <Stack
+                        direction="row"
+                        spacing={0.8}
+                        alignItems="center"
+                        sx={{ mt: "auto", color: landingColors.primary }}
+                      >
+                        <Typography sx={{ fontSize: 14, fontWeight: 950 }}>
+                          Leer guía
+                        </Typography>
+
+                        <ArrowForwardRoundedIcon sx={{ fontSize: 19 }} />
+                      </Stack>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              ))}
+            </Box>
+          </Container>
+        </Box>
 
         <Box
           component="section"
