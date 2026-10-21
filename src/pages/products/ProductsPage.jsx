@@ -634,7 +634,6 @@ export default function ProductsPage() {
           productsMode={productsMode}
           pageBusy={pageBusy}
           allowedProducts={allowedProducts}
-          onBack={() => nav(`/owner/restaurants/${restaurantId}/operation/menu`)}
         />
 
         <ProductsPageFilters

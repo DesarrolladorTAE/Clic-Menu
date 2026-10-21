@@ -1,8 +1,7 @@
 import {
-  Box, Button, Chip, Paper, Stack, Typography,
+  Box, Chip, Paper, Stack, Typography,
 } from "@mui/material";
 
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import LocalDiningOutlinedIcon from "@mui/icons-material/LocalDiningOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
@@ -28,7 +27,6 @@ export default function ProductsPageHeader({
   productsMode,
   pageBusy,
   allowedProducts,
-  onBack,
 }) {
   return (
     <>
@@ -96,26 +94,6 @@ export default function ProductsPageHeader({
             ) : null}
           </Stack>
         </Box>
-
-        <Stack
-          direction={{ xs: "column-reverse", sm: "row" }}
-          spacing={1.5}
-          width={{ xs: "100%", md: "auto" }}
-        >
-          <Button
-            onClick={onBack}
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
-            sx={{
-              minWidth: { xs: "100%", sm: 180 },
-              height: 44,
-              borderRadius: 2,
-            }}
-          >
-            Volver al menú
-          </Button>
-
-        </Stack>
       </Stack>
 
       <Paper

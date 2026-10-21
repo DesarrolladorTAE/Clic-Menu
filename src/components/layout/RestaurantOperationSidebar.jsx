@@ -39,6 +39,9 @@ import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 import WebAssetOutlinedIcon from "@mui/icons-material/WebAssetOutlined";
 import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import FastfoodOutlinedIcon from "@mui/icons-material/FastfoodOutlined";
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED = 78;
@@ -75,7 +78,18 @@ export default function RestaurantOperationSidebar({
         key: "management",
         label: "Gestión",
         icon: <ManageAccountsRoundedIcon />,
-        items: [{ key: "staff", label: "Personal", icon: <GroupIcon /> }],
+        items: [
+          {
+            key: "branch-settings",
+            label: "Configuración",
+            icon: <SettingsOutlinedIcon />,
+          },
+          {
+            key: "staff",
+            label: "Personal",
+            icon: <GroupIcon />,
+          },
+        ],
       },
       {
         key: "inventory",
@@ -109,8 +123,13 @@ export default function RestaurantOperationSidebar({
         items: [
           {
             key: "menu-structure",
-            label: "Estructura del catálogo",
+            label: "Secciones y categorías",
             icon: <RestaurantMenuIcon />,
+          },
+          {
+            key: "products",
+            label: "Productos",
+            icon: <FastfoodOutlinedIcon />,
           },
           {
             key: "catalog",
@@ -119,12 +138,17 @@ export default function RestaurantOperationSidebar({
           },
           {
             key: "branch-sales-channels",
-            label: "Canales de venta por sucursal",
+            label: "Canales de venta",
             icon: <CampaignIcon />,
           },
           {
+            key: "menu-sets",
+            label: "Conjuntos",
+            icon: <LayersOutlinedIcon />,
+          },
+          {
             key: "menus",
-            label: "Menús por sucursal",
+            label: "Menús",
             icon: <MenuBookIcon />,
           },
           {

@@ -160,19 +160,16 @@ export default function OperationalSettingsModal({
   const visibility = initialUi?.visibility || {};
 
   const showOrderingMode =
-    visibility?.ordering_mode ?? !effectiveDirectAttentionMode;
+  !effectiveDirectAttentionMode && (visibility?.ordering_mode ?? true);
 
   const showTableServiceMode =
-    visibility?.table_service_mode ?? !effectiveDirectAttentionMode;
+    !effectiveDirectAttentionMode && (visibility?.table_service_mode ?? true);
 
   const showAssignmentStrategy =
-    visibility?.assignment_strategy ?? !effectiveDirectAttentionMode;
+    !effectiveDirectAttentionMode && (visibility?.assignment_strategy ?? true);
 
   const showSeatCapacity =
-    visibility?.seat_capacity ?? !effectiveDirectAttentionMode;
-
-  const showCashierDirectMode =
-    visibility?.cashier_direct_mode ?? true;
+    !effectiveDirectAttentionMode && (visibility?.seat_capacity ?? true);
 
   const orderingModeChange = initialUi?.ordering_mode_change || null;
 
@@ -245,7 +242,6 @@ export default function OperationalSettingsModal({
   const orderingMode = watch("ordering_mode");
   const tableServiceMode = watch("table_service_mode");
   const assignmentStrategy = watch("assignment_strategy");
-  const cashierDirectMode = watch("cashier_direct_mode");
   const minSeats = watch("min_seats");
   const maxSeats = watch("max_seats");
 
@@ -263,6 +259,11 @@ export default function OperationalSettingsModal({
     reset(defaultValues);
     setServerNotices(initialNotices);
   }, [open, reset, defaultValues, initialNotices]);
+
+  const visibleServerNotices = serverNotices.filter((notice) => {
+    const text = String(notice ?? "");
+    return !/venta directa desde caja|modo de venta directa/i.test(text);
+  });
 
   if (!open) return null;
 
@@ -290,15 +291,6 @@ export default function OperationalSettingsModal({
       ? "Se asigna un mesero por zona y las mesas heredan esa asignación."
       : assignmentStrategy === "table_only"
       ? "Cada mesa puede tener un mesero distinto."
-      : "";
-
-  const cashierDirectHelper =
-    cashierDirectMode === "disabled"
-      ? "La caja no podrá crear ventas directas."
-      : cashierDirectMode === "with_kitchen"
-      ? "La caja podrá crear ventas directas que se enviarán a cocina después del cobro."
-      : cashierDirectMode === "without_kitchen"
-      ? "La caja podrá crear ventas directas sin enviarlas a cocina."
       : "";
 
   const onSubmit = async (form) => {
@@ -428,7 +420,7 @@ export default function OperationalSettingsModal({
               }}
             >
               {effectiveDirectAttentionMode
-                ? "Esta sucursal opera con atención directa. Solo puedes configurar la venta desde caja."
+                ? "Esta sucursal trabaja con atención directa. La venta desde caja se administra en Gestión → Configuración."
                 : "Define cómo se operará la sucursal antes de usar zonas, mesas y QR."}
             </Typography>
           </Box>
@@ -508,7 +500,7 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
-                {serverNotices.length > 0 ? (
+                {visibleServerNotices.length > 0 ? (
                   <Box
                     sx={{
                       p: 1.5,
@@ -530,7 +522,7 @@ export default function OperationalSettingsModal({
                     </Typography>
 
                     <Stack spacing={0.75}>
-                      {serverNotices.map((notice, index) => (
+                      {visibleServerNotices.map((notice, index) => (
                         <Typography
                           key={`${notice}-${index}`}
                           sx={{
@@ -546,6 +538,40 @@ export default function OperationalSettingsModal({
                   </Box>
                 ) : null}
 
+                {effectiveDirectAttentionMode ? (
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      backgroundColor: "#fff",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 15,
+                        fontWeight: 800,
+                        color: "text.primary",
+                        mb: 0.75,
+                      }}
+                    >
+                      Configuración no disponible
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        color: "text.secondary",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      La configuración de mesas no está disponible cuando el restaurante
+                      trabaja con atención directa. Puedes administrar las ventas directas
+                      desde Gestión → Configuración.
+                    </Typography>
+                  </Box>
+                ) : null}
 
                 {showOrderingMode || showTableServiceMode || showAssignmentStrategy ? (
                   <>
@@ -650,45 +676,6 @@ export default function OperationalSettingsModal({
                   </>
                 ) : null}
                 
-
-                {showCashierDirectMode ? (
-                  <>
-                    <SectionTitle title="Venta directa desde caja" />
-
-                    <FieldBlock
-                      label="Modo de venta directa"
-                      input={
-                        <Controller
-                          name="cashier_direct_mode"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              select
-                              fullWidth
-                              value={field.value ?? "disabled"}
-                              onChange={field.onChange}
-                              SelectProps={{
-                                IconComponent: KeyboardArrowDownIcon,
-                              }}
-                            >
-                              <MenuItem value="disabled">Desactivada</MenuItem>
-                              <MenuItem value="with_kitchen">
-                                Activada con cocina
-                              </MenuItem>
-                              <MenuItem value="without_kitchen">
-                                Activada sin cocina
-                              </MenuItem>
-                            </TextField>
-                          )}
-                        />
-                      }
-                      help={cashierDirectHelper}
-                      error={errors?.cashier_direct_mode?.message}
-                    />
-                  </>
-                ) : null}
-
-
                 {showSeatCapacity ? (
                   <>
                     <SectionTitle title="Capacidad de mesas" />
@@ -820,7 +807,7 @@ export default function OperationalSettingsModal({
 
                   <Button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || effectiveDirectAttentionMode}
                     variant="contained"
                     startIcon={<SaveIcon />}
                     sx={{

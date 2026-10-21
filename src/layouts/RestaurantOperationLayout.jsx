@@ -72,6 +72,7 @@ export default function RestaurantOperationLayout() {
     if (pathname.includes("/purchases")) return "purchases";
     if (pathname.includes("/modifiers")) return "modifiers";
     if (pathname.includes("/staff")) return "staff";
+    if (pathname.includes("/branch-settings")) return "branch-settings";
     if (pathname.includes("/warehouses/inventory-report")) {
       return "inventory-report";
     }
@@ -79,7 +80,9 @@ export default function RestaurantOperationLayout() {
     if (pathname.includes("/ingredients")) return "ingredients";
     if (pathname.includes("/public-menu-settings")) return "public-menu-settings";
     if (pathname.includes("/promotions")) return "promotions";
+    if (pathname.includes("/menu-sets")) return "menu-sets";
     if (pathname.includes("/menus")) return "menus";
+    if (pathname.includes("/menu/products")) return "products";
     if (pathname.includes("/menu")) return "menu-structure";
     if (pathname.includes("/catalog")) return "catalog";
     if (pathname.includes("/tables")) return "tables";
@@ -204,6 +207,13 @@ export default function RestaurantOperationLayout() {
     }
 
     switch (key) {
+      case "branch-settings":
+        nav(`${base}/branch-settings`, { state: { restaurantName } });
+        break;
+
+      case "menu-sets":
+        return;
+
       case "staff":
         nav(`${base}/staff`, { state: { restaurantName } });
         break;
@@ -230,6 +240,10 @@ export default function RestaurantOperationLayout() {
 
       case "menu-structure":
         nav(`${base}/menu`, { state: { restaurantName } });
+        break;
+
+      case "products":
+        nav(`${base}/menu/products`, { state: { restaurantName } });
         break;
 
       case "catalog":

@@ -81,6 +81,7 @@ import RestaurantSettings from "../pages/restaurant/RestaurantSettings";
 
 //Menu 2
 import RestaurantOperationLayout from "../layouts/RestaurantOperationLayout";
+import BranchSettingsPage from "../pages/management/settings/BranchSettingsPage";
 
 import ModifierManager from "../pages/menu/modifiers/ModifierManager";
 import ProductModifierCatalogPage from "../pages/menu/modifiers/catalogs/ProductModifierCatalogPage";
@@ -253,7 +254,8 @@ export default function AppRoutes() {
 
         {/* Menu 2: Operación */}
         <Route path="/owner/restaurants/:restaurantId/operation" element={<RestaurantOperationLayout />}>
-          <Route index element={<Navigate to="staff" replace />} />
+          <Route index element={<Navigate to="branch-settings" replace />} />
+          <Route path="branch-settings" element={<BranchSettingsPage />} />
           <Route path="staff" element={<StaffPage />} />
 
           <Route path="ingredients" element={<IngredientsPage />} />

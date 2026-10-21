@@ -249,7 +249,7 @@ export default function RestaurantAdminLayout() {
         return;
       }
 
-      nav(`/owner/restaurants/${restaurantId}/operation/staff`, {
+      nav(`/owner/restaurants/${restaurantId}/operation/branch-settings`, {
         state: { restaurantName },
       });
       return;

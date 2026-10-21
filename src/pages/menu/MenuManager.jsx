@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import {
-  Box, Button, CircularProgress, MenuItem, Paper, Stack, TextField, Typography,
+  Box, CircularProgress, MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 
 import { getRestaurantSettings } from "../../services/restaurant/restaurantSettings.service";
 import { getBranchesByRestaurant } from "../../services/restaurant/branch.service";
@@ -21,7 +20,6 @@ import MenuSectionsPanel from "../../components/menu/MenuSectionsPanel";
 import MenuCategoriesPanel from "../../components/menu/MenuCategoriesPanel";
 
 export default function MenuManager() {
-  const nav = useNavigate();
   const { restaurantId } = useParams();
 
   const [loading, setLoading] = useState(true);
@@ -251,22 +249,6 @@ export default function MenuManager() {
                 Organiza la estructura base de tu menú con secciones y categorías.
               </Typography>
             </Box>
-
-            <Button
-              onClick={() =>
-                nav(`/owner/restaurants/${restaurantId}/operation/menu/products`)
-              }
-              variant="contained"
-              startIcon={<RestaurantMenuIcon />}
-              sx={{
-                minWidth: { xs: "100%", sm: 220 },
-                height: 44,
-                borderRadius: 2,
-                fontWeight: 800,
-              }}
-            >
-              Administrar productos
-            </Button>
           </Stack>
 
           <Paper
