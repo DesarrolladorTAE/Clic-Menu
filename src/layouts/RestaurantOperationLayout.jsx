@@ -212,7 +212,8 @@ export default function RestaurantOperationLayout() {
         break;
 
       case "menu-sets":
-        return;
+        nav(`${base}/menu-sets`, { state: { restaurantName } });
+        break;
 
       case "staff":
         nav(`${base}/staff`, { state: { restaurantName } });
