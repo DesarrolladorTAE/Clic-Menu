@@ -18,6 +18,7 @@ import PauseCircleOutlineOutlinedIcon from "@mui/icons-material/PauseCircleOutli
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
 import PaginationFooter from "../../../../components/common/PaginationFooter";
+import ContextOverview from "../../../../components/common/ContextOverview";
 import usePagination from "../../../../hooks/usePagination";
 
 import MenuSetsList from "../../../../components/menu/menuSets/list/MenuSetsList";
@@ -349,24 +350,30 @@ export default function MenuSetsPage() {
     }
   };
 
-  const summaryItems = [
+  const contextItems = [
     {
       key: "total",
-      label: "Conjuntos totales",
-      icon: LayersOutlinedIcon,
-      helper: "Registrados en esta sucursal.",
+      title: "Conjuntos totales",
+      value: `${summary.total} conjuntos registrados`,
+      icon: <LayersOutlinedIcon fontSize="small" />,
+      chipLabel: "Registrados",
+      chipColor: "primary",
     },
     {
       key: "active",
-      label: "Conjuntos activos",
-      icon: CheckCircleOutlineOutlinedIcon,
-      helper: "Habilitados para utilizarse.",
+      title: "Conjuntos activos",
+      value: `${summary.active} conjuntos habilitados`,
+      icon: <CheckCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Activos",
+      chipColor: "success",
     },
     {
       key: "inactive",
-      label: "Conjuntos inactivos",
-      icon: PauseCircleOutlineOutlinedIcon,
-      helper: "Guardados, pero no habilitados.",
+      title: "Conjuntos inactivos",
+      value: `${summary.inactive} conjuntos sin habilitar`,
+      icon: <PauseCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Inactivos",
+      chipColor: "default",
     },
   ];
 
@@ -499,68 +506,8 @@ export default function MenuSetsPage() {
               </Paper>
             ) : (
               <>
-                {/* Resumen */}
-                <Paper sx={panelSx}>
-                  <Stack spacing={2}>
-                    <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
-                      Contexto actual
-                    </Typography>
-
-                    <Box sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "repeat(2, minmax(0, 1fr))",
-                        md: "repeat(3, minmax(0, 1fr))",
-                      },
-                      gap: 1.5,
-                    }}>
-                      {summaryItems.map((item) => {
-                        const Icon = item.icon;
-
-                        return (
-                          <Box key={item.key} sx={{
-                            p: 1.75, border: "1px solid",
-                            borderColor: "divider", borderRadius: 1,
-                            bgcolor: "background.default",
-                            minWidth: 0,
-                          }}>
-                            <Stack spacing={1}>
-                              <Stack direction="row" alignItems="center" spacing={1}>
-                                <Box sx={{
-                                  width: 34, height: 34, borderRadius: 1,
-                                  display: "grid", placeItems: "center",
-                                  bgcolor: "rgba(255, 152, 0, 0.12)",
-                                  color: "primary.main", flexShrink: 0,
-                                }}>
-                                  <Icon fontSize="small" />
-                                </Box>
-
-                                <Typography sx={{
-                                  fontSize: 14, fontWeight: 800, color: "text.primary",
-                                }}>
-                                  {item.label}
-                                </Typography>
-                              </Stack>
-
-                              <Typography sx={{
-                                fontSize: 24, fontWeight: 800, color: "primary.main",
-                              }}>
-                                {summary[item.key]}
-                              </Typography>
-
-                              <Typography sx={{
-                                fontSize: 12, color: "text.secondary",
-                              }}>
-                                {item.helper}
-                              </Typography>
-                            </Stack>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  </Stack>
-                </Paper>
+                {/* Contexto actual */}
+                <ContextOverview items={contextItems} />
 
                 {/* Buscador y filtro */}
                 <Paper sx={panelSx}>

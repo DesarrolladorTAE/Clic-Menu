@@ -1,5 +1,5 @@
 import {
-  Box, Button, Chip, CircularProgress, FormControlLabel,
+  Box, Chip, CircularProgress, FormControlLabel,
   IconButton, Paper, Stack, Switch, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow,
   Tooltip, Typography,
@@ -14,6 +14,42 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+const switchLabelSx = {
+  fontSize: 14,
+  fontWeight: 700,
+  color: "text.primary",
+};
+
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
+};
+
 function formatDays(days) {
   if (!Array.isArray(days) || days.length === 0) return "Sin días configurados";
 
@@ -22,33 +58,6 @@ function formatDays(days) {
     .filter((day) => day >= 1 && day <= 7)
     .map((day) => DAYS[day - 1])
     .join(", ");
-}
-
-function formatCapacity(option, mode) {
-  if (mode === "none") return "Sin límite";
-
-  if (mode === "weekly") {
-    if (option.weekly_capacity === null || option.weekly_capacity === undefined) {
-      return "Sin configurar";
-    }
-
-    return `${Number(option.weekly_capacity).toLocaleString("es-MX")} por semana`;
-  }
-
-  if (mode === "daily") {
-    const days = Array.isArray(option.service_days) ? option.service_days : [];
-
-    if (days.length === 0) return "Sin días configurados";
-
-    return [...days].sort((a, b) => a - b).map((day) => {
-      const value = option.daily_capacities?.[String(day)];
-      const label = DAYS[Number(day) - 1] || `Día ${day}`;
-
-      return `${label}: ${value === null || value === undefined ? "—" : Number(value).toLocaleString("es-MX")}`;
-    }).join(" · ");
-  }
-
-  return "No configurada";
 }
 
 function PermissionInfo({ reason }) {
@@ -65,6 +74,7 @@ function PermissionInfo({ reason }) {
 
 function StatusControl({ option, updating, disabled, onStatusChange }) {
   const active = Boolean(option.is_active);
+
   const allowed = active
     ? option.can_deactivate === true
     : option.can_activate === true;
@@ -89,10 +99,7 @@ function StatusControl({ option, updating, disabled, onStatusChange }) {
           />
         }
         label={
-          <Typography sx={{
-            fontSize: 13, fontWeight: 800,
-            color: active ? "success.main" : "text.secondary",
-          }}>
+          <Typography sx={switchLabelSx}>
             {active ? "Activo" : "Inactivo"}
           </Typography>
         }
@@ -117,41 +124,34 @@ function Actions({ option, disabled, onEdit, onDelete }) {
       spacing={1}
       justifyContent="flex-end"
       alignItems="center"
-      sx={{ width: "100%", minWidth: 0 }}
+      flexWrap="nowrap"
+      sx={{ minWidth: 0 }}
     >
-      <Box sx={{ flex: { xs: 1, sm: "0 0 auto" }, minWidth: 0 }}>
-        <Tooltip title={canEdit ? "" : option.edit_block_reason || ""} arrow>
-          <span>
-            <Button
-              type="button"
-              variant="outlined"
-              startIcon={<EditOutlinedIcon />}
-              disabled={disabled || !canEdit}
-              onClick={() => onEdit(option)}
-              sx={{ width: { xs: "100%", sm: "auto" } }}
-            >
-              Editar
-            </Button>
-          </span>
-        </Tooltip>
-      </Box>
-
-      <Tooltip title={canDelete ? "Retirar producto" : option.delete_block_reason || ""} arrow>
+      <Tooltip title={canEdit ? "Editar" : option.edit_block_reason || "Edición no disponible"} arrow>
         <span>
-          <Button
+          <IconButton
             type="button"
-            variant="outlined"
-            color="error"
-            disabled={disabled || !canDelete}
+            onClick={() => onEdit(option)}
+            disabled={disabled || !canEdit}
+            aria-label={`Editar ${option.name || option.product?.name || "producto"}`}
+            sx={iconEditSx}
+          >
+            <EditOutlinedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      <Tooltip title={canDelete ? "Retirar producto" : option.delete_block_reason || "Eliminación no disponible"} arrow>
+        <span>
+          <IconButton
+            type="button"
             onClick={() => onDelete(option)}
-            aria-label={`Retirar ${option.name || "producto"}`}
-            sx={{
-              minWidth: 42, width: 42, height: 42,
-              p: 0, flexShrink: 0,
-            }}
+            disabled={disabled || !canDelete}
+            aria-label={`Retirar ${option.name || option.product?.name || "producto"}`}
+            sx={iconDeleteSx}
           >
             <DeleteOutlineOutlinedIcon fontSize="small" />
-          </Button>
+          </IconButton>
         </span>
       </Tooltip>
 
@@ -193,7 +193,7 @@ function InfoRow({ icon, label, value }) {
 }
 
 function ProductCard({
-  option, mode, disabled, updating,
+  option, disabled, updating,
   onStatusChange, onEdit, onDelete,
 }) {
   return (
@@ -205,86 +205,72 @@ function ProductCard({
       backgroundColor: "background.paper",
       overflow: "hidden",
       height: "100%",
-      minHeight: 330,
       display: "flex",
       flexDirection: "column",
     }}>
-      <Box sx={{
-        px: 2, py: 1.75,
-        borderBottom: "1px solid",
-        borderColor: "divider",
-      }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+      <Stack spacing={2} sx={{ p: 2, flex: 1 }}>
+        {/* Información del producto */}
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={1}
+        >
           <Typography sx={{
-            fontSize: 17, fontWeight: 800,
-            color: "text.primary", lineHeight: 1.35,
-            overflowWrap: "anywhere", minWidth: 0,
+            fontSize: 15,
+            fontWeight: 800,
+            color: "text.primary",
+            lineHeight: 1.35,
+            overflowWrap: "anywhere",
+            minWidth: 0,
           }}>
             {option.name || option.product?.name || "Producto sin nombre"}
           </Typography>
 
           <Chip
+            label={`Orden ${option.sort_order ?? 0}`}
             size="small"
-            label={option.is_active ? "Activo" : "Inactivo"}
-            color={option.is_active ? "success" : "default"}
-            variant={option.is_active ? "filled" : "outlined"}
+            sx={{
+              fontWeight: 800,
+              bgcolor: "#FFF3E0",
+              color: "#A75A00",
+              flexShrink: 0,
+            }}
           />
         </Stack>
 
-        <Box sx={{ mt: 0.75 }}>
-          <StatusControl
-            option={option}
-            updating={updating}
-            disabled={disabled}
-            onStatusChange={onStatusChange}
-          />
-        </Box>
-      </Box>
-
-      <Stack spacing={1.75} sx={{ p: 2, flex: 1 }}>
-        <Box sx={{
-          p: 1.5,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 1,
-          bgcolor: "background.default",
-        }}>
-          <Typography sx={{
-            fontSize: 11, fontWeight: 800,
-            color: "text.secondary", textTransform: "uppercase",
-          }}>
-            Capacidad
-          </Typography>
-
-          <Typography sx={{
-            mt: 0.5, fontSize: 14, fontWeight: 800,
-            color: "primary.main", lineHeight: 1.5,
-            overflowWrap: "anywhere",
-          }}>
-            {formatCapacity(option, mode)}
-          </Typography>
-        </Box>
-
+        {/* Días de servicio */}
         <InfoRow
           icon={<EventAvailableOutlinedIcon fontSize="small" />}
           label="Días de servicio"
           value={formatDays(option.service_days)}
         />
 
-        <InfoRow
-          icon={<NumbersOutlinedIcon fontSize="small" />}
-          label="Orden de presentación"
-          value={option.sort_order ?? 0}
-        />
-
         <Box sx={{ flex: 1 }} />
 
-        <Actions
-          option={option}
-          disabled={disabled}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        {/* Estado y acciones */}
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          spacing={1}
+          useFlexGap
+          flexWrap="wrap"
+        >
+          <StatusControl
+            option={option}
+            updating={updating}
+            disabled={disabled}
+            onStatusChange={onStatusChange}
+          />
+
+          <Actions
+            option={option}
+            disabled={disabled}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -292,7 +278,6 @@ function ProductCard({
 
 export default function MenuSetProductsList({
   options = [],
-  mode = "none",
   loading = false,
   busy = false,
   updatingOptionId = null,
@@ -303,11 +288,7 @@ export default function MenuSetProductsList({
 }) {
   if (loading) {
     return (
-      <Paper sx={{
-        p: 4, borderRadius: 1,
-        border: "1px solid", borderColor: "divider",
-        bgcolor: "background.paper", boxShadow: "none",
-      }}>
+      <Box sx={{ p: 4, bgcolor: "background.paper" }}>
         <Stack spacing={2} alignItems="center">
           <CircularProgress color="primary" />
 
@@ -315,26 +296,26 @@ export default function MenuSetProductsList({
             Cargando productos…
           </Typography>
         </Stack>
-      </Paper>
+      </Box>
     );
   }
 
   if (options.length === 0) {
     return (
-      <Paper sx={{
-        px: 3, py: 6,
+      <Box sx={{
+        px: 3,
+        py: 6,
         textAlign: "center",
-        borderRadius: 1,
-        border: "1px solid",
-        borderColor: "divider",
         bgcolor: "background.paper",
-        boxShadow: "none",
       }}>
         <Box sx={{
-          width: 56, height: 56,
-          mx: "auto", mb: 2,
+          width: 56,
+          height: 56,
+          mx: "auto",
+          mb: 2,
           borderRadius: 1,
-          display: "grid", placeItems: "center",
+          display: "grid",
+          placeItems: "center",
           bgcolor: "rgba(255, 152, 0, 0.12)",
           color: "primary.main",
         }}>
@@ -346,34 +327,33 @@ export default function MenuSetProductsList({
         </Typography>
 
         <Typography sx={{
-          mt: 1, fontSize: 14,
-          color: "text.secondary", lineHeight: 1.55,
+          mt: 1,
+          fontSize: 14,
+          color: "text.secondary",
+          lineHeight: 1.55,
         }}>
           {hasFilters
             ? "No hay productos que coincidan con la búsqueda o el estado seleccionado."
             : "Agrega productos existentes del catálogo para configurar esta etapa."}
         </Typography>
-      </Paper>
+      </Box>
     );
   }
 
   return (
     <>
       {/* Tabla para computadoras */}
-      <TableContainer component={Paper} sx={{
+      <TableContainer sx={{
         display: { xs: "none", md: "block" },
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
-        boxShadow: "none",
-        bgcolor: "background.paper",
+        width: "100%",
         overflowX: "auto",
+        bgcolor: "background.paper",
       }}>
-        <Table sx={{ minWidth: 1000 }}>
+        <Table sx={{ minWidth: 850 }}>
           <TableHead>
             <TableRow sx={{
               "& th": {
-                bgcolor: "primary.main",
+                backgroundColor: "primary.main",
                 color: "#fff",
                 fontWeight: 800,
                 fontSize: 13,
@@ -383,9 +363,8 @@ export default function MenuSetProductsList({
             }}>
               <TableCell>Producto</TableCell>
               <TableCell>Días de servicio</TableCell>
-              <TableCell>Capacidad</TableCell>
               <TableCell>Orden</TableCell>
-              <TableCell>Estado</TableCell>
+              <TableCell align="center">Estado</TableCell>
               <TableCell align="right">Acciones</TableCell>
             </TableRow>
           </TableHead>
@@ -405,34 +384,37 @@ export default function MenuSetProductsList({
                   },
                 }}>
                   <TableCell sx={{
-                    maxWidth: 230, fontWeight: 800,
+                    maxWidth: 230,
+                    fontWeight: 800,
                     overflowWrap: "anywhere",
                   }}>
                     {option.name || option.product?.name}
                   </TableCell>
 
-                  <TableCell sx={{ maxWidth: 170, overflowWrap: "anywhere" }}>
+                  <TableCell sx={{
+                    maxWidth: 240,
+                    overflowWrap: "anywhere",
+                  }}>
                     {formatDays(option.service_days)}
                   </TableCell>
 
-                  <TableCell sx={{
-                    maxWidth: 220,
-                    overflowWrap: "anywhere",
-                    fontWeight: 700,
-                    color: "primary.main !important",
-                  }}>
-                    {formatCapacity(option, mode)}
+                  <TableCell>
+                    {option.sort_order ?? 0}
                   </TableCell>
 
-                  <TableCell>{option.sort_order ?? 0}</TableCell>
-
-                  <TableCell>
-                    <StatusControl
-                      option={option}
-                      updating={updating}
-                      disabled={busy}
-                      onStatusChange={onStatusChange}
-                    />
+                  <TableCell align="center">
+                    <Box sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}>
+                      <StatusControl
+                        option={option}
+                        updating={updating}
+                        disabled={busy}
+                        onStatusChange={onStatusChange}
+                      />
+                    </Box>
                   </TableCell>
 
                   <TableCell align="right">
@@ -454,18 +436,19 @@ export default function MenuSetProductsList({
       <Box sx={{
         display: { xs: "grid", md: "none" },
         gridTemplateColumns: {
-          xs: "1fr",
+          xs: "minmax(0, 1fr)",
           sm: "repeat(2, minmax(0, 1fr))",
         },
         gridAutoRows: "1fr",
-        gap: 2,
+        gap: 1.5,
+        p: 2,
         alignItems: "stretch",
+        bgcolor: "background.paper",
       }}>
         {options.map((option) => (
           <ProductCard
             key={option.id}
             option={option}
-            mode={mode}
             disabled={busy}
             updating={String(updatingOptionId) === String(option.id)}
             onStatusChange={onStatusChange}

@@ -1,4 +1,3 @@
-//src/components/menu/menuSets/manage/stages/MenuSetStagesList.jsx
 import {
   Box, Button, Chip, CircularProgress, FormControlLabel,
   IconButton, Paper, Stack, Switch, Table, TableBody,
@@ -13,10 +12,38 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import FormatListNumberedOutlinedIcon from "@mui/icons-material/FormatListNumberedOutlined";
 
+const iconEditSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "#E3C24A",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "#C9AA39",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
+};
+
+const iconDeleteSx = {
+  width: 40,
+  height: 40,
+  bgcolor: "error.main",
+  color: "#fff",
+  borderRadius: 1.5,
+  "&:hover": {
+    bgcolor: "error.dark",
+  },
+  "&.Mui-disabled": {
+    bgcolor: "#E0E0E0",
+    color: "#9E9E9E",
+  },
+};
+
 function PermissionInfo({ reason }) {
-  if (!reason) {
-    return null;
-  }
+  if (!reason) return null;
 
   return (
     <Tooltip title={reason} enterTouchDelay={0} leaveTouchDelay={3500} arrow>
@@ -53,8 +80,9 @@ function StatusControl({ stage, busy, updating, onStatusChange }) {
         }
         label={
           <Typography sx={{
-            fontSize: 13, fontWeight: 800,
-            color: active ? "success.main" : "text.secondary",
+            fontSize: 13,
+            fontWeight: 800,
+            color: "text.primary",
           }}>
             {active ? "Activa" : "Inactiva"}
           </Typography>
@@ -85,6 +113,7 @@ function Actions({ stage, busy, onEdit, onDelete, onConfigureProducts }) {
       alignItems="center"
       sx={{ width: "100%", minWidth: 0 }}
     >
+      {/* Administrar productos */}
       <Tooltip
         title={canConfigure
           ? "Administrar los productos de esta etapa"
@@ -105,10 +134,12 @@ function Actions({ stage, busy, onEdit, onDelete, onConfigureProducts }) {
         </span>
       </Tooltip>
 
+      {/* Editar etapa */}
       <Tooltip title={canEdit ? "Editar etapa" : stage.edit_block_reason || ""} arrow>
         <span>
           <IconButton
-            color="primary"
+            type="button"
+            sx={iconEditSx}
             disabled={busy || !canEdit}
             onClick={() => onEdit(stage)}
             aria-label={`Editar ${stage.name || "etapa"}`}
@@ -118,13 +149,15 @@ function Actions({ stage, busy, onEdit, onDelete, onConfigureProducts }) {
         </span>
       </Tooltip>
 
+      {/* Eliminar etapa */}
       <Tooltip
         title={canDelete ? "Eliminar etapa" : stage.delete_block_reason || ""}
         arrow
       >
         <span>
           <IconButton
-            color="error"
+            type="button"
+            sx={iconDeleteSx}
             disabled={busy || !canDelete}
             onClick={() => onDelete(stage)}
             aria-label={`Eliminar ${stage.name || "etapa"}`}
@@ -151,7 +184,8 @@ function InfoRow({ icon, label, value }) {
 
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{
-          fontSize: 11, fontWeight: 800,
+          fontSize: 11,
+          fontWeight: 800,
           color: "text.secondary",
           textTransform: "uppercase",
           letterSpacing: 0.3,
@@ -160,7 +194,8 @@ function InfoRow({ icon, label, value }) {
         </Typography>
 
         <Typography sx={{
-          mt: 0.25, fontSize: 13,
+          mt: 0.25,
+          fontSize: 13,
           color: "text.primary",
           lineHeight: 1.45,
           overflowWrap: "anywhere",
@@ -197,7 +232,8 @@ function StageCard({
       overflow: "hidden",
     }}>
       <Box sx={{
-        px: 2, py: 1.75,
+        px: 2,
+        py: 1.75,
         borderBottom: "1px solid",
         borderColor: "divider",
       }}>
@@ -296,14 +332,11 @@ export default function MenuSetStagesList({
 }) {
   if (stages.length === 0) {
     return (
-      <Paper sx={{
-        px: 3, py: 6,
+      <Box sx={{
+        px: 3,
+        py: 6,
         textAlign: "center",
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
         backgroundColor: "background.paper",
-        boxShadow: "none",
       }}>
         <Box sx={{
           width: 56, height: 56,
@@ -322,27 +355,26 @@ export default function MenuSetStagesList({
         </Typography>
 
         <Typography sx={{
-          mt: 1, fontSize: 14,
-          color: "text.secondary", lineHeight: 1.55,
+          mt: 1,
+          fontSize: 14,
+          color: "text.secondary",
+          lineHeight: 1.55,
         }}>
           {hasFilters
             ? "No hay etapas que coincidan con la búsqueda o el estado seleccionado."
             : "Agrega la primera etapa para comenzar a organizar los productos del conjunto."}
         </Typography>
-      </Paper>
+      </Box>
     );
   }
 
   return (
     <>
       {/* Tabla para computadoras */}
-      <TableContainer component={Paper} sx={{
+      <TableContainer sx={{
         display: { xs: "none", md: "block" },
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
+        width: "100%",
         backgroundColor: "background.paper",
-        boxShadow: "none",
         overflowX: "auto",
       }}>
         <Table sx={{ minWidth: 1050 }}>
@@ -390,7 +422,8 @@ export default function MenuSetStagesList({
                   </Typography>
 
                   <Typography sx={{
-                    mt: 0.35, fontSize: 12,
+                    mt: 0.35,
+                    fontSize: 12,
                     color: "text.secondary",
                   }}>
                     {stage.stage_definition?.is_system
@@ -437,7 +470,7 @@ export default function MenuSetStagesList({
         </Table>
       </TableContainer>
 
-      {/* Tarjetas para teléfonos y tabletas pequeñas */}
+      {/* Tarjetas para teléfonos y tabletas */}
       <Box sx={{
         display: { xs: "grid", md: "none" },
         gridTemplateColumns: {
@@ -446,6 +479,7 @@ export default function MenuSetStagesList({
         },
         gridAutoRows: "1fr",
         gap: 2,
+        p: 2,
         alignItems: "stretch",
       }}>
         {stages.map((stage) => (

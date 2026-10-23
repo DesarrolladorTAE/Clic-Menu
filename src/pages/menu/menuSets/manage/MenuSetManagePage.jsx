@@ -13,6 +13,8 @@ import AppAlert from "../../../../components/common/AppAlert";
 import MenuSetManageTabs from "../../../../components/menu/menuSets/manage/MenuSetManageTabs";
 import MenuSetGeneralTab from "../../../../components/menu/menuSets/manage/MenuSetGeneralTab";
 import MenuSetStagesTab from "../../../../components/menu/menuSets/manage/stages/MenuSetStagesTab";
+import MenuSetCapacityTab from "../../../../components/menu/menuSets/manage/capacities/MenuSetCapacityTab";
+import MenuSetAvailabilityTab from "../../../../components/menu/menuSets/manage/availability/MenuSetAvailabilityTab";
 
 import { getMenuSet } from "../../../../services/menu/menuSets/menuSet.service";
 
@@ -45,9 +47,14 @@ export default function MenuSetManagePage() {
 
   const [menuSet, setMenuSet] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(
-    location.state?.activeTab === "stages" ? "stages" : "general"
-  );
+
+  const [activeTab, setActiveTab] = useState(() => {
+    const initialTab = location.state?.activeTab;
+
+    return ["general", "stages", "capacities", "availability"].includes(initialTab)
+      ? initialTab
+      : "general";
+  });
 
   const [alertState, setAlertState] = useState({
     open: Boolean(location.state?.successMessage),
@@ -61,11 +68,12 @@ export default function MenuSetManagePage() {
   }, []);
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") {
-      return;
-    }
+    if (reason === "clickaway") return;
 
-    setAlertState((previous) => ({ ...previous, open: false }));
+    setAlertState((previous) => ({
+      ...previous,
+      open: false,
+    }));
   };
 
   useEffect(() => {
@@ -83,25 +91,19 @@ export default function MenuSetManagePage() {
       try {
         const result = await getMenuSet(restaurantId, branchId, menuSetId);
 
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setMenuSet(result);
       } catch (error) {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setMenuSet(null);
 
         showAlert({
-          message: getErrorMessage(error, "No se pudo consultar el Conjunto."),
+          message: getErrorMessage(error, "No se pudo consultar el conjunto."),
         });
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
@@ -113,7 +115,10 @@ export default function MenuSetManagePage() {
   }, [restaurantId, branchId, menuSetId, showAlert]);
 
   const handleBack = () => {
-    navigate("..", { relative: "path", state: { branchId } });
+    navigate("..", {
+      relative: "path",
+      state: { branchId },
+    });
   };
 
   const handleUpdated = (updatedSet) => {
@@ -124,30 +129,28 @@ export default function MenuSetManagePage() {
     if (!stage?.id || !branchId || !menuSetId) return;
 
     navigate(
-        `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stages/${stage.id}/products?branchId=${encodeURIComponent(branchId)}`,
-        {
+      `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stages/${stage.id}/products?branchId=${encodeURIComponent(branchId)}`,
+      {
         state: {
-            branchId,
-            menuSetName: menuSet?.name,
-            stageName: stage.name,
+          branchId,
+          menuSetName: menuSet?.name,
+          stageName: stage.name,
         },
-        }
+      }
     );
   };
 
   const handleManageTypes = () => {
-    if (!restaurantId || !branchId || !menuSetId) {
-        return;
-    }
+    if (!restaurantId || !branchId || !menuSetId) return;
 
     navigate(
-        `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stage-definitions?branchId=${encodeURIComponent(branchId)}`,
-        {
+      `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stage-definitions?branchId=${encodeURIComponent(branchId)}`,
+      {
         state: {
-            branchId,
-            menuSetName: menuSet?.name,
+          branchId,
+          menuSetName: menuSet?.name,
         },
-        }
+      }
     );
   };
 
@@ -161,7 +164,7 @@ export default function MenuSetManagePage() {
           alignItems={{ xs: "flex-start", md: "center" }}
           spacing={2}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography sx={{
               fontSize: { xs: 30, md: 42 },
               fontWeight: 800,
@@ -178,7 +181,10 @@ export default function MenuSetManagePage() {
               color: "text.secondary",
             }}>
               Configura los datos y la disponibilidad de{" "}
-              <Box component="span" sx={{ color: "primary.main", fontWeight: 800 }}>
+              <Box component="span" sx={{
+                color: "primary.main",
+                fontWeight: 800,
+              }}>
                 {menuSet?.name || "tu conjunto"}
               </Box>.
             </Typography>
@@ -189,56 +195,102 @@ export default function MenuSetManagePage() {
             variant="outlined"
             startIcon={<ArrowBackOutlinedIcon />}
             onClick={handleBack}
-            sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
+            sx={{
+              minWidth: { xs: "100%", sm: 190 },
+              height: 44,
+              fontWeight: 800,
+            }}
           >
             Volver a Conjuntos
           </Button>
         </Stack>
 
         {loading ? (
-          <Box sx={{ minHeight: "45vh", display: "grid", placeItems: "center" }}>
+          <Box sx={{
+            minHeight: "45vh",
+            display: "grid",
+            placeItems: "center",
+          }}>
             <Stack spacing={2} alignItems="center">
               <CircularProgress color="primary" />
 
               <Typography sx={{ fontSize: 14, color: "text.secondary" }}>
-                Cargando información del Conjunto…
+                Cargando información del conjunto…
               </Typography>
             </Stack>
           </Box>
         ) : !menuSet ? (
           <Paper sx={panelSx}>
-            <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
+            <Typography sx={{
+              fontSize: 20,
+              fontWeight: 800,
+              color: "text.primary",
+            }}>
               Conjunto no disponible
             </Typography>
 
-            <Typography sx={{ mt: 1, fontSize: 14, color: "text.secondary", lineHeight: 1.55 }}>
-              Regresa al listado y selecciona el Conjunto que deseas administrar.
+            <Typography sx={{
+              mt: 1,
+              fontSize: 14,
+              color: "text.secondary",
+              lineHeight: 1.55,
+            }}>
+              Regresa al listado y selecciona el conjunto que deseas administrar.
             </Typography>
           </Paper>
         ) : (
           <>
-            <MenuSetManageTabs value={activeTab} onChange={setActiveTab} />
+            {/* Pestañas */}
+            <MenuSetManageTabs
+              value={activeTab}
+              onChange={setActiveTab}
+            />
 
+            {/* General */}
             {activeTab === "general" ? (
-                <MenuSetGeneralTab
-                    restaurantId={restaurantId}
-                    branchId={branchId}
-                    menuSet={menuSet}
-                    onUpdated={handleUpdated}
-                    onAlert={showAlert}
-                />
+              <MenuSetGeneralTab
+                restaurantId={restaurantId}
+                branchId={branchId}
+                menuSet={menuSet}
+                onUpdated={handleUpdated}
+                onAlert={showAlert}
+              />
             ) : null}
 
+            {/* Etapas */}
             {activeTab === "stages" ? (
-                <MenuSetStagesTab
-                    restaurantId={restaurantId}
-                    branchId={branchId}
-                    menuSet={menuSet}
-                    onUpdated={handleUpdated}
-                    onAlert={showAlert}
-                    onConfigureProducts={handleConfigureProducts}
-                    onManageTypes={handleManageTypes}
-                />
+              <MenuSetStagesTab
+                restaurantId={restaurantId}
+                branchId={branchId}
+                menuSet={menuSet}
+                onUpdated={handleUpdated}
+                onAlert={showAlert}
+                onConfigureProducts={handleConfigureProducts}
+                onManageTypes={handleManageTypes}
+              />
+            ) : null}
+
+            {/* Capacidades */}
+            {activeTab === "capacities" ? (
+              <MenuSetCapacityTab
+                key={`${branchId}-${menuSet.id}`}
+                restaurantId={restaurantId}
+                branchId={branchId}
+                menuSet={menuSet}
+                onUpdated={handleUpdated}
+                onAlert={showAlert}
+              />
+            ) : null}
+
+            {/* Disponibilidad */}
+            {activeTab === "availability" ? (
+              <MenuSetAvailabilityTab
+                key={`${branchId}-${menuSet.id}`}
+                restaurantId={restaurantId}
+                branchId={branchId}
+                menuSet={menuSet}
+                onAlert={showAlert}
+              />
             ) : null}
           </>
         )}

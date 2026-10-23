@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
-  Box, Button, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, InputAdornment, MenuItem,
-  Paper, Stack, TextField, Tooltip, Typography,
+  Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
+  DialogTitle, InputAdornment, MenuItem, Paper, Stack, TextField,
+  Tooltip, Typography,
 } from "@mui/material";
 
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
@@ -15,11 +15,12 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import PauseCircleOutlineOutlinedIcon from "@mui/icons-material/PauseCircleOutlineOutlined";
-import EventAvailableOutlinedIcon from "@mui/icons-material/EventAvailableOutlined";
+import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 
 import PageContainer from "../../../../../components/common/PageContainer";
 import AppAlert from "../../../../../components/common/AppAlert";
 import PaginationFooter from "../../../../../components/common/PaginationFooter";
+import ContextOverview from "../../../../../components/common/ContextOverview";
 import usePagination from "../../../../../hooks/usePagination";
 
 import MenuSetProductForm from "../../../../../components/menu/menuSets/manage/products/MenuSetProductForm";
@@ -35,12 +36,6 @@ import {
   updateMenuSetStageProduct,
   deleteMenuSetStageProduct,
 } from "../../../../../services/menu/menuSets/menuSetProduct.service";
-
-const CAPACITY_LABELS = {
-  none: "Sin límite",
-  daily: "Diaria",
-  weekly: "Semanal",
-};
 
 const panelSx = {
   p: { xs: 2, sm: 2.5 },
@@ -60,60 +55,6 @@ function getErrorMessage(error, fallback) {
 
   return fieldErrors.find((message) => typeof message === "string")
     || data?.message || error?.message || fallback;
-}
-
-function SummaryCard({ label, value, helper, icon: Icon }) {
-  return (
-    <Box sx={{
-      p: 1.75,
-      height: "100%",
-      minWidth: 0,
-      border: "1px solid",
-      borderColor: "divider",
-      borderRadius: 1,
-      bgcolor: "background.default",
-    }}>
-      <Stack spacing={1} height="100%">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{
-            width: 34, height: 34,
-            borderRadius: 1,
-            display: "grid", placeItems: "center",
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: "primary.main",
-            flexShrink: 0,
-          }}>
-            <Icon fontSize="small" />
-          </Box>
-
-          <Typography sx={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "text.primary",
-          }}>
-            {label}
-          </Typography>
-        </Stack>
-
-        <Typography sx={{
-          fontSize: 24,
-          fontWeight: 800,
-          color: "primary.main",
-        }}>
-          {value}
-        </Typography>
-
-        <Typography sx={{
-          mt: "auto",
-          fontSize: 12,
-          color: "text.secondary",
-          lineHeight: 1.5,
-        }}>
-          {helper}
-        </Typography>
-      </Stack>
-    </Box>
-  );
 }
 
 export default function MenuSetStageProductsPage() {
@@ -310,24 +251,38 @@ export default function MenuSetStageProductsPage() {
     resetKey: `${stageId}|${search}|${statusFilter}`,
   });
 
-  const summaryItems = [
+  const contextItems = [
+    {
+      key: "conjunto",
+      title: "Conjunto",
+      value: menuSet?.name || "Sin nombre",
+      icon: <RestaurantMenuRoundedIcon fontSize="small" />,
+      chipLabel: "Actual",
+      chipColor: "primary",
+    },
     {
       key: "total",
-      label: "Productos totales",
-      icon: Inventory2OutlinedIcon,
-      helper: "Productos asignados a esta etapa.",
+      title: "Productos totales",
+      value: `${summary.total} productos asignados`,
+      icon: <Inventory2OutlinedIcon fontSize="small" />,
+      chipLabel: "Registrados",
+      chipColor: "primary",
     },
     {
       key: "active",
-      label: "Productos activos",
-      icon: CheckCircleOutlineOutlinedIcon,
-      helper: "Productos habilitados.",
+      title: "Productos activos",
+      value: `${summary.active} productos habilitados`,
+      icon: <CheckCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Activos",
+      chipColor: "success",
     },
     {
       key: "inactive",
-      label: "Productos inactivos",
-      icon: PauseCircleOutlineOutlinedIcon,
-      helper: "Productos guardados sin habilitar.",
+      title: "Productos inactivos",
+      value: `${summary.inactive} productos sin habilitar`,
+      icon: <PauseCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Inactivos",
+      chipColor: "default",
     },
   ];
 
@@ -584,111 +539,8 @@ export default function MenuSetStageProductsPage() {
           </Paper>
         ) : (
           <>
-            {/* Información de la etapa */}
-            <Paper sx={panelSx}>
-              <Stack spacing={2}>
-                <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
-                  Información actual
-                </Typography>
-
-                <Box sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0, 1fr))",
-                  },
-                  gap: 1.5,
-                }}>
-                  <InfoItem label="Conjunto" value={menuSet.name || "Sin nombre"} />
-                  <InfoItem label="Etapa" value={stage.name || "Sin nombre"} />
-                  <InfoItem
-                    label="Selecciones permitidas"
-                    value={`${stage.min_selections ?? 0} a ${stage.max_selections ?? 1}`}
-                  />
-                  <InfoItem
-                    label="Modalidad de capacidad"
-                    value={CAPACITY_LABELS[menuSet.capacity_mode] || "No configurada"}
-                  />
-                </Box>
-              </Stack>
-            </Paper>
-
-            {/* Resumen */}
-            <Paper sx={panelSx}>
-              <Stack spacing={2}>
-                <Typography sx={{ fontSize: 16, fontWeight: 800 }}>
-                  Contexto actual
-                </Typography>
-
-                <Box sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0, 1fr))",
-                    md: "repeat(3, minmax(0, 1fr))",
-                  },
-                  gridAutoRows: "1fr",
-                  gap: 1.5,
-                }}>
-                  {summaryItems.map((item) => (
-                    <SummaryCard
-                      key={item.key}
-                      label={item.label}
-                      value={summary[item.key]}
-                      helper={item.helper}
-                      icon={item.icon}
-                    />
-                  ))}
-                </Box>
-              </Stack>
-            </Paper>
-
-            {/* Encabezado de productos */}
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              justifyContent="space-between"
-              alignItems={{ xs: "stretch", md: "center" }}
-              spacing={2}
-            >
-              <Box>
-                <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
-                  Productos de la etapa
-                </Typography>
-
-                <Typography sx={{
-                  mt: 0.5, fontSize: 13,
-                  color: "text.secondary", lineHeight: 1.55,
-                }}>
-                  Organiza los productos y establece cuándo estarán disponibles.
-                </Typography>
-              </Box>
-
-              <Tooltip
-                title={!eligibleLoaded
-                  ? "No se pudieron consultar los productos disponibles."
-                  : availableProducts.length === 0
-                    ? "No hay más productos disponibles para agregar."
-                    : ""}
-                arrow
-              >
-                <span>
-                  <Button
-                    type="button"
-                    variant="contained"
-                    startIcon={<AddOutlinedIcon />}
-                    disabled={busy || !eligibleLoaded || availableProducts.length === 0}
-                    onClick={() => openForm("create")}
-                    sx={{
-                      width: { xs: "100%", md: "auto" },
-                      height: 44,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Agregar producto
-                  </Button>
-                </span>
-              </Tooltip>
-            </Stack>
+            {/* Contexto actual */}
+            <ContextOverview items={contextItems} />
 
             {/* Buscar y filtrar */}
             <Paper sx={panelSx}>
@@ -699,7 +551,8 @@ export default function MenuSetStageProductsPage() {
                   </Typography>
 
                   <Typography sx={{
-                    mt: 0.5, fontSize: 13, color: "text.secondary",
+                    mt: 0.5, fontSize: 13,
+                    color: "text.secondary",
                   }}>
                     Localiza productos por nombre o estado.
                   </Typography>
@@ -742,17 +595,65 @@ export default function MenuSetStageProductsPage() {
               </Stack>
             </Paper>
 
-            {/* Listado */}
-            <Stack spacing={2}>
-              <Typography sx={{
-                fontSize: 18, fontWeight: 800, color: "text.primary",
+            {/* Productos asignados */}
+            <Paper sx={{
+              p: 0,
+              overflow: "hidden",
+              borderRadius: 0,
+              backgroundColor: "background.paper",
+              boxShadow: "none",
+            }}>
+              {/* Encabezado del listado */}
+              <Box sx={{
+                px: 2,
+                py: 1.75,
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 2,
+                flexWrap: "wrap",
               }}>
-                Productos asignados
-              </Typography>
+                <Typography sx={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}>
+                  Productos asignados
+                </Typography>
 
+                <Tooltip
+                  title={!eligibleLoaded
+                    ? "No se pudieron consultar los productos disponibles."
+                    : availableProducts.length === 0
+                      ? "No hay más productos disponibles para agregar."
+                      : ""}
+                  arrow
+                >
+                  <span style={{ width: "auto", maxWidth: "100%" }}>
+                    <Button
+                      type="button"
+                      variant="contained"
+                      startIcon={<AddOutlinedIcon />}
+                      disabled={busy || !eligibleLoaded || availableProducts.length === 0}
+                      onClick={() => openForm("create")}
+                      sx={{
+                        minWidth: { xs: "100%", sm: 170 },
+                        height: 42,
+                        borderRadius: 2,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Agregar producto
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
+
+              {/* Tabla y tarjetas responsivas */}
               <MenuSetProductsList
                 options={pagination.paginatedItems}
-                mode={menuSet.capacity_mode}
                 busy={busy}
                 updatingOptionId={updatingOptionId}
                 hasFilters={Boolean(search.trim()) || statusFilter !== "all"}
@@ -761,29 +662,22 @@ export default function MenuSetStageProductsPage() {
                 onDelete={handleDeleteRequest}
               />
 
+              {/* Paginación dentro del mismo contenedor */}
               {filteredOptions.length > 0 ? (
-                <Paper sx={{
-                  borderRadius: 1,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  boxShadow: "none",
-                  overflow: "hidden",
-                }}>
-                  <PaginationFooter
-                    page={pagination.page}
-                    totalPages={pagination.totalPages}
-                    startItem={pagination.startItem}
-                    endItem={pagination.endItem}
-                    total={pagination.total}
-                    hasPrev={pagination.hasPrev}
-                    hasNext={pagination.hasNext}
-                    onPrev={pagination.prevPage}
-                    onNext={pagination.nextPage}
-                    itemLabel="productos"
-                  />
-                </Paper>
+                <PaginationFooter
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  startItem={pagination.startItem}
+                  endItem={pagination.endItem}
+                  total={pagination.total}
+                  hasPrev={pagination.hasPrev}
+                  hasNext={pagination.hasNext}
+                  onPrev={pagination.prevPage}
+                  onNext={pagination.nextPage}
+                  itemLabel="productos"
+                />
               ) : null}
-            </Stack>
+            </Paper>
           </>
         )}
       </Stack>
@@ -876,36 +770,5 @@ export default function MenuSetStageProductsPage() {
         autoHideDuration={3000}
       />
     </PageContainer>
-  );
-}
-
-function InfoItem({ label, value }) {
-  return (
-    <Box sx={{
-      p: 1.75,
-      minWidth: 0,
-      borderRadius: 1,
-      border: "1px solid",
-      borderColor: "divider",
-      bgcolor: "background.default",
-    }}>
-      <Typography sx={{
-        fontSize: 12,
-        fontWeight: 800,
-        color: "text.secondary",
-      }}>
-        {label}
-      </Typography>
-
-      <Typography sx={{
-        mt: 0.75,
-        fontSize: 15,
-        fontWeight: 800,
-        color: "text.primary",
-        overflowWrap: "anywhere",
-      }}>
-        {value}
-      </Typography>
-    </Box>
   );
 }

@@ -9,10 +9,15 @@ import {
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
+import PauseCircleOutlineOutlinedIcon from "@mui/icons-material/PauseCircleOutlineOutlined";
 
 import PageContainer from "../../../../../components/common/PageContainer";
 import AppAlert from "../../../../../components/common/AppAlert";
 import PaginationFooter from "../../../../../components/common/PaginationFooter";
+import ContextOverview from "../../../../../components/common/ContextOverview";
 
 import usePagination from "../../../../../hooks/usePagination";
 
@@ -29,12 +34,12 @@ import {
 } from "../../../../../services/menu/menuSets/menuSetStageDefinition.service";
 
 const panelSx = {
-  p: { xs: 2, sm: 2.5 },
   borderRadius: 1,
   border: "1px solid",
   borderColor: "divider",
   bgcolor: "background.paper",
   boxShadow: "none",
+  overflow: "hidden",
 };
 
 function getErrorMessage(error, fallback) {
@@ -61,19 +66,10 @@ function sortDefinitions(items) {
 }
 
 function PaginationBlock({ pagination, itemLabel }) {
-  if (pagination.total === 0) {
-    return null;
-  }
+  if (pagination.total === 0) return null;
 
   return (
-    <Paper sx={{
-      mt: 2,
-      borderRadius: 1,
-      border: "1px solid",
-      borderColor: "divider",
-      boxShadow: "none",
-      overflow: "hidden",
-    }}>
+    <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
       <PaginationFooter
         page={pagination.page}
         totalPages={pagination.totalPages}
@@ -86,7 +82,7 @@ function PaginationBlock({ pagination, itemLabel }) {
         onNext={pagination.nextPage}
         itemLabel={itemLabel}
       />
-    </Paper>
+    </Box>
   );
 }
 
@@ -125,19 +121,12 @@ export default function MenuSetStageDefinitionsPage() {
 
   const busy = saving || deleting || updatingId !== null;
 
-  const showAlert = useCallback(({
-    severity = "error",
-    title = "Error",
-    message = "",
-  }) => {
+  const showAlert = useCallback(({ severity = "error", title = "Error", message = "" }) => {
     setAlertState({ open: true, severity, title, message });
   }, []);
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") {
-      return;
-    }
-
+    if (reason === "clickaway") return;
     setAlertState((current) => ({ ...current, open: false }));
   };
 
@@ -149,7 +138,7 @@ export default function MenuSetStageDefinitionsPage() {
     };
   }, []);
 
-  // Consultar el Conjunto y las definiciones disponibles.
+  // Consultar el conjunto y los tipos de etapas disponibles.
   useEffect(() => {
     if (!restaurantId || !branchId || !menuSetId) {
       setMenuSet(null);
@@ -171,20 +160,16 @@ export default function MenuSetStageDefinitionsPage() {
           getMenuSetStageDefinitions(restaurantId, branchId),
         ]);
 
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         if (!set?.id) {
-          throw new Error("No se encontró el Conjunto seleccionado.");
+          throw new Error("No se encontró el conjunto seleccionado.");
         }
 
         setMenuSet(set);
         setDefinitions(rows);
       } catch (error) {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
 
         setMenuSet(null);
         setDefinitions([]);
@@ -196,9 +181,7 @@ export default function MenuSetStageDefinitionsPage() {
           message: getErrorMessage(error, "No se pudieron consultar los tipos de etapas."),
         });
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
@@ -231,6 +214,45 @@ export default function MenuSetStageDefinitionsPage() {
 
   const branchName = menuSet?.branch?.name || "Sucursal seleccionada";
 
+  const customActiveCount = customDefinitions.filter(
+    (item) => item.is_active === true || item.is_active === 1 || item.is_active === "1"
+  ).length;
+
+  const contextItems = [
+    {
+      key: "system",
+      title: "Etapas predeterminadas",
+      value: systemDefinitions.length,
+      icon: <LayersOutlinedIcon fontSize="small" />,
+      chipLabel: "Generales",
+      chipColor: "primary",
+    },
+    {
+      key: "custom",
+      title: "Etapas personalizadas",
+      value: customDefinitions.length,
+      icon: <CategoryOutlinedIcon fontSize="small" />,
+      chipLabel: "Registradas",
+      chipColor: "primary",
+    },
+    {
+      key: "active",
+      title: "Personalizadas activas",
+      value: customActiveCount,
+      icon: <CheckCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Disponibles",
+      chipColor: "success",
+    },
+    {
+      key: "inactive",
+      title: "Personalizadas inactivas",
+      value: customDefinitions.length - customActiveCount,
+      icon: <PauseCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Inactivas",
+      chipColor: "default",
+    },
+  ];
+
   const handleBack = () => {
     navigate(
       `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}?branchId=${encodeURIComponent(branchId)}`,
@@ -244,13 +266,9 @@ export default function MenuSetStageDefinitionsPage() {
   };
 
   const openForm = (mode, definition = null) => {
-    if (busy || operationRef.current) {
-      return;
-    }
+    if (busy || operationRef.current) return;
 
-    if (mode === "edit" && definition?.can_edit !== true) {
-      return;
-    }
+    if (mode === "edit" && definition?.can_edit !== true) return;
 
     setEditingDefinition(definition);
     setFormMode(mode);
@@ -258,9 +276,7 @@ export default function MenuSetStageDefinitionsPage() {
   };
 
   const closeForm = () => {
-    if (saving) {
-      return;
-    }
+    if (saving) return;
 
     setFormMode(null);
     setEditingDefinition(null);
@@ -282,9 +298,7 @@ export default function MenuSetStageDefinitionsPage() {
 
   // Guardar creación o edición sin recargar la página.
   const handleSave = async (payload, definition) => {
-    if (operationRef.current || busy) {
-      return;
-    }
+    if (operationRef.current || busy) return;
 
     operationRef.current = true;
     setSaving(true);
@@ -325,30 +339,23 @@ export default function MenuSetStageDefinitionsPage() {
     } finally {
       operationRef.current = false;
 
-      if (mountedRef.current) {
-        setSaving(false);
-      }
+      if (mountedRef.current) setSaving(false);
     }
   };
 
   // Cambio de estado con actualización visual inmediata.
   const handleStatusChange = async (definition, checked) => {
-    if (operationRef.current || busy || isSystemDefinition(definition)) {
-      return;
-    }
+    if (operationRef.current || busy || isSystemDefinition(definition)) return;
 
     const allowed = checked
       ? definition.can_activate === true
       : definition.can_deactivate === true;
 
-    if (!allowed) {
-      return;
-    }
+    if (!allowed) return;
 
     operationRef.current = true;
     setUpdatingId(definition.id);
 
-    // Mostrar inmediatamente el nuevo estado.
     setDefinitions((current) => current.map((item) =>
       String(item.id) === String(definition.id)
         ? { ...item, is_active: checked }
@@ -377,7 +384,6 @@ export default function MenuSetStageDefinitionsPage() {
         message: response?.message || "Estado actualizado correctamente.",
       });
     } catch (error) {
-      // Restaurar la información anterior.
       setDefinitions((current) => current.map((item) =>
         String(item.id) === String(definition.id) ? definition : item
       ));
@@ -390,24 +396,17 @@ export default function MenuSetStageDefinitionsPage() {
     } finally {
       operationRef.current = false;
 
-      if (mountedRef.current) {
-        setUpdatingId(null);
-      }
+      if (mountedRef.current) setUpdatingId(null);
     }
   };
 
   const handleDeleteRequest = (definition) => {
-    if (busy || operationRef.current || definition.can_delete !== true) {
-      return;
-    }
-
+    if (busy || operationRef.current || definition.can_delete !== true) return;
     setDefinitionToDelete(definition);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!definitionToDelete?.id || busy || operationRef.current) {
-      return;
-    }
+    if (!definitionToDelete?.id || busy || operationRef.current) return;
 
     const definitionId = definitionToDelete.id;
 
@@ -441,9 +440,7 @@ export default function MenuSetStageDefinitionsPage() {
     } finally {
       operationRef.current = false;
 
-      if (mountedRef.current) {
-        setDeleting(false);
-      }
+      if (mountedRef.current) setDeleting(false);
     }
   };
 
@@ -457,7 +454,7 @@ export default function MenuSetStageDefinitionsPage() {
           alignItems={{ xs: "flex-start", md: "center" }}
           spacing={2}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography sx={{
               fontSize: { xs: 30, md: 42 },
               fontWeight: 800,
@@ -506,124 +503,72 @@ export default function MenuSetStageDefinitionsPage() {
             </Stack>
           </Box>
         ) : loadFailed ? (
-          <Paper sx={{ ...panelSx, py: 5, textAlign: "center" }}>
+          <Paper sx={{ ...panelSx, p: { xs: 2, sm: 2.5 }, py: 5, textAlign: "center" }}>
             <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
               No se pudieron consultar las etapas
             </Typography>
 
             <Typography sx={{ mt: 1, fontSize: 14, color: "text.secondary" }}>
-              Regresa a la administración del Conjunto para volver a ingresar.
+              Regresa a la administración del conjunto para volver a ingresar.
             </Typography>
           </Paper>
         ) : (
           <>
-            {/* Contexto */}
-            <Paper sx={panelSx}>
-              <Stack spacing={1.5}>
-                <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
-                  Contexto actual
-                </Typography>
-
-                <Box sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0, 1fr))",
-                  },
-                  gap: 1.5,
-                }}>
-                  <Box sx={{
-                    p: 1.75,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                    bgcolor: "background.default",
-                  }}>
-                    <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 800 }}>
-                      Conjunto actual
-                    </Typography>
-
-                    <Typography sx={{
-                      mt: 0.75,
-                      fontSize: 15,
-                      fontWeight: 800,
-                      color: "text.primary",
-                      overflowWrap: "anywhere",
-                    }}>
-                      {menuSet?.name || "Conjunto seleccionado"}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{
-                    p: 1.75,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                    bgcolor: "background.default",
-                  }}>
-                    <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 800 }}>
-                      Sucursal
-                    </Typography>
-
-                    <Typography sx={{
-                      mt: 0.75,
-                      fontSize: 15,
-                      fontWeight: 800,
-                      color: "text.primary",
-                      overflowWrap: "anywhere",
-                    }}>
-                      {branchName}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-                  Las etapas personalizadas que registres podrán utilizarse en diferentes Conjuntos de esta sucursal.
-                </Typography>
-              </Stack>
-            </Paper>
+            {/* Contexto actual */}
+            <ContextOverview
+              items={contextItems}
+              description="Las etapas personalizadas que registres podrán utilizarse en diferentes Conjuntos de esta sucursal."
+            />
 
             {/* Etapas predeterminadas */}
             <Paper sx={panelSx}>
-              <Stack spacing={2}>
-                <Box>
-                  <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
-                    Etapas predeterminadas
-                  </Typography>
+              <Box sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 1.75,
+                borderBottom: "1px solid",
+                borderColor: "divider",
+              }}>
+                <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
+                  Etapas predeterminadas
+                </Typography>
 
-                  <Typography sx={{
-                    mt: 0.5,
-                    fontSize: 13,
-                    color: "text.secondary",
-                    lineHeight: 1.55,
-                  }}>
-                    Etapas generales disponibles para los Conjuntos. Su configuración es de solo consulta.
-                  </Typography>
-                </Box>
+                <Typography sx={{
+                  mt: 0.5,
+                  fontSize: 13,
+                  color: "text.secondary",
+                  lineHeight: 1.55,
+                }}>
+                  Etapas generales disponibles para los Conjuntos.
+                </Typography>
+              </Box>
 
-                <MenuSetStageDefinitionsList
-                  definitions={systemPagination.paginatedItems}
-                  system
-                  busy={busy}
-                />
+              <MenuSetStageDefinitionsList
+                definitions={systemPagination.paginatedItems}
+                system
+                busy={busy}
+              />
 
-                <PaginationBlock
-                  pagination={systemPagination}
-                  itemLabel="etapas"
-                />
-              </Stack>
+              <PaginationBlock
+                pagination={systemPagination}
+                itemLabel="etapas"
+              />
             </Paper>
 
             {/* Etapas personalizadas */}
             <Paper sx={panelSx}>
-              <Stack spacing={2}>
+              <Box sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 1.75,
+                borderBottom: "1px solid",
+                borderColor: "divider",
+              }}>
                 <Stack
                   direction={{ xs: "column", md: "row" }}
                   justifyContent="space-between"
                   alignItems={{ xs: "stretch", md: "center" }}
                   spacing={2}
                 >
-                  <Box>
+                  <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
                       Etapas personalizadas
                     </Typography>
@@ -654,27 +599,27 @@ export default function MenuSetStageDefinitionsPage() {
                     Nueva etapa personalizada
                   </Button>
                 </Stack>
+              </Box>
 
-                <MenuSetStageDefinitionsList
-                  definitions={customPagination.paginatedItems}
-                  busy={busy}
-                  updatingId={updatingId}
-                  onStatusChange={handleStatusChange}
-                  onEdit={(definition) => openForm("edit", definition)}
-                  onDelete={handleDeleteRequest}
-                />
+              <MenuSetStageDefinitionsList
+                definitions={customPagination.paginatedItems}
+                busy={busy}
+                updatingId={updatingId}
+                onStatusChange={handleStatusChange}
+                onEdit={(definition) => openForm("edit", definition)}
+                onDelete={handleDeleteRequest}
+              />
 
-                <PaginationBlock
-                  pagination={customPagination}
-                  itemLabel="etapas"
-                />
-              </Stack>
+              <PaginationBlock
+                pagination={customPagination}
+                itemLabel="etapas"
+              />
             </Paper>
           </>
         )}
       </Stack>
 
-      {/* Formulario modal */}
+      {/* Formulario */}
       {formMode ? (
         <MenuSetStageDefinitionForm
           key={`${formMode}-${editingDefinition?.id || "new"}-${formVersion}`}

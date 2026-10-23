@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box, Button, ButtonBase, Chip, CircularProgress,
-  FormControlLabel, InputAdornment, Paper, Stack,
-  Switch, TextField, Tooltip, Typography,
+  Box, Button, ButtonBase, CircularProgress, FormControlLabel,
+  InputAdornment, Paper, Stack, Switch, TextField, Tooltip, Typography,
 } from "@mui/material";
 
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -11,9 +10,9 @@ import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import { updateMenuSet } from "../../../../services/menu/menuSets/menuSet.service";
+import ContextOverview from "../../../common/ContextOverview";
 
 const DAYS = [
   { value: 1, label: "Lunes", short: "Lun" },
@@ -24,30 +23,6 @@ const DAYS = [
   { value: 6, label: "Sábado", short: "Sáb" },
   { value: 7, label: "Domingo", short: "Dom" },
 ];
-
-const CAPACITY_OPTIONS = [
-  {
-    value: "none",
-    label: "Sin límite",
-    description: "Los productos no tendrán límites de capacidad comercial.",
-  },
-  {
-    value: "daily",
-    label: "Diaria",
-    description: "Define una cantidad disponible para cada producto y día.",
-  },
-  {
-    value: "weekly",
-    label: "Semanal",
-    description: "Define una cantidad semanal disponible para cada producto.",
-  },
-];
-
-const CAPACITY_LABELS = {
-  none: "Sin límite",
-  daily: "Diaria",
-  weekly: "Semanal",
-};
 
 const panelSx = {
   p: { xs: 2, sm: 2.5 },
@@ -73,30 +48,10 @@ function mapMenuSetToForm(menuSet) {
     price: String(menuSet?.price ?? ""),
     sort_order: String(menuSet?.sort_order ?? 0),
     service_days: normalizeDays(menuSet?.service_days),
-    capacity_mode: menuSet?.capacity_mode ?? "none",
     sat_product_service: menuSet?.sat?.sat_product_service ?? "",
     sat_unit: menuSet?.sat?.sat_unit ?? "",
     is_active: Boolean(menuSet?.is_active),
   };
-}
-
-function getOptions(menuSet) {
-  const stages = Array.isArray(menuSet?.stages) ? menuSet.stages : [];
-
-  return stages.flatMap((stage) => {
-    const products = Array.isArray(stage.menu_set_products) ? stage.menu_set_products : [];
-
-    return products.map((option) => {
-      const days = Array.isArray(option.service_days) ? option.service_days : [];
-
-      return {
-        id: Number(option.id),
-        name: option.product?.name || "Producto sin nombre",
-        stageName: stage.stage_definition?.name || "Etapa",
-        days: normalizeDays(days.map((day) => day.day_of_week)),
-      };
-    });
-  }).filter((option) => Number.isInteger(option.id) && option.id > 0);
 }
 
 function normalizePrice(value) {
@@ -129,10 +84,6 @@ function getChanges(form, menuSet) {
     changes.service_days = normalizeDays(form.service_days);
   }
 
-  if (form.capacity_mode !== original.capacity_mode) {
-    changes.capacity_mode = form.capacity_mode;
-  }
-
   const satProduct = form.sat_product_service.trim();
   const satUnit = form.sat_unit.trim();
 
@@ -153,12 +104,12 @@ function getChanges(form, menuSet) {
   return changes;
 }
 
-function validateForm(form, changes, options, limits) {
+function validateForm(form, changes) {
   const errors = {};
 
   if (Object.prototype.hasOwnProperty.call(changes, "name")) {
     if (!form.name.trim()) {
-      errors.name = "Debes escribir el nombre del Conjunto.";
+      errors.name = "Debes escribir el nombre del conjunto.";
     } else if (form.name.trim().length > 150) {
       errors.name = "El nombre no puede superar los 150 caracteres.";
     }
@@ -195,67 +146,7 @@ function validateForm(form, changes, options, limits) {
     errors.sat = "Debes completar ambas claves de facturación o dejar las dos vacías.";
   }
 
-  if (Object.prototype.hasOwnProperty.call(changes, "capacity_mode")) {
-    if (form.capacity_mode === "weekly") {
-      for (const option of options) {
-        const value = String(limits[option.id]?.weekly_capacity ?? "").trim();
-
-        if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) {
-          errors.capacity_limits = "Debes indicar una capacidad semanal válida para cada producto.";
-          break;
-        }
-      }
-    }
-
-    if (form.capacity_mode === "daily") {
-      for (const option of options) {
-        for (const day of option.days) {
-          const value = String(limits[option.id]?.daily_capacities?.[day] ?? "").trim();
-
-          if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) {
-            errors.capacity_limits = "Debes indicar una capacidad diaria válida para cada producto y día.";
-            break;
-          }
-        }
-
-        if (errors.capacity_limits) {
-          break;
-        }
-      }
-    }
-  }
-
   return errors;
-}
-
-function buildCapacityLimits(mode, options, limits) {
-  const result = {};
-
-  if (mode === "none") {
-    return result;
-  }
-
-  options.forEach((option) => {
-    if (mode === "weekly") {
-      result[option.id] = {
-        weekly_capacity: Number(limits[option.id]?.weekly_capacity),
-      };
-    }
-
-    if (mode === "daily") {
-      const dailyCapacities = {};
-
-      option.days.forEach((day) => {
-        dailyCapacities[day] = Number(limits[option.id]?.daily_capacities?.[day]);
-      });
-
-      result[option.id] = {
-        daily_capacities: dailyCapacities,
-      };
-    }
-  });
-
-  return result;
 }
 
 function SectionTitle({ title, description }) {
@@ -266,7 +157,10 @@ function SectionTitle({ title, description }) {
       </Typography>
 
       {description ? (
-        <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
+        <Typography sx={{
+          mt: 0.5, fontSize: 13,
+          color: "text.secondary", lineHeight: 1.55,
+        }}>
           {description}
         </Typography>
       ) : null}
@@ -284,174 +178,21 @@ function FieldBlock({ label, help, reason, children }) {
       {children}
 
       {reason ? (
-        <Typography sx={{ mt: 0.75, fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+        <Typography sx={{
+          mt: 0.75, fontSize: 12,
+          color: "text.secondary", lineHeight: 1.5,
+        }}>
           {reason}
         </Typography>
       ) : help ? (
-        <Typography sx={{ mt: 0.75, fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+        <Typography sx={{
+          mt: 0.75, fontSize: 12,
+          color: "text.secondary", lineHeight: 1.5,
+        }}>
           {help}
         </Typography>
       ) : null}
     </Box>
-  );
-}
-
-function ContextCard({ icon, title, value, chipLabel, chipColor = "default" }) {
-  return (
-    <Box sx={{
-      p: 1.75,
-      minWidth: 0,
-      height: "100%",
-      border: "1px solid",
-      borderColor: "divider",
-      borderRadius: 1,
-      backgroundColor: "background.default",
-    }}>
-      <Stack spacing={1} height="100%">
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Box sx={{
-            width: 34, height: 34, borderRadius: 1,
-            display: "grid", placeItems: "center",
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: "primary.main", flexShrink: 0,
-          }}>
-            {icon}
-          </Box>
-
-          <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
-            {title}
-          </Typography>
-        </Stack>
-
-        <Typography sx={{
-          fontSize: 14, color: "text.primary",
-          lineHeight: 1.45, overflowWrap: "anywhere",
-        }}>
-          {value}
-        </Typography>
-
-        <Box sx={{ mt: "auto", pt: 1 }}>
-          <Chip
-            label={chipLabel}
-            size="small"
-            color={chipColor}
-            variant={chipColor === "default" ? "outlined" : "filled"}
-          />
-        </Box>
-      </Stack>
-    </Box>
-  );
-}
-
-function CapacityLimitsEditor({ mode, options, limits, saving, onChange, error }) {
-  if (mode === "none" || options.length === 0) {
-    return null;
-  }
-
-  return (
-    <Stack spacing={2}>
-      <SectionTitle
-        title="Capacidades de los productos"
-        description="Configura las nuevas cantidades antes de guardar el cambio de modalidad."
-      />
-
-      <Box sx={{
-        display: "grid",
-        gridTemplateColumns: {
-          xs: "1fr",
-          md: "repeat(2, minmax(0, 1fr))",
-        },
-        gridAutoRows: "1fr",
-        gap: 1.5,
-      }}>
-        {options.map((option) => (
-          <Box key={option.id} sx={{
-            p: 2,
-            height: "100%",
-            minWidth: 0,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 1,
-            backgroundColor: "background.default",
-          }}>
-            <Stack spacing={2}>
-              <Box>
-                <Typography sx={{
-                  fontSize: 15, fontWeight: 800,
-                  color: "text.primary", overflowWrap: "anywhere",
-                }}>
-                  {option.name}
-                </Typography>
-
-                <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
-                  Etapa: {option.stageName}
-                </Typography>
-              </Box>
-
-              {mode === "weekly" ? (
-                <FieldBlock label="Capacidad semanal">
-                  <TextField
-                    fullWidth
-                    type="text"
-                    value={limits[option.id]?.weekly_capacity ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-
-                      if (/^\d*$/.test(value)) {
-                        onChange(option.id, "weekly_capacity", value);
-                      }
-                    }}
-                    placeholder="Ej. 50"
-                    inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-                    disabled={saving}
-                  />
-                </FieldBlock>
-              ) : (
-                <>
-                  {option.days.length === 0 ? (
-                    <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
-                      Este producto todavía no tiene días de servicio configurados.
-                    </Typography>
-                  ) : (
-                    <Box sx={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                      gap: 1.25,
-                    }}>
-                      {option.days.map((day) => (
-                        <FieldBlock key={day} label={DAYS[day - 1].label}>
-                          <TextField
-                            fullWidth
-                            type="text"
-                            value={limits[option.id]?.daily_capacities?.[day] ?? ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-
-                              if (/^\d*$/.test(value)) {
-                                onChange(option.id, "daily_capacity", value, day);
-                              }
-                            }}
-                            placeholder="0"
-                            inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-                            disabled={saving}
-                          />
-                        </FieldBlock>
-                      ))}
-                    </Box>
-                  )}
-                </>
-              )}
-            </Stack>
-          </Box>
-        ))}
-      </Box>
-
-      {error ? (
-        <Typography sx={{ fontSize: 12, color: "error.main" }}>
-          {error}
-        </Typography>
-      ) : null}
-    </Stack>
   );
 }
 
@@ -463,23 +204,19 @@ export default function MenuSetGeneralTab({
   onAlert,
 }) {
   const [form, setForm] = useState(() => mapMenuSetToForm(menuSet));
-  const [limits, setLimits] = useState({});
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
   useEffect(() => {
     setForm(mapMenuSetToForm(menuSet));
-    setLimits({});
     setErrors({});
   }, [menuSet]);
 
-  const options = useMemo(() => getOptions(menuSet), [menuSet]);
   const changes = useMemo(() => getChanges(form, menuSet), [form, menuSet]);
   const hasChanges = Object.keys(changes).length > 0;
 
   const canEditCommercial = menuSet?.can_edit_commercial_data === true;
-  const canChangeCapacity = menuSet?.can_change_capacity_mode === true;
   const canEditSat = menuSet?.can_edit_sat === true;
   const canRemoveDays = menuSet?.can_remove_service_days === true;
   const canEditOrder = menuSet?.can_edit === true;
@@ -493,7 +230,6 @@ export default function MenuSetGeneralTab({
     : menuSet?.activate_block_reason;
 
   const selectedDays = normalizeDays(form.service_days);
-  const capacityChanged = form.capacity_mode !== menuSet?.capacity_mode;
 
   const contextItems = [
     {
@@ -541,9 +277,7 @@ export default function MenuSetGeneralTab({
   const handleToggleDay = (day) => {
     const selected = selectedDays.includes(day);
 
-    if (selected && !canRemoveDays) {
-      return;
-    }
+    if (selected && !canRemoveDays) return;
 
     handleFieldChange(
       "service_days",
@@ -553,68 +287,25 @@ export default function MenuSetGeneralTab({
     );
   };
 
-  const handleCapacityModeChange = (mode) => {
-    if (!canChangeCapacity || saving) {
-      return;
-    }
-
-    setForm((current) => ({ ...current, capacity_mode: mode }));
-    setLimits({});
-    setErrors((current) => {
-      const next = { ...current };
-      delete next.capacity_mode;
-      delete next.capacity_limits;
-      return next;
-    });
-  };
-
-  const handleLimitChange = (optionId, field, value, day = null) => {
-    setLimits((current) => {
-      const previous = current[optionId] || {};
-
-      if (field === "weekly_capacity") {
-        return {
-          ...current,
-          [optionId]: { ...previous, weekly_capacity: value },
-        };
-      }
-
-      return {
-        ...current,
-        [optionId]: {
-          ...previous,
-          daily_capacities: {
-            ...(previous.daily_capacities || {}),
-            [day]: value,
-          },
-        },
-      };
-    });
-
-    setErrors((current) => {
-      const next = { ...current };
-      delete next.capacity_limits;
-      return next;
-    });
-  };
-
   const handleDiscard = () => {
     setForm(mapMenuSetToForm(menuSet));
-    setLimits({});
     setErrors({});
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!hasChanges || savingRef.current || saving) {
-      return;
-    }
+    if (!hasChanges || savingRef.current || saving) return;
 
-    const validationErrors = validateForm(form, changes, options, limits);
+    const validationErrors = validateForm(form, changes);
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      onAlert?.({
+        severity: "error",
+        title: "Revisa la información",
+        message: Object.values(validationErrors)[0],
+      });
       return;
     }
 
@@ -626,10 +317,6 @@ export default function MenuSetGeneralTab({
 
     if (Object.prototype.hasOwnProperty.call(payload, "sort_order")) {
       payload.sort_order = Number(form.sort_order);
-    }
-
-    if (capacityChanged && form.capacity_mode !== "none" && options.length > 0) {
-      payload.capacity_limits = buildCapacityLimits(form.capacity_mode, options, limits);
     }
 
     savingRef.current = true;
@@ -646,7 +333,7 @@ export default function MenuSetGeneralTab({
       const updatedSet = response?.menu_set;
 
       if (!updatedSet?.id) {
-        throw new Error("No se recibió la información actualizada del Conjunto.");
+        throw new Error("No se recibió la información actualizada del conjunto.");
       }
 
       onUpdated?.(updatedSet);
@@ -665,45 +352,24 @@ export default function MenuSetGeneralTab({
 
         Object.entries(serverErrors).forEach(([field, messages]) => {
           const message = Array.isArray(messages) ? messages[0] : String(messages);
-          const key = field.startsWith("sat.")
-            ? field.replace("sat.", "")
-            : field.startsWith("capacity_limits.")
-              ? "capacity_limits"
-              : field;
+          const key = field.startsWith("sat.") ? field.replace("sat.", "") : field;
 
           mappedErrors[key] = message;
         });
 
         setErrors(mappedErrors);
-
-        const hasVisibleErrors = Object.keys(mappedErrors).some((field) => (
-          field === "name" ||
-          field === "billing_name" ||
-          field === "price" ||
-          field === "sort_order" ||
-          field === "capacity_mode" ||
-          field === "capacity_limits" ||
-          field === "sat" ||
-          field === "sat_product_service" ||
-          field === "sat_unit" ||
-          field === "service_days" ||
-          field === "is_active"
-        ));
-
-        if (!hasVisibleErrors) {
-          onAlert?.({
-            severity: "error",
-            title: "Error",
-            message: error?.response?.data?.message || "No se pudieron guardar los cambios.",
-          });
-        }
-      } else {
-        onAlert?.({
-          severity: "error",
-          title: "Error",
-          message: error?.response?.data?.message || error?.message || "No se pudieron guardar los cambios.",
-        });
       }
+
+      const firstError = serverErrors && typeof serverErrors === "object"
+        ? Object.values(serverErrors).flat().find((message) => typeof message === "string")
+        : null;
+
+      onAlert?.({
+        severity: "error",
+        title: "Error",
+        message: firstError || error?.response?.data?.message
+          || error?.message || "No se pudieron guardar los cambios.",
+      });
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -713,28 +379,7 @@ export default function MenuSetGeneralTab({
   return (
     <Stack spacing={3}>
       {/* Contexto actual */}
-      <Paper sx={panelSx}>
-        <Stack spacing={2}>
-          <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
-            Contexto actual
-          </Typography>
-
-          <Box sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              md: "repeat(3, minmax(0, 1fr))",
-            },
-            gridAutoRows: "1fr",
-            gap: 1.5,
-          }}>
-            {contextItems.map((item) => (
-              <ContextCard key={item.title} {...item} />
-            ))}
-          </Box>
-        </Stack>
-      </Paper>
+      <ContextOverview items={contextItems} />
 
       {/* Configuración */}
       <Paper component="form" onSubmit={handleSubmit} sx={panelSx}>
@@ -898,7 +543,11 @@ export default function MenuSetGeneralTab({
           </Typography>
 
           {!canRemoveDays && menuSet?.remove_service_days_block_reason ? (
-            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+            <Typography sx={{
+              fontSize: 12,
+              color: "text.secondary",
+              lineHeight: 1.5,
+            }}>
               {menuSet.remove_service_days_block_reason}
             </Typography>
           ) : null}
@@ -907,109 +556,6 @@ export default function MenuSetGeneralTab({
             <Typography sx={{ fontSize: 12, color: "error.main" }}>
               {errors.service_days}
             </Typography>
-          ) : null}
-
-          {/* Capacidad */}
-          <SectionTitle
-            title="Modalidad de capacidad"
-            description="Define cómo se controlarán las cantidades disponibles de los productos del conjunto."
-          />
-
-          <Box sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              md: "repeat(3, minmax(0, 1fr))",
-            },
-            gridAutoRows: "1fr",
-            gap: 1.5,
-          }}>
-            {CAPACITY_OPTIONS.map((option) => {
-              const selected = form.capacity_mode === option.value;
-
-              return (
-                <ButtonBase
-                  key={option.value}
-                  type="button"
-                  disabled={saving || !canChangeCapacity}
-                  onClick={() => handleCapacityModeChange(option.value)}
-                  aria-pressed={selected}
-                  sx={{
-                    width: "100%",
-                    minHeight: 130,
-                    p: 2,
-                    borderRadius: 1,
-                    border: "1px solid",
-                    borderColor: selected ? "secondary.main" : "divider",
-                    backgroundColor: selected ? "rgba(214, 122, 58, 0.10)" : "background.default",
-                    textAlign: "left",
-                    alignItems: "stretch",
-                    transition: "border-color 0.18s ease, background-color 0.18s ease",
-                    "&:hover": {
-                      borderColor: "secondary.main",
-                      backgroundColor: "rgba(214, 122, 58, 0.07)",
-                    },
-                  }}
-                >
-                  <Stack spacing={1} sx={{ width: "100%" }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                      <Typography sx={{
-                        fontSize: 16,
-                        fontWeight: 800,
-                        color: selected ? "secondary.main" : "text.primary",
-                      }}>
-                        {option.label}
-                      </Typography>
-
-                      {selected ? <Chip size="small" label="Seleccionada" color="secondary" /> : null}
-                    </Stack>
-
-                    <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.5 }}>
-                      {option.description}
-                    </Typography>
-                  </Stack>
-                </ButtonBase>
-              );
-            })}
-          </Box>
-
-          {!canChangeCapacity && menuSet?.capacity_mode_block_reason ? (
-            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
-              {menuSet.capacity_mode_block_reason}
-            </Typography>
-          ) : null}
-
-          {errors.capacity_mode ? (
-            <Typography sx={{ fontSize: 12, color: "error.main" }}>
-              {errors.capacity_mode}
-            </Typography>
-          ) : null}
-
-          {capacityChanged && options.length > 0 && form.capacity_mode !== "none" ? (
-            <CapacityLimitsEditor
-              mode={form.capacity_mode}
-              options={options}
-              limits={limits}
-              saving={saving}
-              onChange={handleLimitChange}
-              error={errors.capacity_limits}
-            />
-          ) : null}
-
-          {capacityChanged && form.capacity_mode === "none" && options.length > 0 ? (
-            <Box sx={{
-              p: 1.75, border: "1px solid", borderColor: "divider",
-              borderRadius: 1, backgroundColor: "background.default",
-            }}>
-              <Stack direction="row" spacing={1.25} alignItems="flex-start">
-                <InfoOutlinedIcon sx={{ color: "primary.main", fontSize: 20, flexShrink: 0 }} />
-
-                <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-                  Al guardar esta modalidad, se retirarán los límites de capacidad configurados para los productos.
-                </Typography>
-              </Stack>
-            </Box>
           ) : null}
 
           {/* Datos de facturación */}
@@ -1045,7 +591,11 @@ export default function MenuSetGeneralTab({
           </Stack>
 
           {!canEditSat && menuSet?.sat_block_reason ? (
-            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+            <Typography sx={{
+              fontSize: 12,
+              color: "text.secondary",
+              lineHeight: 1.5,
+            }}>
               {menuSet.sat_block_reason}
             </Typography>
           ) : null}
@@ -1056,10 +606,10 @@ export default function MenuSetGeneralTab({
             </Typography>
           ) : null}
 
-          {/* Estado */}
+          {/* Estado del conjunto */}
           <SectionTitle
             title="Estado del conjunto"
-            description="Un conjunto activo puede utilizarse cuando su configuración cumple los requisitos necesarios."
+            description="Activa el conjunto cuando sus etapas, productos y capacidades estén configurados."
           />
 
           <Box sx={{
@@ -1067,7 +617,7 @@ export default function MenuSetGeneralTab({
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 1,
-            backgroundColor: "background.default",
+            bgcolor: "background.default",
           }}>
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -1075,25 +625,27 @@ export default function MenuSetGeneralTab({
               alignItems={{ xs: "flex-start", sm: "center" }}
               spacing={1.5}
             >
-              <Box sx={{ flex: 1 }}>
-                <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: "text.primary",
+                }}>
                   {form.is_active ? "Conjunto activo" : "Conjunto inactivo"}
                 </Typography>
 
-                {!canChangeStatus && statusReason ? (
-                  <Typography sx={{
-                    mt: 0.5, fontSize: 12,
-                    color: "text.secondary", lineHeight: 1.5,
-                  }}>
-                    {statusReason}
-                  </Typography>
-                ) : null}
-
-                {errors.is_active ? (
-                  <Typography sx={{ mt: 0.5, fontSize: 12, color: "error.main" }}>
-                    {errors.is_active}
-                  </Typography>
-                ) : null}
+                <Typography sx={{
+                  mt: 0.5,
+                  fontSize: 12,
+                  color: "text.secondary",
+                  lineHeight: 1.5,
+                }}>
+                  {!canChangeStatus && statusReason
+                    ? statusReason
+                    : form.is_active
+                      ? "El conjunto estará habilitado para utilizarse en los menús correspondientes."
+                      : "El conjunto permanecerá guardado sin estar habilitado."}
+                </Typography>
               </Box>
 
               <FormControlLabel
@@ -1104,13 +656,14 @@ export default function MenuSetGeneralTab({
                     checked={form.is_active}
                     onChange={(event) => handleFieldChange("is_active", event.target.checked)}
                     disabled={saving || !canChangeStatus}
+                    inputProps={{ "aria-label": "Estado del conjunto" }}
                   />
                 }
                 label={
                   <Typography sx={{
                     fontSize: 14,
                     fontWeight: 800,
-                    color: form.is_active ? "success.main" : "text.secondary",
+                    color: "text.primary",
                   }}>
                     {form.is_active ? "Activo" : "Inactivo"}
                   </Typography>
@@ -1132,7 +685,11 @@ export default function MenuSetGeneralTab({
               startIcon={<RestartAltRoundedIcon />}
               onClick={handleDiscard}
               disabled={!hasChanges || saving}
-              sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
+              sx={{
+                minWidth: { xs: "100%", sm: 190 },
+                height: 44,
+                fontWeight: 800,
+              }}
             >
               Descartar cambios
             </Button>
@@ -1144,7 +701,11 @@ export default function MenuSetGeneralTab({
                 ? <CircularProgress size={18} color="inherit" />
                 : <SaveOutlinedIcon />}
               disabled={!hasChanges || saving}
-              sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
+              sx={{
+                minWidth: { xs: "100%", sm: 190 },
+                height: 44,
+                fontWeight: 800,
+              }}
             >
               {saving ? "Guardando…" : "Guardar cambios"}
             </Button>

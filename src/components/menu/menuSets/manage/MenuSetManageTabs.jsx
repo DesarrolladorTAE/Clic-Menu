@@ -68,7 +68,8 @@ export default function MenuSetManageTabs({ value = "general", onChange }) {
       >
         <Tab value="general" label="General" disableRipple sx={tabSx} />
         <Tab value="stages" label="Etapas" disableRipple sx={tabSx} />
-        <Tab value="availability" label="Disponibilidad" disableRipple disabled sx={tabSx} />
+        <Tab value="capacities" label="Capacidades" disableRipple sx={tabSx} />
+        <Tab value="availability" label="Disponibilidad" disableRipple sx={tabSx} />
       </Tabs>
     </Box>
   );

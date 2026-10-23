@@ -1,5 +1,4 @@
-//src/components/menu/menuSets/manage/stages/MenuSetStagesTab.jsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box, Button, CircularProgress, Dialog, DialogActions,
@@ -17,6 +16,7 @@ import PauseCircleOutlineOutlinedIcon from "@mui/icons-material/PauseCircleOutli
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 
 import PaginationFooter from "../../../../common/PaginationFooter";
+import ContextOverview from "../../../../common/ContextOverview";
 import usePagination from "../../../../../hooks/usePagination";
 
 import MenuSetStageForm from "./MenuSetStageForm";
@@ -41,13 +41,6 @@ const panelSx = {
   boxShadow: "none",
 };
 
-const labelSx = {
-  fontSize: 14,
-  fontWeight: 800,
-  color: "text.primary",
-  mb: 1,
-};
-
 function getErrorMessage(error, fallback) {
   const data = error?.response?.data;
 
@@ -59,61 +52,6 @@ function getErrorMessage(error, fallback) {
     || data?.message
     || error?.message
     || fallback;
-}
-
-function SummaryCard({ label, value, helper, icon: Icon }) {
-  return (
-    <Box sx={{
-      p: 1.75,
-      height: "100%",
-      minWidth: 0,
-      border: "1px solid",
-      borderColor: "divider",
-      borderRadius: 1,
-      bgcolor: "background.default",
-    }}>
-      <Stack spacing={1} height="100%">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{
-            width: 34, height: 34,
-            borderRadius: 1,
-            display: "grid",
-            placeItems: "center",
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: "primary.main",
-            flexShrink: 0,
-          }}>
-            <Icon fontSize="small" />
-          </Box>
-
-          <Typography sx={{
-            fontSize: 14,
-            fontWeight: 800,
-            color: "text.primary",
-          }}>
-            {label}
-          </Typography>
-        </Stack>
-
-        <Typography sx={{
-          fontSize: 24,
-          fontWeight: 800,
-          color: "primary.main",
-        }}>
-          {value}
-        </Typography>
-
-        <Typography sx={{
-          mt: "auto",
-          fontSize: 12,
-          color: "text.secondary",
-          lineHeight: 1.5,
-        }}>
-          {helper}
-        </Typography>
-      </Stack>
-    </Box>
-  );
 }
 
 export default function MenuSetStagesTab({
@@ -182,9 +120,7 @@ export default function MenuSetStagesTab({
         getMenuSetStageDefinitions(restaurantId, branchId),
       ]);
 
-      if (!active) {
-        return;
-      }
+      if (!active) return;
 
       const stagesResult = results[0];
       const definitionsResult = results[1];
@@ -236,9 +172,7 @@ export default function MenuSetStagesTab({
       getMenuSet(restaurantId, branchId, menuSetId),
     ]);
 
-    if (!mountedRef.current) {
-      return;
-    }
+    if (!mountedRef.current) return;
 
     if (results[0].status === "fulfilled") {
       setStages(results[0].value);
@@ -294,31 +228,35 @@ export default function MenuSetStagesTab({
     resetKey: `${menuSetId}|${search}|${statusFilter}`,
   });
 
-  const summaryItems = [
+  const contextItems = [
     {
       key: "total",
-      label: "Etapas totales",
-      icon: LayersOutlinedIcon,
-      helper: "Etapas agregadas al conjunto.",
+      title: "Etapas totales",
+      value: `${summary.total} etapas agregadas`,
+      icon: <LayersOutlinedIcon fontSize="small" />,
+      chipLabel: "Registradas",
+      chipColor: "primary",
     },
     {
       key: "active",
-      label: "Etapas activas",
-      icon: CheckCircleOutlineOutlinedIcon,
-      helper: "Etapas habilitadas.",
+      title: "Etapas activas",
+      value: `${summary.active} etapas habilitadas`,
+      icon: <CheckCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Activas",
+      chipColor: "success",
     },
     {
       key: "inactive",
-      label: "Etapas inactivas",
-      icon: PauseCircleOutlineOutlinedIcon,
-      helper: "Etapas guardadas sin habilitar.",
+      title: "Etapas inactivas",
+      value: `${summary.inactive} etapas sin habilitar`,
+      icon: <PauseCircleOutlineOutlinedIcon fontSize="small" />,
+      chipLabel: "Inactivas",
+      chipColor: "default",
     },
   ];
 
   const openForm = (mode, stage = null) => {
-    if (busy || operationRef.current) {
-        return;
-    }
+    if (busy || operationRef.current) return;
 
     setFormMode(mode);
     setEditingStage(stage);
@@ -326,18 +264,14 @@ export default function MenuSetStagesTab({
   };
 
   const closeForm = () => {
-    if (saving) {
-      return;
-    }
+    if (saving) return;
 
     setFormMode(null);
     setEditingStage(null);
   };
 
   const handleSave = async (payload, stage) => {
-    if (operationRef.current) {
-      return;
-    }
+    if (operationRef.current) return;
 
     operationRef.current = true;
     setSaving(true);
@@ -390,17 +324,13 @@ export default function MenuSetStagesTab({
   };
 
   const handleStatusChange = async (stage, checked) => {
-    if (operationRef.current || busy) {
-      return;
-    }
+    if (operationRef.current || busy) return;
 
     const allowed = checked
       ? stage.can_activate === true
       : stage.can_deactivate === true;
 
-    if (!allowed) {
-      return;
-    }
+    if (!allowed) return;
 
     operationRef.current = true;
     setUpdatingStageId(stage.id);
@@ -459,17 +389,12 @@ export default function MenuSetStagesTab({
   };
 
   const handleDeleteRequest = (stage) => {
-    if (busy || stage.can_delete !== true) {
-      return;
-    }
-
+    if (busy || stage.can_delete !== true) return;
     setStageToDelete(stage);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!stageToDelete?.id || operationRef.current || deleting) {
-      return;
-    }
+    if (!stageToDelete?.id || operationRef.current || deleting) return;
 
     const stageId = stageToDelete.id;
 
@@ -551,113 +476,7 @@ export default function MenuSetStagesTab({
   return (
     <Stack spacing={3}>
       {/* Contexto actual */}
-      <Paper sx={panelSx}>
-        <Stack spacing={2}>
-          <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
-            Contexto actual
-          </Typography>
-
-          <Box sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              md: "repeat(3, minmax(0, 1fr))",
-            },
-            gridAutoRows: "1fr",
-            gap: 1.5,
-          }}>
-            {summaryItems.map((item) => (
-              <SummaryCard
-                key={item.key}
-                label={item.label}
-                value={summary[item.key]}
-                helper={item.helper}
-                icon={item.icon}
-              />
-            ))}
-          </Box>
-        </Stack>
-      </Paper>
-
-      {/* Encabezado de etapas */}
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", md: "center" }}
-        spacing={2}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
-            Etapas del conjunto
-          </Typography>
-
-          <Typography sx={{
-            mt: 0.5,
-            fontSize: 13,
-            color: "text.secondary",
-            lineHeight: 1.55,
-          }}>
-            Organiza las etapas y define cuántos productos podrá seleccionar el cliente.
-          </Typography>
-        </Box>
-
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          sx={{ flexShrink: 0 }}
-        >
-          <Tooltip
-            title={onManageTypes
-              ? "Administrar los tipos de etapas disponibles"
-              : "La administración de tipos de etapas estará disponible en el paso correspondiente."}
-            arrow
-          >
-            <span>
-              <Button
-                type="button"
-                variant="outlined"
-                startIcon={<TuneOutlinedIcon />}
-                disabled={busy || typeof onManageTypes !== "function"}
-                onClick={() => onManageTypes?.()}
-                sx={{
-                  width: { xs: "100%", sm: "auto" },
-                  height: 44,
-                  fontWeight: 800,
-                }}
-              >
-                Administrar tipos de etapas
-              </Button>
-            </span>
-          </Tooltip>
-
-          <Tooltip
-            title={!definitionsLoaded
-              ? "No se pudieron consultar los tipos de etapas disponibles."
-              : availableDefinitions.length === 0
-                ? "No hay más tipos de etapas disponibles para agregar."
-                : ""}
-            arrow
-          >
-            <span>
-              <Button
-                type="button"
-                variant="contained"
-                startIcon={<AddOutlinedIcon />}
-                disabled={busy || !definitionsLoaded || availableDefinitions.length === 0}
-                onClick={() => openForm("create")}
-                sx={{
-                  width: { xs: "100%", sm: "auto" },
-                  height: 44,
-                  fontWeight: 800,
-                }}
-              >
-                Agregar etapa
-              </Button>
-            </span>
-          </Tooltip>
-        </Stack>
-      </Stack>
+      <ContextOverview items={contextItems} />
 
       {/* Buscar y filtrar */}
       <Paper sx={panelSx}>
@@ -668,9 +487,7 @@ export default function MenuSetStagesTab({
             </Typography>
 
             <Typography sx={{
-              mt: 0.5,
-              fontSize: 13,
-              color: "text.secondary",
+              mt: 0.5, fontSize: 13, color: "text.secondary",
             }}>
               Localiza etapas por nombre o estado.
             </Typography>
@@ -686,10 +503,7 @@ export default function MenuSetStagesTab({
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchOutlinedIcon
-                      fontSize="small"
-                      sx={{ color: "text.secondary" }}
-                    />
+                    <SearchOutlinedIcon fontSize="small" sx={{ color: "text.secondary" }} />
                   </InputAdornment>
                 ),
               }}
@@ -700,10 +514,7 @@ export default function MenuSetStagesTab({
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{
-                width: { xs: "100%", md: 220 },
-                flexShrink: 0,
-              }}
+              sx={{ width: { xs: "100%", md: 220 }, flexShrink: 0 }}
             >
               <MenuItem value="all">Todas</MenuItem>
               <MenuItem value="active">Activas</MenuItem>
@@ -713,12 +524,93 @@ export default function MenuSetStagesTab({
         </Stack>
       </Paper>
 
-      {/* Listado */}
-      <Stack spacing={2}>
-        <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
-          Etapas registradas
-        </Typography>
+      {/* Etapas del conjunto */}
+      <Paper sx={{ ...panelSx, p: 0, overflow: "hidden" }}>
+        {/* Encabezado y acciones */}
+        <Box sx={{
+          px: { xs: 2, sm: 2.5 },
+          py: 1.75,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "stretch", md: "center" }}
+            spacing={2}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
+                Etapas del conjunto
+              </Typography>
 
+              <Typography sx={{
+                mt: 0.5, fontSize: 13,
+                color: "text.secondary", lineHeight: 1.55,
+              }}>
+                Organiza las etapas y define cuántos productos podrá seleccionar el cliente.
+              </Typography>
+            </Box>
+
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              sx={{ flexShrink: 0 }}
+            >
+              <Tooltip
+                title={onManageTypes
+                  ? "Administrar los tipos de etapas disponibles"
+                  : "La administración de tipos de etapas estará disponible en el paso correspondiente."}
+                arrow
+              >
+                <span>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    startIcon={<TuneOutlinedIcon />}
+                    disabled={busy || typeof onManageTypes !== "function"}
+                    onClick={() => onManageTypes?.()}
+                    sx={{
+                      width: { xs: "100%", sm: "auto" },
+                      height: 44,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Administrar tipos de etapas
+                  </Button>
+                </span>
+              </Tooltip>
+
+              <Tooltip
+                title={!definitionsLoaded
+                  ? "No se pudieron consultar los tipos de etapas disponibles."
+                  : availableDefinitions.length === 0
+                    ? "No hay más tipos de etapas disponibles para agregar."
+                    : ""}
+                arrow
+              >
+                <span>
+                  <Button
+                    type="button"
+                    variant="contained"
+                    startIcon={<AddOutlinedIcon />}
+                    disabled={busy || !definitionsLoaded || availableDefinitions.length === 0}
+                    onClick={() => openForm("create")}
+                    sx={{
+                      width: { xs: "100%", sm: "auto" },
+                      height: 44,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Agregar etapa
+                  </Button>
+                </span>
+              </Tooltip>
+            </Stack>
+          </Stack>
+        </Box>
+
+        {/* Listado */}
         <MenuSetStagesList
           stages={pagination.paginatedItems}
           busy={busy}
@@ -730,13 +622,11 @@ export default function MenuSetStagesTab({
           onConfigureProducts={onConfigureProducts}
         />
 
+        {/* Paginación */}
         {filteredStages.length > 0 ? (
-          <Paper sx={{
-            borderRadius: 1,
-            border: "1px solid",
+          <Box sx={{
+            borderTop: "1px solid",
             borderColor: "divider",
-            boxShadow: "none",
-            overflow: "hidden",
           }}>
             <PaginationFooter
               page={pagination.page}
@@ -750,23 +640,23 @@ export default function MenuSetStagesTab({
               onNext={pagination.nextPage}
               itemLabel="etapas"
             />
-          </Paper>
+          </Box>
         ) : null}
-      </Stack>
+      </Paper>
 
       {/* Modal para agregar o editar etapas */}
       {formMode ? (
         <MenuSetStageForm
-            key={`${formMode}-${editingStage?.id || "new"}-${formVersion}`}
-            open={Boolean(formMode)}
-            stage={editingStage}
-            menuSet={menuSet}
-            definitions={definitions}
-            usedDefinitionIds={usedDefinitionIds}
-            saving={saving}
-            onSave={handleSave}
-            onCancel={closeForm}
-            onAlert={onAlert}
+          key={`${formMode}-${editingStage?.id || "new"}-${formVersion}`}
+          open={Boolean(formMode)}
+          stage={editingStage}
+          menuSet={menuSet}
+          definitions={definitions}
+          usedDefinitionIds={usedDefinitionIds}
+          saving={saving}
+          onSave={handleSave}
+          onCancel={closeForm}
+          onAlert={onAlert}
         />
       ) : null}
 
@@ -785,9 +675,7 @@ export default function MenuSetStagesTab({
         <DialogContent>
           <Stack spacing={1.25}>
             <Typography sx={{
-              fontSize: 14,
-              lineHeight: 1.55,
-              color: "text.primary",
+              fontSize: 14, lineHeight: 1.55, color: "text.primary",
             }}>
               ¿Deseas eliminar la etapa{" "}
               <Box component="span" sx={{ fontWeight: 800 }}>
@@ -796,9 +684,7 @@ export default function MenuSetStagesTab({
             </Typography>
 
             <Typography sx={{
-              fontSize: 13,
-              lineHeight: 1.5,
-              color: "text.secondary",
+              fontSize: 13, lineHeight: 1.5, color: "text.secondary",
             }}>
               Esta acción eliminará la etapa y sus productos asignados. No se podrá deshacer.
             </Typography>
@@ -806,8 +692,7 @@ export default function MenuSetStagesTab({
         </DialogContent>
 
         <DialogActions sx={{
-          px: 3,
-          pb: 2.5,
+          px: 3, pb: 2.5,
           flexDirection: { xs: "column-reverse", sm: "row" },
           gap: 1,
         }}>
