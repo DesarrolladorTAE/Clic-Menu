@@ -1,19 +1,22 @@
-import { useMemo, useState } from "react";
+
+import { useMemo } from "react";
 
 import {
-  Box, Chip, Divider, Pagination, Paper, Stack,
-  Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Typography, useMediaQuery,
+  Box, Chip, Divider, Paper, Stack, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow,
+  Typography,
 } from "@mui/material";
-
-import { useTheme } from "@mui/material/styles";
 
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import EventAvailableOutlinedIcon from "@mui/icons-material/EventAvailableOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
-const PAGE_SIZE = 5;
+import PaginationFooter from "../../../../common/PaginationFooter";
+import usePagination from "../../../../../hooks/usePagination";
+
+const STAGES_PAGE_SIZE = 2;
+const PRODUCTS_PAGE_SIZE = 5;
 
 const STATUS_CONFIG = {
   available: {
@@ -43,12 +46,12 @@ const numberFormatter = new Intl.NumberFormat("es-MX", {
 });
 
 const panelSx = {
-  p: { xs: 2, sm: 2.5 },
   borderRadius: 1,
   border: "1px solid",
   borderColor: "divider",
   bgcolor: "background.paper",
   boxShadow: "none",
+  overflow: "hidden",
 };
 
 function formatQuantity(value) {
@@ -56,7 +59,6 @@ function formatQuantity(value) {
   if (value === undefined || value === "") return "No informado";
 
   const number = Number(value);
-
   if (!Number.isFinite(number)) return "No informado";
 
   return numberFormatter.format(number);
@@ -66,7 +68,6 @@ function formatDate(value) {
   if (!value) return "Sin fecha";
 
   const date = new Date(`${value}T12:00:00Z`);
-
   if (Number.isNaN(date.getTime())) return value;
 
   return new Intl.DateTimeFormat("es-MX", {
@@ -78,13 +79,7 @@ function formatDate(value) {
 }
 
 function getStatus(availability) {
-  const status = availability?.status;
-
-  if (STATUS_CONFIG[status]) {
-    return STATUS_CONFIG[status];
-  }
-
-  return {
+  return STATUS_CONFIG[availability?.status] || {
     label: "Sin información",
     color: "default",
   };
@@ -94,11 +89,9 @@ function getPreparedMessage(availability) {
   if (!availability?.prepared_selection_required) return null;
 
   const choices = Array.isArray(availability.prepared_choices)
-    ? availability.prepared_choices
-    : [];
+    ? availability.prepared_choices : [];
 
   const count = choices.length;
-
   if (count === 0) return null;
 
   return count === 1
@@ -165,6 +158,57 @@ function DetailItem({ label, value }) {
   );
 }
 
+function SummaryCard({ icon, label, value }) {
+  return (
+    <Box sx={{
+      p: 1.75,
+      minWidth: 0,
+      height: "100%",
+      border: "1px solid",
+      borderColor: "divider",
+      borderRadius: 1,
+      bgcolor: "background.default",
+    }}>
+      <Stack spacing={1} sx={{ height: "100%" }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Box sx={{
+            width: 34,
+            height: 34,
+            flexShrink: 0,
+            borderRadius: 1,
+            display: "grid",
+            placeItems: "center",
+            bgcolor: "rgba(255, 152, 0, 0.12)",
+            color: "primary.main",
+          }}>
+            {icon}
+          </Box>
+
+          <Typography sx={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: "text.secondary",
+            overflowWrap: "anywhere",
+          }}>
+            {label}
+          </Typography>
+        </Stack>
+
+        <Typography sx={{
+          mt: "auto !important",
+          fontSize: 19,
+          fontWeight: 800,
+          color: "text.primary",
+          overflowWrap: "anywhere",
+          lineHeight: 1.35,
+        }}>
+          {value}
+        </Typography>
+      </Stack>
+    </Box>
+  );
+}
+
 function AvailabilityCard({ option }) {
   const availability = option.availability || {};
   const preparedMessage = getPreparedMessage(availability);
@@ -203,8 +247,8 @@ function AvailabilityCard({ option }) {
               fontSize: 16,
               fontWeight: 800,
               color: "text.primary",
-              overflowWrap: "anywhere",
               lineHeight: 1.4,
+              overflowWrap: "anywhere",
             }}>
               {option.product_name || "Producto sin nombre"}
             </Typography>
@@ -214,7 +258,7 @@ function AvailabilityCard({ option }) {
               fontSize: 12,
               color: "text.secondary",
             }}>
-              Producto del Conjunto
+              Producto del conjunto
             </Typography>
           </Box>
         </Stack>
@@ -239,6 +283,7 @@ function AvailabilityCard({ option }) {
               color: "primary.main",
               fontWeight: 700,
               lineHeight: 1.5,
+              overflowWrap: "anywhere",
             }}>
               {preparedMessage}
             </Typography>
@@ -254,7 +299,7 @@ function AvailabilityCard({ option }) {
             gap: 1.5,
           }}>
             <DetailItem
-              label="Capacidad restante"
+              label="Cupo restante"
               value={availability.capacity_remaining}
             />
 
@@ -263,10 +308,12 @@ function AvailabilityCard({ option }) {
               value={availability.physical_available}
             />
 
-            <DetailItem
-              label="Disponibilidad efectiva"
-              value={availability.effective_available}
-            />
+            <Box sx={{ gridColumn: "1 / -1" }}>
+              <DetailItem
+                label="Disponible efectivo"
+                value={availability.effective_available}
+              />
+            </Box>
           </Box>
         </Box>
       </Stack>
@@ -276,36 +323,44 @@ function AvailabilityCard({ option }) {
 
 function AvailabilityTable({ options }) {
   return (
-    <TableContainer component={Paper} sx={{
-      borderRadius: 1,
-      border: "1px solid",
-      borderColor: "divider",
-      boxShadow: "none",
+    <TableContainer sx={{
+      display: { xs: "none", md: "block" },
+      width: "100%",
+      overflowX: "auto",
     }}>
-      <Table size="small" sx={{ minWidth: 820 }}>
+      <Table sx={{ minWidth: 900 }}>
         <TableHead>
-          <TableRow sx={{ bgcolor: "background.default" }}>
-            <TableCell sx={{ fontWeight: 800, color: "text.primary", width: "20%" }}>
+          <TableRow sx={{
+            "& th": {
+              bgcolor: "primary.main",
+              color: "#fff",
+              fontWeight: 800,
+              fontSize: 13,
+              borderBottom: "none",
+              whiteSpace: "nowrap",
+            },
+          }}>
+            <TableCell sx={{ width: "20%" }}>
               Producto
             </TableCell>
 
-            <TableCell sx={{ fontWeight: 800, color: "text.primary", width: "17%" }}>
+            <TableCell sx={{ width: "17%" }}>
               Estado
             </TableCell>
 
-            <TableCell sx={{ fontWeight: 800, color: "text.primary", width: "27%" }}>
+            <TableCell sx={{ width: "27%" }}>
               Motivo
             </TableCell>
 
-            <TableCell align="center" sx={{ fontWeight: 800, color: "text.primary", width: "12%" }}>
+            <TableCell align="center" sx={{ width: "12%" }}>
               Cupo restante
             </TableCell>
 
-            <TableCell align="center" sx={{ fontWeight: 800, color: "text.primary", width: "12%" }}>
+            <TableCell align="center" sx={{ width: "12%" }}>
               Disponibilidad física
             </TableCell>
 
-            <TableCell align="center" sx={{ fontWeight: 800, color: "text.primary", width: "12%" }}>
+            <TableCell align="center" sx={{ width: "12%" }}>
               Disponible efectivo
             </TableCell>
           </TableRow>
@@ -320,9 +375,18 @@ function AvailabilityTable({ options }) {
               <TableRow
                 key={option.option_id}
                 hover
-                sx={{ "&:last-child td": { borderBottom: 0 } }}
+                sx={{
+                  "& td": {
+                    py: 2,
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    fontSize: 14,
+                    color: "text.primary",
+                    verticalAlign: "middle",
+                  },
+                }}
               >
-                <TableCell sx={{ py: 2 }}>
+                <TableCell>
                   <Typography sx={{
                     fontSize: 14,
                     fontWeight: 800,
@@ -337,7 +401,7 @@ function AvailabilityTable({ options }) {
                   <StatusChip availability={availability} />
                 </TableCell>
 
-                <TableCell sx={{ py: 2 }}>
+                <TableCell>
                   <Typography sx={{
                     fontSize: 13,
                     color: "text.secondary",
@@ -354,6 +418,7 @@ function AvailabilityTable({ options }) {
                       color: "primary.main",
                       fontWeight: 700,
                       lineHeight: 1.45,
+                      overflowWrap: "anywhere",
                     }}>
                       {preparedMessage}
                     </Typography>
@@ -361,19 +426,34 @@ function AvailabilityTable({ options }) {
                 </TableCell>
 
                 <TableCell align="center">
-                  <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+                  <Typography sx={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "text.primary",
+                    overflowWrap: "anywhere",
+                  }}>
                     {formatQuantity(availability.capacity_remaining)}
                   </Typography>
                 </TableCell>
 
                 <TableCell align="center">
-                  <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+                  <Typography sx={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "text.primary",
+                    overflowWrap: "anywhere",
+                  }}>
                     {formatQuantity(availability.physical_available)}
                   </Typography>
                 </TableCell>
 
                 <TableCell align="center">
-                  <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary" }}>
+                  <Typography sx={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "text.primary",
+                    overflowWrap: "anywhere",
+                  }}>
                     {formatQuantity(availability.effective_available)}
                   </Typography>
                 </TableCell>
@@ -386,64 +466,117 @@ function AvailabilityTable({ options }) {
   );
 }
 
-function StageGroup({ group, mobile }) {
+function StageGroup({ group }) {
+  const pagination = usePagination({
+    items: group.options,
+    initialPage: 1,
+    pageSize: PRODUCTS_PAGE_SIZE,
+    mode: "frontend",
+    resetKey: group.id,
+  });
+
   return (
-    <Stack spacing={1.5}>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "flex-start", sm: "center" }}
-        spacing={1}
-      >
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box sx={{
-            width: 36,
-            height: 36,
-            borderRadius: 1,
-            flexShrink: 0,
-            display: "grid",
-            placeItems: "center",
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: "primary.main",
-          }}>
-            <CheckCircleOutlineRoundedIcon fontSize="small" />
-          </Box>
+    <Paper sx={{
+      ...panelSx,
+      border: "1.5px solid",
+      borderColor: "#E5A67F",
+      boxShadow: "0 2px 8px rgba(140, 75, 45, 0.08)",
+    }}>
+      {/* Encabezado de la etapa */}
+      <Box sx={{
+        px: { xs: 2, sm: 2.5 },
+        py: 1.75,
+        borderBottom: "1px solid",
+        borderColor: "divider",
+      }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={1.5}
+        >
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+            <Box sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 1,
+              flexShrink: 0,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: "rgba(255, 152, 0, 0.12)",
+              color: "primary.main",
+            }}>
+              <CheckCircleOutlineRoundedIcon fontSize="small" />
+            </Box>
 
-          <Typography sx={{
-            fontSize: { xs: 17, sm: 18 },
-            fontWeight: 800,
-            color: "text.primary",
-            overflowWrap: "anywhere",
-          }}>
-            {group.name}
-          </Typography>
+            <Typography sx={{
+              fontSize: { xs: 17, sm: 19 },
+              fontWeight: 800,
+              color: "text.primary",
+              lineHeight: 1.4,
+              overflowWrap: "anywhere",
+            }}>
+              {group.name}
+            </Typography>
+          </Stack>
+
+          <Chip
+            label={`${group.options.length} ${group.options.length === 1 ? "producto" : "productos"}`}
+            size="small"
+            variant="outlined"
+            sx={{
+              fontWeight: 800,
+              color: "text.primary",
+              flexShrink: 0,
+            }}
+          />
         </Stack>
+      </Box>
 
-        <Chip
-          label={`${group.options.length} ${group.options.length === 1 ? "producto" : "productos"} en esta página`}
-          size="small"
-          variant="outlined"
-        />
-      </Stack>
+      {/* Tabla para computadoras */}
+      <AvailabilityTable options={pagination.paginatedItems} />
 
-      {mobile ? (
+      {/* Tarjetas para teléfonos y tabletas */}
+      <Box sx={{
+        display: { xs: "grid", md: "none" },
+        gridTemplateColumns: {
+          xs: "1fr",
+          sm: "repeat(2, minmax(0, 1fr))",
+        },
+        gridAutoRows: "1fr",
+        gap: 1.5,
+        p: { xs: 2, sm: 2.5 },
+        alignItems: "stretch",
+      }}>
+        {pagination.paginatedItems.map((option) => (
+          <AvailabilityCard
+            key={option.option_id}
+            option={option}
+          />
+        ))}
+      </Box>
+
+      {/* Paginación independiente de cada etapa */}
+      {pagination.total > 0 ? (
         <Box sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-          },
-          gridAutoRows: "1fr",
-          gap: 1.5,
+          borderTop: "1px solid",
+          borderColor: "divider",
         }}>
-          {group.options.map((option) => (
-            <AvailabilityCard key={option.option_id} option={option} />
-          ))}
+          <PaginationFooter
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            startItem={pagination.startItem}
+            endItem={pagination.endItem}
+            total={pagination.total}
+            hasPrev={pagination.hasPrev}
+            hasNext={pagination.hasNext}
+            onPrev={pagination.prevPage}
+            onNext={pagination.nextPage}
+            itemLabel="productos"
+          />
         </Box>
-      ) : (
-        <AvailabilityTable options={group.options} />
-      )}
-    </Stack>
+      ) : null}
+    </Paper>
   );
 }
 
@@ -451,30 +584,23 @@ export default function MenuSetAvailabilityResults({
   result,
   queryChanged = false,
 }) {
-  const theme = useTheme();
-  const mobile = useMediaQuery(theme.breakpoints.down("md"));
-
-  const [page, setPage] = useState(1);
-
   const options = useMemo(() => {
     return Array.isArray(result?.options) ? result.options : [];
   }, [result]);
 
   const total = options.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
 
-  const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const endIndex = Math.min(startIndex + PAGE_SIZE, total);
+  const availableCount = useMemo(() => {
+    return options.filter((option) => option.availability?.is_available === true).length;
+  }, [options]);
 
-  const paginatedOptions = useMemo(() => {
-    return options.slice(startIndex, endIndex);
-  }, [options, startIndex, endIndex]);
+  const unavailableCount = total - availableCount;
 
+  // Agrupar todos los productos por etapa antes de paginar.
   const groups = useMemo(() => {
     const map = new Map();
 
-    paginatedOptions.forEach((option) => {
+    options.forEach((option) => {
       const key = String(option.stage_id ?? "sin-etapa");
 
       if (!map.has(key)) {
@@ -489,20 +615,36 @@ export default function MenuSetAvailabilityResults({
     });
 
     return Array.from(map.values());
-  }, [paginatedOptions]);
-
-  const availableCount = useMemo(() => {
-    return options.filter((option) => option.availability?.is_available === true).length;
   }, [options]);
 
-  const unavailableCount = total - availableCount;
+  // Mostrar dos etapas por página.
+  const stagePagination = usePagination({
+    items: groups,
+    initialPage: 1,
+    pageSize: STAGES_PAGE_SIZE,
+    mode: "frontend",
+    resetKey: `${result?.menu_set_id ?? ""}|${result?.service_date ?? ""}|${result?.quantity ?? ""}`,
+  });
 
   if (total === 0) {
     return (
-      <Paper sx={{ ...panelSx, py: 5, textAlign: "center" }}>
-        <Inventory2OutlinedIcon sx={{ fontSize: 44, color: "text.disabled", mb: 1 }} />
+      <Paper sx={{
+        ...panelSx,
+        p: { xs: 2, sm: 2.5 },
+        py: 5,
+        textAlign: "center",
+      }}>
+        <Inventory2OutlinedIcon sx={{
+          fontSize: 44,
+          color: "text.disabled",
+          mb: 1,
+        }} />
 
-        <Typography sx={{ fontSize: 19, fontWeight: 800, color: "text.primary" }}>
+        <Typography sx={{
+          fontSize: 19,
+          fontWeight: 800,
+          color: "text.primary",
+        }}>
           No hay productos para consultar
         </Typography>
 
@@ -512,7 +654,7 @@ export default function MenuSetAvailabilityResults({
           color: "text.secondary",
           lineHeight: 1.55,
         }}>
-          Este Conjunto todavía no tiene opciones de productos registradas en sus etapas.
+          Este conjunto todavía no tiene productos registrados en sus etapas.
         </Typography>
       </Paper>
     );
@@ -520,8 +662,11 @@ export default function MenuSetAvailabilityResults({
 
   return (
     <Stack spacing={3}>
-      {/* Resumen de consulta */}
-      <Paper sx={panelSx}>
+      {/* Resumen de la consulta */}
+      <Paper sx={{
+        ...panelSx,
+        p: { xs: 2, sm: 2.5 },
+      }}>
         <Stack spacing={2}>
           <Stack
             direction={{ xs: "column", md: "row" }}
@@ -529,8 +674,12 @@ export default function MenuSetAvailabilityResults({
             alignItems={{ xs: "flex-start", md: "center" }}
             spacing={1.5}
           >
-            <Box>
-              <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{
+                fontSize: 18,
+                fontWeight: 800,
+                color: "text.primary",
+              }}>
                 Resultados de disponibilidad
               </Typography>
 
@@ -547,7 +696,12 @@ export default function MenuSetAvailabilityResults({
             </Box>
 
             {queryChanged ? (
-              <Chip label="Consulta anterior" color="warning" size="small" variant="outlined" />
+              <Chip
+                label="Consulta anterior"
+                color="warning"
+                size="small"
+                variant="outlined"
+              />
             ) : null}
           </Stack>
 
@@ -577,14 +731,12 @@ export default function MenuSetAvailabilityResults({
               icon={<CheckCircleOutlineRoundedIcon fontSize="small" />}
               label="Opciones disponibles"
               value={availableCount}
-              color="success.main"
             />
 
             <SummaryCard
               icon={<InfoOutlinedIcon fontSize="small" />}
               label="Opciones no disponibles"
               value={unavailableCount}
-              color="text.primary"
             />
           </Box>
 
@@ -593,117 +745,70 @@ export default function MenuSetAvailabilityResults({
             color: "text.secondary",
             lineHeight: 1.6,
           }}>
-            La consulta corresponde a las opciones base de los productos. Las variantes no se
-            comprueban individualmente y estos resultados no determinan si el Conjunto completo
-            puede venderse.
+            La consulta corresponde a las opciones base de los productos. Las variantes
+            no se comprueban individualmente y estos resultados no determinan si el
+            conjunto completo puede venderse.
           </Typography>
         </Stack>
       </Paper>
 
-      {/* Resultados agrupados */}
+      {/* Disponibilidad agrupada por etapas */}
       <Paper sx={panelSx}>
-        <Stack spacing={3}>
-          <Box>
-            <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
-              Disponibilidad por etapas
-            </Typography>
-
-            <Typography sx={{
-              mt: 0.5,
-              fontSize: 13,
-              color: "text.secondary",
-              lineHeight: 1.55,
-            }}>
-              Consulta el estado individual de cada producto y los motivos que afectan su disponibilidad.
-            </Typography>
-          </Box>
-
-          {groups.map((group, index) => (
-            <Box key={group.id}>
-              {index > 0 ? <Divider sx={{ mb: 3 }} /> : null}
-
-              <StageGroup group={group} mobile={mobile} />
-            </Box>
-          ))}
-
-          {/* Paginación */}
-          {total > PAGE_SIZE ? (
-            <Stack spacing={1.5} alignItems="center" sx={{ pt: 1 }}>
-              <Typography sx={{ fontSize: 12, color: "text.secondary", textAlign: "center" }}>
-                Mostrando {startIndex + 1} a {endIndex} de {total} productos
-              </Typography>
-
-              <Pagination
-                count={totalPages}
-                page={currentPage}
-                onChange={(_, nextPage) => setPage(nextPage)}
-                color="primary"
-                shape="rounded"
-                size={mobile ? "small" : "medium"}
-                siblingCount={mobile ? 0 : 1}
-                boundaryCount={1}
-                showFirstButton={!mobile}
-                showLastButton={!mobile}
-                sx={{
-                  "& .MuiPaginationItem-root": {
-                    fontWeight: 700,
-                  },
-                }}
-              />
-            </Stack>
-          ) : null}
-        </Stack>
-      </Paper>
-    </Stack>
-  );
-}
-
-function SummaryCard({ icon, label, value, color = "text.primary" }) {
-  return (
-    <Box sx={{
-      p: 1.75,
-      minWidth: 0,
-      height: "100%",
-      border: "1px solid",
-      borderColor: "divider",
-      borderRadius: 1,
-      bgcolor: "background.default",
-    }}>
-      <Stack spacing={1} height="100%">
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Box sx={{
-            width: 34,
-            height: 34,
-            flexShrink: 0,
-            borderRadius: 1,
-            display: "grid",
-            placeItems: "center",
-            bgcolor: "rgba(255, 152, 0, 0.12)",
-            color: "primary.main",
+        <Box sx={{
+          px: { xs: 2, sm: 2.5 },
+          py: 1.75,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}>
+          <Typography sx={{
+            fontSize: 20,
+            fontWeight: 800,
+            color: "text.primary",
           }}>
-            {icon}
-          </Box>
+            Disponibilidad por etapas
+          </Typography>
 
           <Typography sx={{
+            mt: 0.5,
             fontSize: 13,
-            fontWeight: 800,
             color: "text.secondary",
+            lineHeight: 1.55,
           }}>
-            {label}
+            Consulta el estado individual de cada producto y los motivos que afectan su disponibilidad.
           </Typography>
+        </Box>
+
+        {/* Dos etapas por página, cada una con su propia paginación */}
+        <Stack spacing={2.5} sx={{ p: { xs: 2, sm: 2.5 } }}>
+          {stagePagination.paginatedItems.map((group) => (
+            <StageGroup
+              key={group.id}
+              group={group}
+            />
+          ))}
         </Stack>
 
-        <Typography sx={{
-          mt: "auto !important",
-          fontSize: 19,
-          fontWeight: 800,
-          color,
-          overflowWrap: "anywhere",
-          lineHeight: 1.35,
-        }}>
-          {value}
-        </Typography>
-      </Stack>
-    </Box>
+        {/* Paginación general de etapas */}
+        {stagePagination.total > 0 ? (
+          <Box sx={{
+            borderTop: "1px solid",
+            borderColor: "divider",
+          }}>
+            <PaginationFooter
+              page={stagePagination.page}
+              totalPages={stagePagination.totalPages}
+              startItem={stagePagination.startItem}
+              endItem={stagePagination.endItem}
+              total={stagePagination.total}
+              hasPrev={stagePagination.hasPrev}
+              hasNext={stagePagination.hasNext}
+              onPrev={stagePagination.prevPage}
+              onNext={stagePagination.nextPage}
+              itemLabel="etapas"
+            />
+          </Box>
+        ) : null}
+      </Paper>
+    </Stack>
   );
 }

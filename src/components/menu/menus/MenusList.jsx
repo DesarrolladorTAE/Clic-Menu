@@ -14,6 +14,7 @@ import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutli
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 
 import usePagination from "../../../hooks/usePagination";
 import PaginationFooter from "../../common/PaginationFooter";
@@ -24,6 +25,7 @@ export default function MenusList({
   menus = [],
   loading = false,
   busyMenuId = null,
+  onCreate,
   onContent,
   onChannels,
   onEdit,
@@ -164,16 +166,33 @@ export default function MenusList({
             </Typography>
           </Box>
 
-          <Chip
-            label={
-              total === 1
-                ? "1 menú"
-                : `${total} menús`
-            }
-            color="primary"
-            variant="outlined"
-            size="small"
-          />
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
+          >
+            <Chip
+              label={total === 1 ? "1 menú" : `${total} menús`}
+              color="primary"
+              variant="outlined"
+              size="small"
+            />
+
+            <Button
+              type="button"
+              variant="contained"
+              startIcon={<AddOutlinedIcon />}
+              onClick={onCreate}
+              sx={{
+                minWidth: { xs: "100%", sm: 170 },
+                height: 42,
+                fontWeight: 800,
+              }}
+            >
+              Nuevo menú
+            </Button>
+          </Stack>
         </Box>
 
         {menus.length === 0 ? (

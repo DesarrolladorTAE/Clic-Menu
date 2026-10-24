@@ -610,15 +610,7 @@ export default function MenuListPage() {
   return (
     <PageContainer>
       <Stack spacing={3}>
-        <MenusHeader
-          branchName={
-            selectedBranch?.name
-          }
-          onCreate={openCreate}
-          disabled={
-            branches.length === 0
-          }
-        />
+        <MenusHeader branchName={selectedBranch?.name} />
 
         <MenusInstructionsCard />
 
@@ -688,25 +680,14 @@ export default function MenuListPage() {
             />
 
             <MenusList
-              menus={
-                filteredMenus
-              }
-              loading={
-                loadingMenus
-              }
-              busyMenuId={
-                busyMenuId
-              }
-              onContent={
-                navigateToContent
-              }
-              onChannels={
-                navigateToChannels
-              }
+              menus={filteredMenus}
+              loading={loadingMenus}
+              busyMenuId={busyMenuId}
+              onCreate={openCreate}
+              onContent={navigateToContent}
+              onChannels={navigateToChannels}
               onEdit={openEdit}
-              onAction={
-                openAction
-              }
+              onAction={openAction}
             />
           </>
         )}

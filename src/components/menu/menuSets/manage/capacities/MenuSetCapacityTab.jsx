@@ -238,10 +238,10 @@ function CapacityProductCard({ product, mode, values, disabled, onChange }) {
       p: { xs: 2, sm: 2.5 },
       height: "100%",
       minWidth: 0,
-      border: "1px solid",
-      borderColor: "divider",
+      border: "1.5px solid",
+      borderColor: "#E5A67F",
       borderRadius: 1,
-      bgcolor: "background.default",
+      bgcolor: "background.paper",
       boxShadow: "none",
     }}>
       <Stack spacing={2}>

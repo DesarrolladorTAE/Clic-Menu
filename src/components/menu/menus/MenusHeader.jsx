@@ -1,13 +1,7 @@
-import {
-  Box, Button, Stack, Typography,
-} from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 
-import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
-
-export default function MenusHeader({
+export default function MenusHeader({ 
   branchName,
-  onCreate,
-  disabled = false,
 }) {
   return (
     <Stack
@@ -50,21 +44,6 @@ export default function MenusHeader({
         </Typography>
       </Box>
 
-      <Button
-        type="button"
-        variant="contained"
-        startIcon={<AddOutlinedIcon />}
-        onClick={onCreate}
-        disabled={disabled}
-        sx={{
-          minWidth: { xs: "100%", sm: 190 },
-          width: { xs: "100%", md: "auto" },
-          height: 44,
-          fontWeight: 800,
-        }}
-      >
-        Nuevo menú
-      </Button>
     </Stack>
   );
 }
