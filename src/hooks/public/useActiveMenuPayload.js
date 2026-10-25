@@ -2,10 +2,17 @@
 // deriva toda la data calculada del menú (web channels, payload activo, header, ui, sections, filtros base)
 // Objetivo: sacar del Page el “mar de useMemo” sin cambiar el resultado.
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import {
+  getCatalogModeVisibility,
+  normalizeCatalogMode,
+} from "../menu/menu-sets/menuSet.utils";
+
+const EMPTY_MENU_SETS = [];
 
 export function useActiveMenuPayload({
   data,
+  menuSetCatalog = null,
   webChannelId,
   setWebChannelId,
   resetOnChannelChange,
@@ -26,16 +33,24 @@ export function useActiveMenuPayload({
     if (!isWeb) return "";
 
     const chosen = String(webChannelId || "");
+    const defaultChannelId = String(data?.default_channel_id ?? "");
 
-    if (chosen) {
-      return chosen;
+    const menusByChannel = data?.menus_by_channel &&
+      typeof data.menus_by_channel === "object" &&
+      !Array.isArray(data.menus_by_channel)
+      ? data.menus_by_channel
+      : {};
+
+    const availableIds = Object.keys(menusByChannel);
+
+    if (availableIds.length > 0) {
+      if (availableIds.includes(chosen)) return chosen;
+      if (availableIds.includes(defaultChannelId)) return defaultChannelId;
+      return "";
     }
 
-    const defaultChannelId = data?.default_channel_id
-      ? String(data.default_channel_id)
-      : "";
-
-    return defaultChannelId;
+    // Los QR web actuales ya están asociados a un único canal.
+    return String(data?.sales_channel?.id ?? data?.default_channel_id ?? "");
   }, [isWeb, webChannelId, data]);
 
   const activeMenuPayload = useMemo(() => {
@@ -100,6 +115,7 @@ export function useActiveMenuPayload({
       return {
         ...data,
         sections: [],
+        catalog_mode: null,
         ui: data?.ui || {},
         table: data?.table || null,
         ordering_mode: data?.ordering_mode ?? null,
@@ -118,6 +134,7 @@ export function useActiveMenuPayload({
      */
     return {
       ...selectedPayload,
+      catalog_mode: selectedPayload?.catalog_mode ?? data?.catalog_mode ?? null,
       sections: Array.isArray(selectedPayload?.sections) ? selectedPayload.sections : [],
       ui: selectedPayload?.ui || data?.ui || {},
       table: selectedPayload?.table ?? data?.table ?? null,
@@ -139,6 +156,71 @@ export function useActiveMenuPayload({
         selectedPayload?.online_order_checkout ?? data?.online_order_checkout ?? null,
     };
   }, [data, isWeb, activeWebChannelId]);
+
+  const catalogMode = useMemo(() => {
+    return normalizeCatalogMode(activeMenuPayload?.catalog_mode);
+  }, [activeMenuPayload?.catalog_mode]);
+
+  const catalogVisibility = useMemo(() => {
+    return getCatalogModeVisibility(catalogMode);
+  }, [catalogMode]);
+
+  const menuSets = useMemo(() => {
+    if (!catalogVisibility.showMenuSets || !menuSetCatalog) {
+      return EMPTY_MENU_SETS;
+    }
+
+    if (menuSetCatalog.catalogMode !== catalogMode) {
+      return EMPTY_MENU_SETS;
+    }
+
+    const catalogSource = menuSetCatalog.source || {};
+
+    const activeMenuId = Number(
+      activeMenuPayload?.menu_context?.menu_id ??
+      activeMenuPayload?.menu?.id ??
+      0,
+    );
+
+    const setsMenuId = Number(catalogSource.menu_id ?? 0);
+
+    if (activeMenuId > 0 && setsMenuId > 0 && activeMenuId !== setsMenuId) {
+      return EMPTY_MENU_SETS;
+    }
+
+    const activeChannelId = Number(activeMenuPayload?.sales_channel?.id ?? 0);
+    const setsChannelId = Number(catalogSource.sales_channel_id ?? 0);
+
+    if (activeChannelId > 0 && setsChannelId > 0 && activeChannelId !== setsChannelId) {
+      return EMPTY_MENU_SETS;
+    }
+
+    return Array.isArray(menuSetCatalog.menuSets)
+      ? menuSetCatalog.menuSets
+      : EMPTY_MENU_SETS;
+  }, [catalogMode, catalogVisibility, activeMenuPayload, menuSetCatalog]);
+
+  const previousWebChannelRef = useRef(null);
+
+  useEffect(() => {
+    if (!isWeb) {
+      previousWebChannelRef.current = null;
+      return;
+    }
+
+    if (!activeWebChannelId) return;
+
+    const previousChannelId = previousWebChannelRef.current;
+    previousWebChannelRef.current = activeWebChannelId;
+
+    if (
+      previousChannelId !== null &&
+      previousChannelId !== activeWebChannelId &&
+      typeof resetOnChannelChange === "function"
+    ) {
+      resetOnChannelChange();
+    }
+  }, [isWeb, activeWebChannelId, resetOnChannelChange]);
 
   const header = useMemo(() => {
     if (!activeMenuPayload) return null;
@@ -218,6 +300,9 @@ export function useActiveMenuPayload({
     webChannels,
     activeWebChannelId,
     activeMenuPayload,
+    catalogMode,
+    catalogVisibility,
+    menuSets,
     header,
     ui,
     hasTable,

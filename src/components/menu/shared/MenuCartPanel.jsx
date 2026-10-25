@@ -152,7 +152,7 @@ function PricingSummaryBlock({
 
             <div className="cm-pricing-summary-row">
               <span className="cm-pricing-summary-label">
-                Productos nuevos aproximados
+                Productos y Conjuntos nuevos (aprox.)
               </span>
 
               <span className="cm-pricing-summary-value">
@@ -261,6 +261,7 @@ export default function MenuCartPanel({
   pricingSummary = null,
   oldItems = [],
   newItems = [],
+  menuSets = [],
   pendingItems = [],
   sendToast = "",
   sending = false,
@@ -282,6 +283,7 @@ export default function MenuCartPanel({
   onQtyChange,
   onNotesChange,
   onRemove,
+  onEditMenuSet,
 
   onRemoveOldItem,
   removingOldItemId = null,
@@ -628,10 +630,13 @@ export default function MenuCartPanel({
               hasNew || hasPendingItems ? (
                 <NewItemsSection
                   newItems={newItems}
+                  menuSets={menuSets}
                   pendingItems={pendingItems}
+                  themeColor={resolvedThemeColor}
                   canAppend={canAppend}
                   onQtyChange={onQtyChange}
                   onRemove={onRemove}
+                  onEditMenuSet={onEditMenuSet}
                   onOpenNote={openNoteModal}
                 />
               ) : (

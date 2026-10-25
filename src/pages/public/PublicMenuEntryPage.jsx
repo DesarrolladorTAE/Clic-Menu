@@ -1,6 +1,6 @@
 // src/pages/public/PublicMenuEntryPage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import echo from "../../realtime/echo";
 
@@ -37,6 +37,16 @@ import PreparedItemsSection from "../../components/menu/shared/prepared-items/Pr
 import PublicMenuCategoryTabs from "../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 import MenuSectionTabs from "../../components/menu/shared/menuUi/MenuSectionTabs";
 
+import MenuCatalogModeLayout from "../../components/menu/shared/menu-sets/MenuCatalogModeLayout";
+import {
+  getCatalogModeVisibility,
+  normalizeCatalogMode,
+} from "../../hooks/menu/menu-sets/menuSet.utils";
+import {
+  countPublicOrderRootItems,
+} from "../../hooks/public/cartAndOrder/publicCartAndOrder.utils";
+import { useTransientMessage } from "../../hooks/menu/useTransientMessage";
+
 import PublicMenuBrandCard from "../../components/menu/public/PublicMenuBrandCard";
 import PublicMenuGalleryCarousel from "../../components/menu/public/PublicMenuGalleryCarousel";
 import PublicMenuFooter from "../../components/menu/public/PublicMenuFooter";
@@ -65,6 +75,7 @@ import {
 export default function PublicMenuEntryPage() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [q, setQ] = useState("");
@@ -103,6 +114,7 @@ export default function PublicMenuEntryPage() {
     errorMsg,
     data,
     load,
+    menuSetCatalog,
     webChannelId,
     setWebChannelId,
     callLocked,
@@ -117,14 +129,16 @@ export default function PublicMenuEntryPage() {
     webChannels,
     activeWebChannelId,
     activeMenuPayload,
+    menuSets: activeMenuSets,
     header,
     ui,
     hasTable,
     tableId,
     badgeUi,
     sections,
-  } = useActiveMenuPayload({
+    } = useActiveMenuPayload({
     data,
+    menuSetCatalog,
     webChannelId,
     setWebChannelId,
     resetOnChannelChange: () => {
@@ -178,6 +192,27 @@ export default function PublicMenuEntryPage() {
   }, [selectedSectionId]);
 
   const qr = useTableQrSession({ activeMenuPayload, hasTable, tableId });
+
+  const catalogMode = normalizeCatalogMode(
+    activeMenuPayload?.catalog_mode ||
+    data?.catalog_mode ||
+    data?.menu_set_catalog?.catalog_mode ||
+    "normal",
+  ) || "normal";
+
+  const catalogVisibility = getCatalogModeVisibility(catalogMode);
+
+  const menuSets = activeMenuSets;
+
+  const visibleMenuSets = useMemo(() => {
+    const search = String(q || "").trim().toLocaleLowerCase("es-MX");
+    if (!search) return menuSets;
+
+    return menuSets.filter((set) => {
+      return [set.name, set.billingName, set.description]
+        .some((value) => String(value || "").toLocaleLowerCase("es-MX").includes(search));
+    });
+  }, [menuSets, q]);
 
   const uiFlags = ui || {};
 
@@ -268,6 +303,11 @@ export default function PublicMenuEntryPage() {
     contextKey: preparedItemsContextKey,
   });
 
+  const publicMenu = activeMenuPayload?.public_menu || data?.public_menu || {};
+  const themeColor = isValidHexColor(publicMenu?.theme_color)
+    ? publicMenu.theme_color
+    : "#FF7A00";
+    
   const cartOrder = useCartAndOrder({
     token,
     canSelect,
@@ -283,6 +323,70 @@ export default function PublicMenuEntryPage() {
     salesChannelCode,
     onPreparedItemsRefresh: preparedItems.refetch,
   });
+
+  const handleOpenMenuSet = useCallback((menuSet, options = {}) => {
+    const menuSetId = Number(menuSet?.id || 0);
+    if (!Number.isSafeInteger(menuSetId) || menuSetId <= 0) return;
+
+    const editCartKey = String(options?.editCartKey || "").trim();
+
+    const prepared = cartOrder.prepareMenuSetNavigation(
+      location.pathname,
+      menuSetId,
+      { editCartKey },
+    );
+
+    if (!prepared?.ok) {
+      cartOrder.setSendToast?.(prepared?.message || "No se pudo abrir este Conjunto.");
+      return;
+    }
+
+    navigate(`/menu/${encodeURIComponent(token)}/conjuntos/${menuSetId}`, {
+      state: {
+        menuSet,
+        menuSetId,
+        editCartKey,
+        navigationContext: cartOrder.menuSetNavigationContext,
+        contextKey: cartOrder.menuSetNavigationKey,
+        returnPath: location.pathname,
+        themeColor,
+        canSelect,
+      },
+    });
+  }, [
+    cartOrder.prepareMenuSetNavigation,
+    cartOrder.setSendToast,
+    cartOrder.menuSetNavigationContext,
+    cartOrder.menuSetNavigationKey,
+    location.pathname,
+    navigate,
+    token,
+    themeColor,
+    canSelect,
+  ]);
+
+  const handleEditMenuSet = useCallback((selectedLine) => {
+    const line = typeof selectedLine === "string"
+      ? cartOrder.cart.find((item) => item.key === selectedLine)
+      : selectedLine;
+
+    const menuSetId = Number(line?.menu_set_id || 0);
+    const editCartKey = String(line?.key || "").trim();
+
+    if (!menuSetId || !editCartKey) {
+      cartOrder.setSendToast?.("⚠️ No se pudo identificar el Conjunto seleccionado.");
+      return;
+    }
+
+    const menuSet = menuSets.find((item) => Number(item.id) === menuSetId);
+
+    if (!menuSet) {
+      cartOrder.setSendToast?.("⚠️ Este Conjunto ya no está disponible en el menú.");
+      return;
+    }
+
+    handleOpenMenuSet(menuSet, { editCartKey });
+  }, [cartOrder.cart, cartOrder.setSendToast, menuSets, handleOpenMenuSet]);
 
   const handleOnlineOrderCreated = useCallback(
     (createdOrder) => {
@@ -323,8 +427,11 @@ export default function PublicMenuEntryPage() {
   useEffect(() => {
     if (!activeMenuPayload) return;
 
-    cartOrder.reconcileCartAvailability?.(activeMenuPayload);
-  }, [activeMenuPayload, cartOrder.reconcileCartAvailability]);
+    cartOrder.reconcileCartAvailability?.({
+      ...activeMenuPayload,
+      menu_sets: menuSets,
+    });
+  }, [activeMenuPayload, menuSets, cartOrder.reconcileCartAvailability]);
 
   useEffect(() => {
     let mounted = true;
@@ -390,7 +497,7 @@ export default function PublicMenuEntryPage() {
   });
 
   const [billRequesting, setBillRequesting] = useState(false);
-  const [billToast, setBillToast] = useState("");
+  const [billToast, setBillToast] = useTransientMessage();
 
   const lastLoadedOrderIdRef = useRef(null);
 
@@ -741,8 +848,8 @@ export default function PublicMenuEntryPage() {
 
   const cartDrawerItemCount =
     Number(cartOrder.cart?.length || 0) +
-    Number(cartOrder.oldItems?.length || 0) +
-    pendingOrderItems.length;
+    countPublicOrderRootItems(cartOrder.oldItems) +
+    countPublicOrderRootItems(pendingOrderItems);
 
   const hasCartContent =
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
@@ -1128,11 +1235,6 @@ export default function PublicMenuEntryPage() {
     return <PublicMenuEmptyState />;
   }
 
-  const publicMenu = activeMenuPayload?.public_menu || data?.public_menu || {};
-  const themeColor = isValidHexColor(publicMenu?.theme_color)
-    ? publicMenu.theme_color
-    : "#FF7A00";
-
   const pending = hasPending;
   const restaurantName = header?.restaurantName || "Restaurante";
 
@@ -1266,6 +1368,55 @@ export default function PublicMenuEntryPage() {
     </>
   );
 
+  const normalCatalogContent = (
+    <>
+      {showSectionSelector ? (
+        <MenuSectionTabs
+          sections={sections}
+          selectedSectionId={selectedSectionId}
+          onSectionChange={handleSectionChange}
+          themeColor={themeColor}
+        />
+      ) : null}
+
+      <PublicMenuCategoryTabs
+        categoryOptions={categoryOptions}
+        value={categoryFilter}
+        onChange={setCategoryFilter}
+        themeColor={themeColor}
+      />
+
+      <PublicMenuProductsGrid
+        filteredProducts={filteredProducts}
+        paginatedProducts={paginatedProducts}
+        categoryNameById={categoryNameById}
+        canSelect={canSelect}
+        showSelectBtn={showSelectBtn}
+        allowReadOnlyDetails={allowReadOnlyDetails}
+        themeColor={themeColor}
+        onAddSimple={openProductSelectionFlow}
+        onAddVariant={openVariantSelectionFlow}
+        onOpenComposite={openCompositeConfigurator}
+        onOpenExtras={openReadOnlyExtrasViewer}
+        onOpenVariants={openVariantsViewer}
+        pagination={{
+          page, totalPages, startItem, endItem, total,
+          hasPrev, hasNext, prevPage, nextPage,
+        }}
+      />
+
+      {preparedItemsEnabled ? (
+        <PreparedItemsSection
+          items={preparedItems.items}
+          loading={preparedItems.loading}
+          selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
+          themeColor={themeColor}
+          onSelect={handlePreparedItemSelect}
+        />
+      ) : null}
+    </>
+  );
+
   return (
     <div
       style={{
@@ -1346,8 +1497,11 @@ export default function PublicMenuEntryPage() {
           open={cartDrawerOpen}
           onClose={() => setCartDrawerOpen(false)}
           cartOrder={cartOrder}
+          menuSets={menuSets}
           cartDrawerItemCount={cartDrawerItemCount}
           pendingItems={pendingOrderItems}
+          orderLabel={isWebOrderingFlow ? "Pedido" : "Comanda"}
+          onEditMenuSet={handleEditMenuSet}
           canAppend={canAppend}
           pending={pending}
           allowSendButton={allowSendButton}
@@ -1387,7 +1541,10 @@ export default function PublicMenuEntryPage() {
             rightActions={actionButtons}
             q={q}
             onSearchChange={setQ}
-            totalVisible={filteredProducts.length}
+            totalVisible={
+              (catalogVisibility.showNormalProducts ? filteredProducts.length : 0) +
+              (catalogVisibility.showMenuSets ? visibleMenuSets.length : 0)
+            }
             extraFilterActions={
               canSelect ? (
                 <Badge tone="ok" title="Items nuevos por enviar/agregar">
@@ -1401,60 +1558,24 @@ export default function PublicMenuEntryPage() {
 
         <PublicMenuCallToast message={qr.callToast} />
 
-        {showSectionSelector ? (
-          <MenuSectionTabs
-            sections={sections}
-            selectedSectionId={selectedSectionId}
-            onSectionChange={handleSectionChange}
-            themeColor={themeColor}
-          />
-        ) : null}
-
-        <PublicMenuCategoryTabs
-          categoryOptions={categoryOptions}
-          value={categoryFilter}
-          onChange={setCategoryFilter}
-          themeColor={themeColor}
-        />
-
         <PublicMenuWarningBlock warning={activeMenuPayload?.warning} />
 
-        <PublicMenuProductsGrid
-          filteredProducts={filteredProducts}
-          paginatedProducts={paginatedProducts}
-          categoryNameById={categoryNameById}
-          canSelect={canSelect}
-          showSelectBtn={showSelectBtn}
-          allowReadOnlyDetails={allowReadOnlyDetails}
-          themeColor={themeColor}
-          onAddSimple={openProductSelectionFlow}
-          onAddVariant={openVariantSelectionFlow}
-          onOpenComposite={openCompositeConfigurator}
-          onOpenExtras={openReadOnlyExtrasViewer}
-          onOpenVariants={openVariantsViewer}
-          pagination={{
-            page,
-            totalPages,
-            startItem,
-            endItem,
-            total,
-            hasPrev,
-            hasNext,
-            prevPage,
-            nextPage,
-          }}
-        />
-
-        {preparedItemsEnabled ? (
-          <PreparedItemsSection
-            items={preparedItems.items}
-            loading={preparedItems.loading}
-            selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
-            themeColor={themeColor}
-            onSelect={handlePreparedItemSelect}
-          />
-        ) : null}
-
+        {catalogVisibility.showMenuSets ? (
+          <div style={{ marginTop: 24 }}>
+            <MenuCatalogModeLayout
+              catalogMode={catalogMode}
+              menuSets={visibleMenuSets}
+              normalContent={
+                catalogVisibility.showNormalProducts ? normalCatalogContent : null
+              }
+              themeColor={themeColor}
+              onOpenMenuSet={handleOpenMenuSet}
+              showNormalHeader={catalogVisibility.showNormalProducts}
+            />
+          </div>
+        ) : (
+          normalCatalogContent
+        )}
         <div style={{ marginTop: 28 }}>
           <PublicMenuFooter
             publicMenu={publicMenu}

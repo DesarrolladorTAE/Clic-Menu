@@ -1,15 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money, safeNum } from "../../../../hooks/public/publicMenu.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
 import {
   buildOldItemsTree,
   classifyOrderHistoryItems,
+  isOldMenuSetRoot,
   renderNotes,
   resolveOrderItemCancellationState,
 } from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
+import MenuSetCartDetail from "../menu-sets/MenuSetCartDetail";
 
 const OLD_ITEMS_PAGE_SIZE = 4;
 
@@ -311,10 +313,61 @@ function ConfirmedLinePricingBlock({ pricing }) {
   );
 }
 
+function OldMenuSetHistoryDetail({
+  item,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+  themeColor,
+}) {
+  const pricing = resolveConfirmedItemPricing(item);
+  const hasPromotions = pricing.appliedPromotions.length > 0;
+
+  return (
+    <div className="cm-menu-set-history-detail">
+      <MenuSetCartDetail
+        item={item}
+        themeColor={themeColor}
+        defaultExpanded={false}
+        readOnly
+      />
+
+      {resolveOrderItemCancellationState(item).hasCancellation ? (
+        <div className="cm-menu-set-history-state">
+          <CancellationStateBlock item={item} />
+        </div>
+      ) : null}
+
+      {hasPromotions || pricing.hasDiscount ? (
+        <div className="cm-confirmed-detail-stack">
+          {hasPromotions ? (
+            <AppliedPromotionsBlock promotions={pricing.appliedPromotions} />
+          ) : null}
+
+          {pricing.hasDiscount ? (
+            <ConfirmedLinePricingBlock pricing={pricing} />
+          ) : null}
+        </div>
+      ) : null}
+
+      {typeof onRemoveOldItem === "function" ? (
+        <div className="cm-menu-set-history-actions">
+          <OldRemoveButton
+            item={item}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function OldChildRow({
   item,
   hasActionColumn = false,
+  depth = 1,
 }) {
   const cancellation = resolveOrderItemCancellationState(item);
 
@@ -332,7 +385,10 @@ function OldChildRow({
 
   return (
     <tr>
-      <td className="cm-td cm-child">
+      <td
+        className="cm-td cm-child"
+        style={{ paddingLeft: Math.min(10 + depth * 12, 130) }}
+      >
         <div style={{ fontWeight: 850, fontSize: 12, color: "#3F3A52" }}>
           ↳ {label}
         </div>
@@ -364,12 +420,50 @@ function OldChildRow({
   );
 }
 
+function OldNestedChildRows({ item, hasActionColumn = false, depth = 1 }) {
+  const children = Array.isArray(item?.children) ? item.children : [];
+
+  return (
+    <>
+      <OldChildRow item={item} hasActionColumn={hasActionColumn} depth={depth} />
+
+      {children.map((child, index) => (
+        <OldNestedChildRows
+          key={`nested-${getOldItemId(child) || index}-${index}`}
+          item={child}
+          hasActionColumn={hasActionColumn}
+          depth={depth + 1}
+        />
+      ))}
+    </>
+  );
+}
+
 function OldRow({
   item,
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  themeColor,
 }) {
+  const hasActionColumn = typeof onRemoveOldItem === "function";
+
+  if (isOldMenuSetRoot(item)) {
+    return (
+      <tr className="cm-menu-set-history-row">
+        <td className="cm-td cm-menu-set-history-cell" colSpan={hasActionColumn ? 4 : 3}>
+          <OldMenuSetHistoryDetail
+            item={item}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+            themeColor={themeColor}
+          />
+        </td>
+      </tr>
+    );
+  }
+
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -381,9 +475,6 @@ function OldRow({
   const isCompositeParent =
     !!item?.is_composite_parent ||
     (Array.isArray(item?.children) && item.children.length > 0);
-
-  const hasActionColumn =
-  typeof onRemoveOldItem === "function";
 
   const hasAppliedPromotions =
     Array.isArray(pricing.appliedPromotions) &&
@@ -475,12 +566,70 @@ function OldRow({
   );
 }
 
+function OldNestedChildCard({ item }) {
+  const label = item?.variant_name
+    ? `${item.product_name} · ${item.variant_name}`
+    : item.product_name || `Producto #${item.product_id}`;
+
+  const cancellation = resolveOrderItemCancellationState(item);
+  const children = Array.isArray(item?.children) ? item.children : [];
+
+  const subtotal = safeNum(
+    item?.line_total,
+    safeNum(item?.unit_price, 0) * safeNum(item?.quantity, 1),
+  );
+
+  const hideMoney = safeNum(item?.unit_price, 0) <= 0 && subtotal <= 0;
+
+  return (
+    <div className="cm-child-card">
+      <div className="cm-mobile-title">↳ {label}</div>
+
+      <div className="cm-mobile-sub">
+        Cantidad: <strong>{cancellation.effectiveQuantity}</strong> ·{" "}
+        {hideMoney ? "Incluido" : money(subtotal)}
+      </div>
+
+      <CancellationStateBlock item={item} />
+      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
+
+      {item?.notes ? (
+        <div className="cm-note">• {renderNotes(item.notes)}</div>
+      ) : null}
+
+      {children.length > 0 ? (
+        <div className="cm-children-list">
+          {children.map((child, index) => (
+            <OldNestedChildCard
+              key={`mobile-nested-${getOldItemId(child) || index}-${index}`}
+              item={child}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function OldItemCard({
   item,
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  themeColor,
 }) {
+  if (isOldMenuSetRoot(item)) {
+    return (
+      <OldMenuSetHistoryDetail
+        item={item}
+        onRemoveOldItem={onRemoveOldItem}
+        removingOldItemId={removingOldItemId}
+        oldItemRemoveLabel={oldItemRemoveLabel}
+        themeColor={themeColor}
+      />
+    );
+  }
+
   const label = item?.variant_name
     ? `${item.product_name} · ${item.variant_name}`
     : item.product_name || `Producto #${item.product_id}`;
@@ -547,46 +696,12 @@ function OldItemCard({
 
       {Array.isArray(item?.children) && item.children.length > 0 ? (
         <div className="cm-children-list">
-          {item.children.map((child) => {
-            const childLabel = child?.variant_name
-              ? `${child.product_name} · ${child.variant_name}`
-              : child.product_name || `Producto #${child.product_id}`;
-
-            const childCancellation = resolveOrderItemCancellationState(child);
-
-            const childSubtotal = safeNum(
-              child?.line_total,
-              safeNum(child?.unit_price, 0) * safeNum(child?.quantity, 1),
-            );
-
-            const childHideMoney =
-              safeNum(child?.unit_price, 0) <= 0 &&
-              safeNum(childSubtotal, 0) <= 0;
-
-            return (
-              <div
-                key={`old-mobile-child-${child?.id}`}
-                className="cm-child-card"
-              >
-                <div className="cm-mobile-title">↳ {childLabel}</div>
-
-                <div className="cm-mobile-sub">
-                  Cantidad: <strong>{childCancellation.effectiveQuantity}</strong> ·{" "}
-                  {childHideMoney ? "Incluido" : money(childSubtotal)}
-                </div>
-
-                <CancellationStateBlock item={child} />
-
-                <ModifierGroupsBlock
-                  groups={child?.modifier_groups_display || []}
-                />
-
-                {child?.notes ? (
-                  <div className="cm-note">• {renderNotes(child.notes)}</div>
-                ) : null}
-              </div>
-            );
-          })}
+          {item.children.map((child, index) => (
+            <OldNestedChildCard
+              key={`old-mobile-child-${getOldItemId(child) || index}-${index}`}
+              item={child}
+            />
+          ))}
         </div>
       ) : null}
     </div>
@@ -601,6 +716,7 @@ function HistoryItemsGroup({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  themeColor,
 }) {
   const rows = Array.isArray(items) ? items : [];
   const canRemoveOldItems = typeof onRemoveOldItem === "function";
@@ -656,17 +772,20 @@ function HistoryItemsGroup({
                       onRemoveOldItem={onRemoveOldItem}
                       removingOldItemId={removingOldItemId}
                       oldItemRemoveLabel={oldItemRemoveLabel}
+                      themeColor={themeColor}
                     />
 
-                    {Array.isArray(item?.children) && item.children.length > 0
-                      ? item.children.map((child) => (
-                          <OldChildRow
-                            key={`history-child-${child?.id || child?.order_item_id}`}
-                            item={child}
-                            hasActionColumn={canRemoveOldItems}
-                          />
-                        ))
-                      : null}
+                    {!isOldMenuSetRoot(item) &&
+                      Array.isArray(item?.children) &&
+                      item.children.length > 0
+                        ? item.children.map((child, index) => (
+                            <OldNestedChildRows
+                              key={`history-child-${getOldItemId(child) || index}-${index}`}
+                              item={child}
+                              hasActionColumn={canRemoveOldItems}
+                            />
+                          ))
+                        : null}
                   </React.Fragment>
                 ))}
               </tbody>
@@ -681,6 +800,7 @@ function HistoryItemsGroup({
                 onRemoveOldItem={onRemoveOldItem}
                 removingOldItemId={removingOldItemId}
                 oldItemRemoveLabel={oldItemRemoveLabel}
+                themeColor={themeColor}
               />
             ))}
           </div>
@@ -711,13 +831,29 @@ export default function OldItemsSection({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  themeColor,
 }) {
-  const confirmedItems = useMemo(() => {
-    if (Array.isArray(oldItemsTree) && oldItemsTree.length > 0) {
-      return oldItemsTree;
-    }
+  const sectionRef = useRef(null);
+  const [inheritedColor, setInheritedColor] = useState("#FF9800");
 
-    return buildOldItemsTree(oldItems);
+  useEffect(() => {
+    if (!sectionRef.current || typeof window === "undefined") return;
+
+    const value = window.getComputedStyle(sectionRef.current)
+      .getPropertyValue("--cm-cart-accent").trim();
+
+    const nextColor = /^#[0-9A-Fa-f]{6}$/.test(value) ? value : "#FF9800";
+    setInheritedColor((current) => current === nextColor ? current : nextColor);
+  }, [themeColor, oldItems, oldItemsTree]);
+
+  const activeColor = /^#[0-9A-Fa-f]{6}$/.test(String(themeColor || ""))
+    ? themeColor : inheritedColor;
+
+  const confirmedItems = useMemo(() => {
+    const source = Array.isArray(oldItemsTree) && oldItemsTree.length > 0
+      ? oldItemsTree : oldItems;
+
+    return buildOldItemsTree(source);
   }, [oldItems, oldItemsTree]);
 
   const { sentItems, cancelledItems } = useMemo(
@@ -726,9 +862,10 @@ export default function OldItemsSection({
   );
 
   return (
-    <div className="cm-section">
+    <div className="cm-section" ref={sectionRef}>
       <HistoryItemsGroup
         title="Pedidos enviados"
+        themeColor={activeColor}
         items={sentItems}
         emptyMessage="No hay productos vigentes en el historial."
         itemLabel="productos enviados"
@@ -740,6 +877,7 @@ export default function OldItemsSection({
       {cancelledItems.length > 0 ? (
         <HistoryItemsGroup
           title="Cancelados"
+          themeColor={activeColor}
           items={cancelledItems}
           itemLabel="productos cancelados"
           onRemoveOldItem={null}

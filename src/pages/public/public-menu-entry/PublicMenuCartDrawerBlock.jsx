@@ -13,8 +13,11 @@ export default function PublicMenuCartDrawerBlock({
   open,
   onClose,
   cartOrder,
+  menuSets = [],
   cartDrawerItemCount,
   pendingItems = [],
+  orderLabel = "Comanda",
+  onEditMenuSet = null,
   canAppend,
   allowSendButton,
   hasInvalidItems,
@@ -104,21 +107,21 @@ export default function PublicMenuCartDrawerBlock({
 
   const drawerTitle = cancellationActive
     ? "Solicitar cancelación"
-    : "Comanda";
+    : orderLabel;
 
   const drawerSubtitle = cancellationActive
-    ? "Selecciona los productos de la comanda que deseas cancelar."
+    ? "Selecciona lo que deseas cancelar."
     : isPaymentInProgress
       ? "Consulta el detalle de tu comanda."
       : effectiveCanAppend
-        ? "Orden abierta: puedes agregar productos."
-        : "Revisa los productos seleccionados antes de enviar.";
+        ? "Orden abierta: puedes agregar más productos o Conjuntos."
+        : "Revisa tu selección antes de enviarla.";
 
   const panelSubtitle = isPaymentInProgress
     ? "Consulta los productos incluidos en tu comanda."
     : effectiveCanAppend
-      ? "Orden abierta: puedes agregar productos."
-      : "Se llena cuando seleccionas productos. Luego presiona Enviar.";
+      ? "Puedes agregar nuevas selecciones a esta comanda."
+      : "Revisa tu selección y presiona Enviar cuando esté lista.";
 
   return (
     <MenuCartDrawer
@@ -171,9 +174,15 @@ export default function PublicMenuCartDrawerBlock({
         </div>
       ) : (
         <MenuCartPanel
-          title="Comanda"
+          title={orderLabel}
           subtitle={panelSubtitle}
           themeColor={themeColor}
+          menuSets={menuSets}
+          onEditMenuSet={
+            !isPaymentInProgress && !cartOrder.sending
+              ? onEditMenuSet
+              : undefined
+          }
           customerName={
             cartOrder?.activeOrder?.id
               ? cartOrder.activeOrder?.customer_name || ""

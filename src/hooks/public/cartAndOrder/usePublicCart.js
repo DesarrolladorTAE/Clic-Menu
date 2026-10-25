@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+//src/hooks/public/cartAndOrder/usePublicCart.js
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildCartKey,
   buildNewItemsPricingSummary,
@@ -29,6 +30,22 @@ import {
 } from "./publicCartAndOrder.utils";
 import { useTransientMessage } from "../../menu/useTransientMessage";
 
+import {
+  getMenuSetById,
+  getMenuSetOptionById,
+  getMenuSetStageByDefinitionId,
+  isMenuSetOptionSelectable,
+  normalizeMenuSetCatalog,
+} from "../../menu/menu-sets/menuSet.utils";
+import {
+  buildMenuSetSelectionPayload,
+  isMenuSetCartLine,
+} from "../../menu/menu-sets/menuSetPayload.utils";
+import {
+  getMenuSetCart,
+  saveMenuSetCart,
+} from "../../menu/menu-sets/menuSetNavigationStore";
+
 /*
 |--------------------------------------------------------------------------
 | usePublicCart
@@ -46,36 +63,165 @@ import { useTransientMessage } from "../../menu/useTransientMessage";
 | - useCartAndOrder.js.
 |--------------------------------------------------------------------------
 */
+function reconcileMenuSetLine(item, menuSets) {
+  const menuSet = getMenuSetById(menuSets, item.menu_set_id);
+  let reason = "";
+
+  if (!menuSet || menuSet.isActive === false || menuSet.isSellable === false) {
+    reason = "Este Conjunto ya no está disponible.";
+  } else {
+    const selections = Array.isArray(item.selections) ? item.selections : [];
+    const knownStages = new Set();
+
+    if (selections.length === 0) {
+      reason = "Este Conjunto no tiene productos seleccionados.";
+    }
+
+    for (const stage of menuSet.stages || []) {
+      if (reason) break;
+
+      const stageId = Number(stage.stageDefinitionId);
+      knownStages.add(stageId);
+
+      const savedStage = selections.find((row) =>
+        Number(row.menu_set_stage_definition_id) === stageId
+      );
+
+      const chosen = Array.isArray(savedStage?.items) ? savedStage.items : [];
+      const minimum = stage.required
+        ? Math.max(1, Number(stage.minSelections || 0))
+        : Number(stage.minSelections || 0);
+
+      const maximum = Number(stage.maxSelections || 0);
+
+      if (chosen.length < minimum || chosen.length > maximum) {
+        reason = `Revisa las selecciones de "${stage.name}".`;
+        break;
+      }
+
+      const selectedOptionIds = new Set();
+
+      for (const selection of chosen) {
+        const optionId = Number(selection.menu_set_product_id);
+        const option = getMenuSetOptionById(stage, optionId);
+
+        if (!option || selectedOptionIds.has(optionId)) {
+          reason = `Revisa los productos elegidos en "${stage.name}".`;
+          break;
+        }
+
+        selectedOptionIds.add(optionId);
+
+        if (!isMenuSetOptionSelectable(option, selection.prepared_item_id)) {
+          reason = `"${option.name}" ya no está disponible.`;
+          break;
+        }
+
+        const variantId = Number(selection.variant_id || 0);
+
+        if (variantId > 0) {
+          const variant = (option.variants || []).find((row) =>
+            Number(row.id) === variantId
+          );
+
+          if (!variant || variant.is_available === false) {
+            reason = `La variante elegida de "${option.name}" ya no está disponible.`;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!reason && selections.some((stage) =>
+      !knownStages.has(Number(stage.menu_set_stage_definition_id))
+    )) {
+      reason = "La configuración de este Conjunto cambió. Revisa tu selección.";
+    }
+  }
+
+  return {
+    ...item,
+    menu_set_invalid: Boolean(reason),
+    menu_set_invalid_reason: reason,
+  };
+}
 
 export function usePublicCart({
   activeMenuPayload,
   isWhatsappFlow,
   onPreparedItemsRefresh = null,
+  navigationKey = null,
 }) {
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => getMenuSetCart(navigationKey) || []);
+  const currentNavigationKeyRef = useRef(navigationKey);
+
+  useEffect(() => {
+    if (currentNavigationKeyRef.current !== navigationKey) {
+      currentNavigationKeyRef.current = navigationKey;
+      setCart(getMenuSetCart(navigationKey) || []);
+      return;
+    }
+
+    if (navigationKey) saveMenuSetCart(navigationKey, cart);
+  }, [navigationKey, cart]);
+
+  const persistNavigationCart = useCallback(() => {
+    if (!navigationKey) {
+      return { ok: false, message: "No se pudo identificar el pedido actual." };
+    }
+
+    return saveMenuSetCart(navigationKey, cart);
+  }, [navigationKey, cart]);
   const [preparedCartMessage, setPreparedCartMessage, clearPreparedCartMessage] =
     useTransientMessage();
   const cartLineSequenceRef = useRef(0);
 
-  const invalidCartItemsCount = useMemo(
-    () => countInvalidCartItems(cart),
-    [cart],
-  );
+  const invalidCartItemsCount = useMemo(() => {
+    const normalItems = cart.filter((item) => !isMenuSetCartLine(item));
+    const invalidMenuSets = cart.filter((item) =>
+      isMenuSetCartLine(item) && item.menu_set_invalid === true
+    );
+
+    return countInvalidCartItems(normalItems) + invalidMenuSets.length;
+  }, [cart]);
 
   const hasInvalidCartItems = invalidCartItemsCount > 0;
 
-  const reconcileCartAvailability = useCallback(
-    (menuSource = activeMenuPayload) => {
-      if (!menuSource) {
-        return;
-      }
+  const reconcileCartAvailability = useCallback((menuSource = activeMenuPayload) => {
+    if (!menuSource) return;
 
-      setCart((previous) =>
-        reconcilePendingCartAvailability(previous, menuSource),
+    const rawMenuSets =
+      menuSource?.menu_sets ??
+      menuSource?.menuSets ??
+      menuSource?.menu_set_catalog?.menu_sets ??
+      null;
+
+    const hasMenuSetCatalog = Array.isArray(rawMenuSets);
+
+    const menuSets = !hasMenuSetCatalog
+      ? []
+      : rawMenuSets.every((item) => item?.kind === "menu_set")
+        ? rawMenuSets
+        : normalizeMenuSetCatalog({ menu_sets: rawMenuSets }).menuSets;
+
+    setCart((previous) => {
+      const normalItems = previous.filter((item) => !isMenuSetCartLine(item));
+      const reconciledNormal = reconcilePendingCartAvailability(normalItems, menuSource);
+      const normalByKey = new Map(
+        reconciledNormal.map((item) => [String(item.key), item])
       );
-    },
-    [activeMenuPayload],
-  );
+
+      return previous.map((item) => {
+        if (isMenuSetCartLine(item)) {
+          return hasMenuSetCatalog
+            ? reconcileMenuSetLine(item, menuSets)
+            : item;
+        }
+
+        return normalByKey.get(String(item.key)) || item;
+      });
+    });
+  }, [activeMenuPayload]);
 
   const markCartAvailabilityError = useCallback((apiError) => {
     setCart((previous) =>
@@ -199,6 +345,8 @@ export function usePublicCart({
         key: uniqueLineKey,
       },
     ]);
+
+    return uniqueLineKey;
   }
 
   function addToCartFromProduct(
@@ -346,6 +494,77 @@ export function usePublicCart({
     });
   }
 
+  function normalizeIncomingMenuSetLine(line) {
+    const payload = buildMenuSetSelectionPayload(line);
+
+    return {
+      ...line,
+      kind: "menu_set",
+      commercial_type: "menu_set",
+      menu_set_id: payload.menu_set_id,
+      product_id: null,
+      variant_id: null,
+      quantity: 1,
+      selections: payload.selections,
+      menu_set_invalid: false,
+      menu_set_invalid_reason: "",
+    };
+  }
+
+  function addMenuSetCartLine(line) {
+    try {
+      const normalized = normalizeIncomingMenuSetLine(line);
+      const key = upsertCartItem(normalized);
+
+      return { ok: true, key };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "No fue posible agregar el Conjunto.",
+      };
+    }
+  }
+
+  function replaceMenuSetCartLine(itemKey, line) {
+    const existing = cart.find((item) =>
+      item.key === itemKey && isMenuSetCartLine(item)
+    );
+
+    if (!existing) {
+      return { ok: false, message: "No se encontró el Conjunto que deseas modificar." };
+    }
+
+    try {
+      const normalized = normalizeIncomingMenuSetLine(line);
+
+      setCart((previous) => previous.map((item) =>
+        item.key === itemKey
+          ? { ...normalized, key: itemKey }
+          : item
+      ));
+
+      return { ok: true, key: itemKey };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "No fue posible modificar el Conjunto.",
+      };
+    }
+  }
+
+  function removeMenuSetCartLine(itemKey) {
+    const existing = cart.find((item) =>
+      item.key === itemKey && isMenuSetCartLine(item)
+    );
+
+    if (!existing) {
+      return { ok: false, message: "No se encontró el Conjunto seleccionado." };
+    }
+
+    setCart((previous) => previous.filter((item) => item.key !== itemKey));
+    return { ok: true };
+  }
+
   function setCartComponents(
     itemKey,
     components,
@@ -357,7 +576,8 @@ export function usePublicCart({
     setCart((previous) =>
       previous.map((item) =>
         item.key === itemKey &&
-        !isPreparedItemLine(item)
+          !isPreparedItemLine(item) &&
+          !isMenuSetCartLine(item)
           ? {
               ...item,
               components: normalized,
@@ -471,7 +691,8 @@ export function usePublicCart({
       previous.map((item) => {
         if (
           item.key !== key ||
-          isPreparedItemLine(item)
+          isPreparedItemLine(item) ||
+          isMenuSetCartLine(item)
         ) {
           return item;
         }
@@ -557,7 +778,7 @@ export function usePublicCart({
   function setCartNotes(key, notes) {
     setCart((previous) =>
       previous.map((item) =>
-        item.key === key
+        item.key === key && !isMenuSetCartLine(item)
           ? {
               ...item,
               notes: String(notes || ""),
@@ -609,6 +830,11 @@ export function usePublicCart({
 
     addToCartFromProduct,
     addToCartFromVariant,
+
+    addMenuSetCartLine,
+    replaceMenuSetCartLine,
+    removeMenuSetCartLine,
+    persistNavigationCart,
 
     addPreparedItem,
     removePreparedItem,

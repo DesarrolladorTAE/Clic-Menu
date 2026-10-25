@@ -1,3 +1,4 @@
+//src/hooks/public/useCartAndOrder.js
 import { useMemo, useState } from "react";
 import {
   buildCombinedPricingSummary,
@@ -10,6 +11,13 @@ import { usePublicTableOrder } from "./cartAndOrder/usePublicTableOrder";
 import { usePublicOrderCancellation } from "./cartAndOrder/usePublicOrderCancellation";
 import { toSafeInt } from "./cartAndOrder/publicCartAndOrder.utils";
 import { useTransientMessage } from "../menu/useTransientMessage";
+
+import {
+  createMenuSetNavigationKey,
+  saveMenuSetDraft,
+  saveMenuSetReturnPath,
+} from "../menu/menu-sets/menuSetNavigationStore";
+import { isMenuSetCartLine } from "../menu/menu-sets/menuSetPayload.utils";
 
 export function useCartAndOrder({
   token,
@@ -59,6 +67,39 @@ export function useCartAndOrder({
   const isWebOrderingFlow =
     isWhatsappFlow ||
     isOnlineOrderFlow;
+
+  const menuSetNavigationContext = useMemo(() => ({
+    channel: isWhatsappFlow
+      ? "whatsapp"
+      : isOnlineOrderFlow
+        ? "pedido_en_linea"
+        : activeMenuPayload?.table?.id
+          ? "publico"
+          : "vista_general",
+    token: String(token || "").trim(),
+    restaurantId: Number(
+      activeMenuPayload?.restaurant_id ||
+      activeMenuPayload?.restaurant?.id ||
+      0
+    ) || null,
+    branchId: Number(
+      activeMenuPayload?.branch_id ||
+      activeMenuPayload?.branch?.id ||
+      0
+    ) || null,
+    menuId: Number(
+      activeMenuPayload?.menu_id ||
+      activeMenuPayload?.menu?.id ||
+      0
+    ) || null,
+    tableId: Number(
+      activeMenuPayload?.table?.id || 0
+    ) || null,
+  }), [token, isWhatsappFlow, isOnlineOrderFlow, activeMenuPayload]);
+
+  const menuSetNavigationKey = useMemo(() => {
+    return createMenuSetNavigationKey(menuSetNavigationContext);
+  }, [menuSetNavigationContext]);
 
   const onlineOrderCheckout =
     isOnlineOrderFlow &&
@@ -139,12 +180,12 @@ export function useCartAndOrder({
   |--------------------------------------------------------------------------
   */
 
-  const publicCart =
-    usePublicCart({
-      activeMenuPayload,
-      isWhatsappFlow,
-      onPreparedItemsRefresh,
-    });
+  const publicCart = usePublicCart({
+    activeMenuPayload,
+    isWhatsappFlow,
+    onPreparedItemsRefresh,
+    navigationKey: menuSetNavigationKey,
+  });
 
   /*
   |--------------------------------------------------------------------------
@@ -321,12 +362,80 @@ export function useCartAndOrder({
     );
   }
 
+  function addMenuSet(cartLine) {
+    if (!canSelect || String(tableOrder.activeOrder?.status || "").toLowerCase() === "paying") {
+      return { ok: false, message: "No se pueden agregar Conjuntos en este momento." };
+    }
+
+    return publicCart.addMenuSetCartLine(cartLine);
+  }
+
+  function replaceMenuSet(itemKey, cartLine) {
+    if (!canSelect || String(tableOrder.activeOrder?.status || "").toLowerCase() === "paying") {
+      return { ok: false, message: "Este pedido ya no permite modificar Conjuntos." };
+    }
+
+    return publicCart.replaceMenuSetCartLine(itemKey, cartLine);
+  }
+
+  function removeMenuSet(itemKey) {
+    return publicCart.removeMenuSetCartLine(itemKey);
+  }
+
+  /*
+  * Conserva el carrito antes de pasar a la pantalla independiente.
+  * Cuando se edita, recupera la configuración original de esa partida.
+  */
+  function prepareMenuSetNavigation(returnPath, menuSetId, options = {}) {
+    const id = Number(menuSetId);
+
+    if (!Number.isSafeInteger(id) || id <= 0 || !menuSetNavigationKey) {
+      return { ok: false, message: "No se pudo identificar el menú seleccionado." };
+    }
+
+    const editCartKey = String(options?.editCartKey || "").trim();
+    const existing = editCartKey
+      ? publicCart.cart.find((item) =>
+          item.key === editCartKey &&
+          isMenuSetCartLine(item) &&
+          Number(item.menu_set_id) === id
+        )
+      : null;
+
+    if (editCartKey && !existing) {
+      return { ok: false, message: "No se encontró el Conjunto que deseas modificar." };
+    }
+
+    const persisted = publicCart.persistNavigationCart();
+    if (!persisted?.ok) {
+      return { ok: false, message: persisted?.message || "No se pudo conservar tu pedido." };
+    }
+
+    if (existing) {
+      const draft = saveMenuSetDraft(menuSetNavigationKey, {
+        menuSetId: id,
+        currentStep: 0,
+        selections: existing.selections || [],
+      });
+
+      if (!draft?.ok) {
+        return { ok: false, message: draft?.message || "No se pudo preparar la edición." };
+      }
+    }
+
+    const returnState = saveMenuSetReturnPath(menuSetNavigationKey, returnPath, id);
+    if (!returnState?.ok) {
+      return { ok: false, message: returnState?.message || "No se pudo abrir el menú." };
+    }
+
+    return { ok: true, editCartKey: editCartKey || null };
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Pricing global
   |--------------------------------------------------------------------------
   */
-
   const activeOrderPricingSummary =
     useMemo(() => {
       return normalizeConfirmedPricingSummary(
@@ -755,6 +864,13 @@ export function useCartAndOrder({
 
     addToCartFromProduct,
     addToCartFromVariant,
+
+    addMenuSet,
+    replaceMenuSet,
+    removeMenuSet,
+    prepareMenuSetNavigation,
+    menuSetNavigationContext,
+    menuSetNavigationKey,
 
     addPreparedItem:
       publicCart.addPreparedItem,

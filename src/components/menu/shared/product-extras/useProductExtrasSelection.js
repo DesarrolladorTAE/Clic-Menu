@@ -19,20 +19,41 @@ export function makeGroupSelectionKey(section, group) {
   const componentProductId = Number(section?.component?.component_product_id || 0);
   const componentVariantId = Number(section?.option?.variant_id || 0);
   const variantId = Number(section?.variant?.id || 0);
+  const menuSetProductId = Number(section?.menu_set_product_id || 0);
+  const stageDefinitionId = Number(section?.menu_set_stage_definition_id || 0);
 
-  return [
+  const baseKey = [
     section?.context_type || "product",
     Number(group?.id || 0),
     componentProductId || 0,
     componentVariantId || 0,
     variantId || 0,
-  ].join("|");
+  ];
+
+  if (Number.isSafeInteger(menuSetProductId) && menuSetProductId > 0) {
+    return [
+      "conjunto",
+      Number.isSafeInteger(stageDefinitionId) && stageDefinitionId > 0 ? stageDefinitionId : 0,
+      menuSetProductId,
+      ...baseKey,
+    ].join("|");
+  }
+
+  return baseKey.join("|");
 }
 
 export function buildPreparedSections(product, sections) {
   const title = product?.display_name || product?.name || "Producto";
+  const menuSetProductId = Number(product?.menu_set_product_id ?? product?.menuSetProductId ?? 0);
+  const stageDefinitionId = Number(product?.menu_set_stage_definition_id ?? product?.menuSetStageDefinitionId ?? 0);
 
   return (Array.isArray(sections) ? sections : []).map((section) => {
+    const scopedSection = {
+      ...section,
+      menu_set_product_id: section?.menu_set_product_id ?? (menuSetProductId > 0 ? menuSetProductId : null),
+      menu_set_stage_definition_id: section?.menu_set_stage_definition_id ?? (stageDefinitionId > 0 ? stageDefinitionId : null),
+    };
+
     const contextSource =
       section?.context_type === "variant"
         ? "variant"
@@ -62,15 +83,17 @@ export function buildPreparedSections(product, sections) {
         : null;
 
     return {
-      ...section,
+      ...scopedSection,
       groups: (Array.isArray(section?.groups) ? section.groups : []).map((group) => ({
         ...group,
-        __selection_key: makeGroupSelectionKey(section, group),
+        __selection_key: makeGroupSelectionKey(scopedSection, group),
         __context_source: contextSource,
         __applies_to_level: appliesToLevel,
         __context_label: contextLabel,
         __component_product_id: componentProductId,
         __component_variant_id: componentVariantId,
+        __menu_set_product_id: scopedSection.menu_set_product_id,
+        __menu_set_stage_definition_id: scopedSection.menu_set_stage_definition_id,
       })),
     };
   });
@@ -164,15 +187,16 @@ export function buildInitialSelectionMap(initialValue, preparedSections) {
     .flatMap((section) => section.groups || [])
     .forEach((preparedGroup) => {
       const match = groups.find((group) => {
+        const savedOptionId = Number(group?.menu_set_product_id || 0);
+        const savedStageId = Number(group?.menu_set_stage_definition_id || 0);
+
         return (
-          Number(group?.modifier_group_id || group?.id || 0) ===
-            Number(preparedGroup?.id || 0) &&
-          String(group?.applies_to_level || "order_item") ===
-            String(preparedGroup?.__applies_to_level || "order_item") &&
-          Number(group?.component_product_id || 0) ===
-            Number(preparedGroup?.__component_product_id || 0) &&
-          Number(group?.component_variant_id || 0) ===
-            Number(preparedGroup?.__component_variant_id || 0)
+          Number(group?.modifier_group_id || group?.id || 0) === Number(preparedGroup?.id || 0) &&
+          String(group?.applies_to_level || "order_item") === String(preparedGroup?.__applies_to_level || "order_item") &&
+          Number(group?.component_product_id || 0) === Number(preparedGroup?.__component_product_id || 0) &&
+          Number(group?.component_variant_id || 0) === Number(preparedGroup?.__component_variant_id || 0) &&
+          (savedOptionId === 0 || savedOptionId === Number(preparedGroup?.__menu_set_product_id || 0)) &&
+          (savedStageId === 0 || savedStageId === Number(preparedGroup?.__menu_set_stage_definition_id || 0))
         );
       });
 

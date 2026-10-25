@@ -1196,6 +1196,169 @@ export default function MenuCartPanelStyles() {
           font-size: 11px;
         }
 
+      /* =========================
+          Conjuntos guardados
+        ========================= */
+
+        .cm-menu-set-history-row {
+          background: #FFFFFF;
+        }
+
+        .cm-menu-set-history-cell {
+          width: 100%;
+          max-width: 100%;
+          padding: 10px;
+          border-top: 1px solid rgba(47,42,61,0.08);
+          vertical-align: top;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-detail {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 9px;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-detail > article {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-state {
+          width: 100%;
+          min-width: 0;
+          padding: 9px 11px;
+          border: 1px solid rgba(47,42,61,0.09);
+          border-radius: 11px;
+          background: #FBF8F8;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-state .cm-cancellation-summary {
+          margin-top: 0;
+        }
+
+        .cm-menu-set-history-detail > .cm-confirmed-detail-stack {
+          width: 100%;
+          min-width: 0;
+          gap: 8px;
+        }
+
+        .cm-menu-set-history-detail .cm-applied-promotions {
+          margin-top: 0;
+        }
+
+        .cm-menu-set-history-detail > .cm-confirmed-detail-stack .cm-line-discount {
+          width: 100%;
+          max-width: 100%;
+          margin-top: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-menu-set-history-actions > button {
+          max-width: 100%;
+          min-height: 36px;
+          box-sizing: border-box;
+        }
+
+        .cm-child-card {
+          min-width: 0;
+          box-sizing: border-box;
+        }
+
+        .cm-child-card .cm-children-list {
+          margin-top: 10px;
+          padding-left: 9px;
+          border-left: 1px solid rgba(47,42,61,0.12);
+        }
+
+        .cm-child-card .cm-child-card {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          border: 1px solid rgba(47,42,61,0.09);
+          border-radius: 11px;
+          background: #FFFFFF;
+          box-sizing: border-box;
+        }
+
+        /* =========================
+          Conjuntos responsivos
+        ========================= */
+
+        @container cm-cart (max-width: 760px) {
+          .cm-menu-set-history-detail {
+            gap: 8px;
+          }
+
+          .cm-menu-set-history-state {
+            padding: 9px 10px;
+          }
+
+          .cm-menu-set-history-detail > article {
+            border-radius: 12px;
+          }
+
+          .cm-child-card .cm-children-list {
+            padding-left: 8px;
+          }
+        }
+
+        @container cm-cart (max-width: 420px) {
+          .cm-menu-set-history-detail {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .cm-menu-set-history-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .cm-menu-set-history-actions > button {
+            width: 100% !important;
+            max-width: none !important;
+          }
+
+          .cm-menu-set-history-detail .cm-line-discount-row {
+            gap: 8px;
+          }
+
+          .cm-menu-set-history-detail .cm-line-discount-label {
+            flex: 1 1 auto;
+            min-width: 0;
+          }
+
+          .cm-menu-set-history-detail .cm-line-discount-value {
+            flex: 0 0 auto;
+            text-align: right;
+          }
+
+          .cm-child-card .cm-children-list {
+            padding-left: 6px;
+          }
+
+          .cm-child-card .cm-child-card {
+            padding: 9px;
+          }
+        }
+
         /* =========================
           Promotion responsive rules
         ========================= */

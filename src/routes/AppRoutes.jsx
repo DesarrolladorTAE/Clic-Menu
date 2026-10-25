@@ -163,6 +163,7 @@ import OwnerBillingPage from "../pages/owner/billing/OwnerBillingPage";
 
 import BranchQrCodesPage from "../pages/floor/qr/BranchQrCodesPage";
 import PublicMenuEntryPage from "../pages/public/PublicMenuEntryPage";
+import MenuSetBuilderPage from "../pages/public/public-menu-entry/menu-sets/MenuSetBuilderPage";
 import PublicInvoicePage from "../pages/public/invoice/PublicInvoicePage";
 import PublicOnlineOrderTrackingPage from "../pages/public/order-tracking/PublicOnlineOrderTrackingPage";
 
@@ -187,6 +188,7 @@ export default function AppRoutes() {
 
       {/* Menus QRS */}
       <Route path="/menu/:token" element={<PublicMenuEntryPage />} />
+      <Route path="/menu/:token/conjuntos/:menuSetId" element={<MenuSetBuilderPage />} />
       <Route path="/order/:trackingToken" element={<PublicOnlineOrderTrackingPage />} />
       <Route path="/invoice/:token" element={<PublicInvoicePage />} />
 
@@ -213,9 +215,10 @@ export default function AppRoutes() {
       <Route element={<StaffProtectedRoute />}>
         <Route path="/staff/select-context" element={<StaffSelectContext />} />
 
-        {/* Mesero*/}
+        {/* Mesero */}
         <Route path="/staff/waiter/tables/grid" element={<WaiterTablesGrid />} />
         <Route path="/staff/waiter/tables/:tableId/order" element={<StaffMenuEntryPage />} />
+        <Route path="/staff/waiter/tables/:tableId/order/conjuntos/:menuSetId" element={<MenuSetBuilderPage />} />
 
         {/* Cocina */}
         <Route path="/staff/kitchen" element={<KitchenDashboard />} />
@@ -226,6 +229,7 @@ export default function AppRoutes() {
         <Route path="/staff/cashier" element={<CashierLayout />}>
           <Route path="queue" element={<CashierQueuePage />} />
           <Route path="direct-order" element={<CashierDirectOrderPage />} />
+          <Route path="direct-order/conjuntos/:menuSetId" element={<MenuSetBuilderPage />} />
           <Route path="online-orders" element={<CashierOnlineOrdersPage />} />
           <Route path="online-orders/:onlineOrderId" element={<CashierOnlineOrderDetailPage />} />
           <Route path="online-orders/:onlineOrderId/payment" element={<CashierOnlineOrderPaymentPage />} />

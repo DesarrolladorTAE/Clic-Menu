@@ -15,10 +15,13 @@ import {
 } from "../../../../hooks/menu/preparedItem.utils";
 
 import { isCartItemAvailabilityInvalid } from "../../../../hooks/menu/menuAvailability.utils";
+import { isMenuSetCartLine } from "../../../../hooks/menu/menu-sets/menuSetPayload.utils";
+import { normalizeMenuSet } from "../../../../hooks/menu/menu-sets/menuSet.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
 import { buildOldItemsTree, renderNotes } from "./cartPanel.utils";
 import ModifierGroupsBlock from "./ModifierGroupsBlock";
 import CompositeDetailBlock from "./CompositeDetailBlock";
+import MenuSetCartDetail from "../menu-sets/MenuSetCartDetail";
 import QtyControl from "./QtyControl";
 
 const NEW_ITEMS_PAGE_SIZE = 4;
@@ -59,6 +62,23 @@ function normalizeAvailabilityMaxQty(value) {
   if (!Number.isFinite(quantity)) return null;
 
   return Math.max(0, Math.floor(quantity));
+}
+
+function isMenuSetRootLine(item) {
+  if (!isMenuSetCartLine(item)) return false;
+  if (item?.is_menu_set_product === true || Number(item?.parent_order_item_id || 0) > 0) return false;
+
+  return item?.is_menu_set_root === true
+    || item?.commercial_type === "menu_set"
+    || item?.kind === "menu_set"
+    || (item?.product_id == null && item?.menu_set_id != null);
+}
+
+function getMenuSetDisplayItem(item) {
+  if (Array.isArray(item?.stages) && item.stages.length > 0) return item;
+  if (!Array.isArray(item?.display_stages) || item.display_stages.length === 0) return item;
+
+  return { ...item, stages: item.display_stages };
 }
 
 function NoteButton({ item, onOpenNote }) {
@@ -209,7 +229,24 @@ function PendingChildCard({ item }) {
   );
 }
 
-function PendingNewItemCard({ item }) {
+function PendingNewItemCard({ item, menuSet = null, themeColor }) {
+  if (isMenuSetRootLine(item)) {
+    return (
+      <div className="cm-new-card">
+        <div className="cm-new-meta" style={{ marginBottom: 10 }}>
+          Pedido enviado · Solo lectura
+        </div>
+
+        <MenuSetCartDetail
+          item={getMenuSetDisplayItem(item)}
+          menuSet={menuSet}
+          themeColor={themeColor}
+          readOnly
+        />
+      </div>
+    );
+  }
+
   const label = getPendingItemLabel(item);
   const quantity = getPendingItemQuantity(item);
   const total = getPendingItemTotal(item);
@@ -272,7 +309,29 @@ function PendingNewItemCard({ item }) {
   );
 }
 
-function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
+function NewItemCard({
+  item,
+  menuSet = null,
+  themeColor,
+  onQtyChange,
+  onRemove,
+  onOpenNote,
+  onEditMenuSet,
+}) {
+  if (isMenuSetRootLine(item)) {
+    return (
+      <MenuSetCartDetail
+        item={getMenuSetDisplayItem(item)}
+        menuSet={menuSet}
+        themeColor={themeColor}
+        onEdit={typeof onEditMenuSet === "function" ? onEditMenuSet : undefined}
+        onRemove={typeof onRemove === "function"
+          ? (line) => onRemove(line.key)
+          : undefined}
+      />
+    );
+  }
+
   if (isPreparedItemLine(item)) {
     return (
       <PreparedNewItemCard
@@ -507,13 +566,31 @@ function NewItemCard({ item, onQtyChange, onRemove, onOpenNote }) {
 
 export default function NewItemsSection({
   newItems = [],
+  menuSets = [],
   pendingItems = [],
+  themeColor = "",
   canAppend = false,
   onQtyChange,
   onRemove,
+  onEditMenuSet,
   onOpenNote,
 }) {
   const items = Array.isArray(newItems) ? newItems : [];
+
+  const availableMenuSets = useMemo(() => {
+    return (Array.isArray(menuSets) ? menuSets : [])
+      .map((entry) => {
+        if (entry?.kind === "menu_set" && Array.isArray(entry?.stages)) return entry;
+        return normalizeMenuSet(entry);
+      })
+      .filter((entry) => Number(entry?.id || 0) > 0);
+  }, [menuSets]);
+
+  const getMenuSetForItem = (item) => {
+    return availableMenuSets.find((set) =>
+      Number(set.id) === Number(item?.menu_set_id)
+    ) || null;
+  };
 
   const pendingItemsTree = useMemo(
     () => buildOldItemsTree(pendingItems),
@@ -540,6 +617,8 @@ export default function NewItemsSection({
               <PendingNewItemCard
                 key={`pending-card-${item?.id || item?.order_item_id}`}
                 item={item}
+                menuSet={getMenuSetForItem(item)}
+                themeColor={themeColor}
               />
             ))}
           </div>
@@ -573,7 +652,7 @@ export default function NewItemsSection({
         <>
           <div className="cm-section-title">
             <span>
-              Items nuevos por {canAppend ? "agregar" : "enviar"}
+              Productos y Conjuntos por {canAppend ? "agregar" : "enviar"}
             </span>
             <Badge tone="ok">{localPagination.total}</Badge>
           </div>
@@ -583,9 +662,12 @@ export default function NewItemsSection({
               <NewItemCard
                 key={`new-card-${item.key}`}
                 item={item}
+                menuSet={getMenuSetForItem(item)}
+                themeColor={themeColor}
                 onQtyChange={onQtyChange}
                 onRemove={onRemove}
                 onOpenNote={onOpenNote}
+                onEditMenuSet={onEditMenuSet}
               />
             ))}
           </div>

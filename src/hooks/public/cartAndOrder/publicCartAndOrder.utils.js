@@ -1,3 +1,4 @@
+//src/hooks/public/cartAndOrder/publicCartAndOrder.utils.js
 import {
   extractApiErrorInfo,
   normalizeCompositeComponentsForKey,
@@ -13,6 +14,10 @@ import {
   isPreparedItemLine,
   serializePreparedItemLine,
 } from "../../menu/preparedItem.utils";
+import {
+  isMenuSetCartLine,
+  serializeCartItemsWithMenuSets,
+} from "../../menu/menu-sets/menuSetPayload.utils";
 
 /*
 |--------------------------------------------------------------------------
@@ -32,114 +37,135 @@ import {
 | - useCartAndOrder.js.
 |--------------------------------------------------------------------------
 */
-
 export function normalizeItemsForApi(cart) {
-  const arr = Array.isArray(cart) ? cart : [];
+  return serializeCartItemsWithMenuSets(cart, (normalItems) => {
+    return normalItems.map((it) => {
+      if (isPreparedItemLine(it)) {
+        return serializePreparedItemLine(it);
+      }
 
-  return arr.map((it) => {
-    if (isPreparedItemLine(it)) {
-      return serializePreparedItemLine(it);
-    }
+      const out = {
+        product_id: Number(it.product_id),
+        variant_id: it.variant_id ? Number(it.variant_id) : null,
+        quantity: Number(it.quantity || 1),
+        notes: it.notes ? String(it.notes).slice(0, 500) : null,
+      };
 
-    const out = {
-      product_id: Number(it.product_id),
-      variant_id: it.variant_id ? Number(it.variant_id) : null,
-      quantity: Number(it.quantity || 1),
-      notes: it.notes ? String(it.notes).slice(0, 500) : null,
-    };
+      const parentModifiers = normalizeModifierGroupsForKey(it?.modifiers || []);
 
-    const parentModifiers = normalizeModifierGroupsForKey(it?.modifiers || []);
+      if (parentModifiers.length > 0) {
+        out.modifiers = parentModifiers.map((g) => ({
+          ...g,
+          options: g.options.map((o) => ({
+            modifier_option_id: Number(o.modifier_option_id),
+            quantity: Number(o.quantity || 1),
+          })),
+        }));
+      }
 
-    if (parentModifiers.length > 0) {
-      out.modifiers = parentModifiers.map((g) => ({
-        ...g,
-        options: g.options.map((o) => ({
-          modifier_option_id: Number(o.modifier_option_id),
-          quantity: Number(o.quantity || 1),
-        })),
-      }));
-    }
+      if (Array.isArray(it.components) && it.components.length > 0) {
+        out.components = normalizeCompositeComponentsForKey(it.components).map((c) => {
+          const componentPayload = {
+            component_product_id: Number(c.component_product_id),
+            variant_id: c.variant_id ? Number(c.variant_id) : null,
+            quantity: c.quantity == null ? null : Number(c.quantity),
+          };
 
-    if (Array.isArray(it.components) && it.components.length > 0) {
-      out.components = normalizeCompositeComponentsForKey(it.components).map((c) => {
-        const componentPayload = {
-          component_product_id: Number(c.component_product_id),
-          variant_id: c.variant_id ? Number(c.variant_id) : null,
-          quantity: c.quantity == null ? null : Number(c.quantity),
-        };
+          const componentModifiers = normalizeModifierGroupsForKey(c?.modifiers || []);
 
-        const componentModifiers = normalizeModifierGroupsForKey(c?.modifiers || []);
+          if (componentModifiers.length > 0) {
+            componentPayload.modifiers = componentModifiers.map((g) => ({
+              ...g,
+              options: g.options.map((o) => ({
+                modifier_option_id: Number(o.modifier_option_id),
+                quantity: Number(o.quantity || 1),
+              })),
+            }));
+          }
 
-        if (componentModifiers.length > 0) {
-          componentPayload.modifiers = componentModifiers.map((g) => ({
-            ...g,
-            options: g.options.map((o) => ({
-              modifier_option_id: Number(o.modifier_option_id),
-              quantity: Number(o.quantity || 1),
-            })),
-          }));
-        }
-
-        return componentPayload;
-      });
-    }
-
-    return out;
-  }).filter(Boolean);
+          return componentPayload;
+        });
+      }
+      return out;
+    }).filter(Boolean);
+  });
 }
 
 export function normalizeOnlineOrderItemsForApi(cart) {
-  const arr = Array.isArray(cart) ? cart : [];
+  return serializeCartItemsWithMenuSets(cart, (normalItems) => {
+    return normalItems.map((item) => {
+      if (isPreparedItemLine(item)) {
+        return serializePreparedItemLine(item);
+      }
 
-  return arr.map((item) => {
-    if (isPreparedItemLine(item)) {
-      return serializePreparedItemLine(item);
-    }
+      const payload = {
+        product_id: Number(item.product_id),
+        variant_id: item.variant_id ? Number(item.variant_id) : null,
+        quantity: Number(item.quantity || 1),
+        notes: item.notes ? String(item.notes).slice(0, 500) : null,
+      };
 
-    const payload = {
-      product_id: Number(item.product_id),
-      variant_id: item.variant_id ? Number(item.variant_id) : null,
-      quantity: Number(item.quantity || 1),
-      notes: item.notes ? String(item.notes).slice(0, 500) : null,
-    };
+      const parentModifiers = normalizeModifierGroupsForKey(item?.modifiers || []);
 
-    const parentModifiers = normalizeModifierGroupsForKey(item?.modifiers || []);
+      if (parentModifiers.length > 0) {
+        payload.modifiers = parentModifiers.map((group) => ({
+          modifier_group_id: Number(group.modifier_group_id),
+          options: group.options.map((option) => ({
+            modifier_option_id: Number(option.modifier_option_id),
+            quantity: Number(option.quantity || 1),
+          })),
+        }));
+      }
 
-    if (parentModifiers.length > 0) {
-      payload.modifiers = parentModifiers.map((group) => ({
-        modifier_group_id: Number(group.modifier_group_id),
-        options: group.options.map((option) => ({
-          modifier_option_id: Number(option.modifier_option_id),
-          quantity: Number(option.quantity || 1),
-        })),
-      }));
-    }
+      if (Array.isArray(item.components) && item.components.length > 0) {
+        payload.components = normalizeCompositeComponentsForKey(item.components).map((component) => {
+          const componentPayload = {
+            component_product_id: Number(component.component_product_id),
+            variant_id: component.variant_id ? Number(component.variant_id) : null,
+          };
 
-    if (Array.isArray(item.components) && item.components.length > 0) {
-      payload.components = normalizeCompositeComponentsForKey(item.components).map((component) => {
-        const componentPayload = {
-          component_product_id: Number(component.component_product_id),
-          variant_id: component.variant_id ? Number(component.variant_id) : null,
-        };
+          const componentModifiers = normalizeModifierGroupsForKey(component?.modifiers || []);
 
-        const componentModifiers = normalizeModifierGroupsForKey(component?.modifiers || []);
+          if (componentModifiers.length > 0) {
+            componentPayload.modifiers = componentModifiers.map((group) => ({
+              modifier_group_id: Number(group.modifier_group_id),
+              options: group.options.map((option) => ({
+                modifier_option_id: Number(option.modifier_option_id),
+                quantity: Number(option.quantity || 1),
+              })),
+            }));
+          }
 
-        if (componentModifiers.length > 0) {
-          componentPayload.modifiers = componentModifiers.map((group) => ({
-            modifier_group_id: Number(group.modifier_group_id),
-            options: group.options.map((option) => ({
-              modifier_option_id: Number(option.modifier_option_id),
-              quantity: Number(option.quantity || 1),
-            })),
-          }));
-        }
+          return componentPayload;
+        });
+      }
+      return payload;
+    }).filter(Boolean);
+  });
+}
 
-        return componentPayload;
-      });
-    }
+export function buildPublicOrderSelectionErrorMessage(errorInfo, fallback = "Revisa los productos de tu pedido e intenta nuevamente.") {
+  const info = errorInfo?.response ? extractApiErrorInfo(errorInfo) : errorInfo || {};
+  const errors = info?.errors && typeof info.errors === "object" ? info.errors : {};
 
-    return payload;
-  }).filter(Boolean);
+  const messages = [
+    ...Object.values(errors).flatMap((value) => Array.isArray(value) ? value : [value]),
+    info?.message,
+  ];
+
+  for (const value of messages) {
+    const message = String(value || "").trim();
+    if (!message || message === "[object Object]") continue;
+
+    const technical = (
+      /^(the\s|validation\s|sqlstate\b)/i.test(message) ||
+      /items\.\d+|selections\.\d+|menu_set_id|menu_set_product_id|product_id|variant_id|prepared_item_id|modifier_group_id|backend|frontend/i.test(message)
+    );
+
+    if (!technical) return message;
+  }
+
+  return fallback;
 }
 
 export function isActiveOrderStatus(status) {
@@ -291,6 +317,14 @@ export function buildOnlineOrderPublicErrorMessage(error, fallback) {
   }
 
   return friendlyByField[firstError.field] || fallback;
+}
+
+export function countPublicOrderRootItems(items) {
+  const rows = Array.isArray(items) ? items : [];
+
+  return rows.filter((item) => {
+    return Number(item?.parent_order_item_id || 0) <= 0;
+  }).length;
 }
 
 export function buildCartPromotionMetadata(source, basePrice) {
@@ -518,6 +552,14 @@ export function applyAvailabilityErrorToCart(items, apiError) {
     }
 
     marked = true;
+
+    if (isMenuSetCartLine(item)) {
+      return {
+        ...item,
+        menu_set_invalid: true,
+        menu_set_invalid_reason: "Este Conjunto ya no está disponible. Revisa sus productos.",
+      };
+    }
 
     return {
       ...item,

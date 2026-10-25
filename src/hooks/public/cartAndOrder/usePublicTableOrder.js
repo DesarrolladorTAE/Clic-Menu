@@ -1,3 +1,4 @@
+//src/hooks/public/cartAndOrder/usePublicTableOrder.js
 import {
   useCallback,
   useMemo,
@@ -15,11 +16,14 @@ import {
   isAvailabilityErrorCode,
 } from "../publicMenu.utils";
 import {
+  buildPublicOrderSelectionErrorMessage,
   isActiveOrderStatus,
   isPendingLikeStatus,
   mergeConfirmedOrderTotals,
   normalizeItemsForApi,
 } from "./publicCartAndOrder.utils";
+
+import { MenuSetPayloadError } from "../../menu/menu-sets/menuSetPayload.utils";
 
 const PENDING_ITEMS_STATUSES = new Set([
   "pending",
@@ -49,7 +53,6 @@ const HIDDEN_HISTORY_STATUSES = new Set([
 | - useCartAndOrder.js.
 |--------------------------------------------------------------------------
 */
-
 export function usePublicTableOrder({
   token,
 
@@ -311,29 +314,27 @@ export function usePublicTableOrder({
         };
       }
 
-      const items =
-        normalizeItemsForApi(cart);
-
       try {
-        const res =
-          await createPublicOrder({
-            token:
-              String(token || ""),
+        const items = normalizeItemsForApi(cart);
 
-            customer_name:
-              name,
+        const res = await createPublicOrder({
+          token:
+            String(token || ""),
 
-            party_size:
-              occupancyPayload.party_size,
+          customer_name:
+            name,
 
-            adult_count:
-              occupancyPayload.adult_count,
+          party_size:
+            occupancyPayload.party_size,
 
-            child_count:
-              occupancyPayload.child_count,
+          adult_count:
+            occupancyPayload.adult_count,
 
-            items,
-          });
+          child_count:
+            occupancyPayload.child_count,
+
+          items,
+        });
 
         if (res?.ok) {
           const responseData =
@@ -398,7 +399,7 @@ export function usePublicTableOrder({
           setSendOpen(false);
 
           setSendToast(
-            "✅ Comanda enviada. En espera de aprobación.",
+            "Comanda enviada. En espera de aprobación.",
           );
 
           setPreparedCartMessage("");
@@ -422,13 +423,15 @@ export function usePublicTableOrder({
           ok: false,
         };
       } catch (e) {
-        const preparedError =
-          await handlePreparedItemRequestError(e);
+        if (e instanceof MenuSetPayloadError) {
+          setSendToast(`⚠️ ${e.message}`);
+          return { ok: false, selectionError: true };
+        }
+
+        const preparedError = await handlePreparedItemRequestError(e);
 
         if (preparedError) {
-          setSendToast(
-            preparedError.message,
-          );
+          setSendToast(preparedError.message);
 
           return preparedError;
         }
@@ -479,48 +482,17 @@ export function usePublicTableOrder({
           };
         }
 
-        const validationErrors =
-          apiError?.errors ||
-          e?.response?.data?.errors ||
-          null;
-
-        if (
-          validationErrors &&
-          typeof validationErrors === "object"
-        ) {
-          const firstKey =
-            Object.keys(
-              validationErrors,
-            )[0];
-
-          const firstMessage =
-            Array.isArray(
-              validationErrors[firstKey],
-            )
-              ? validationErrors[firstKey][0]
-              : validationErrors[firstKey];
-
-          if (firstMessage) {
-            setSendToast(
-              `⚠️ ${firstMessage}`,
-            );
-
-            return {
-              ok: false,
-            };
-          }
-        }
-
-        const msg =
-          apiError?.message ||
-          "No se pudo crear la comanda.";
-
-        setSendToast(
-          `⚠️ ${msg}`,
+        const message = buildPublicOrderSelectionErrorMessage(
+          apiError,
+          "No se pudo crear la comanda. Revisa tus productos y Conjuntos.",
         );
+
+        setSendToast(`⚠️ ${message}`);
 
         return {
           ok: false,
+          selectionError: apiError.status === 409 || apiError.status === 422,
+          code: apiError.code || null,
         };
       }
     },
@@ -559,20 +531,18 @@ export function usePublicTableOrder({
         };
       }
 
-      const items =
-        normalizeItemsForApi(cart);
-
       try {
-        const res =
-          await appendPublicOrderItems({
-            orderId:
-              Number(orderId),
+        const items = normalizeItemsForApi(cart);
 
-            token:
-              String(token || ""),
+        const res = await appendPublicOrderItems({
+          orderId:
+            Number(orderId),
 
-            items,
-          });
+          token:
+            String(token || ""),
+
+          items,
+        });
 
         if (res?.ok) {
           const responseData =
@@ -586,8 +556,7 @@ export function usePublicTableOrder({
               previous,
               responseData,
               {
-                id:
-                  Number(orderId),
+                id: Number(orderId),
 
                 status:
                   previous?.status ||
@@ -598,14 +567,10 @@ export function usePublicTableOrder({
 
           setCart([]);
 
-          setSendToast(
-            "✅ Productos agregados a la orden.",
-          );
+          setSendToast("Tu selección se agregó a la comanda");
 
           try {
-            await refreshOrder(
-              orderId,
-            );
+            await refreshOrder(orderId);
           } catch {
             /*
             * El append ya fue procesado.
@@ -633,32 +598,25 @@ export function usePublicTableOrder({
           ok: false,
         };
       } catch (e) {
-        const preparedError =
-          await handlePreparedItemRequestError(e);
+        if (e instanceof MenuSetPayloadError) {
+          setSendToast(`⚠️ ${e.message}`);
+          return { ok: false, selectionError: true };
+        }
+
+        const preparedError = await handlePreparedItemRequestError(e);
 
         if (preparedError) {
-          setSendToast(
-            preparedError.message,
-          );
+          setSendToast(preparedError.message);
 
           return preparedError;
         }
 
-        const apiError =
-          extractApiErrorInfo(e);
+        const apiError = extractApiErrorInfo(e);
 
-        if (
-          isAvailabilityErrorCode(
-            apiError.code,
-          )
-        ) {
-          markCartAvailabilityError(
-            apiError,
-          );
+        if (isAvailabilityErrorCode(apiError.code)) {
+          markCartAvailabilityError(apiError);
 
-          setSendToast(
-            `⚠️ ${buildAvailabilityErrorMessage(apiError)}`,
-          );
+          setSendToast(`⚠️ ${buildAvailabilityErrorMessage(apiError)}`);
 
           return {
             ok: false,
@@ -669,16 +627,17 @@ export function usePublicTableOrder({
           };
         }
 
-        const msg =
-          apiError?.message ||
-          "No se pudieron agregar productos.";
-
-        setSendToast(
-          `⚠️ ${msg}`,
+        const message = buildPublicOrderSelectionErrorMessage(
+          apiError,
+          "No se pudo ampliar la comanda. Revisa tus productos y Conjuntos.",
         );
+
+        setSendToast(`⚠️ ${message}`);
 
         return {
           ok: false,
+          selectionError: apiError.status === 409 || apiError.status === 422,
+          code: apiError.code || null,
         };
       }
     },

@@ -50,6 +50,28 @@ export async function fetchResolvedMenu(token) {
 
 /**
  * =========================================================
+ * 2.1) Conjuntos del menú público
+ * =========================================================
+ * El servidor resuelve el menú correspondiente al QR.
+ * La fecha de servicio es opcional.
+ */
+export async function fetchPublicMenuSets(token, { serviceDate = null } = {}) {
+  const safeToken = encodeURIComponent(String(token || "").trim());
+  const params = {};
+
+  if (serviceDate) {
+    params.service_date = String(serviceDate);
+  }
+
+  const { data } = await publicApi.get(`/public/menu/${safeToken}/sets`, {
+    params,
+  });
+
+  return data?.data;
+}
+
+/**
+ * =========================================================
  * 2.5) Preparación rápida
  * =========================================================
  * Consulta las unidades físicas disponibles para el contexto público

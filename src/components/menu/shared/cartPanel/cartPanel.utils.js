@@ -85,6 +85,23 @@ export function classifyOrderHistoryItems(items = []) {
   );
 }
 
+export function isOldMenuSetRoot(item) {
+  if (!item || typeof item !== "object") return false;
+  if (item.is_menu_set_product === true) return false;
+
+  const parentId = Number(item.parent_order_item_id || 0);
+  const productId = Number(item.product_id || 0);
+
+  if (parentId > 0 || productId > 0) return false;
+
+  return (
+    item.is_menu_set_root === true ||
+    item.commercial_type === "menu_set" ||
+    item.item_kind === "menu_set" ||
+    (Number(item.menu_set_id || 0) > 0 && item.product_id == null)
+  );
+}
+
 export function getToastStyles(sendToast = "") {
   const msg = String(sendToast || "");
 
@@ -125,27 +142,147 @@ export function getToastStyles(sendToast = "") {
 }
 
 export function buildOldItemsTree(items = []) {
-  const arr = Array.isArray(items) ? items : [];
-  const parents = arr.filter((it) => !it?.parent_order_item_id);
+  const source = Array.isArray(items) ? items : [];
+  const records = new Map();
+  const order = [];
+  const visitedReferences = new WeakSet();
+  let anonymousId = 0;
+
+  const getId = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const id = Number(value);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  };
+
+  const register = (item, nestedParentKey = null, depth = 0) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return;
+    if (depth > 20 || visitedReferences.has(item)) return;
+
+    visitedReferences.add(item);
+
+    const id = getId(item.id ?? item.order_item_id);
+    const key = id !== null ? `item:${id}` : `anonymous:${++anonymousId}`;
+    const explicitParentId = getId(item.parent_order_item_id);
+    const parentKey = explicitParentId !== null
+      ? `item:${explicitParentId}`
+      : nestedParentKey;
+
+    const previous = records.get(key);
+
+    if (!previous) {
+      order.push(key);
+      records.set(key, {
+        data: { ...item, children: [] },
+        parentKey: parentKey !== key ? parentKey : null,
+      });
+    } else {
+      records.set(key, {
+        data: { ...previous.data, ...item, children: [] },
+        parentKey: parentKey && parentKey !== key ? parentKey : previous.parentKey,
+      });
+    }
+
+    const children = Array.isArray(item.children) ? item.children : [];
+    children.forEach((child) => register(child, key, depth + 1));
+  };
+
+  source.forEach((item) => register(item));
+
   const childrenByParent = new Map();
+  const rootKeys = [];
 
-  arr.forEach((it) => {
-    const pid = it?.parent_order_item_id;
-    if (!pid) return;
-    if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
-    childrenByParent.get(pid).push(it);
+  order.forEach((key) => {
+    const parentKey = records.get(key)?.parentKey;
+
+    if (!parentKey || !records.has(parentKey) || parentKey === key) {
+      rootKeys.push(key);
+      return;
+    }
+
+    if (!childrenByParent.has(parentKey)) childrenByParent.set(parentKey, []);
+    childrenByParent.get(parentKey).push(key);
   });
 
-  return parents.map((parent) => {
-    const nestedChildren = childrenByParent.get(parent.id);
+  const completed = new Set();
+  const active = new Set();
 
-    return {
-      ...parent,
-      children: Array.isArray(nestedChildren)
-        ? nestedChildren
-        : Array.isArray(parent?.children)
-          ? parent.children
-          : [],
-    };
+  const assemble = (key) => {
+    if (completed.has(key) || active.has(key)) return null;
+
+    const record = records.get(key);
+    if (!record) return null;
+
+    active.add(key);
+
+    const children = (childrenByParent.get(key) || [])
+      .map(assemble)
+      .filter(Boolean);
+
+    active.delete(key);
+    completed.add(key);
+
+    const node = { ...record.data, children };
+
+    if (isOldMenuSetRoot(node)) {
+      const historicalStages = Array.isArray(node.stages) ? node.stages : [];
+
+      if (children.length > 0) {
+        const groups = new Map();
+
+        const stageKey = (stageId, stageName) => {
+          const id = getId(stageId);
+          return id !== null
+            ? `stage:${id}`
+            : `name:${String(stageName || "Sin etapa")}`;
+        };
+
+        historicalStages.forEach((stage) => {
+          const key = stageKey(
+            stage.menu_set_stage_definition_id,
+            stage.menu_set_stage_name_snapshot ?? stage.name,
+          );
+
+          if (!groups.has(key)) {
+            groups.set(key, { ...stage, items: [] });
+          }
+        });
+
+        children.forEach((child) => {
+          const stageId = getId(child.menu_set_stage_definition_id);
+          const stageName = child.menu_set_stage_name_snapshot || "Productos del Conjunto";
+          const key = stageKey(stageId, stageName);
+
+          if (!groups.has(key)) {
+            groups.set(key, {
+              menu_set_stage_definition_id: stageId,
+              menu_set_stage_name_snapshot: stageName,
+              items: [],
+            });
+          }
+
+          groups.get(key).items.push(child);
+        });
+
+        node.stages = Array.from(groups.values()).filter(
+          (stage) => stage.items.length > 0,
+        );
+      } else {
+        node.stages = historicalStages;
+      }
+    }
+
+    return node;
+  };
+
+  const tree = rootKeys.map(assemble).filter(Boolean);
+
+  // Conserva partidas con referencias incompletas sin perderlas silenciosamente.
+  order.forEach((key) => {
+    if (completed.has(key)) return;
+
+    const node = assemble(key);
+    if (node) tree.push(node);
   });
+
+  return tree;
 }
