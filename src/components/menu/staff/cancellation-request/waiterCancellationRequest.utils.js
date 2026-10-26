@@ -160,6 +160,24 @@ export function buildRequestedItems(request, context) {
     }
   });
 
+  const isFull = String(request?.type || "").toLowerCase() === "full";
+  const effectiveContextItems = contextItems.filter((item) => getEffectiveQuantity(item) > 0);
+
+  // Una solicitud total debe conservar exactamente las partidas y cantidades originales.
+  const fullRequestChanged = isFull && (
+    requestItems.length !== effectiveContextItems.length ||
+    requestItems.some((requestedItem) => {
+      const orderItemId = getOrderItemId(requestedItem);
+      const currentItem = contextById.get(orderItemId);
+
+      if (!orderItemId || !currentItem) {
+        return true;
+      }
+
+      return getRequestedQuantity(requestedItem) !== getEffectiveQuantity(currentItem);
+    })
+  );
+
   return requestItems.map((requestedItem) => {
     const orderItemId = getOrderItemId(requestedItem);
 
@@ -180,12 +198,46 @@ export function buildRequestedItems(request, context) {
     } else if (requestedQuantity <= 0) {
       stale = true;
       staleMessage = "La solicitud ya no tiene una cantidad válida para este producto.";
-    } else if (currentItem?.can_cancel === false) {
+    } else if (currentItem.can_cancel === false) {
       stale = true;
       staleMessage = "Este producto ya no se puede cancelar en su estado actual.";
     } else if (effectiveQuantity < requestedQuantity) {
       stale = true;
       staleMessage = "La cantidad disponible cambió desde que el cliente hizo la solicitud.";
+    } else if (Boolean(requestedItem?.is_menu_set) !== Boolean(currentItem?.is_menu_set)) {
+      stale = true;
+      staleMessage = "La estructura comercial del producto cambió desde que se solicitó la cancelación.";
+    } else if (currentItem.is_menu_set) {
+      const requestedPhysicalItems = Array.isArray(requestedItem?.physical_items)
+        ? requestedItem.physical_items : [];
+
+      const currentPhysicalItems = Array.isArray(currentItem?.physical_items)
+        ? currentItem.physical_items : [];
+
+      const requestedPhysicalIds = requestedPhysicalItems
+        .map(getOrderItemId)
+        .sort((a, b) => a - b);
+
+      const currentPhysicalIds = currentPhysicalItems
+        .map(getOrderItemId)
+        .sort((a, b) => a - b);
+
+      const selectionChanged =
+        requestedPhysicalIds.length === 0 ||
+        requestedPhysicalIds.length !== currentPhysicalIds.length ||
+        requestedPhysicalIds.some((id, index) => {
+          return !id || id !== currentPhysicalIds[index];
+        });
+
+      if (selectionChanged) {
+        stale = true;
+        staleMessage = "Los productos del Conjunto cambiaron desde que el cliente solicitó cancelarlo.";
+      }
+    }
+
+    if (!stale && fullRequestChanged) {
+      stale = true;
+      staleMessage = "La comanda cambió y esta solicitud de cancelación total ya no coincide con sus unidades actuales.";
     }
 
     return {
@@ -203,15 +255,24 @@ export function buildRequestedItems(request, context) {
 }
 
 export function getPhysicalResolutionItems(items) {
-  return (Array.isArray(items) ? items : []).filter((item) => {
+  const physicalCandidates = (Array.isArray(items) ? items : []).flatMap((item) => {
     if (item?.stale) {
-      return false;
+      return [];
     }
 
+    if (item?.is_menu_set) {
+      return Array.isArray(item?.physical_items) ? item.physical_items : [];
+    }
+
+    return [item];
+  });
+
+  return physicalCandidates.filter((item) => {
+    const orderItemId = getOrderItemId(item);
     const reuseOptions = normalizePhysicalOptions(item, "reuse_intents");
     const deliveryOptions = normalizePhysicalOptions(item, "delivery_states");
 
-    return reuseOptions.length > 0 || deliveryOptions.length > 0;
+    return Boolean(orderItemId) && (reuseOptions.length > 0 || deliveryOptions.length > 0);
   });
 }
 
@@ -250,11 +311,7 @@ export function normalizeAuthorizers(context) {
 export function buildInitialItemDecisions(items) {
   const decisions = {};
 
-  (Array.isArray(items) ? items : []).forEach((item) => {
-    if (item?.stale) {
-      return;
-    }
-
+  getPhysicalResolutionItems(items).forEach((item) => {
     const orderItemId = getOrderItemId(item);
 
     if (!orderItemId) {
@@ -286,7 +343,7 @@ export function buildInitialItemDecisions(items) {
 }
 
 export function buildApprovalPayload(items, decisions, requiresAuthorization, authorizerUserId, pin) {
-  const decisionItems = (Array.isArray(items) ? items : []).map((item) => {
+  const decisionItems = getPhysicalResolutionItems(items).map((item) => {
     const orderItemId = getOrderItemId(item);
 
     if (!orderItemId || item?.stale) {

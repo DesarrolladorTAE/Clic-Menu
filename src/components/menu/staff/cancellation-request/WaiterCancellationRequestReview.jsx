@@ -1,11 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Button,
-  Chip,
-  Divider,
-  Stack,
-  Typography,
+  Box, Button, Chip, Divider, Stack, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
@@ -200,13 +195,14 @@ export default function WaiterCancellationRequestReview({
           }}
         >
           {items.map((item) => {
-            const orderItemId =
-              getOrderItemId(item);
+            const orderItemId = getOrderItemId(item);
+            const isMenuSet = Boolean(item?.is_menu_set);
 
-            const kitchenLabel =
-              getKitchenStatusLabel(
-                item?.kitchen_status,
-              );
+            const physicalItems = isMenuSet && Array.isArray(item?.physical_items)
+              ? item.physical_items : [];
+
+            const kitchenLabel = isMenuSet
+              ? null : getKitchenStatusLabel(item?.kitchen_status);
 
             return (
               <Box
@@ -268,22 +264,114 @@ export default function WaiterCancellationRequestReview({
                       ) : null}
                     </Box>
 
-                    <Chip
-                      label={`Cant. ${getRequestedQuantity(
-                        item,
-                      )}`}
+                     <Chip
+                      label={`Cant. ${getRequestedQuantity(item)}`}
                       size="small"
                       sx={{
                         flexShrink: 0,
-                        bgcolor: alpha(
-                          primaryColor,
-                          0.1,
-                        ),
+                        bgcolor: alpha(primaryColor, 0.1),
                         color: primaryColor,
                         fontWeight: 800,
                       }}
                     />
                   </Stack>
+
+                  {isMenuSet ? (
+                    <Box
+                      sx={{
+                        mt: 0.5,
+                        p: 1.25,
+                        borderLeft: "3px solid",
+                        borderColor: "primary.main",
+                        bgcolor: "background.default",
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          mb: 1,
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: "text.secondary",
+                        }}
+                      >
+                        Productos del Conjunto
+                      </Typography>
+
+                      {physicalItems.length > 0 ? (
+                        <Stack spacing={0.75}>
+                          {physicalItems.map((physical) => {
+                            const physicalId = getOrderItemId(physical);
+                            const physicalStatus = getKitchenStatusLabel(
+                              physical?.kitchen_status ||
+                              physical?.current_kitchen_status ||
+                              physical?.kitchen_status_at_request,
+                            );
+
+                            return (
+                              <Box
+                                key={`qr-cancellation-physical-${orderItemId}-${physicalId}`}
+                                sx={{
+                                  px: 1.25,
+                                  py: 1,
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  borderRadius: 1,
+                                  bgcolor: "background.paper",
+                                }}
+                              >
+                                <Stack
+                                  direction={{ xs: "column", sm: "row" }}
+                                  justifyContent="space-between"
+                                  alignItems={{ xs: "flex-start", sm: "center" }}
+                                  spacing={0.75}
+                                >
+                                  <Typography
+                                    sx={{
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      color: "text.primary",
+                                      lineHeight: 1.4,
+                                    }}
+                                  >
+                                    {getItemLabel(physical)}
+                                  </Typography>
+
+                                  {physicalStatus ? (
+                                    <Chip
+                                      label={`Cocina: ${physicalStatus}`}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{
+                                        height: "auto",
+                                        minHeight: 24,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        "& .MuiChip-label": {
+                                          whiteSpace: "normal",
+                                          py: 0.4,
+                                        },
+                                      }}
+                                    />
+                                  ) : null}
+                                </Stack>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      ) : (
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: "warning.main",
+                            fontWeight: 700,
+                          }}
+                        >
+                          No se encontraron productos físicos para este Conjunto.
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : null}
 
                   {item?.stale ? (
                     <Typography

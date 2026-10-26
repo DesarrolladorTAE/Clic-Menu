@@ -612,12 +612,14 @@ export default function StaffMenuEntryPage() {
   const preparedContextOrderId = Number(menuContextOrderId || 0) || null;
   const preparedContextTableId = preparedContextOrderId ? null : Number(tableId || 0) || null;
 
+  const preparedContextKey = preparedContextOrderId
+    ? `waiter:order:${preparedContextOrderId}:menu:${currentMenuId}`
+    : `waiter:table:${preparedContextTableId}:menu:${currentMenuId}`;
+
   const preparedItemsCollection = usePreparedItemsCollection({
     initialItems: initialPreparedItems,
     enabled: currentMenuId > 0 && Boolean(preparedContextOrderId || preparedContextTableId),
-    contextKey: preparedContextOrderId
-      ? `waiter:order:${preparedContextOrderId}:menu:${currentMenuId}`
-      : `waiter:table:${preparedContextTableId}:menu:${currentMenuId}`,
+    contextKey: preparedContextKey,
     loader: async () => {
       const response = await fetchPreparedItems(
         preparedContextOrderId
@@ -647,27 +649,46 @@ export default function StaffMenuEntryPage() {
   });
 
   const refreshPreparedItems = useCallback(async () => {
-    const nextItems = await preparedItemsCollection.refetch();
-    cartOrder.reconcilePreparedItems?.(nextItems);
+    const result = await preparedItemsCollection.refetchWithStatus();
 
-    return nextItems;
-  }, [
-    preparedItemsCollection.refetch,
-    cartOrder.reconcilePreparedItems,
-  ]);
+    if (!result.ok || result.contextKey !== preparedContextKey) {
+      return null;
+    }
+
+    return result.items;
+  }, [preparedItemsCollection.refetchWithStatus, preparedContextKey]);
 
   useEffect(() => {
-    if (!currentMenuId || preparedItemsCollection.loading) return;
+    if (!currentMenuId || !preparedItemsCollection.isConfirmed) return;
 
-    cartOrder.reconcilePreparedItems?.(
-      preparedItemsCollection.items,
-    );
+    if (preparedItemsCollection.confirmedContextKey !== preparedContextKey) {
+      return;
+    }
+
+    cartOrder.reconcilePreparedItems?.(preparedItemsCollection.items);
   }, [
     currentMenuId,
+    preparedContextKey,
     preparedItemsCollection.items,
-    preparedItemsCollection.loading,
+    preparedItemsCollection.isConfirmed,
+    preparedItemsCollection.confirmedContextKey,
     cartOrder.reconcilePreparedItems,
   ]);
+
+  /*
+   * Mantiene actualizadas las funciones usadas por WebSocket
+   * sin registrar nuevamente la suscripción en cada render.
+   */
+  const tableRealtimeRef = useRef(null);
+
+  tableRealtimeRef.current = {
+    load,
+    loadExisting: cartOrder.loadExisting,
+    refreshPreparedItems,
+    activeOrderId,
+    effectiveOrderId,
+    preparedContextOrderId,
+  };
 
   useEffect(() => {
     if (!branchId || !tableId) return;
@@ -677,80 +698,58 @@ export default function StaffMenuEntryPage() {
     const channel = echo.private(channelName);
 
     const onTableUpdated = async (event) => {
-      const eventTableId =
-        Number(event?.table_id || 0);
+      const eventTableId = Number(event?.table_id || 0);
 
-      if (
-        !eventTableId ||
-        eventTableId !== currentTableId
-      ) {
-        return;
-      }
+      if (!eventTableId || eventTableId !== currentTableId) return;
+      if (realtimeBusyRef.current) return;
 
-      if (realtimeBusyRef.current) {
-        return;
-      }
+      const latest = tableRealtimeRef.current;
+      if (!latest) return;
 
       realtimeBusyRef.current = true;
 
       try {
-        const incomingOrderId =
-          Number(event?.order_id || 0);
-
-        const currentActiveOrderId =
-          Number(cartOrder?.activeOrder?.id || 0);
+        const incomingOrderId = Number(event?.order_id || 0);
 
         const targetOrderId =
           incomingOrderId ||
-          currentActiveOrderId ||
-          Number(effectiveOrderId || 0);
+          Number(latest.activeOrderId || 0) ||
+          Number(latest.effectiveOrderId || 0) ||
+          null;
 
         /*
-        * Si el evento ya contiene order_id, el menú se recarga
-        * directamente con ese contexto.
-        *
-        * Así no se consulta table_id cuando la mesa ya tiene orden.
-        */
-        await load({
+         * Resolver el menú con el contexto de la orden actual.
+         * El cambio de contexto actualizará también Preparación rápida.
+         */
+        await latest.load({
           silent: true,
-          orderIdOverride:
-            targetOrderId || null,
+          orderIdOverride: targetOrderId,
         }).catch(() => {});
 
-        if (targetOrderId) {
-          await cartOrder
-            .loadExisting({
-              orderId: targetOrderId,
-              force: true,
-            })
-            .catch(() => {});
-        } else {
-          await cartOrder
-            .loadExisting({
-              force: true,
-            })
-            .catch(() => {});
-        }
+        await latest.loadExisting({
+          ...(targetOrderId ? { orderId: targetOrderId } : {}),
+          force: true,
+        }).catch(() => {});
 
-        await refreshPreparedItems().catch(() => {});
+        /*
+         * No consultar Preparación rápida con un contexto anterior
+         * si el evento acaba de cambiar la orden de la mesa.
+         */
+        if (!targetOrderId || targetOrderId === latest.preparedContextOrderId) {
+          await latest.refreshPreparedItems().catch(() => {});
+        }
       } finally {
         realtimeBusyRef.current = false;
       }
     };
-
 
     channel.listen(".table.grid.updated", onTableUpdated);
 
     return () => {
       echo.leave(channelName);
     };
-  }, [
-    branchId,
-    tableId,
-    cartOrder,
-    effectiveOrderId,
-    refreshPreparedItems,
-  ]);
+  }, [branchId, tableId]);
+
 
   useMenuAvailabilityRealtime({
     echo,

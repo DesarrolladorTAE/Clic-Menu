@@ -14,6 +14,7 @@ import MenuSetManageTabs from "../../../../components/menu/menuSets/manage/MenuS
 import MenuSetGeneralTab from "../../../../components/menu/menuSets/manage/MenuSetGeneralTab";
 import MenuSetStagesTab from "../../../../components/menu/menuSets/manage/stages/MenuSetStagesTab";
 import MenuSetCapacityTab from "../../../../components/menu/menuSets/manage/capacities/MenuSetCapacityTab";
+import MenuSetActivationTab from "../../../../components/menu/menuSets/manage/MenuSetActivationTab";
 import MenuSetAvailabilityTab from "../../../../components/menu/menuSets/manage/availability/MenuSetAvailabilityTab";
 
 import { getMenuSet } from "../../../../services/menu/menuSets/menuSet.service";
@@ -47,11 +48,12 @@ export default function MenuSetManagePage() {
 
   const [menuSet, setMenuSet] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checkingActivation, setCheckingActivation] = useState(false);
 
   const [activeTab, setActiveTab] = useState(() => {
     const initialTab = location.state?.activeTab;
 
-    return ["general", "stages", "capacities", "availability"].includes(initialTab)
+    return ["general", "stages", "capacities", "activation", "availability"].includes(initialTab)
       ? initialTab
       : "general";
   });
@@ -113,6 +115,55 @@ export default function MenuSetManagePage() {
       active = false;
     };
   }, [restaurantId, branchId, menuSetId, showAlert]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Sincronizar la preparación sin recargar la página
+  |--------------------------------------------------------------------------
+  */
+  useEffect(() => {
+    if (activeTab !== "activation" || !menuSet?.id) {
+      return undefined;
+    }
+
+    let active = true;
+    setCheckingActivation(true);
+
+    const checkConfiguration = async () => {
+      try {
+        const updatedSet = await getMenuSet(restaurantId, branchId, menuSetId);
+
+        if (!active) return;
+
+        if (updatedSet?.id) {
+          setMenuSet(updatedSet);
+        }
+      } catch (error) {
+        if (!active) return;
+
+        showAlert({
+          severity: "error",
+          title: "No se pudo comprobar",
+          message: getErrorMessage(error, "No se pudo consultar la configuración actual del conjunto."),
+        });
+      } finally {
+        if (active) setCheckingActivation(false);
+      }
+    };
+
+    checkConfiguration();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    activeTab,
+    menuSet?.id,
+    restaurantId,
+    branchId,
+    menuSetId,
+    showAlert,
+  ]);
 
   const handleBack = () => {
     navigate("..", {
@@ -279,6 +330,19 @@ export default function MenuSetManagePage() {
                 menuSet={menuSet}
                 onUpdated={handleUpdated}
                 onAlert={showAlert}
+              />
+            ) : null}
+
+            {/* Activación */}
+            {activeTab === "activation" ? (
+              <MenuSetActivationTab
+                restaurantId={restaurantId}
+                branchId={branchId}
+                menuSet={menuSet}
+                onUpdated={handleUpdated}
+                onAlert={showAlert}
+                onNavigate={setActiveTab}
+                checking={checkingActivation}
               />
             ) : null}
 

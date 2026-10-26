@@ -194,13 +194,48 @@ export function buildPreparedItemCartLine(preparedItem) {
 }
 
 /**
- * Comprueba si una unidad física ya fue agregada.
+ * Obtiene las unidades físicas seleccionadas en el carrito.
  *
- * Puede recibir el PreparedItem completo o directamente su prepared_item_id.
+ * Incluye PreparedItems individuales y Products directos de Conjuntos.
+ * No interpreta componentes internos como preparados independientes.
+ */
+export function getSelectedPreparedItemIds(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const selectedIds = new Set();
+
+  rows.forEach((item) => {
+    const preparedItemId = getPreparedItemId(item);
+
+    if (preparedItemId) {
+      selectedIds.add(preparedItemId);
+    }
+
+    const menuSetId = toPositiveInt(item?.menu_set_id);
+
+    if (!menuSetId || !Array.isArray(item?.selections)) return;
+
+    item.selections.forEach((stage) => {
+      const selections = Array.isArray(stage?.items) ? stage.items : [];
+
+      selections.forEach((selection) => {
+        const selectedPreparedItemId = getPreparedItemId(selection);
+
+        if (selectedPreparedItemId) {
+          selectedIds.add(selectedPreparedItemId);
+        }
+      });
+    });
+  });
+
+  return Array.from(selectedIds);
+}
+
+/**
+ * Comprueba si una unidad física ya está seleccionada.
+ *
+ * Revisa preparados individuales y preparados dentro de Conjuntos.
  */
 export function isPreparedItemAlreadySelected(items, preparedItemOrId) {
-  const rows = Array.isArray(items) ? items : [];
-
   const preparedItemId =
     preparedItemOrId && typeof preparedItemOrId === "object"
       ? getPreparedItemId(preparedItemOrId)
@@ -208,7 +243,7 @@ export function isPreparedItemAlreadySelected(items, preparedItemOrId) {
 
   if (!preparedItemId) return false;
 
-  return rows.some((item) => getPreparedItemId(item) === preparedItemId);
+  return getSelectedPreparedItemIds(items).includes(preparedItemId);
 }
 
 /**

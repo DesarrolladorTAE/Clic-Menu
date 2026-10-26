@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 
 import {
@@ -64,6 +63,14 @@ function formatQuantity(value) {
   return numberFormatter.format(number);
 }
 
+function formatAvailabilityQuantity(availability, field) {
+  if (availability?.configuration_pending === true) {
+    return "—";
+  }
+
+  return formatQuantity(availability?.[field]);
+}
+
 function formatDate(value) {
   if (!value) return "Sin fecha";
 
@@ -79,6 +86,13 @@ function formatDate(value) {
 }
 
 function getStatus(availability) {
+  if (availability?.configuration_pending === true) {
+    return {
+      label: "Configuración pendiente",
+      color: "warning",
+    };
+  }
+
   return STATUS_CONFIG[availability?.status] || {
     label: "Sin información",
     color: "default",
@@ -134,25 +148,20 @@ function StatusChip({ availability }) {
   );
 }
 
-function DetailItem({ label, value }) {
+function DetailItem({ label, availability, field }) {
   return (
     <Box sx={{ minWidth: 0 }}>
       <Typography sx={{
-        fontSize: 12,
-        fontWeight: 800,
-        color: "text.secondary",
+        fontSize: 12, fontWeight: 800, color: "text.secondary",
       }}>
         {label}
       </Typography>
 
       <Typography sx={{
-        mt: 0.35,
-        fontSize: 14,
-        fontWeight: 800,
-        color: "text.primary",
-        overflowWrap: "anywhere",
+        mt: 0.35, fontSize: 14, fontWeight: 800,
+        color: "text.primary", overflowWrap: "anywhere",
       }}>
-        {formatQuantity(value)}
+        {formatAvailabilityQuantity(availability, field)}
       </Typography>
     </Box>
   );
@@ -300,18 +309,21 @@ function AvailabilityCard({ option }) {
           }}>
             <DetailItem
               label="Cupo restante"
-              value={availability.capacity_remaining}
+              availability={availability}
+              field="capacity_remaining"
             />
 
             <DetailItem
               label="Disponibilidad física"
-              value={availability.physical_available}
+              availability={availability}
+              field="physical_available"
             />
 
             <Box sx={{ gridColumn: "1 / -1" }}>
               <DetailItem
                 label="Disponible efectivo"
-                value={availability.effective_available}
+                availability={availability}
+                field="effective_available"
               />
             </Box>
           </Box>
@@ -427,34 +439,28 @@ function AvailabilityTable({ options }) {
 
                 <TableCell align="center">
                   <Typography sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
-                    overflowWrap: "anywhere",
+                    fontSize: 14, fontWeight: 800,
+                    color: "text.primary", overflowWrap: "anywhere",
                   }}>
-                    {formatQuantity(availability.capacity_remaining)}
+                    {formatAvailabilityQuantity(availability, "capacity_remaining")}
                   </Typography>
                 </TableCell>
 
                 <TableCell align="center">
                   <Typography sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
-                    overflowWrap: "anywhere",
+                    fontSize: 14, fontWeight: 800,
+                    color: "text.primary", overflowWrap: "anywhere",
                   }}>
-                    {formatQuantity(availability.physical_available)}
+                    {formatAvailabilityQuantity(availability, "physical_available")}
                   </Typography>
                 </TableCell>
 
                 <TableCell align="center">
                   <Typography sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
-                    overflowWrap: "anywhere",
+                    fontSize: 14, fontWeight: 800,
+                    color: "text.primary", overflowWrap: "anywhere",
                   }}>
-                    {formatQuantity(availability.effective_available)}
+                    {formatAvailabilityQuantity(availability, "effective_available")}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -478,9 +484,8 @@ function StageGroup({ group }) {
   return (
     <Paper sx={{
       ...panelSx,
-      border: "1.5px solid",
-      borderColor: "#E5A67F",
-      boxShadow: "0 2px 8px rgba(140, 75, 45, 0.08)",
+      border: "1px solid",
+      borderColor: "divider",
     }}>
       {/* Encabezado de la etapa */}
       <Box sx={{
@@ -594,7 +599,11 @@ export default function MenuSetAvailabilityResults({
     return options.filter((option) => option.availability?.is_available === true).length;
   }, [options]);
 
-  const unavailableCount = total - availableCount;
+  const pendingCount = useMemo(() => {
+    return options.filter((option) => option.availability?.configuration_pending === true).length;
+  }, [options]);
+
+  const unavailableCount = total - availableCount - pendingCount;
 
   // Agrupar todos los productos por etapa antes de paginar.
   const groups = useMemo(() => {
@@ -710,7 +719,7 @@ export default function MenuSetAvailabilityResults({
             gridTemplateColumns: {
               xs: "1fr",
               sm: "repeat(2, minmax(0, 1fr))",
-              md: "repeat(4, minmax(0, 1fr))",
+              lg: "repeat(5, minmax(0, 1fr))",
             },
             gridAutoRows: "1fr",
             gap: 1.5,
@@ -735,7 +744,13 @@ export default function MenuSetAvailabilityResults({
 
             <SummaryCard
               icon={<InfoOutlinedIcon fontSize="small" />}
-              label="Opciones no disponibles"
+              label="Configuración pendiente"
+              value={pendingCount}
+            />
+
+            <SummaryCard
+              icon={<Inventory2OutlinedIcon fontSize="small" />}
+              label="Otras no disponibles"
               value={unavailableCount}
             />
           </Box>

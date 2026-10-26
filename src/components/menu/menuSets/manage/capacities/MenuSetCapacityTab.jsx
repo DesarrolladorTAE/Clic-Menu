@@ -14,7 +14,10 @@ import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import PaginationFooter from "../../../../common/PaginationFooter";
 import usePagination from "../../../../../hooks/usePagination";
 
-import { updateMenuSet } from "../../../../../services/menu/menuSets/menuSet.service";
+import {
+  getMenuSet,
+  updateMenuSet,
+} from "../../../../../services/menu/menuSets/menuSet.service";
 import { getMenuSetStages } from "../../../../../services/menu/menuSets/menuSetStage.service";
 import {
   getMenuSetStageProducts,
@@ -95,6 +98,7 @@ function mapStageProduct(stage, option) {
     id: Number(option.id),
     productId: Number(option.product_id),
     name: option.name || option.product?.name || "Producto sin nombre",
+    isActive: Boolean(option.is_active),
     stageId: Number(stage.id),
     stageName: stage.name || stage.stage_definition?.name || "Etapa",
     stageOrder: Number(stage.sort_order ?? 0),
@@ -127,6 +131,11 @@ function isValidCapacity(value) {
     && Number(normalized) <= MAX_CAPACITY;
 }
 
+function toCapacityValue(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized === "" ? null : Number(normalized);
+}
+
 function hasProductChanges(product, mode, inputs) {
   const current = inputs[product.id] || {};
 
@@ -148,14 +157,16 @@ function hasProductChanges(product, mode, inputs) {
 function buildCapacityLimits(mode, products, inputs) {
   const result = {};
 
-  if (mode === "none") return result;
+  if (mode === "none") {
+    return result;
+  }
 
   products.forEach((product) => {
     const current = inputs[product.id] || {};
 
     if (mode === "weekly") {
       result[product.id] = {
-        weekly_capacity: Number(current.weekly_capacity),
+        weekly_capacity: toCapacityValue(current.weekly_capacity),
       };
     }
 
@@ -163,38 +174,57 @@ function buildCapacityLimits(mode, products, inputs) {
       const dailyCapacities = {};
 
       product.days.forEach((day) => {
-        dailyCapacities[day] = Number(current.daily_capacities?.[day]);
+        dailyCapacities[day] = toCapacityValue(current.daily_capacities?.[day]);
       });
 
-      result[product.id] = {
-        daily_capacities: dailyCapacities,
-      };
+      result[product.id] = { daily_capacities: dailyCapacities };
     }
   });
 
   return result;
 }
 
-function validateCapacities(mode, products, inputs) {
-  if (mode === "none") return null;
+function validateCapacities(mode, products, inputs, modeChanged = false) {
+  if (mode === "none") {
+    return null;
+  }
 
   for (const product of products) {
     const current = inputs[product.id] || {};
 
     if (mode === "weekly") {
-      if (!isValidCapacity(current.weekly_capacity)) {
+      const value = String(current.weekly_capacity ?? "").trim();
+      const changed = value !== String(product.weeklyCapacity ?? "");
+
+      if (value === "") {
+        if (product.isActive && (modeChanged || changed)) {
+          return `Configura la capacidad semanal de ${product.name}, en la etapa ${product.stageName}.`;
+        }
+
+        continue;
+      }
+
+      if (!isValidCapacity(value)) {
         return `Indica una capacidad semanal válida para ${product.name}, en la etapa ${product.stageName}.`;
       }
     }
 
     if (mode === "daily") {
       for (const day of product.days) {
-        const value = current.daily_capacities?.[day];
+        const value = String(current.daily_capacities?.[day] ?? "").trim();
+        const original = String(product.dailyCapacities?.[day] ?? "");
+        const changed = value !== original;
+
+        if (value === "") {
+          if (product.isActive && (modeChanged || changed)) {
+            return `Configura la capacidad del ${DAYS[day - 1].label.toLowerCase()} para ${product.name}, en la etapa ${product.stageName}.`;
+          }
+
+          continue;
+        }
 
         if (!isValidCapacity(value)) {
-          const dayName = DAYS[day - 1].label;
-
-          return `Indica una capacidad válida para ${product.name}, el día ${dayName}, en la etapa ${product.stageName}.`;
+          return `Indica una capacidad válida para ${product.name}, el día ${DAYS[day - 1].label}, en la etapa ${product.stageName}.`;
         }
       }
     }
@@ -238,7 +268,7 @@ function CapacityProductCard({ product, mode, values, disabled, onChange }) {
       p: { xs: 2, sm: 2.5 },
       height: "100%",
       minWidth: 0,
-      border: "1.5px solid",
+      border: "1px solid",
       borderColor: "#E5A67F",
       borderRadius: 1,
       bgcolor: "background.paper",
@@ -334,7 +364,7 @@ function CapacityProductCard({ product, mode, values, disabled, onChange }) {
                           onChange(product.id, "daily_capacity", value, day.value);
                         }
                       }}
-                      placeholder="0"
+                      placeholder="Sin configurar"
                       inputProps={{
                         inputMode: "numeric",
                         pattern: "[0-9]*",
@@ -556,7 +586,7 @@ export default function MenuSetCapacityTab({
     }
 
     const productsToValidate = modeChanged ? products : modifiedProducts;
-    const validationError = validateCapacities(mode, productsToValidate, inputs);
+    const validationError = validateCapacities(mode, productsToValidate, inputs, modeChanged);
 
     if (validationError) {
       onAlert?.({
@@ -591,13 +621,19 @@ export default function MenuSetCapacityTab({
 
           if (mode === "daily") {
             product.days.forEach((day) => {
-              dailyCapacities[day] = String(Number(current.daily_capacities?.[day]));
+              const capacity = toCapacityValue(current.daily_capacities?.[day]);
+
+              if (capacity !== null) {
+                dailyCapacities[day] = String(capacity);
+              }
             });
           }
 
           return {
             ...product,
-            weeklyCapacity: mode === "weekly" ? Number(current.weekly_capacity) : null,
+            weeklyCapacity: mode === "weekly"
+              ? toCapacityValue(current.weekly_capacity)
+              : null,
             dailyCapacities,
           };
         });
@@ -631,14 +667,19 @@ export default function MenuSetCapacityTab({
           const payload = {};
 
           if (mode === "weekly") {
-            payload.weekly_capacity = Number(current.weekly_capacity);
+            payload.weekly_capacity = toCapacityValue(current.weekly_capacity);
           }
 
           if (mode === "daily") {
             payload.daily_capacities = {};
 
             product.days.forEach((day) => {
-              payload.daily_capacities[day] = Number(current.daily_capacities?.[day]);
+              const value = String(current.daily_capacities?.[day] ?? "");
+              const original = String(product.dailyCapacities?.[day] ?? "");
+
+              if (value !== original) {
+                payload.daily_capacities[day] = toCapacityValue(value);
+              }
             });
           }
 
@@ -664,6 +705,17 @@ export default function MenuSetCapacityTab({
             ...currentInputs,
             [product.id]: buildInputs([updatedProduct])[product.id],
           }));
+        }
+
+        // Actualizar los permisos y el progreso del conjunto sin recargar la página.
+        try {
+          const updatedSet = await getMenuSet(restaurantId, branchId, menuSetId);
+
+          if (mountedRef.current && updatedSet?.id) {
+            onUpdated?.(updatedSet);
+          }
+        } catch {
+          // Las capacidades guardadas permanecen visibles.
         }
 
         onAlert?.({
@@ -804,8 +856,8 @@ export default function MenuSetCapacityTab({
             <SectionTitle
               title="Capacidades de los productos"
               description={mode === "daily"
-                ? "Establece las cantidades disponibles para cada producto y día de servicio."
-                : "Establece la cantidad semanal disponible para cada producto."}
+                ? "Configura las cantidades por producto y día. Puedes guardar capacidades pendientes de productos inactivos y completarlas después."
+                : "Configura la cantidad semanal por producto. Puedes dejar pendientes las capacidades de productos inactivos."}
             />
 
             <Box>

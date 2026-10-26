@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import {
   Box, Button, Card, CardContent, CircularProgress, Dialog,
   DialogContent, DialogTitle, FormControlLabel, IconButton,
-  MenuItem, Portal, Stack, Switch, TextField, Typography, useMediaQuery,
+  MenuItem, Portal, Stack, Switch, TextField, Tooltip, Typography, useMediaQuery,
 } from "@mui/material";
 
 import { useTheme } from "@mui/material/styles";
@@ -32,12 +32,12 @@ function normalizeDays(days) {
     .sort((a, b) => a - b);
 }
 
-function mapOptionToForm(option) {
+function mapOptionToForm(option, mode = "none") {
   return {
     product_id: option ? String(option.product_id) : "",
     service_days: normalizeDays(option?.service_days),
     sort_order: String(option?.sort_order ?? 0),
-    is_active: option ? Boolean(option.is_active) : true,
+    is_active: option ? Boolean(option.is_active) : mode === "none",
   };
 }
 
@@ -74,14 +74,18 @@ function getChanges(form, option) {
   return changes;
 }
 
-function validateForm(form, option, allowedDays) {
+function validateForm(form, option, allowedDays, mode) {
   const errors = {};
 
   if (!option && !form.product_id) {
     errors.product_id = "Debes seleccionar un producto.";
   }
 
-  if (!/^\d+$/.test(form.sort_order) || Number(form.sort_order) > 4294967295) {
+  if (
+    !/^\d+$/.test(form.sort_order)
+    || !Number.isSafeInteger(Number(form.sort_order))
+    || Number(form.sort_order) > 4294967295
+  ) {
     errors.sort_order = "Indica un orden válido entre 0 y 4294967295.";
   }
 
@@ -93,13 +97,45 @@ function validateForm(form, option, allowedDays) {
     errors.service_days = "Selecciona al menos un día para activar el producto.";
   }
 
-  if (option?.can_remove_service_days === false) {
-    const removed = normalizeDays(option.service_days)
-      .some((day) => !form.service_days.includes(day));
+  if (!option && mode !== "none" && form.is_active) {
+    errors.is_active = "Primero guarda el producto y configura sus capacidades antes de activarlo.";
+  }
 
-    if (removed) {
-      errors.service_days = option.remove_service_days_block_reason
-        || "No puedes retirar días de servicio de este producto.";
+  if (option) {
+    const originalDays = normalizeDays(option.service_days);
+    const removableDays = normalizeDays(option.removable_service_days);
+    const availableDaysToAdd = normalizeDays(option.available_service_days_to_add);
+    const removalReasons = option.service_day_removal_block_reasons ?? {};
+
+    const removedDay = originalDays.find((day) =>
+      !form.service_days.includes(day) && !removableDays.includes(day)
+    );
+
+    if (removedDay !== undefined) {
+      errors.service_days = removalReasons[removedDay]
+        || option.remove_service_days_block_reason
+        || "No puedes retirar este día del producto.";
+    }
+
+    const addedDay = form.service_days.find((day) =>
+      !originalDays.includes(day) && !availableDaysToAdd.includes(day)
+    );
+
+    if (addedDay !== undefined) {
+      errors.service_days = option.add_service_days_block_reason
+        || "No puedes agregar este día al producto.";
+    }
+
+    if (form.is_active !== Boolean(option.is_active)) {
+      const allowed = form.is_active
+        ? option.can_activate === true
+        : option.can_deactivate === true;
+
+      if (!allowed) {
+        errors.is_active = form.is_active
+          ? option.activate_block_reason || "No puedes activar este producto."
+          : option.deactivate_block_reason || "No puedes desactivar este producto.";
+      }
     }
   }
 
@@ -151,7 +187,9 @@ export default function MenuSetProductForm({
 
   const editing = Boolean(option);
 
-  const [form, setForm] = useState(() => mapOptionToForm(option));
+  const [form, setForm] = useState(() =>
+    mapOptionToForm(option, menuSet?.capacity_mode)
+  );
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -173,15 +211,22 @@ export default function MenuSetProductForm({
     setAlertState((current) => ({ ...current, open: false }));
   };
 
+  const mode = menuSet?.capacity_mode || "none";
   const allowedDays = useMemo(() => normalizeDays(menuSet?.service_days), [menuSet?.service_days]);
   const availableDays = DAYS.filter((day) => allowedDays.includes(day.id));
 
   const originalDays = useMemo(() => normalizeDays(option?.service_days), [option?.service_days]);
+  const removableDays = normalizeDays(option?.removable_service_days);
+  const availableDaysToAdd = normalizeDays(option?.available_service_days_to_add);
+  const removalReasons = option?.service_day_removal_block_reasons ?? {};
 
   const canEdit = !editing || option.can_edit === true;
+  const canActivate = editing ? option.can_activate === true : mode === "none";
+  const canDeactivate = editing ? option.can_deactivate === true : true;
 
-  const canActivate = !editing || option.is_active || option.can_activate === true;
-  const canDeactivate = !editing || !option.is_active || option.can_deactivate === true;
+  const canChangeStatus = editing
+    ? option.is_active ? canDeactivate : canActivate
+    : mode === "none";
 
   const changes = useMemo(() => getChanges(form, option), [form, option]);
 
@@ -198,14 +243,21 @@ export default function MenuSetProductForm({
   };
 
   const handleDayToggle = (day) => {
-    if (saving || !canEdit) return;
+    if (saving || !canEdit) {
+      return;
+    }
 
     const selected = form.service_days.includes(day);
 
-    const protectedDay = editing && originalDays.includes(day)
-      && option.can_remove_service_days !== true;
+    const blockedRemoval = editing && selected && originalDays.includes(day)
+      && !removableDays.includes(day);
 
-    if (selected && protectedDay) return;
+    const blockedAddition = editing && !selected && !originalDays.includes(day)
+      && !availableDaysToAdd.includes(day);
+
+    if (blockedRemoval || blockedAddition) {
+      return;
+    }
 
     const nextDays = selected
       ? form.service_days.filter((current) => current !== day)
@@ -219,7 +271,7 @@ export default function MenuSetProductForm({
 
     if (saving || (editing && !hasChanges)) return;
 
-    const validationErrors = validateForm(form, option, allowedDays);
+    const validationErrors = validateForm(form, option, allowedDays, mode);
 
     if (Object.keys(validationErrors).length > 0) {
       const firstError = Object.values(validationErrors)[0];
@@ -427,43 +479,49 @@ export default function MenuSetProductForm({
                     }}>
                       {availableDays.map((day) => {
                         const selected = form.service_days.includes(day.id);
+                        const original = originalDays.includes(day.id);
 
-                        const protectedDay = editing && selected
-                          && originalDays.includes(day.id)
-                          && option.can_remove_service_days !== true;
+                        const blockedRemoval = editing && selected && original
+                          && !removableDays.includes(day.id);
+
+                        const blockedAddition = editing && !selected && !original
+                          && !availableDaysToAdd.includes(day.id);
+
+                        const blocked = blockedRemoval || blockedAddition;
+
+                        const reason = blockedRemoval
+                          ? removalReasons[day.id] || option?.remove_service_days_block_reason || ""
+                          : blockedAddition
+                            ? option?.add_service_days_block_reason || ""
+                            : "";
 
                         return (
-                          <Button
-                            key={day.id}
-                            type="button"
-                            variant={selected ? "contained" : "outlined"}
-                            onClick={() => handleDayToggle(day.id)}
-                            disabled={saving || !canEdit || protectedDay}
-                            aria-label={`${selected ? "Quitar" : "Seleccionar"} ${day.name}`}
-                            aria-pressed={selected}
-                            sx={{
-                              minWidth: 0,
-                              height: 44,
-                              fontSize: 13,
-                              fontWeight: 800,
-                              opacity: protectedDay ? 0.75 : 1,
-                            }}
-                          >
-                            {day.short}
-                          </Button>
+                          <Tooltip key={day.id} title={blocked ? reason : ""} arrow enterTouchDelay={0}>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Button
+                                fullWidth
+                                type="button"
+                                variant={selected ? "contained" : "outlined"}
+                                onClick={() => handleDayToggle(day.id)}
+                                disabled={saving || !canEdit || blocked}
+                                aria-label={`${selected ? "Quitar" : "Seleccionar"} ${day.name}`}
+                                aria-pressed={selected}
+                                sx={{
+                                  minWidth: 0,
+                                  height: 44,
+                                  fontSize: 13,
+                                  fontWeight: 800,
+                                  opacity: blocked ? 0.75 : 1,
+                                }}
+                              >
+                                {day.short}
+                              </Button>
+                            </Box>
+                          </Tooltip>
                         );
                       })}
                     </Box>
                   )}
-
-                  {editing && option.can_remove_service_days === false ? (
-                    <Typography sx={{
-                      mt: 1, fontSize: 12, color: "text.secondary", lineHeight: 1.5,
-                    }}>
-                      {option.remove_service_days_block_reason
-                        || "Algunos días no pueden retirarse porque existen operaciones relacionadas."}
-                    </Typography>
-                  ) : null}
                 </FieldBlock>
 
                 {/* Orden */}
@@ -506,7 +564,11 @@ export default function MenuSetProductForm({
                       }}>
                         {form.is_active
                           ? "El producto estará habilitado dentro de esta etapa."
-                          : "El producto permanecerá guardado sin estar habilitado."}
+                          : !editing && mode !== "none"
+                            ? "Guarda el producto, configura sus capacidades y después actívalo."
+                            : editing && !canActivate && option?.activate_block_reason
+                              ? option.activate_block_reason
+                              : "El producto permanecerá guardado sin estar habilitado."}
                       </Typography>
                     </Box>
 
@@ -519,9 +581,7 @@ export default function MenuSetProductForm({
                           onChange={(event) => handleFieldChange(
                             "is_active", event.target.checked
                           )}
-                          disabled={saving || !canEdit
-                            || (form.is_active && !canDeactivate)
-                            || (!form.is_active && !canActivate)}
+                          disabled={saving || !canEdit || !canChangeStatus}
                         />
                       }
                       label={

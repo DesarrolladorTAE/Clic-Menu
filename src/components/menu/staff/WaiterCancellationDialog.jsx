@@ -73,6 +73,34 @@ function normalizePhysicalOptions(item, key) {
     : [];
 }
 
+function getPhysicalResolutionProducts(items) {
+  return (Array.isArray(items) ? items : []).flatMap((item) => {
+    const isMenuSet = item?.is_menu_set === true;
+
+    const products = isMenuSet
+      ? (Array.isArray(item?.physical_items) ? item.physical_items : [])
+      : [item];
+
+    return products
+      .filter((product) => {
+        return normalizePhysicalOptions(product, "reuse_intents").length > 0 ||
+          normalizePhysicalOptions(product, "delivery_states").length > 0;
+      })
+      .map((product) => {
+        if (!isMenuSet) {
+          return product;
+        }
+
+        return {
+          ...product,
+          selected_quantity: 1,
+          commercial_order_item_id: getOrderItemId(item),
+          commercial_label: getItemLabel(item),
+        };
+      });
+  });
+}
+
 function buildInitialItemDecisions(items) {
   const decisions = {};
 
@@ -161,10 +189,7 @@ export default function WaiterCancellationDialog({
   }, [context]);
 
   const physicalResolutionItems = useMemo(() => {
-    return (Array.isArray(selectedItems) ? selectedItems : []).filter((item) => {
-      return normalizePhysicalOptions(item, "reuse_intents").length > 0 ||
-        normalizePhysicalOptions(item, "delivery_states").length > 0;
-    });
+    return getPhysicalResolutionProducts(selectedItems);
   }, [selectedItems]);
 
   const hasPhysicalResolution = physicalResolutionItems.length > 0;
@@ -205,8 +230,15 @@ export default function WaiterCancellationDialog({
       const reuseOptions = normalizePhysicalOptions(item, "reuse_intents");
       const deliveryOptions = normalizePhysicalOptions(item, "delivery_states");
 
-      if (reuseOptions.length > 0 && !reuseOptions.includes(String(decision?.reuse_intent || ""))) return true;
-      if (deliveryOptions.length > 0 && !deliveryOptions.includes(String(decision?.delivery_state || ""))) return true;
+      const reuseIntent = String(decision?.reuse_intent || "");
+      const deliveryState = String(decision?.delivery_state || "");
+
+      if (deliveryOptions.length > 0) {
+        if (!deliveryOptions.includes(deliveryState)) return true;
+        if (deliveryState === "delivered") return false;
+      }
+
+      if (reuseOptions.length > 0 && !reuseOptions.includes(reuseIntent)) return true;
 
       return false;
     });
@@ -259,14 +291,14 @@ export default function WaiterCancellationDialog({
     setAuthorizerUserId("");
     setPin("");
     setStepIndex(0);
-    setItemDecisions(buildInitialItemDecisions(selectedItems));
+    setItemDecisions(buildInitialItemDecisions(physicalResolutionItems));
     setAlertState({
       open: false,
       severity: "error",
       title: "",
       message: "",
     });
-  }, [open, selectedItems]);
+  }, [open, physicalResolutionItems]);
 
   useEffect(() => {
     if (!open || !requiresAuthorization || authorizers.length !== 1) return;
@@ -287,6 +319,21 @@ export default function WaiterCancellationDialog({
 
       if (value) decision[field] = value;
       else delete decision[field];
+
+      if (field === "delivery_state") {
+        if (value === "delivered") {
+          delete decision.reuse_intent;
+        }
+
+        if (value === "not_delivered") {
+          const item = physicalResolutionItems.find((product) => getOrderItemId(product) === orderItemId);
+          const reuseOptions = normalizePhysicalOptions(item, "reuse_intents");
+
+          if (reuseOptions.length === 1) {
+            decision.reuse_intent = reuseOptions[0];
+          }
+        }
+      }
 
       if (Object.keys(decision).length > 0) next[orderItemId] = decision;
       else delete next[orderItemId];
@@ -615,6 +662,12 @@ export default function WaiterCancellationDialog({
                             }}
                           >
                             <Stack spacing={2}>
+                              {item?.commercial_order_item_id ? (
+                                <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary" }}>
+                                  {item.commercial_label || "Conjunto"} #{item.commercial_order_item_id}
+                                </Typography>
+                              ) : null}
+
                               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
                                 <Typography sx={{ minWidth: 0, fontSize: 15, fontWeight: 800, color: "text.primary" }}>
                                   {getItemLabel(item)}
@@ -632,17 +685,6 @@ export default function WaiterCancellationDialog({
                                 />
                               </Stack>
 
-                              {reuseOptions.length > 0 ? (
-                                <PhysicalChoiceBlock
-                                  label="Destino físico"
-                                  options={reuseOptions}
-                                  value={decision?.reuse_intent || ""}
-                                  labels={REUSE_LABELS}
-                                  loading={loading}
-                                  onChange={(value) => updateDecision(orderItemId, "reuse_intent", value)}
-                                />
-                              ) : null}
-
                               {deliveryOptions.length > 0 ? (
                                 <PhysicalChoiceBlock
                                   label="Estado de entrega"
@@ -651,6 +693,18 @@ export default function WaiterCancellationDialog({
                                   labels={DELIVERY_LABELS}
                                   loading={loading}
                                   onChange={(value) => updateDecision(orderItemId, "delivery_state", value)}
+                                />
+                              ) : null}
+
+                              {reuseOptions.length > 0 &&
+                                (deliveryOptions.length === 0 || decision?.delivery_state === "not_delivered") ? (
+                                <PhysicalChoiceBlock
+                                  label="Destino físico"
+                                  options={reuseOptions}
+                                  value={decision?.reuse_intent || ""}
+                                  labels={REUSE_LABELS}
+                                  loading={loading}
+                                  onChange={(value) => updateDecision(orderItemId, "reuse_intent", value)}
                                 />
                               ) : null}
                             </Stack>

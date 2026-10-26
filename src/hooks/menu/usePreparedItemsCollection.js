@@ -193,23 +193,12 @@ function normalizeVisibleItems(source, now = Date.now()) {
  * habitual de los servicios/API. El hook sigue sin conocer ningún endpoint.
  */
 function extractLoaderItems(response) {
-  if (Array.isArray(response)) {
-    return response;
-  }
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.items)) return response.items;
+  if (Array.isArray(response?.data?.items)) return response.data.items;
+  if (Array.isArray(response?.data?.data?.items)) return response.data.data.items;
 
-  if (Array.isArray(response?.items)) {
-    return response.items;
-  }
-
-  if (Array.isArray(response?.data?.items)) {
-    return response.data.items;
-  }
-
-  if (Array.isArray(response?.data?.data?.items)) {
-    return response.data.data.items;
-  }
-
-  return [];
+  return null;
 }
 
 export function usePreparedItemsCollection({
@@ -230,6 +219,17 @@ export function usePreparedItemsCollection({
 
   const [error, setError] = useState(null);
 
+  const [collectionState, setCollectionState] = useState(() => ({
+    contextKey,
+    status: !enabled
+      ? "idle"
+      : Array.isArray(initialItems)
+        ? "success"
+        : typeof loader === "function"
+          ? "loading"
+          : "idle",
+  }));
+
   const itemsRef = useRef(items);
   const loaderRef = useRef(loader);
   const enabledRef = useRef(enabled);
@@ -248,18 +248,18 @@ export function usePreparedItemsCollection({
 
   const loadCollection = useCallback(
     async ({ showLoading = false } = {}) => {
+      const requestContextKey = contextKeyRef.current;
+
       if (!enabledRef.current || typeof loaderRef.current !== "function") {
-        return itemsRef.current;
+        return { ok: false, items: itemsRef.current, contextKey: requestContextKey };
       }
 
       const requestId = ++requestSequenceRef.current;
-      const requestContextKey = contextKeyRef.current;
 
-      if (showLoading) {
-        setLoading(true);
-      }
+      if (showLoading) setLoading(true);
 
       setError(null);
+      setCollectionState({ contextKey: requestContextKey, status: "loading" });
 
       try {
         const response = await loaderRef.current();
@@ -269,15 +269,29 @@ export function usePreparedItemsCollection({
           requestContextKey !== contextKeyRef.current ||
           !enabledRef.current
         ) {
-          return itemsRef.current;
+          return { ok: false, items: itemsRef.current, contextKey: requestContextKey };
         }
 
-        const nextItems = normalizeVisibleItems(
-          extractLoaderItems(response),
-        );
+        if (response?.ok === false || response?.data?.ok === false) {
+          throw new Error(
+            response?.message ||
+            response?.data?.message ||
+            "No se pudo consultar Preparación rápida."
+          );
+        }
+
+        const extractedItems = extractLoaderItems(response);
+
+        if (!Array.isArray(extractedItems)) {
+          throw new Error("Preparación rápida devolvió una respuesta inválida.");
+        }
+
+        const nextItems = normalizeVisibleItems(extractedItems);
 
         replaceItems(nextItems);
-        return nextItems;
+        setCollectionState({ contextKey: requestContextKey, status: "success" });
+
+        return { ok: true, items: nextItems, contextKey: requestContextKey };
       } catch (nextError) {
         if (
           requestId === requestSequenceRef.current &&
@@ -285,9 +299,10 @@ export function usePreparedItemsCollection({
           enabledRef.current
         ) {
           setError(nextError);
+          setCollectionState({ contextKey: requestContextKey, status: "error" });
         }
 
-        return itemsRef.current;
+        return { ok: false, items: itemsRef.current, contextKey: requestContextKey };
       } finally {
         if (
           requestId === requestSequenceRef.current &&
@@ -301,11 +316,16 @@ export function usePreparedItemsCollection({
     [replaceItems],
   );
 
-  const refetch = useCallback(() => {
+  const refetchWithStatus = useCallback(() => {
     return loadCollection({
       showLoading: itemsRef.current.length === 0,
     });
   }, [loadCollection]);
+
+  const refetch = useCallback(async () => {
+    const result = await refetchWithStatus();
+    return result.items;
+  }, [refetchWithStatus]);
 
   /*
    * Cambiar menú, mesa u orden invalida cualquier consulta anterior.
@@ -323,27 +343,26 @@ export function usePreparedItemsCollection({
 
     if (!enabled) {
       replaceItems([]);
+      setCollectionState({ contextKey, status: "idle" });
       return;
     }
 
     if (Array.isArray(initialItemsRef.current)) {
-      replaceItems(
-        normalizeVisibleItems(initialItemsRef.current),
-      );
+      replaceItems(normalizeVisibleItems(initialItemsRef.current));
+      setCollectionState({ contextKey, status: "success" });
       return;
     }
 
     replaceItems([]);
 
     if (typeof loaderRef.current === "function") {
+      setCollectionState({ contextKey, status: "loading" });
       void loadCollection({ showLoading: true });
+      return;
     }
-  }, [
-    enabled,
-    contextKey,
-    loadCollection,
-    replaceItems,
-  ]);
+
+    setCollectionState({ contextKey, status: "idle" });
+  }, [enabled, contextKey, loadCollection, replaceItems]);
 
   /*
    * Cuando vence la unidad más próxima:
@@ -392,10 +411,18 @@ export function usePreparedItemsCollection({
     replaceItems,
   ]);
 
+  const contextMatches = collectionState.contextKey === contextKey;
+  const status = !enabled ? "idle" : contextMatches ? collectionState.status : "loading";
+  const isConfirmed = enabled && contextMatches && status === "success";
+
   return {
-    items,
-    loading,
-    error,
+    items: enabled && contextMatches ? items : [],
+    loading: enabled && (!contextMatches || loading),
+    error: contextMatches ? error : null,
+    status,
+    isConfirmed,
+    confirmedContextKey: isConfirmed ? contextKey : null,
     refetch,
+    refetchWithStatus,
   };
 }

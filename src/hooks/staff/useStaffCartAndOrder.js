@@ -53,6 +53,7 @@ import {
   buildPreparedItemCartLine,
   getPreparedItemCartKey,
   getPreparedItemId,
+  getSelectedPreparedItemIds,
   isPreparedItemAlreadySelected,
   isPreparedItemLine,
   serializePreparedItemLine,
@@ -742,15 +743,28 @@ export function useStaffCartAndOrder({ tableId, menuSetNavigationKey = null }) {
     }));
   }
 
-  const reconcilePreparedItems = useCallback((availablePreparedItems = []) => {
+  /*
+   * Reconcilia únicamente PreparedItems individuales.
+   *
+   * Los preparados internos de Conjuntos se validan mediante
+   * la disponibilidad propia del Conjunto, no mediante este pool.
+   */
+  const reconcilePreparedItems = useCallback((availablePreparedItems) => {
+    if (!Array.isArray(availablePreparedItems)) {
+      return {
+        ok: false,
+        skipped: true,
+        removed_prepared_item_ids: [],
+        message: "",
+      };
+    }
+
     const availableIds = new Set(
-      (Array.isArray(availablePreparedItems) ? availablePreparedItems : [])
-        .map(getPreparedItemId)
-        .filter(Boolean),
+      availablePreparedItems.map(getPreparedItemId).filter(Boolean),
     );
 
     const missingLines = cart.filter((item) => {
-      if (!isPreparedItemLine(item)) return false;
+      if (isMenuSetCartLine(item) || !isPreparedItemLine(item)) return false;
 
       const preparedItemId = getPreparedItemId(item);
       return preparedItemId && !availableIds.has(preparedItemId);
@@ -767,7 +781,8 @@ export function useStaffCartAndOrder({ tableId, menuSetNavigationKey = null }) {
     const missingIds = new Set(missingLines.map(getPreparedItemId).filter(Boolean));
 
     setCart((prev) => prev.filter((item) => {
-      if (!isPreparedItemLine(item)) return true;
+      if (isMenuSetCartLine(item) || !isPreparedItemLine(item)) return true;
+
       return !missingIds.has(getPreparedItemId(item));
     }));
 
@@ -783,16 +798,10 @@ export function useStaffCartAndOrder({ tableId, menuSetNavigationKey = null }) {
       removed_prepared_item_ids: Array.from(missingIds),
       message,
     };
-  }, [cart]);
+  }, [cart, setCart, setPreparedCartMessage]);
 
   const selectedPreparedItemIds = useMemo(() => {
-    return Array.from(
-      new Set(
-        cart
-          .map(getPreparedItemId)
-          .filter(Boolean),
-      ),
-    );
+    return getSelectedPreparedItemIds(cart);
   }, [cart]);
 
   function setCartQty(key, qty) {
@@ -1115,23 +1124,47 @@ export function useStaffCartAndOrder({ tableId, menuSetNavigationKey = null }) {
         ? resolution.item_decisions
         : {};
 
-    const items = cancellationSummary.items.map((selectedItem) => {
-      const orderItemId = Number(selectedItem.order_item_id);
-      const decision = decisions[orderItemId] || decisions[String(orderItemId)] || {};
-      const item = { ...selectedItem };
+    // Las partidas comerciales conservan únicamente identificador y cantidad.
+    const items = cancellationSummary.items.map((item) => ({
+      order_item_id: Number(item.order_item_id),
+      quantity: Number(item.quantity),
+    }));
 
-      const reuseIntent = String(decision?.reuse_intent || "").trim();
-      const deliveryState = String(decision?.delivery_state || "").trim();
+    // Las decisiones físicas corresponden a Products normales o internos de Conjuntos.
+    const unitDecisions = selectedCancellationItems.flatMap((commercialItem) => {
+      const products = commercialItem?.is_menu_set === true
+        ? (Array.isArray(commercialItem.physical_items) ? commercialItem.physical_items : [])
+        : [commercialItem];
 
-      if (reuseIntent) item.reuse_intent = reuseIntent;
-      if (deliveryState) item.delivery_state = deliveryState;
+      return products.map((product) => {
+        const orderItemId = Number(product?.order_item_id || 0);
 
-      return item;
+        if (!Number.isInteger(orderItemId) || orderItemId <= 0) {
+          return null;
+        }
+
+        const decision = decisions[orderItemId] || decisions[String(orderItemId)] || {};
+        const reuseIntent = String(decision?.reuse_intent || "").trim();
+        const deliveryState = String(decision?.delivery_state || "").trim();
+
+        const physicalDecision = { order_item_id: orderItemId };
+
+        if (deliveryState) {
+          physicalDecision.delivery_state = deliveryState;
+        }
+
+        if (reuseIntent && deliveryState !== "delivered") {
+          physicalDecision.reuse_intent = reuseIntent;
+        }
+
+        return Object.keys(physicalDecision).length > 1 ? physicalDecision : null;
+      }).filter(Boolean);
     });
 
     const payload = {
       type: cancellationSummary.type,
       items,
+      ...(unitDecisions.length > 0 ? { unit_decisions: unitDecisions } : {}),
       reason_code: reasonCode,
       reason_note: String(resolution?.reason_note || "").trim() || null,
     };

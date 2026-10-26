@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box, Button, ButtonBase, CircularProgress, FormControlLabel,
-  InputAdornment, Paper, Stack, Switch, TextField, Tooltip, Typography,
+  Box, Button, ButtonBase, CircularProgress, InputAdornment,
+  Paper, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -50,7 +50,6 @@ function mapMenuSetToForm(menuSet) {
     service_days: normalizeDays(menuSet?.service_days),
     sat_product_service: menuSet?.sat?.sat_product_service ?? "",
     sat_unit: menuSet?.sat?.sat_unit ?? "",
-    is_active: Boolean(menuSet?.is_active),
   };
 }
 
@@ -95,10 +94,6 @@ function getChanges(form, menuSet) {
       sat_product_service: satProduct || null,
       sat_unit: satUnit || null,
     };
-  }
-
-  if (form.is_active !== original.is_active) {
-    changes.is_active = form.is_active;
   }
 
   return changes;
@@ -218,18 +213,14 @@ export default function MenuSetGeneralTab({
 
   const canEditCommercial = menuSet?.can_edit_commercial_data === true;
   const canEditSat = menuSet?.can_edit_sat === true;
-  const canRemoveDays = menuSet?.can_remove_service_days === true;
   const canEditOrder = menuSet?.can_edit === true;
 
-  const canChangeStatus = menuSet?.is_active
-    ? menuSet?.can_deactivate === true
-    : menuSet?.can_activate === true;
-
-  const statusReason = menuSet?.is_active
-    ? menuSet?.deactivate_block_reason
-    : menuSet?.activate_block_reason;
-
+  const originalDays = normalizeDays(menuSet?.service_days);
   const selectedDays = normalizeDays(form.service_days);
+
+  const removableDays = normalizeDays(menuSet?.removable_service_days);
+  const availableDaysToAdd = normalizeDays(menuSet?.available_service_days_to_add);
+  const removalReasons = menuSet?.service_day_removal_block_reasons ?? {};
 
   const contextItems = [
     {
@@ -276,8 +267,14 @@ export default function MenuSetGeneralTab({
 
   const handleToggleDay = (day) => {
     const selected = selectedDays.includes(day);
+    const original = originalDays.includes(day);
 
-    if (selected && !canRemoveDays) return;
+    const blockedRemoval = selected && original && !removableDays.includes(day);
+    const blockedAddition = !selected && !original && !availableDaysToAdd.includes(day);
+
+    if (blockedRemoval || blockedAddition) {
+      return;
+    }
 
     handleFieldChange(
       "service_days",
@@ -477,7 +474,7 @@ export default function MenuSetGeneralTab({
           {/* Días de servicio */}
           <SectionTitle
             title="Días de servicio"
-            description="Selecciona los días en los que deseas ofrecer este conjunto."
+            description="Selecciona los días generales del conjunto. Después podrás configurar los productos y capacidades correspondientes."
           />
 
           <Box sx={{
@@ -491,16 +488,30 @@ export default function MenuSetGeneralTab({
           }}>
             {DAYS.map((day) => {
               const selected = selectedDays.includes(day.value);
-              const blocked = selected && !canRemoveDays;
+              const original = originalDays.includes(day.value);
+
+              const blockedRemoval = selected && original
+                && !removableDays.includes(day.value);
+
+              const blockedAddition = !selected && !original
+                && !availableDaysToAdd.includes(day.value);
+
+              const blocked = blockedRemoval || blockedAddition;
+
+              const reason = blockedRemoval
+                ? removalReasons[day.value] || menuSet?.remove_service_days_block_reason || ""
+                : blockedAddition
+                  ? menuSet?.add_service_days_block_reason || "No puedes agregar este día."
+                  : "";
 
               return (
                 <Tooltip
                   key={day.value}
-                  title={blocked ? menuSet?.remove_service_days_block_reason || "" : ""}
+                  title={blocked ? reason : ""}
                   arrow
                   enterTouchDelay={0}
                 >
-                  <Box>
+                  <Box sx={{ minWidth: 0 }}>
                     <ButtonBase
                       type="button"
                       disabled={saving || blocked}
@@ -514,12 +525,13 @@ export default function MenuSetGeneralTab({
                         borderRadius: 1,
                         border: "1px solid",
                         borderColor: selected ? "secondary.main" : "divider",
-                        backgroundColor: selected ? "rgba(214, 122, 58, 0.10)" : "background.default",
+                        bgcolor: selected ? "rgba(214, 122, 58, 0.10)" : "background.default",
                         transition: "border-color 0.18s ease, background-color 0.18s ease",
                         "&:hover": {
                           borderColor: "secondary.main",
-                          backgroundColor: "rgba(214, 122, 58, 0.07)",
+                          bgcolor: "rgba(214, 122, 58, 0.07)",
                         },
+                        "&.Mui-disabled": { opacity: 0.65 },
                       }}
                     >
                       <Typography sx={{
@@ -541,16 +553,6 @@ export default function MenuSetGeneralTab({
               ? "No hay días seleccionados."
               : `${selectedDays.length} ${selectedDays.length === 1 ? "día seleccionado" : "días seleccionados"}.`}
           </Typography>
-
-          {!canRemoveDays && menuSet?.remove_service_days_block_reason ? (
-            <Typography sx={{
-              fontSize: 12,
-              color: "text.secondary",
-              lineHeight: 1.5,
-            }}>
-              {menuSet.remove_service_days_block_reason}
-            </Typography>
-          ) : null}
 
           {errors.service_days ? (
             <Typography sx={{ fontSize: 12, color: "error.main" }}>
@@ -606,71 +608,11 @@ export default function MenuSetGeneralTab({
             </Typography>
           ) : null}
 
-          {/* Estado del conjunto */}
-          <SectionTitle
-            title="Estado del conjunto"
-            description="Activa el conjunto cuando sus etapas, productos y capacidades estén configurados."
-          />
-
-          <Box sx={{
-            p: 1.75,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 1,
-            bgcolor: "background.default",
-          }}>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              justifyContent="space-between"
-              alignItems={{ xs: "flex-start", sm: "center" }}
-              spacing={1.5}
-            >
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{
-                  fontSize: 14,
-                  fontWeight: 800,
-                  color: "text.primary",
-                }}>
-                  {form.is_active ? "Conjunto activo" : "Conjunto inactivo"}
-                </Typography>
-
-                <Typography sx={{
-                  mt: 0.5,
-                  fontSize: 12,
-                  color: "text.secondary",
-                  lineHeight: 1.5,
-                }}>
-                  {!canChangeStatus && statusReason
-                    ? statusReason
-                    : form.is_active
-                      ? "El conjunto estará habilitado para utilizarse en los menús correspondientes."
-                      : "El conjunto permanecerá guardado sin estar habilitado."}
-                </Typography>
-              </Box>
-
-              <FormControlLabel
-                sx={{ m: 0 }}
-                control={
-                  <Switch
-                    color="primary"
-                    checked={form.is_active}
-                    onChange={(event) => handleFieldChange("is_active", event.target.checked)}
-                    disabled={saving || !canChangeStatus}
-                    inputProps={{ "aria-label": "Estado del conjunto" }}
-                  />
-                }
-                label={
-                  <Typography sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
-                  }}>
-                    {form.is_active ? "Activo" : "Inactivo"}
-                  </Typography>
-                }
-              />
-            </Stack>
-          </Box>
+          {errors.sat ? (
+            <Typography sx={{ fontSize: 12, color: "error.main" }}>
+              {errors.sat}
+            </Typography>
+          ) : null}
 
           {/* Acciones */}
           <Stack
