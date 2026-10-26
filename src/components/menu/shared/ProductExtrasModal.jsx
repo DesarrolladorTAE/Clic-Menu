@@ -1,59 +1,13 @@
-//src/components/menu/shared/ProductExtrasModal.jsx
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
-import {
-  buildModifierContextSections,
-} from "../../../hooks/public/publicMenu.utils";
+import { buildModifierContextSections } from "../../../hooks/public/publicMenu.utils";
 
 import ProductExtrasReadOnlyNavigator from "./product-extras/ProductExtrasReadOnlyNavigator";
 import ProductExtrasSelectionNavigator from "./product-extras/ProductExtrasSelectionNavigator";
 import useProductExtrasSelection from "./product-extras/useProductExtrasSelection";
-
-import {
-  getSafeModifierThemeColor,
-} from "./product-extras/ModifierCardShells";
-
-const MOBILE_BREAKPOINT = 600;
-
-function useIsMobileViewport() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    const handleChange = (event) => {
-      setIsMobile(event.matches);
-    };
-
-    setIsMobile(mediaQuery.matches);
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-
-      return () => {
-        mediaQuery.removeEventListener("change", handleChange);
-      };
-    }
-
-    mediaQuery.addListener(handleChange);
-
-    return () => {
-      mediaQuery.removeListener(handleChange);
-    };
-  }, []);
-
-  return isMobile;
-}
+import { getSafeModifierThemeColor } from "./product-extras/ModifierCardShells";
 
 export default function ProductExtrasModal({
   open,
@@ -69,7 +23,6 @@ export default function ProductExtrasModal({
   selectionScope = "all",
 }) {
   const safeThemeColor = getSafeModifierThemeColor(themeColor);
-  const isMobileViewport = useIsMobileViewport();
 
   const readOnlyNavigationRef = useRef(null);
   const selectionNavigationRef = useRef(null);
@@ -102,9 +55,7 @@ export default function ProductExtrasModal({
     }
   }, [open, readOnly, product?.id]);
 
-  if (!product) {
-    return null;
-  }
+  if (!product) return null;
 
   const title = product?.display_name || product?.name || "Producto";
 
@@ -123,10 +74,7 @@ export default function ProductExtrasModal({
     }
 
     const normalized = selection.buildResult();
-
-    if (!normalized) {
-      return;
-    }
+    if (!normalized) return;
 
     onConfirm?.(normalized);
   };
@@ -136,24 +84,29 @@ export default function ProductExtrasModal({
       open={open}
       title={`Extras: ${title}`}
       onClose={onClose}
-      width={isMobileViewport ? "100vw" : "920px"}
-      maxHeight={isMobileViewport ? "100dvh" : "650px"}
-      bodyPadding={0}
+      width="min(760px, 96vw)"
+      maxHeight="min(88vh, 920px)"
+      bodyPadding={16}
       backdropBlur={false}
       fullScreenMobile
       contentStyle={{
-        borderRadius: isMobileViewport ? 0 : 18,
-        width: isMobileViewport ? "100vw" : "920px",
-        maxWidth: isMobileViewport ? "100vw" : "920px",
-        height: isMobileViewport ? "100dvh" : "650px",
-        minHeight: isMobileViewport ? "100dvh" : "650px",
-        maxHeight: isMobileViewport ? "100dvh" : "650px",
-        margin: 0,
         boxSizing: "border-box",
+        minWidth: 0,
       }}
       bodyStyle={{
         background: "#F5F3F3",
         boxSizing: "border-box",
+        minHeight: 0,
+        minWidth: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehaviorY: "contain",
+        WebkitOverflowScrolling: "touch",
+      }}
+      footerStyle={{
+        boxSizing: "border-box",
+        width: "100%",
+        minWidth: 0,
       }}
       actions={
         <>
@@ -207,16 +160,14 @@ export default function ProductExtrasModal({
     >
       <div
         style={{
-          width: "calc(100% - 32px)",
+          width: "100%",
           minWidth: 0,
-          maxWidth: "calc(100% - 32px)",
-          minHeight: "calc(100% - 16px)",
-          margin: "0 16px 16px",
+          maxWidth: "100%",
+          margin: 0,
           boxSizing: "border-box",
           padding: 16,
           border: "1px solid rgba(47,42,61,0.08)",
-          borderTop: "none",
-          borderRadius: "0 0 10px 10px",
+          borderRadius: 10,
           background: "#FFFFFF",
           boxShadow: "0 2px 10px rgba(0,0,0,0.035)",
         }}

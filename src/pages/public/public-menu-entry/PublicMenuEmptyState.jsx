@@ -13,7 +13,7 @@ export default function PublicMenuEmptyState() {
           padding: 14,
         }}
       >
-        <div style={{ fontWeight: 950 }}>Sin data</div>
+        <div style={{ fontWeight: 950 }}>Menú no disponible</div>
         <div style={{ fontSize: 13, opacity: 0.8, marginTop: 6 }}>
           Esto no debería pasar… pero aquí estamos.
         </div>

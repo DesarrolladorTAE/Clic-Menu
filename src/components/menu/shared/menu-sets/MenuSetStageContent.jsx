@@ -1,12 +1,9 @@
 //src/components/menu/shared/menu-sets/MenuSetStageContent.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Dialog, DialogActions, DialogContent, DialogTitle, TextField, useMediaQuery,
+  Dialog, DialogActions, DialogContent, DialogTitle, useMediaQuery,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-
-import EditRoundedIcon from "@mui/icons-material/EditRounded";
-import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 
 import { PillButton } from "../../../../pages/public/publicMenu.ui";
 import { buildModifierContextSections } from "../../../../hooks/public/publicMenu.utils";
@@ -18,6 +15,7 @@ import CompositeProductModal from "../CompositeProductModal";
 import ProductExtrasModal from "../ProductExtrasModal";
 import ProductVariantsModal from "../ProductVariantsModal";
 import MenuSetStageProductCard from "./MenuSetStageProductCard";
+import MenuSetNotesModal from "./MenuSetNotesModal";
 
 const PAGE_SIZE = 8;
 
@@ -112,10 +110,7 @@ function applyComponentModifiers(components = [], groups = []) {
 }
 
 function hasModifierConfiguration(product, options = {}) {
-  return buildModifierContextSections(product, {
-    ...options,
-    selectionScope: "all",
-  }).length > 0;
+  return buildModifierContextSections(product, options).length > 0;
 }
 
 export default function MenuSetStageContent({
@@ -184,8 +179,11 @@ export default function MenuSetStageContent({
       (item) => getSelectionId(item) === optionId,
     );
 
+    const variantId = positiveId(configuration.variant_id ?? configuration.variantId);
     const nextConfiguration = {
       ...configuration,
+      variant_id: variantId,
+      variantId,
       notes: configuration.notes ?? existing?.notes ?? null,
       quantity: 1,
     };
@@ -203,14 +201,21 @@ export default function MenuSetStageContent({
   const openModifiersOrSave = useCallback((nextFlow) => {
     if (!selectionAllowed) return;
 
-    const initialValue = [
+    const existingVariantId = positiveId(
+      nextFlow.existing?.variant_id ?? nextFlow.existing?.variantId,
+    );
+    const nextVariantId = positiveId(nextFlow.variantId);
+    const sameVariant = existingVariantId === nextVariantId;
+
+    const initialValue = sameVariant ? [
       ...(Array.isArray(nextFlow.existing?.modifiers) ? nextFlow.existing.modifiers : []),
       ...collectComponentModifiers(nextFlow.existing?.components || []),
-    ];
+    ] : [];
 
     if (hasModifierConfiguration(nextFlow.product, {
       variantId: nextFlow.variantId,
       compositeDraft: nextFlow.compositeDraft,
+      selectionScope: nextFlow.selectionScope || "product_only",
     })) {
       setFlow({ ...nextFlow, initialModifiers: initialValue });
       setActiveDialog("extras");
@@ -224,22 +229,22 @@ export default function MenuSetStageContent({
     }, nextFlow);
   }, [selectionAllowed, saveSelection]);
 
-  const beginSelection = useCallback((option) => {
-    if (!selectionAllowed || !builder || !stageId) return;
+  const buildFlowForOption = useCallback((option) => {
+    if (!selectionAllowed || !builder || !stageId) return null;
 
     const optionId = getOptionId(option);
     const product = getProductForOption(option, stageId);
 
     if (!optionId || !positiveId(product.id)) {
       reportError("No se pudo identificar el producto seleccionado.");
-      return;
+      return null;
     }
 
     const existing = selectedItems.find(
       (item) => getSelectionId(item) === optionId,
     ) || null;
 
-    const nextFlow = {
+    return {
       option,
       product,
       existing,
@@ -247,7 +252,14 @@ export default function MenuSetStageContent({
       components: Array.isArray(existing?.components) ? existing.components : [],
       compositeDraft: null,
       initialModifiers: [],
+      selectionScope: "product_only",
     };
+  }, [selectionAllowed, builder, stageId, selectedItems, reportError]);
+
+  // Selecciona exclusivamente el producto original, sin abrir variantes.
+  const beginSelection = useCallback((option) => {
+    const nextFlow = buildFlowForOption(option);
+    if (!nextFlow) return;
 
     setFlow(nextFlow);
 
@@ -256,22 +268,39 @@ export default function MenuSetStageContent({
       return;
     }
 
-    if (product.product_type === "composite") {
-      composite.resetDraftForProduct?.(product);
+    if (nextFlow.product.product_type === "composite") {
+      composite.resetDraftForProduct?.(nextFlow.product);
       setActiveDialog("composite");
       return;
     }
 
-    if (Array.isArray(product.variants) && product.variants.length > 0) {
-      setActiveDialog("variants");
+    openModifiersOrSave({
+      ...nextFlow,
+      variantId: null,
+      components: [],
+      compositeDraft: null,
+      selectionScope: "product_only",
+    });
+  }, [buildFlowForOption, composite, openModifiersOrSave]);
+
+  // Abre las variantes solamente cuando se utiliza su botón independiente.
+  const openVariantSelection = useCallback((option) => {
+    const nextFlow = buildFlowForOption(option);
+    if (!nextFlow) return;
+
+    if (option?.availability?.requiresPreparedSelection === true) {
+      reportError("Esta preparación conserva su configuración original.");
       return;
     }
 
-    openModifiersOrSave({ ...nextFlow, variantId: null, components: [] });
-  }, [
-    selectionAllowed, builder, stageId, selectedItems,
-    composite, openModifiersOrSave, reportError,
-  ]);
+    if (!Array.isArray(nextFlow.product.variants) || nextFlow.product.variants.length === 0) {
+      reportError("Este producto no tiene variantes disponibles para consultar.");
+      return;
+    }
+
+    setFlow({ ...nextFlow, selectionScope: "variant_only" });
+    setActiveDialog("variants");
+  }, [buildFlowForOption, reportError]);
 
   const handleVariantSelection = (_product, variant) => {
     if (!selectionAllowed) return;
@@ -285,6 +314,7 @@ export default function MenuSetStageContent({
       variantId,
       components: [],
       compositeDraft: null,
+      selectionScope: "variant_only",
     });
   };
 
@@ -305,6 +335,7 @@ export default function MenuSetStageContent({
       variantId: null,
       components,
       compositeDraft: draft,
+      selectionScope: "composite_only",
     });
   };
 
@@ -367,6 +398,18 @@ export default function MenuSetStageContent({
     if (result?.ok) closeDialog();
   };
 
+  // Configura la opción ya elegida, respetando si es original o variante.
+  const handleConfigureSelection = (option, selection) => {
+    const selectedVariantId = positiveId(selection?.variant_id ?? selection?.variantId);
+
+    if (selectedVariantId) {
+      openVariantSelection(option);
+      return;
+    }
+
+    beginSelection(option);
+  };
+
   if (!activeStage) return null;
 
   const preparedChoices = Array.isArray(flow?.option?.availability?.preparedChoices)
@@ -415,21 +458,9 @@ export default function MenuSetStageContent({
             display: flex;
             flex-direction: column;
             width: 100%;
+            height: 100%;
             min-width: 0;
             max-width: 100%;
-          }
-
-          .cm-set-stage-edit-actions {
-            display: flex;
-            gap: 7px;
-            flex-wrap: wrap;
-            padding: 9px 2px 0;
-          }
-
-          .cm-set-stage-edit-actions > button {
-            flex: 1 1 110px;
-            min-width: 0;
-            white-space: normal;
           }
 
           .cm-set-stage-content .cm-set-stage-pagination {
@@ -477,29 +508,12 @@ export default function MenuSetStageContent({
                   themeColor={color}
                   onSelect={selectionAllowed ? () => beginSelection(option) : undefined}
                   onRemove={selectionAllowed ? () => handleRemove(option) : undefined}
+                  onOpenVariants={selectionAllowed ? () => openVariantSelection(option) : undefined}
+                  onConfigure={selection && selectionAllowed
+                    ? () => handleConfigureSelection(option, selection) : undefined}
+                  onNotes={selection && selectionAllowed
+                    ? () => openNotes(option, selection) : undefined}
                 />
-
-                {selection && selectionAllowed ? (
-                  <div className="cm-set-stage-edit-actions">
-                    <PillButton
-                      tone="default"
-                      onClick={() => beginSelection(option)}
-                      title="Cambiar configuración"
-                    >
-                      <EditRoundedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-                      Configurar
-                    </PillButton>
-
-                    <PillButton
-                      tone="default"
-                      onClick={() => openNotes(option, selection)}
-                      title="Agregar o cambiar indicaciones"
-                    >
-                      <NotesRoundedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-                      Nota
-                    </PillButton>
-                  </div>
-                ) : null}
               </div>
             );
           })}
@@ -565,7 +579,7 @@ export default function MenuSetStageContent({
         variantId={flow?.variantId || null}
         compositeDraft={flow?.compositeDraft || null}
         initialValue={flow?.initialModifiers || []}
-        selectionScope="all"
+        selectionScope={flow?.selectionScope || "all"}
         themeColor={color}
         readOnly={!selectionAllowed}
         onClose={closeDialog}
@@ -625,6 +639,7 @@ export default function MenuSetStageContent({
                 </PillButton>
               </div>
             ))}
+
           </div>
 
           {preparedChoices.length === 0 ? (
@@ -639,48 +654,16 @@ export default function MenuSetStageContent({
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <MenuSetNotesModal
         open={selectionAllowed && activeDialog === "notes"}
+        productName={flow?.option?.name || ""}
+        value={noteValue}
+        onChange={setNoteValue}
         onClose={closeDialog}
-        fullWidth
-        fullScreen={isMobile}
-        maxWidth="sm"
-        PaperProps={{
-          sx: {
-            borderRadius: isMobile ? 0 : 2,
-            border: `1px solid ${alpha(color, 0.2)}`,
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 900 }}>
-          Indicaciones del producto
-        </DialogTitle>
-
-        <DialogContent dividers>
-          <TextField
-            multiline
-            fullWidth
-            minRows={4}
-            value={noteValue}
-            onChange={(event) => setNoteValue(event.target.value)}
-            inputProps={{ maxLength: 500 }}
-            placeholder="Escribe alguna indicación para este producto..."
-            sx={{
-              mt: 1,
-              "& .MuiOutlinedInput-notchedOutline": { borderWidth: "1px" },
-            }}
-          />
-        </DialogContent>
-
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <PillButton tone="default" onClick={closeDialog}>
-            Cancelar
-          </PillButton>
-          <PillButton tone="orange" themeColor={color} onClick={saveNotes}>
-            Guardar
-          </PillButton>
-        </DialogActions>
-      </Dialog>
+        onSave={saveNotes}
+        themeColor={color}
+        readOnly={!selectionAllowed}
+      />
     </div>
   );
 }

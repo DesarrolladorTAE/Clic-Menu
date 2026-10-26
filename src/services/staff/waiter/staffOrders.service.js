@@ -43,6 +43,24 @@ export async function fetchStaffWaiterMenu({ tableId = null, orderId = null } = 
   return res?.data;
 }
 
+/**
+ * Consulta los Conjuntos del menú correspondiente a la mesa
+ * o a la comanda existente. El servidor determina el menú.
+ */
+export async function fetchStaffWaiterMenuSets({ tableId = null, orderId = null } = {}) {
+  const params = {
+    _t: Date.now(),
+    ...buildExclusiveWaiterContext({ tableId, orderId }),
+  };
+
+  const res = await staffApi.get("/staff/waiter/menu-sets", {
+    params,
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
+}
+
 export async function fetchPreparedItems({ tableId = null, orderId = null } = {}) {
   const params = {
     _t: Date.now(),

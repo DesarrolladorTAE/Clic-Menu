@@ -1,7 +1,7 @@
 // src/pages/staff/casher/CashierDirectOrderPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Box, CircularProgress, Snackbar, Stack, Typography } from "@mui/material";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import echo from "../../../realtime/echo";
 
@@ -14,6 +14,7 @@ import { usePreparedItemsCollection } from "../../../hooks/menu/usePreparedItems
 
 import {
   fetchCashierDirectMenu,
+  fetchCashierDirectMenuSets,
   fetchPreparedItems,
 } from "../../../services/staff/casher/cashierDirectOrder.service";
 
@@ -32,6 +33,21 @@ import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloa
 import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
 import MenuSectionTabs from "../../../components/menu/shared/menuUi/MenuSectionTabs";
 import PreparedItemsSection from "../../../components/menu/shared/prepared-items/PreparedItemsSection";
+
+import MenuCatalogModeLayout from "../../../components/menu/shared/menu-sets/MenuCatalogModeLayout";
+
+import {
+  createMenuSetNavigationKey,
+  clearMenuSetNavigationState,
+  getMenuSetCart,
+  saveMenuSetCart,
+  saveMenuSetReturnPath,
+} from "../../../hooks/menu/menu-sets/menuSetNavigationStore";
+
+import {
+  getCatalogModeVisibility,
+  normalizeMenuSetCatalog,
+} from "../../../hooks/menu/menu-sets/menuSet.utils";
 
 import CashierDirectHeaderCard from "../../../components/staff/casher/directOrderPage/CashierDirectHeaderCard";
 import CashierDirectCreateOrderDialog from "../../../components/staff/casher/directOrderPage/CashierDirectCreateOrderDialog";
@@ -112,7 +128,11 @@ function hasContextualModifiers(product, opts = {}) {
 
 export default function CashierDirectOrderPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sp] = useSearchParams();
+
+  const menuSetContextKeyRef = useRef(null);
+  const catalogRequestRef = useRef(0);
 
   const orderIdFromQuery = sp.get("order_id")
     ? Number(sp.get("order_id"))
@@ -161,6 +181,9 @@ export default function CashierDirectOrderPage() {
   const [loadingExistingOrder, setLoadingExistingOrder] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [data, setData] = useState(null);
+  const [menuSetsPayload, setMenuSetsPayload] = useState(null);
+  const [menuSetsNotice, setMenuSetsNotice] = useState("");
+  const [hydratedMenuSetKey, setHydratedMenuSetKey] = useState(null);
 
   const [selectedMenuId, setSelectedMenuId] = useState(null);
 
@@ -174,6 +197,11 @@ export default function CashierDirectOrderPage() {
     returnSaleId,
     selectedMenuId,
     onPreparedItemsRefresh: preparedItems.refetch,
+    onCommitted: () => {
+      if (menuSetContextKeyRef.current) {
+        clearMenuSetNavigationState(menuSetContextKeyRef.current);
+      }
+    },
   });
 
   const composite = useCompositeDrafts();
@@ -220,6 +248,99 @@ export default function CashierDirectOrderPage() {
       (menu) => String(menu?.id) === String(selectedMenuId)
     ) ||
     null;
+  
+  /*
+  * El catálogo de Conjuntos respeta la modalidad configurada en la sucursal.
+  * Los productos normales y los Conjuntos comparten el menú seleccionado.
+  */
+  const menuSetCatalog = useMemo(() => {
+    return normalizeMenuSetCatalog(menuSetsPayload);
+  }, [menuSetsPayload]);
+
+  const catalogMode = menuSetCatalog.catalogMode || data?.catalog_mode || null;
+  const catalogVisibility = getCatalogModeVisibility(catalogMode);
+  const menuSets = menuSetCatalog.menuSets;
+
+  const filteredMenuSets = useMemo(() => {
+    const search = String(q || "").trim().toLocaleLowerCase("es-MX");
+    if (!search) return menuSets;
+
+    return menuSets.filter((set) => {
+      const content = `${set.name || ""} ${set.description || ""}`.toLocaleLowerCase("es-MX");
+      return content.includes(search);
+    });
+  }, [menuSets, q]);
+
+  /*
+  * Cada caja, menú y venta existente conserva un contexto independiente.
+  * La venta existente utiliza siempre el menú original de su orden.
+  */
+  const menuSetNavigationContext = useMemo(() => {
+    const branchId = Number(
+      data?.branch_id || data?.branch?.id ||
+      menuSetsPayload?.data?.branch_id || cartOrder.activeOrder?.branch_id || 0
+    );
+
+    const menuId = Number(
+      isEditingExistingDirectOrder
+        ? cartOrder.activeOrder?.menu_id || 0
+        : selectedMenuId || 0
+    );
+
+    if (!branchId || !menuId) return null;
+
+    return {
+      channel: "caja",
+      restaurantId: Number(data?.restaurant_id || data?.restaurant?.id || 0) || null,
+      branchId,
+      menuId,
+      orderId: isEditingExistingDirectOrder ? orderIdFromQuery : null,
+      saleId: isEditingExistingDirectOrder
+        ? Number(cartOrder.activeSale?.id || returnSaleId || 0) || null
+        : null,
+    };
+  }, [
+    data, menuSetsPayload, selectedMenuId, isEditingExistingDirectOrder,
+    orderIdFromQuery, returnSaleId, cartOrder.activeOrder, cartOrder.activeSale,
+  ]);
+
+  const menuSetNavigationKey = useMemo(() => {
+    return createMenuSetNavigationKey(menuSetNavigationContext);
+  }, [menuSetNavigationContext]);
+
+  menuSetContextKeyRef.current = menuSetNavigationKey;
+
+  /*
+  * Recuperar la captura al regresar de la pantalla de Conjuntos.
+  * La sincronización comienza después de recuperar el carrito guardado,
+  * para evitar sobrescribirlo con un carrito vacío al montar la página.
+  */
+  useEffect(() => {
+    if (!menuSetNavigationKey) {
+      setHydratedMenuSetKey(null);
+      return;
+    }
+
+    const savedCart = getMenuSetCart(menuSetNavigationKey);
+    if (Array.isArray(savedCart)) cartOrder.setCart(savedCart);
+
+    setHydratedMenuSetKey(menuSetNavigationKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuSetNavigationKey]);
+
+  useEffect(() => {
+    if (!menuSetNavigationKey || hydratedMenuSetKey !== menuSetNavigationKey) return;
+    saveMenuSetCart(menuSetNavigationKey, cartOrder.cart);
+  }, [menuSetNavigationKey, hydratedMenuSetKey, cartOrder.cart]);
+
+  /*
+  * Los Conjuntos se actualizan según la disponibilidad del catálogo.
+  * El servidor vuelve a validar inventario, etapas y capacidad al guardar.
+  */
+  useEffect(() => {
+    if (menuSetsPayload?.ok !== true) return;
+    cartOrder.reconcileMenuSetsAvailability(menuSets);
+  }, [menuSetsPayload, menuSets, cartOrder.reconcileMenuSetsAvailability]);
 
   const {
     selectedSectionId,
@@ -306,62 +427,79 @@ export default function CashierDirectOrderPage() {
   const load = async ({
     silent = false,
     menuId = undefined,
+    indicateProgress = false,
   } = {}) => {
+    const requestId = ++catalogRequestRef.current;
+
     if (!silent) {
       setLoading(true);
       setErrorMsg("");
-    } else {
+    } else if (indicateProgress) {
       setSyncing(true);
     }
 
     /*
-     * Cuando menuId no se envía explícitamente:
-     *
-     * 1. Una venta existente utiliza el menu_id de su orden.
-     * 2. Una venta nueva conserva el menú seleccionado actualmente.
-     * 3. Si todavía no existe selección, el backend devuelve
-     *    el menú predeterminado.
-     */
-    const currentMenuId = Number(
-      cartOrder.activeOrder?.menu_id ||
-        selectedMenuId ||
-        0
-    );
-
-    const requestedMenuId =
-      menuId === undefined
-        ? currentMenuId || null
-        : Number(menuId || 0) || null;
+    * Cuando menuId no se envía explícitamente:
+    * 1. Una venta existente utiliza el menu_id de su orden.
+    * 2. Una venta nueva conserva el menú seleccionado actualmente.
+    * 3. Si todavía no existe selección, el backend devuelve
+    *    el menú predeterminado.
+    */
+    const currentMenuId = Number(cartOrder.activeOrder?.menu_id || selectedMenuId || 0);
+    const requestedMenuId = menuId === undefined
+      ? currentMenuId || null
+      : Number(menuId || 0) || null;
 
     try {
       const res = await fetchCashierDirectMenu(
-        requestedMenuId
-          ? {
-              menuId: requestedMenuId,
-            }
-          : undefined
+        requestedMenuId ? { menuId: requestedMenuId } : undefined
       );
 
-      const payload = res?.data ? res.data : res;
+      if (requestId !== catalogRequestRef.current) return null;
 
-      const resolvedMenuId =
-        Number(
-          payload?.selected_menu?.id ||
-            payload?.default_menu_id ||
-            requestedMenuId ||
-            0
-        ) || null;
+      const payload = res?.data ? res.data : res;
+      const resolvedMenuId = Number(
+        payload?.selected_menu?.id || payload?.default_menu_id || requestedMenuId || 0
+      ) || null;
 
       setData(payload || null);
       setSelectedMenuId(resolvedMenuId);
 
+      /*
+      * Consultar Conjuntos con el mismo menú.
+      * En una corrección también se envía order_id.
+      */
+      try {
+        const setsResponse = await fetchCashierDirectMenuSets({
+          menuId: resolvedMenuId,
+          orderId: isEditingExistingDirectOrder ? orderIdFromQuery : null,
+        });
+
+        if (requestId !== catalogRequestRef.current) return null;
+
+        if (setsResponse?.ok === false) {
+          throw new Error(setsResponse?.message || "No se pudieron consultar los Conjuntos.");
+        }
+
+        setMenuSetsPayload(setsResponse);
+        setMenuSetsNotice("");
+      } catch (error) {
+        if (requestId !== catalogRequestRef.current) return null;
+
+        setMenuSetsPayload(null);
+        setMenuSetsNotice(
+          String(error?.response?.data?.message || error?.message || "No se pudieron cargar los Conjuntos.")
+        );
+      }
+
       return payload || null;
-    } catch (e) {
-      const code = e?.response?.data?.code;
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.message ||
+    } catch (error) {
+      if (requestId !== catalogRequestRef.current) return null;
+
+      const code = error?.response?.data?.code;
+      const message = error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
         "No se pudo cargar el menú de caja directa.";
 
       if (code === "NO_OPEN_CASH_SESSION") {
@@ -370,17 +508,19 @@ export default function CashierDirectOrderPage() {
       }
 
       if (!silent) {
-        setErrorMsg(String(msg));
+        setErrorMsg(String(message));
         setData(null);
+        setMenuSetsPayload(null);
+      } else {
+        setMenuSetsNotice(String(message));
       }
 
       return null;
     } finally {
-      if (!silent) {
-        setLoading(false);
+      if (requestId === catalogRequestRef.current) {
+        if (!silent) setLoading(false);
+        setSyncing(false);
       }
-
-      setSyncing(false);
     }
   };
 
@@ -580,14 +720,109 @@ export default function CashierDirectOrderPage() {
     }
 
     /*
-     * Los productos pendientes pertenecen al catálogo anterior.
-     * Deben eliminarse antes de abrir el nuevo menú.
-     */
+    * Los productos pendientes pertenecen al catálogo anterior.
+    * Deben eliminarse antes de abrir el nuevo menú.
+    */
+    if (menuSetNavigationKey) {
+      clearMenuSetNavigationState(menuSetNavigationKey);
+    }
+
+    if (menuSetNavigationContext) {
+      clearMenuSetNavigationState({
+        ...menuSetNavigationContext,
+        menuId: normalizedMenuId,
+        orderId: null,
+        saleId: null,
+      });
+    }
+
     resetPendingCaptureForMenuChange();
+    setMenuSetsPayload(null);
+    setMenuSetsNotice("");
 
     await load({
       silent: true,
       menuId: normalizedMenuId,
+      indicateProgress: true,
+    });
+  };
+
+  /*
+  * Abre el configurador compartido mediante su propia ruta.
+  * El carrito y la ruta de regreso se conservan por contexto.
+  */
+  const handleOpenMenuSet = (menuSet, options = {}) => {
+    if (syncing) return;
+
+    if (!menuSet?.id || !menuSetNavigationKey || !menuSetNavigationContext) {
+      setMenuSetsNotice("No se pudo identificar el menú de esta venta.");
+      return;
+    }
+
+    const editCartKey = String(options?.editCartKey || "");
+    if (!editCartKey && menuSet.isSellable === false) {
+      const reason = menuSet.source?.unavailability_reason
+        || menuSet.availability?.reason
+        || "Este Conjunto no está disponible por el momento.";
+
+      setMenuSetsNotice(reason);
+      return;
+    }
+
+    const savedCart = saveMenuSetCart(menuSetNavigationKey, cartOrder.cart);
+    if (!savedCart?.ok) {
+      setMenuSetsNotice(savedCart?.message || "No se pudo conservar tu selección.");
+      return;
+    }
+
+    const returnPath = `${location.pathname}${location.search}`;
+    const savedReturn = saveMenuSetReturnPath(menuSetNavigationKey, returnPath, menuSet.id);
+
+    if (!savedReturn?.ok) {
+      setMenuSetsNotice(savedReturn?.message || "No se pudo preparar el configurador.");
+      return;
+    }
+
+    setCartDrawerOpen(false);
+
+    navigate(`/staff/cashier/direct-order/conjuntos/${menuSet.id}`, {
+      state: {
+        menuSet,
+        menuSetId: menuSet.id,
+        navigationContext: menuSetNavigationContext,
+        returnPath,
+        channel: "caja",
+        ...(editCartKey ? {
+          editCartKey,
+          initialSelections: options.initialSelections,
+        } : {}),
+      },
+    });
+  };
+
+  /*
+  * La edición reemplaza una partida pendiente, conservando su identificador.
+  * No modifica productos ya guardados en una venta existente.
+  */
+  const handleEditMenuSet = (item) => {
+    const menuSet = menuSets.find((set) => Number(set.id) === Number(item?.menu_set_id));
+
+    if (!menuSet || !item?.key) {
+      setMenuSetsNotice("No se encontró el Conjunto que deseas modificar.");
+      return;
+    }
+
+    const stages = Array.isArray(item?.display_stages) && item.display_stages.length > 0
+      ? item.display_stages
+      : Array.isArray(item?.selections) ? item.selections : [];
+
+    handleOpenMenuSet(menuSet, {
+      editCartKey: item.key,
+      initialSelections: {
+        menuSetId: Number(menuSet.id),
+        currentStep: 0,
+        selections: stages,
+      },
     });
   };
 
@@ -927,123 +1162,134 @@ export default function CashierDirectOrderPage() {
 
           q={q}
           onSearchChange={setQ}
-          totalVisible={filteredProducts.length}
+          totalVisible={catalogVisibility.showNormalProducts ? filteredProducts.length : filteredMenuSets.length}
           onOpenCart={() => setCartDrawerOpen(true)}
-          onRefresh={() => load({ silent: true })}
           syncing={syncing}
         />
 
-        {showSectionSelector ? (
-          <MenuSectionTabs
-            sections={sections}
-            selectedSectionId={selectedSectionId}
-            onSectionChange={handleSectionChange}
-          />
-        ) : null}
+        <MenuCatalogModeLayout
+          catalogMode={catalogMode}
+          menuSets={filteredMenuSets}
+          themeColor="#FF7A00"
+          onOpenMenuSet={handleOpenMenuSet}
+          loading={loading || syncing}
+          normalContent={
+            <>
 
-        {sections.length > 0 ? (
-          <PublicMenuCategoryTabs
-            categoryOptions={categoryOptions}
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-          />
-        ) : null}
-
-        <Box>
-          <Box
-            sx={{
-              display: "grid",
-              gap: 2,
-              gridTemplateColumns: {
-                xs: "repeat(1, minmax(0, 1fr))",
-                sm: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(3, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr))",
-              },
-            }}
-          >
-            {sections.length > 0 && filteredProducts.length > 0 ? (
-              paginatedProducts.map((product) => (
-                <MenuProductCard
-                  key={product.id}
-                  product={product}
-                  categoryName={
-                    product.__categoryName ||
-                    categoryNameById.get(Number(product.category_id)) ||
-                    "Sin categoría"
-                  }
-                  canSelect={canSelect}
-                  showSelectBtn
-                  onAddSimple={openProductSelectionFlow}
-                  onAddVariant={openVariantSelectionFlow}
-                  onOpenComposite={openCompositeConfigurator}
-                  onOpenExtras={openReadOnlyExtrasViewer}
-                  onOpenVariants={openVariantsViewer}
+              {showSectionSelector ? (
+                <MenuSectionTabs
+                  sections={sections}
+                  selectedSectionId={selectedSectionId}
+                  onSectionChange={handleSectionChange}
                 />
-              ))
-            ) : (
-              <Box
-                sx={{
-                  gridColumn: "1 / -1",
-                  border: "1px dashed",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  backgroundColor: "background.paper",
-                  p: 3,
-                  textAlign: "center",
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: 22,
-                    fontWeight: 800,
-                    color: "text.primary",
-                  }}
-                >
-                  {sections.length === 0
-                    ? "Sin secciones disponibles"
-                    : "Sin productos"}
-                </Typography>
+              ) : null}
 
-                <Typography
+              {sections.length > 0 ? (
+                <PublicMenuCategoryTabs
+                  categoryOptions={categoryOptions}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                />
+              ) : null}
+
+              <Box>
+                <Box
                   sx={{
-                    mt: 1,
-                    fontSize: 14,
-                    color: "text.secondary",
+                    display: "grid",
+                    gap: 2,
+                    gridTemplateColumns: {
+                      xs: "repeat(1, minmax(0, 1fr))",
+                      sm: "repeat(2, minmax(0, 1fr))",
+                      md: "repeat(3, minmax(0, 1fr))",
+                      xl: "repeat(4, minmax(0, 1fr))",
+                    },
                   }}
                 >
-                  {sections.length === 0
-                    ? "El menú seleccionado no tiene secciones disponibles."
-                    : "Prueba con otro texto o cambia de categoría."}
-                </Typography>
+                  {sections.length > 0 && filteredProducts.length > 0 ? (
+                    paginatedProducts.map((product) => (
+                      <MenuProductCard
+                        key={product.id}
+                        product={product}
+                        categoryName={
+                          product.__categoryName ||
+                          categoryNameById.get(Number(product.category_id)) ||
+                          "Sin categoría"
+                        }
+                        canSelect={canSelect}
+                        showSelectBtn
+                        onAddSimple={openProductSelectionFlow}
+                        onAddVariant={openVariantSelectionFlow}
+                        onOpenComposite={openCompositeConfigurator}
+                        onOpenExtras={openReadOnlyExtrasViewer}
+                        onOpenVariants={openVariantsViewer}
+                      />
+                    ))
+                  ) : (
+                    <Box
+                      sx={{
+                        gridColumn: "1 / -1",
+                        border: "1px dashed",
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        backgroundColor: "background.paper",
+                        p: 3,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          color: "text.primary",
+                        }}
+                      >
+                        {sections.length === 0
+                          ? "Sin secciones disponibles"
+                          : "Sin productos"}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          fontSize: 14,
+                          color: "text.secondary",
+                        }}
+                      >
+                        {sections.length === 0
+                          ? "El menú seleccionado no tiene secciones disponibles."
+                          : "Prueba con otro texto o cambia de categoría."}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+
+                {filteredProducts.length > 0 ? (
+                  <Box sx={{ mt: 2 }}>
+                    <PaginationFooter
+                      page={page}
+                      totalPages={totalPages}
+                      startItem={startItem}
+                      endItem={endItem}
+                      total={total}
+                      hasPrev={hasPrev}
+                      hasNext={hasNext}
+                      onPrev={prevPage}
+                      onNext={nextPage}
+                      itemLabel="productos"
+                    />
+                  </Box>
+                ) : null}
+
+                <PreparedItemsSection
+                  items={preparedItems.items}
+                  loading={preparedItems.loading || syncing}
+                  selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
+                  onSelect={handlePreparedItemSelect}
+                />
               </Box>
-            )}
-          </Box>
-
-          {filteredProducts.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
-              <PaginationFooter
-                page={page}
-                totalPages={totalPages}
-                startItem={startItem}
-                endItem={endItem}
-                total={total}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                onPrev={prevPage}
-                onNext={nextPage}
-                itemLabel="productos"
-              />
-            </Box>
-          ) : null}
-
-          <PreparedItemsSection
-            items={preparedItems.items}
-            loading={preparedItems.loading || syncing}
-            selectedPreparedItemIds={cartOrder.selectedPreparedItemIds}
-            onSelect={handlePreparedItemSelect}
-          />
-        </Box>
+            </>
+          }
+        />
       </Stack>
 
       {!isEditingExistingDirectOrder ? (
@@ -1166,6 +1412,8 @@ export default function CashierDirectOrderPage() {
           pricingSummary={cartOrder.pricingSummary}
           oldItems={cartOrder.oldItems}
           newItems={cartOrder.cart}
+          menuSets={menuSets}
+          onEditMenuSet={handleEditMenuSet}
           sendToast={cartOrder.sendToast}
           sending={cartOrder.sending}
           canAppend={canAppend || isEditingExistingDirectOrder}
@@ -1242,6 +1490,24 @@ export default function CashierDirectOrderPage() {
         label={hasCartContent ? "Ver venta" : "Venta"}
         title="Abrir venta directa"
       />
+
+      <Snackbar
+        open={Boolean(menuSetsNotice)}
+        autoHideDuration={3000}
+        onClose={(_event, reason) => {
+          if (reason !== "clickaway") setMenuSetsNotice("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={() => setMenuSetsNotice("")}
+          sx={{ width: "100%", borderRadius: 1 }}
+        >
+          {menuSetsNotice}
+        </Alert>
+      </Snackbar>
     </PageContainer>
   );
 }

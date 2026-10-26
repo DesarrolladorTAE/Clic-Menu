@@ -1,3 +1,4 @@
+//src/components/staff/casher/directOrderPage/CashierDirectCreateOrderDialog.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box, Button, Card, CardContent, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField,
@@ -8,6 +9,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import KitchenRoundedIcon from "@mui/icons-material/KitchenRounded";
+import { isMenuSetCartLine } from "../../../../hooks/menu/menu-sets/menuSetPayload.utils";
 
 export default function CashierDirectCreateOrderDialog({
   open,
@@ -36,12 +38,27 @@ export default function CashierDirectCreateOrderDialog({
     setLocalKitchenFlow(kitchenFlow || "");
   }, [open, customerName, kitchenFlow]);
 
-  const itemCount = useMemo(() => {
-    return (Array.isArray(cart) ? cart : []).reduce(
-      (acc, item) => acc + Number(item?.quantity || 1),
-      0
-    );
+  /*
+  * Un Conjunto completo representa una unidad comercial.
+  * Sus productos internos no se cuentan como partidas adicionales.
+  */
+  const itemSummary = useMemo(() => {
+    return (Array.isArray(cart) ? cart : []).reduce((summary, item) => {
+      const isSet = isMenuSetCartLine(item);
+      const quantity = isSet ? 1 : Math.max(1, Number(item?.quantity || 1));
+
+      summary.totalUnits += quantity;
+      if (isSet) {
+        summary.menuSetUnits += 1;
+      } else {
+        summary.productUnits += quantity;
+      }
+
+      return summary;
+    }, { totalUnits: 0, productUnits: 0, menuSetUnits: 0 });
   }, [cart]);
+
+  const itemCount = itemSummary.totalUnits;
 
   const pricingPreview = useMemo(() => {
     const summary =
@@ -122,8 +139,15 @@ export default function CashierDirectCreateOrderDialog({
       slotProps={{
         paper: {
           sx: {
+            width: { xs: "100%", sm: "min(600px, calc(100vw - 32px))" },
+            maxWidth: { xs: "100%", sm: 600 },
+            height: { xs: "100dvh", sm: "auto" },
+            maxHeight: { xs: "100dvh", sm: "calc(100dvh - 32px)" },
+            m: { xs: 0, sm: 2 },
             borderRadius: { xs: 0, sm: 1 },
             overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
           },
         },
       }}
@@ -187,6 +211,11 @@ export default function CashierDirectCreateOrderDialog({
         sx={{
           p: { xs: 2, sm: 3 },
           bgcolor: "background.default",
+          flex: "1 1 auto",
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <Card
@@ -221,29 +250,25 @@ export default function CashierDirectCreateOrderDialog({
                   }}
                 >
                   <Stack spacing={1}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      spacing={2}
-                    >
-                      <Typography
-                        sx={{
-                          fontSize: 13,
-                          color: "text.secondary",
-                        }}
-                      >
-                        Productos
+                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                      <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                        Unidades de la venta
                       </Typography>
-
-                      <Typography
-                        sx={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                        }}
-                      >
+                      <Typography sx={{ fontSize: 13, fontWeight: 800 }}>
                         {itemCount}
                       </Typography>
                     </Stack>
+
+                    {itemSummary.menuSetUnits > 0 ? (
+                      <Box sx={{ display: "grid", gap: 0.5, pl: 1.5, borderLeft: "2px solid", borderColor: "primary.main" }}>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                          Productos: <strong>{itemSummary.productUnits}</strong>
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                          Conjuntos: <strong>{itemSummary.menuSetUnits}</strong>
+                        </Typography>
+                      </Box>
+                    ) : null}
 
                     <Stack
                       direction="row"

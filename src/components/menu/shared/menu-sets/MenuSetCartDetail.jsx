@@ -1,6 +1,7 @@
 //src/components/menu/shared/menu-sets/MenuSetCartDetail.jsx
 //Detalle expandible del Conjunto dentro del carrito e historial.                                                  |
 import React, { useMemo, useState } from "react";
+import { IconButton } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
@@ -9,7 +10,6 @@ import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 
-import { PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money } from "../../../../hooks/public/publicMenu.utils";
 import { isMenuSetCartLine } from "../../../../hooks/menu/menu-sets/menuSetPayload.utils";
 
@@ -449,21 +449,63 @@ export default function MenuSetCartDetail({
           {canEdit || canRemove ? (
             <div style={{
               display: "flex", justifyContent: "flex-end",
-              gap: 8, flexWrap: "wrap",
+              alignItems: "center", gap: 10, flexWrap: "wrap",
               borderTop: `1px solid ${border}`, paddingTop: 11,
             }}>
               {canEdit ? (
-                <PillButton tone="default" onClick={() => onEdit(item)}>
-                  <EditRoundedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-                  Modificar
-                </PillButton>
+                <IconButton
+                  type="button"
+                  onClick={() => onEdit(item)}
+                  title="Modificar conjunto"
+                  aria-label={`Modificar ${title}`}
+                  sx={{
+                    width: 42, height: 42, flexShrink: 0,
+                    borderRadius: "50%",
+                    color: "#FFFFFF",
+                    bgcolor: "#D99A00",
+                    border: "1px solid #D99A00",
+                    boxShadow: "0 4px 12px rgba(217,154,0,0.20)",
+                    "&:hover": {
+                      bgcolor: "#BA8200",
+                      borderColor: "#BA8200",
+                      color: "#FFFFFF",
+                    },
+                    "&:focus-visible": {
+                      outline: "2px solid #D99A00",
+                      outlineOffset: 3,
+                    },
+                  }}
+                >
+                  <EditRoundedIcon sx={{ fontSize: 20 }} />
+                </IconButton>
               ) : null}
 
               {canRemove ? (
-                <PillButton tone="danger" onClick={() => onRemove(item)}>
-                  <DeleteOutlineRoundedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-                  Quitar
-                </PillButton>
+                <IconButton
+                  type="button"
+                  onClick={() => onRemove(item)}
+                  title="Eliminar conjunto"
+                  aria-label={`Eliminar ${title}`}
+                  sx={{
+                    width: 40, height: 40, flexShrink: 0,
+                    borderRadius: "50%",
+                    color: "#FFFFFF",
+                    bgcolor: "#D32F2F",
+                    border: "1px solid #D32F2F",
+                    boxShadow: "0 4px 12px rgba(211,47,47,0.20)",
+                    "&:hover": {
+                      bgcolor: "#B71C1C",
+                      borderColor: "#B71C1C",
+                      color: "#FFFFFF",
+                    },
+                    "&:focus-visible": {
+                      outline: "2px solid #D32F2F",
+                      outlineOffset: 3,
+                    },
+                  }}
+                >
+                  <DeleteOutlineRoundedIcon sx={{ fontSize: 20 }} />
+                </IconButton>
               ) : null}
             </div>
           ) : null}

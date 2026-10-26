@@ -1,3 +1,4 @@
+//src/components/menu/shared/MenuCartPanel.jsx
 import React, { useMemo, useState } from "react";
 import { money } from "../../../hooks/public/publicMenu.utils";
 import { Badge, PillButton } from "../../../pages/public/publicMenu.ui";

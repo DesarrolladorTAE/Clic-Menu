@@ -1,3 +1,4 @@
+//src/services/staff/casher/cashierDirectOrder.service.js
 import staffApi from "../../staffApi";
 
 const NO_CACHE_HEADERS = {
@@ -28,6 +29,34 @@ export async function fetchCashierDirectMenu({
   );
 
     return res?.data;
+}
+
+/*
+ * Consulta los Conjuntos del menú seleccionado para Caja directa.
+ * En una venta existente se envía también el identificador de la orden
+ * para conservar el menú bloqueado y sus validaciones.
+ */
+export async function fetchCashierDirectMenuSets({
+  menuId = null,
+  orderId = null,
+  serviceDate = null,
+} = {}) {
+  const normalizedMenuId = Number(menuId || 0);
+  const normalizedOrderId = Number(orderId || 0);
+
+  const params = {
+    _t: Date.now(),
+    ...(normalizedMenuId > 0 ? { menu_id: normalizedMenuId } : {}),
+    ...(normalizedOrderId > 0 ? { order_id: normalizedOrderId } : {}),
+    ...(serviceDate ? { service_date: serviceDate } : {}),
+  };
+
+  const res = await staffApi.get("/staff/cashier/direct-orders/menu-sets", {
+    params,
+    headers: NO_CACHE_HEADERS,
+  });
+
+  return res?.data;
 }
 
 export async function fetchPreparedItems(menuId) {

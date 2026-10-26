@@ -1,4 +1,4 @@
-// src/components/menu/shared/menu-sets/MenuSetStageProductCard.jsx
+//src/components/menu/shared/menu-sets/MenuSetStageProductCard.jsx
 import React, { useState } from "react";
 import {
   Box, Chip, Dialog, DialogContent, DialogTitle, Divider, IconButton,
@@ -9,6 +9,8 @@ import { alpha, useTheme } from "@mui/material/styles";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
 
 import { PillButton, ProductThumb } from "../../../../pages/public/publicMenu.ui";
 import { normalizeMenuSetOption } from "../../../../hooks/menu/menu-sets/menuSet.utils";
@@ -68,7 +70,10 @@ export default function MenuSetStageProductCard({
   themeColor,
   onSelect,
   onRemove,
+  onOpenVariants,
   onViewDetails,
+  onConfigure,
+  onNotes,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -105,6 +110,8 @@ export default function MenuSetStageProductCard({
   const canChoose = canSelect && !unavailable && typeof onSelect === "function";
   const canRemove = canSelect && typeof onRemove === "function";
   const blocked = isSelected ? !canRemove : !canChoose;
+  const showVariantsButton = canSelect && hasVariants && typeof onOpenVariants === "function";
+  const variantsBlocked = unavailable || requiresPrepared;
 
   const statusLabel = isSelected
     ? "Seleccionado"
@@ -144,9 +151,13 @@ export default function MenuSetStageProductCard({
       return;
     }
 
-    // La página decide si debe abrir variantes, extras, componentes
-    // o la selección de una unidad previamente preparada.
+    // Selecciona el producto original. Las variantes tienen su propio botón.
     onSelect(product);
+  };
+
+  const handleOpenVariants = () => {
+    if (!showVariantsButton || variantsBlocked) return;
+    onOpenVariants(product);
   };
 
   return (
@@ -174,12 +185,14 @@ export default function MenuSetStageProductCard({
             .cm-set-stage-product-card {
               display: grid;
               grid-template-rows: auto minmax(0, 1fr) auto;
+              flex: 1 1 auto;
               width: 100%;
               min-width: 0;
               max-width: 100%;
               height: 100%;
               padding: 10px;
               border: 1px solid var(--cm-stage-product-border);
+              border-top: 3px solid var(--cm-stage-product-color);
               border-radius: 11px;
               background: var(--cm-stage-product-surface);
               box-shadow: 0 8px 22px rgba(47,42,61,0.055);
@@ -252,14 +265,14 @@ export default function MenuSetStageProductCard({
             .cm-set-stage-product-status {
               position: absolute;
               top: 8px;
-              right: 8px;
+              left: 8px;
               z-index: 20;
               display: inline-flex;
               align-items: center;
               justify-content: center;
               gap: 4px;
               width: max-content;
-              max-width: calc(100% - 16px);
+              max-width: calc(100% - 70px);
               padding: 5px 8px;
               border: 1px solid var(--cm-stage-product-status-border);
               border-radius: 999px;
@@ -366,6 +379,50 @@ export default function MenuSetStageProductCard({
               font-size: 12px;
             }
 
+            .cm-set-stage-product-variants-action {
+              grid-column: 1 / -1;
+              width: 100%;
+              min-width: 0;
+            }
+
+            .cm-set-stage-product-variants-action > button {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: 100%;
+              min-width: 0;
+              max-width: 100%;
+              min-height: 39px;
+              height: auto;
+              padding: 9px 8px;
+              white-space: normal;
+              line-height: 1.35;
+              text-align: center;
+              font-size: 12px;
+            }
+
+            /*
+             * La fila de edición existe también cuando la tarjeta
+             * no está seleccionada, para reservar la misma altura.
+             */
+            .cm-set-stage-product-edit-actions {
+              grid-column: 1 / -1;
+              display: flex;
+              justify-content: flex-end;
+              align-items: center;
+              gap: 8px;
+              width: 100%;
+              min-width: 0;
+              min-height: 40px;
+              padding: 0 2px;
+            }
+
+            .cm-set-stage-product-edit-actions > button {
+              flex: 0 0 40px;
+              width: 40px;
+              height: 40px;
+            }
+
             @media (max-width: 639px) {
               .cm-set-stage-product-card { padding: 9px; }
               .cm-set-stage-product-name { font-size: 13.5px; }
@@ -374,7 +431,8 @@ export default function MenuSetStageProductCard({
 
             @media (max-width: 359px) {
               .cm-set-stage-product-actions { grid-template-columns: minmax(0, 1fr); }
-              .cm-set-stage-product-actions > button { font-size: 11.5px; }
+              .cm-set-stage-product-actions > button,
+              .cm-set-stage-product-variants-action > button { font-size: 11.5px; }
             }
           `}
         </style>
@@ -395,6 +453,37 @@ export default function MenuSetStageProductCard({
             {isSelected ? <CheckCircleRoundedIcon sx={{ fontSize: 13 }} /> : null}
             {statusLabel}
           </span>
+
+          <IconButton
+            type="button"
+            onClick={openDetails}
+            title={`Ver detalles de ${title}`}
+            aria-label={`Ver detalles de ${title}`}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 21,
+              width: 34,
+              height: 34,
+              borderRadius: "50%",
+              bgcolor: "rgba(255,255,255,0.97)",
+              color: theme.palette.text.primary,
+              border: `1px solid ${theme.palette.divider}`,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              "&:hover": {
+                bgcolor: alpha(color, 0.08),
+                color,
+                borderColor: alpha(color, 0.3),
+              },
+              "&:focus-visible": {
+                outline: `2px solid ${color}`,
+                outlineOffset: 2,
+              },
+            }}
+          >
+            <InfoOutlinedIcon sx={{ fontSize: 20 }} />
+          </IconButton>
         </div>
 
         <div className="cm-set-stage-product-body">
@@ -424,15 +513,6 @@ export default function MenuSetStageProductCard({
         </div>
 
         <div className={`cm-set-stage-product-actions${!canSelect ? " is-read-only" : ""}`}>
-          <PillButton
-            tone="default"
-            onClick={openDetails}
-            title={`Ver detalles de ${title}`}
-          >
-            <InfoOutlinedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-            Ver detalles
-          </PillButton>
-
           {canSelect ? (
             <PillButton
               tone={isSelected ? "soft" : "orange"}
@@ -446,7 +526,7 @@ export default function MenuSetStageProductCard({
                     ? "Quitar este producto de la etapa"
                     : requiresPrepared
                       ? "Elegir una preparación disponible"
-                      : "Seleccionar este producto"
+                      : "Seleccionar el producto original"
               }
             >
               {isSelected
@@ -457,6 +537,90 @@ export default function MenuSetStageProductCard({
                     ? "Elegir"
                     : "Seleccionar"}
             </PillButton>
+          ) : null}
+
+          {showVariantsButton ? (
+            <div className="cm-set-stage-product-variants-action">
+              <PillButton
+                tone="default"
+                themeColor={color}
+                disabled={variantsBlocked}
+                onClick={handleOpenVariants}
+                title={
+                  requiresPrepared
+                    ? "Esta preparación conserva su configuración original"
+                    : unavailable
+                      ? availability.reason || "Producto no disponible"
+                      : `Elegir una de las ${variants.length} variantes de ${title}`
+                }
+              >
+                Variantes ({variants.length})
+              </PillButton>
+            </div>
+          ) : null}
+
+          {canSelect ? (
+            <div className="cm-set-stage-product-edit-actions">
+              {isSelected && typeof onConfigure === "function" ? (
+                <IconButton
+                  type="button"
+                  onClick={() => onConfigure(product)}
+                  title="Editar configuración"
+                  aria-label={`Editar configuración de ${title}`}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                    color: "text.primary",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                    "&:hover": {
+                      bgcolor: alpha(color, 0.08),
+                      borderColor: color,
+                      color,
+                    },
+                    "&:focus-visible": {
+                      outline: `2px solid ${color}`,
+                      outlineOffset: 2,
+                    },
+                  }}
+                >
+                  <EditRoundedIcon sx={{ fontSize: 19 }} />
+                </IconButton>
+              ) : null}
+
+              {isSelected && typeof onNotes === "function" ? (
+                <IconButton
+                  type="button"
+                  onClick={() => onNotes(product)}
+                  title="Agregar o editar nota"
+                  aria-label={`Agregar o editar nota de ${title}`}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                    color: "text.primary",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                    "&:hover": {
+                      bgcolor: alpha(color, 0.08),
+                      borderColor: color,
+                      color,
+                    },
+                    "&:focus-visible": {
+                      outline: `2px solid ${color}`,
+                      outlineOffset: 2,
+                    },
+                  }}
+                >
+                  <StickyNote2OutlinedIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </article>

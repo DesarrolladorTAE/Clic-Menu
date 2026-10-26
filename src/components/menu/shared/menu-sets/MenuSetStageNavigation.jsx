@@ -51,6 +51,7 @@ export default function MenuSetStageNavigation({
   onRemoveOption,
   onViewOption,
   onConfirm,
+  confirmLabel = "Agregar al pedido",
   footerActions = null,
   summaryContent = null,
   children = null,
@@ -194,6 +195,9 @@ export default function MenuSetStageNavigation({
         "--cm-stage-color": color,
         "--cm-stage-border": alpha(color, 0.19),
         "--cm-stage-soft": alpha(color, 0.075),
+        "--cm-stage-completed-soft": alpha(color, 0.14),
+        "--cm-stage-completed-border": alpha(color, 0.32),
+        "--cm-stage-completed-accent": alpha(color, 0.6),
         "--cm-stage-text": theme.palette.text.primary,
         "--cm-stage-muted": theme.palette.text.secondary,
         "--cm-stage-surface": theme.palette.background.paper,
@@ -274,6 +278,17 @@ export default function MenuSetStageNavigation({
 
           .cm-set-stage-side-button.is-active {
             background: var(--cm-stage-soft);
+            border-color: var(--cm-stage-color);
+          }
+          
+          .cm-set-stage-side-button.is-completed:not(.is-active) {
+            background: var(--cm-stage-completed-soft);
+            border-color: var(--cm-stage-completed-border);
+            box-shadow: inset 3px 0 0 var(--cm-stage-completed-accent);
+          }
+
+          .cm-set-stage-side-button.is-completed:not(.is-active):hover {
+            background: var(--cm-stage-completed-soft);
             border-color: var(--cm-stage-color);
           }
 
@@ -374,6 +389,38 @@ export default function MenuSetStageNavigation({
             gap: 4px;
             min-width: 0;
             max-width: 100%;
+          }
+          
+          .cm-set-stage-outline-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 45px;
+            padding: 10px 18px;
+            border: 1px solid var(--cm-stage-color);
+            border-radius: 15px;
+            background: transparent;
+            color: var(--cm-stage-color);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 850;
+            cursor: pointer;
+            transition: background 160ms ease, opacity 160ms ease;
+          }
+
+          .cm-set-stage-outline-button:hover:not(:disabled) {
+            background: var(--cm-stage-soft);
+          }
+
+          .cm-set-stage-outline-button:focus-visible {
+            outline: 2px solid var(--cm-stage-color);
+            outline-offset: 3px;
+          }
+
+          .cm-set-stage-outline-button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
           }
 
           .cm-set-stage-summary {
@@ -582,13 +629,15 @@ export default function MenuSetStageNavigation({
       <div className="cm-set-stage-layout">
         <nav className="cm-set-stage-sidebar" aria-label="Etapas del menú">
           {availableStages.map((stage, index) => {
-            const done = !viewOnly && index < step && validations[index]?.valid === true;
+            const stageId = getStageId(stage);
+            const chosen = Array.isArray(selections?.[stageId]) ? selections[stageId] : [];
+            const done = !viewOnly && index !== step && validations[index]?.valid === true && chosen.length > 0;
 
             return (
               <button
                 key={getStageId(stage) || index}
                 type="button"
-                className={`cm-set-stage-side-button${step === index ? " is-active" : ""}`}
+                className={`cm-set-stage-side-button${step === index ? " is-active" : ""}${done ? " is-completed" : ""}`}
                 aria-current={step === index ? "step" : undefined}
                 disabled={typeof goToStep !== "function"}
                 onClick={() => goToStep?.(index)}
@@ -704,15 +753,15 @@ export default function MenuSetStageNavigation({
           )}
 
           <footer className="cm-set-stage-footer">
-            <PillButton
-              tone="orange"
-              themeColor={color}
+            <button
+              type="button"
+              className="cm-set-stage-outline-button"
               onClick={handlePrevious}
               disabled={!canGoPrevious && !canGoBack}
             >
-              <ChevronLeftRoundedIcon sx={{ mr: 0.5, fontSize: 17 }} />
+              <ChevronLeftRoundedIcon sx={{ fontSize: 17 }} />
               Anterior
-            </PillButton>
+            </button>
 
             {footerActions ?? (
               isSummary ? (
@@ -732,20 +781,19 @@ export default function MenuSetStageNavigation({
                     disabled={!builder?.isComplete || typeof onConfirm !== "function"}
                     onClick={handleConfirm}
                   >
-                    Agregar al pedido
+                    {confirmLabel}
                   </PillButton>
                 )
               ) : (
-                <PillButton
-                  tone="orange"
-                  themeColor={color}
+                <button
+                  type="button"
+                  className="cm-set-stage-outline-button"
                   disabled={!canGoNext}
                   onClick={() => nextStep?.()}
                 >
-                  {viewOnly && step === availableStages.length - 1
-                    ? "Ver resumen" : "Siguiente"}
-                  <ChevronRightRoundedIcon sx={{ ml: 0.5, fontSize: 17 }} />
-                </PillButton>
+                  {viewOnly && step === availableStages.length - 1 ? "Ver resumen" : "Siguiente"}
+                  <ChevronRightRoundedIcon sx={{ fontSize: 17 }} />
+                </button>
               )
             )}
           </footer>

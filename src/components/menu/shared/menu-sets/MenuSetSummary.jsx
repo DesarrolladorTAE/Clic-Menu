@@ -1,12 +1,12 @@
-//src/components/menu/shared/menu-sets/MenuSetSummary.jsx
+//src/components/menu/shared/menu-sets/MenuSetSummary.js
 import React from "react";
+import { IconButton } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 
-import { PillButton } from "../../../../pages/public/publicMenu.ui";
 import { money } from "../../../../hooks/public/publicMenu.utils";
 
 function positiveId(value) {
@@ -75,10 +75,7 @@ function renderComponents(components, definitions = [], depth = 0) {
           || definition?.product?.composite?.items || [];
 
         return (
-          <div
-            key={`${component?.component_product_id || index}-${index}`}
-            style={{ minWidth: 0 }}
-          >
+          <div key={`${component?.component_product_id || index}-${index}`} style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, lineHeight: 1.5 }}>
               • {name}{quantity > 1 ? ` · ${quantity} unidades` : ""}
               {variantId
@@ -145,13 +142,9 @@ function SelectionDetail({ option, selection, color, muted }) {
 
       {notes ? (
         <div style={{
-          marginTop: 4,
-          padding: "7px 9px",
-          fontSize: 11.5,
-          color: muted,
-          whiteSpace: "pre-wrap",
-          borderLeft: `2px solid ${color}`,
-          lineHeight: 1.45,
+          marginTop: 4, padding: "7px 9px", fontSize: 11.5,
+          color: muted, whiteSpace: "pre-wrap",
+          borderLeft: `2px solid ${color}`, lineHeight: 1.45,
         }}>
           {notes}
         </div>
@@ -213,6 +206,34 @@ export default function MenuSetSummary({
     builder?.removeOption?.(getStageId(stage), getOptionId(option));
   };
 
+  // Botón de edición reutilizable: aparece una sola vez por etapa.
+  const renderEditButton = (stageIndex, stage) => {
+    if (!canSelect || viewOnly) return null;
+
+    return (
+      <IconButton
+        type="button"
+        onClick={() => handleEditStage(stageIndex, stage)}
+        title={`Cambiar selección de ${stage.name || `Etapa ${stageIndex + 1}`}`}
+        aria-label={`Cambiar selección de ${stage.name || `Etapa ${stageIndex + 1}`}`}
+        sx={{
+          width: 40,
+          height: 40,
+          flexShrink: 0,
+          borderRadius: "50%",
+          color: "#FFFFFF",
+          bgcolor: "#D99A00",
+          border: "1px solid #D99A00",
+          boxShadow: "0 4px 12px rgba(217,154,0,0.20)",
+          "&:hover": { bgcolor: "#BA8200", borderColor: "#BA8200" },
+          "&:focus-visible": { outline: "2px solid #D99A00", outlineOffset: 3 },
+        }}
+      >
+        <EditRoundedIcon sx={{ fontSize: 20 }} />
+      </IconButton>
+    );
+  };
+
   return (
     <div
       className="cm-menu-set-summary"
@@ -239,27 +260,6 @@ export default function MenuSetSummary({
             gap: 13px;
           }
 
-          .cm-menu-set-summary-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-wrap: wrap;
-            gap: 12px;
-            padding: 14px;
-            border: 1px solid var(--cm-summary-border);
-            border-radius: 12px;
-            background: var(--cm-summary-soft);
-          }
-
-          .cm-menu-set-summary-title {
-            margin: 0;
-            color: var(--cm-summary-text);
-            font-size: 17px;
-            font-weight: 950;
-            line-height: 1.3;
-            overflow-wrap: anywhere;
-          }
-
           .cm-menu-set-summary-stage {
             min-width: 0;
             max-width: 100%;
@@ -273,7 +273,6 @@ export default function MenuSetSummary({
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
             gap: 10px;
             margin-bottom: 10px;
           }
@@ -281,18 +280,41 @@ export default function MenuSetSummary({
           .cm-menu-set-summary-items {
             display: grid;
             gap: 8px;
+            min-width: 0;
           }
 
+          /*
+           * El nombre del producto ocupa la columna flexible.
+           * Editar y eliminar comparten una sola hilera a la derecha.
+           */
           .cm-menu-set-summary-item {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
             gap: 10px;
             min-width: 0;
             padding: 11px;
             border: 1px solid var(--cm-summary-border);
             border-radius: 9px;
             overflow-wrap: anywhere;
+          }
+
+          .cm-menu-set-summary-item-actions {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: nowrap;
+            gap: 8px;
+            flex-shrink: 0;
+          }
+
+          .cm-menu-set-summary-item-actions > button {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            min-height: 40px;
+            flex: 0 0 40px;
           }
 
           .cm-menu-set-summary-option {
@@ -337,44 +359,14 @@ export default function MenuSetSummary({
           }
 
           @media (max-width: 639px) {
-            .cm-menu-set-summary-head,
-            .cm-menu-set-summary-footer {
-              padding: 12px;
-            }
-
+            .cm-menu-set-summary-footer { padding: 12px; }
             .cm-menu-set-summary-stage { padding: 10px; }
-            .cm-menu-set-summary-item { padding: 9px; }
+            .cm-menu-set-summary-item { gap: 7px; padding: 9px; }
+            .cm-menu-set-summary-item-actions { gap: 6px; }
             .cm-menu-set-summary-option { padding: 9px; }
           }
         `}
       </style>
-
-      <div className="cm-menu-set-summary-head">
-        <div style={{ minWidth: 0 }}>
-          <h3 className="cm-menu-set-summary-title">
-            {set.name || "Tu menú personalizado"}
-          </h3>
-
-          <div style={{
-            color: "var(--cm-summary-muted)",
-            fontSize: 12,
-            marginTop: 5,
-          }}>
-            {viewOnly
-              ? `${availableStages.length} ${availableStages.length === 1 ? "etapa" : "etapas"} disponibles para consultar`
-              : `${selectedCount} ${selectedCount === 1 ? "producto seleccionado" : "productos seleccionados"}`}
-          </div>
-        </div>
-
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: "var(--cm-summary-muted)" }}>
-            Precio base
-          </div>
-          <strong style={{ fontSize: 19, color: "var(--cm-summary-color)" }}>
-            {hasPrice ? money(price) : "Por confirmar"}
-          </strong>
-        </div>
-      </div>
 
       {availableStages.map((stage, stageIndex) => {
         const stageId = getStageId(stage);
@@ -398,8 +390,7 @@ export default function MenuSetSummary({
                 </div>
 
                 <div style={{
-                  fontSize: 11.5,
-                  marginTop: 4,
+                  fontSize: 11.5, marginTop: 4,
                   color: "var(--cm-summary-muted)",
                 }}>
                   {viewOnly
@@ -408,15 +399,8 @@ export default function MenuSetSummary({
                 </div>
               </div>
 
-              {canSelect && !viewOnly ? (
-                <PillButton
-                  tone="default"
-                  onClick={() => handleEditStage(stageIndex, stage)}
-                >
-                  <EditRoundedIcon sx={{ fontSize: 15, mr: 0.5, verticalAlign: "middle" }} />
-                  Cambiar
-                </PillButton>
-              ) : null}
+              {/* Si la etapa está vacía, el lápiz queda en el encabezado. */}
+              {chosen.length === 0 ? renderEditButton(stageIndex, stage) : null}
             </div>
 
             {viewOnly ? (
@@ -446,8 +430,7 @@ export default function MenuSetSummary({
                 </div>
               ) : (
                 <div style={{
-                  padding: "10px 0",
-                  fontSize: 12,
+                  padding: "10px 0", fontSize: 12,
                   color: "var(--cm-summary-muted)",
                 }}>
                   Esta etapa no tiene productos registrados para mostrar.
@@ -465,7 +448,7 @@ export default function MenuSetSummary({
                       key={`${getSelectionId(selection) || index}-${index}`}
                       className="cm-menu-set-summary-item"
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ minWidth: 0 }}>
                         <SelectionDetail
                           option={option}
                           selection={selection}
@@ -474,23 +457,40 @@ export default function MenuSetSummary({
                         />
                       </div>
 
-                      {canSelect && option ? (
-                        <PillButton
-                          tone="default"
-                          onClick={() => handleRemove(stage, option)}
-                          title={`Quitar ${option.name || "producto"}`}
-                        >
-                          <DeleteOutlineRoundedIcon sx={{ fontSize: 17 }} />
-                        </PillButton>
-                      ) : null}
+                      {/* Ambos botones quedan en la misma fila. */}
+                      <div className="cm-menu-set-summary-item-actions">
+                        {index === 0 ? renderEditButton(stageIndex, stage) : null}
+
+                        {canSelect && option ? (
+                          <IconButton
+                            type="button"
+                            onClick={() => handleRemove(stage, option)}
+                            title={`Eliminar ${option.name || "producto"} de esta etapa`}
+                            aria-label={`Eliminar ${option.name || "producto"} de esta etapa`}
+                            sx={{
+                              width: 40,
+                              height: 40,
+                              flexShrink: 0,
+                              borderRadius: "50%",
+                              color: "#FFFFFF",
+                              bgcolor: "#D32F2F",
+                              border: "1px solid #D32F2F",
+                              boxShadow: "0 4px 12px rgba(211,47,47,0.20)",
+                              "&:hover": { bgcolor: "#B71C1C", borderColor: "#B71C1C" },
+                              "&:focus-visible": { outline: "2px solid #D32F2F", outlineOffset: 3 },
+                            }}
+                          >
+                            <DeleteOutlineRoundedIcon sx={{ fontSize: 20 }} />
+                          </IconButton>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
               <div style={{
-                padding: "10px 0",
-                fontSize: 12,
+                padding: "10px 0", fontSize: 12,
                 color: "var(--cm-summary-muted)",
               }}>
                 {stage.required
@@ -524,7 +524,14 @@ export default function MenuSetSummary({
           }}>
             {viewOnly
               ? "Consulta las opciones disponibles en cada etapa. La disponibilidad y el importe final pueden variar según la configuración elegida."
-              : "El importe final incluirá los extras con costo y se confirmará al enviar el pedido."}
+              : (
+                <>
+                  <strong>
+                    {selectedCount} {selectedCount === 1 ? "producto seleccionado" : "productos seleccionados"}.
+                  </strong>
+                  {" "}El importe final incluirá los extras con costo y se confirmará al enviar el pedido.
+                </>
+              )}
           </div>
         </div>
 

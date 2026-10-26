@@ -173,6 +173,7 @@ function menuItemSx(accentColor) {
 
 export default function OnlineOrderFulfillmentSection({
   fulfillments,
+  preparedTimingConflict = false,
   fulfillmentType,
   selectedFulfillment,
   timingType,
@@ -343,6 +344,31 @@ export default function OnlineOrderFulfillmentSection({
               Pedido mínimo:{" "}
               <strong>{money(selectedFulfillment.minimum_order_amount)}</strong>
             </Typography>
+          ) : null}
+
+          {preparedTimingConflict ? (
+            <Box
+              role="status"
+              sx={{
+                width: "100%",
+                px: 1.25,
+                py: 1.1,
+                border: "1px solid",
+                borderColor: "warning.main",
+                borderRadius: 1.5,
+                backgroundColor: "rgba(237,108,2,0.045)",
+              }}
+            >
+              <Typography sx={{
+                fontSize: 12.5,
+                lineHeight: 1.5,
+                color: "text.primary",
+              }}>
+                Tu pedido incluye Preparación rápida, disponible únicamente para entrega
+                lo antes posible. Selecciona una entrega inmediata o quita esas
+                preparaciones de tu pedido para continuar.
+              </Typography>
+            </Box>
           ) : null}
 
           {fulfillmentType !== "scheduled_point" && selectedFulfillment ? (

@@ -1,3 +1,4 @@
+//src/hooks/staff/useStaffCartAndOrder.js
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   appendWaiterOrderItems,
@@ -30,6 +31,25 @@ import {
 import { useTransientMessage } from "../menu/useTransientMessage";
 
 import {
+  getMenuSetOptionById,
+  getMenuSetStageByDefinitionId,
+  isMenuSetOptionSelectable,
+} from "../menu/menu-sets/menuSet.utils";
+
+import {
+  isMenuSetCartLine,
+  MenuSetPayloadError,
+  serializeCartItemsWithMenuSets,
+} from "../menu/menu-sets/menuSetPayload.utils";
+
+import {
+  clearMenuSetNavigationState,
+  getMenuSetCart,
+  saveMenuSetCart,
+  useMenuSetNavigationState,
+} from "../menu/menu-sets/menuSetNavigationStore";
+
+import {
   buildPreparedItemCartLine,
   getPreparedItemCartKey,
   getPreparedItemId,
@@ -43,6 +63,8 @@ import { buildOrderCancellationSelectionPayload } from "../../components/menu/sh
 const INVALID_CART_MESSAGE =
   "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
 
+const EMPTY_CART = Object.freeze([]);
+
 function getCancellationEffectiveQuantity(item) {
   const quantity = Number(item?.effective_quantity || 0);
   if (!Number.isFinite(quantity)) return 0;
@@ -50,7 +72,7 @@ function getCancellationEffectiveQuantity(item) {
   return Math.max(0, Math.floor(quantity));
 }
 
-function normalizeItemsForApi(cart) {
+function normalizeNormalItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
   return arr.map((it) => {
@@ -99,6 +121,10 @@ function normalizeItemsForApi(cart) {
 
     return out;
   });
+}
+
+function normalizeItemsForApi(cart) {
+  return serializeCartItemsWithMenuSets(cart, normalizeNormalItemsForApi);
 }
 
 function hasOwn(source, key) {
@@ -289,8 +315,14 @@ function applyAvailabilityErrorToCart(items, apiError) {
   });
 }
 
-export function useStaffCartAndOrder({ tableId }) {
-  const [cart, setCart] = useState([]);
+
+export function useStaffCartAndOrder({ tableId, menuSetNavigationKey = null }) {
+  const [localCart, setLocalCart] = useState([]);
+  const navigationState = useMenuSetNavigationState(menuSetNavigationKey);
+
+  const cart = menuSetNavigationKey
+    ? Array.isArray(navigationState.cart) ? navigationState.cart : EMPTY_CART
+    : localCart;
 
   const [sendOpen, setSendOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
@@ -298,6 +330,29 @@ export function useStaffCartAndOrder({ tableId }) {
   const [sendToast, setSendToast, clearSendToast] = useTransientMessage();
   const [preparedCartMessage, setPreparedCartMessage, clearPreparedCartMessage] =
     useTransientMessage();
+
+  const setCart = useCallback((updater) => {
+    if (!menuSetNavigationKey) {
+      setLocalCart(updater);
+      return;
+    }
+
+    const previous = getMenuSetCart(menuSetNavigationKey) || EMPTY_CART;
+    const next = typeof updater === "function" ? updater(previous) : updater;
+
+    if (!Array.isArray(next)) {
+      setSendToast("No se pudo actualizar el contenido de la comanda.");
+      return;
+    }
+
+    if (next === previous) return;
+
+    const saved = saveMenuSetCart(menuSetNavigationKey, next);
+
+    if (!saved?.ok) {
+      setSendToast(saved?.message || "No se pudo conservar la comanda.");
+    }
+  }, [menuSetNavigationKey, setSendToast]);
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [oldItems, setOldItems] = useState([]);
@@ -315,7 +370,15 @@ export function useStaffCartAndOrder({ tableId }) {
   const lastLoadedRef = useRef({ tableId: null, orderId: null });
   const cartLineSequenceRef = useRef(0);
 
-  const invalidCartItemsCount = useMemo(() => countInvalidCartItems(cart), [cart]);
+  const invalidCartItemsCount = useMemo(() => {
+    const normalItems = cart.filter((item) => !isMenuSetCartLine(item));
+    const invalidSets = cart.filter((item) =>
+      isMenuSetCartLine(item) && item.is_available_now === false
+    );
+
+    return countInvalidCartItems(normalItems) + invalidSets.length;
+  }, [cart]);
+
   const hasInvalidCartItems = invalidCartItemsCount > 0;
 
   const cancellationSummary = useMemo(() => {
@@ -359,14 +422,109 @@ export function useStaffCartAndOrder({ tableId }) {
     selectedCancellationItems,
   ]);
 
+  
   const reconcileCartAvailability = useCallback((menuSource) => {
     if (!menuSource) return;
-    setCart((previous) => reconcilePendingCartAvailability(previous, menuSource));
-  }, []);
+
+    setCart((previous) => {
+      const normalItems = previous.filter((item) => !isMenuSetCartLine(item));
+      const updatedNormalItems = reconcilePendingCartAvailability(normalItems, menuSource);
+      let normalIndex = 0;
+
+      return previous.map((item) => {
+        if (isMenuSetCartLine(item)) return item;
+
+        const updated = updatedNormalItems[normalIndex] || item;
+        normalIndex += 1;
+        return updated;
+      });
+    });
+  }, [setCart]);
+
+  const reconcileMenuSetAvailability = useCallback((menuSets = []) => {
+    if (!Array.isArray(menuSets)) return;
+
+    const catalog = new Map(menuSets.map((set) => [Number(set.id), set]));
+
+    setCart((previous) => {
+      let changed = false;
+
+      const updated = previous.map((item) => {
+        if (!isMenuSetCartLine(item)) return item;
+
+        const set = catalog.get(Number(item.menu_set_id));
+        let available = Boolean(set && set.isActive !== false && set.isSellable !== false);
+
+        if (available) {
+          for (const selectedStage of item.selections || []) {
+            const stage = getMenuSetStageByDefinitionId(
+              set, selectedStage.menu_set_stage_definition_id,
+            );
+
+            if (!stage) {
+              available = false;
+              break;
+            }
+
+            for (const selectedItem of selectedStage.items || []) {
+              const option = getMenuSetOptionById(stage, selectedItem.menu_set_product_id);
+              const preparedItemId = selectedItem.prepared_item_id || null;
+
+              if (!option || !isMenuSetOptionSelectable(option, preparedItemId)) {
+                available = false;
+                break;
+              }
+
+              const variantId = Number(selectedItem.variant_id || 0);
+
+              if (variantId > 0) {
+                const variant = (option.variants || []).find((row) =>
+                  Number(row.id) === variantId
+                );
+
+                if (!variant || variant.is_available === false ||
+                    variant.availability?.is_available === false) {
+                  available = false;
+                  break;
+                }
+              }
+            }
+
+            if (!available) break;
+          }
+        }
+
+        const status = available ? "available" : "no_longer_sellable";
+        const reason = available ? "" :
+          set?.availability?.reason ||
+          set?.source?.unavailability_reason ||
+          "Este Conjunto ya no está disponible en el menú de esta mesa.";
+
+        if (
+          item.is_available_now === available &&
+          item.availability_status === status &&
+          String(item.availability_reason || "") === reason
+        ) {
+          return item;
+        }
+
+        changed = true;
+
+        return {
+          ...item,
+          is_available_now: available,
+          availability_status: status,
+          availability_reason: reason,
+        };
+      });
+
+      return changed ? updated : previous;
+    });
+  }, [setCart]);
 
   const markCartAvailabilityError = useCallback((apiError) => {
     setCart((previous) => applyAvailabilityErrorToCart(previous, apiError));
-  }, []);
+  }, [setCart]);
 
   function upsertCartItem(nextItem) {
     cartLineSequenceRef.current += 1;
@@ -527,7 +685,7 @@ export function useStaffCartAndOrder({ tableId }) {
 
     setCart((prev) =>
       prev.map((x) =>
-        x.key === itemKey && !isPreparedItemLine(x)
+          x.key === itemKey && !isPreparedItemLine(x) && !isMenuSetCartLine(x)
           ? {
               ...x,
               components: normalized,
@@ -641,16 +799,17 @@ export function useStaffCartAndOrder({ tableId }) {
     const qn = Math.max(1, Math.min(99, Number(qty || 1)));
 
     setCart((prev) => prev.map((x) => {
-      if (x.key !== key || isPreparedItemLine(x)) return x;
+      if (x.key !== key || isPreparedItemLine(x) || isMenuSetCartLine(x)) return x;
 
       return { ...x, quantity: qn };
     }));
   }
 
   function setCartNotes(key, notes) {
-    setCart((prev) =>
-      prev.map((x) => (x.key === key ? { ...x, notes: String(notes || "") } : x)),
-    );
+    setCart((prev) => prev.map((x) => {
+      if (x.key !== key || isMenuSetCartLine(x)) return x;
+      return { ...x, notes: String(notes || "") };
+    }));
   }
 
   const newItemsPricingSummary = useMemo(() => {
@@ -1064,9 +1223,9 @@ export function useStaffCartAndOrder({ tableId }) {
         return { ok: false };
       }
 
-      const items = normalizeItemsForApi(cart);
-
       try {
+        const items = normalizeItemsForApi(cart);
+
         const payload = {
           customer_name: name,
           items,
@@ -1185,6 +1344,11 @@ export function useStaffCartAndOrder({ tableId }) {
         setSendToast(`⚠️ ${res?.message || "No se pudo crear la comanda."}`);
         return { ok: false };
       } catch (e) {
+        if (e instanceof MenuSetPayloadError) {
+          setSendToast(`⚠️ ${e.message}`);
+          return { ok: false, invalidSelection: true };
+        }
+
         const apiError = extractApiErrorInfo(e);
 
         if (isWarehouseSelectionErrorCode(apiError.code)) {
@@ -1225,9 +1389,8 @@ export function useStaffCartAndOrder({ tableId }) {
         return { ok: false, availabilityError: true };
       }
 
-      const items = normalizeItemsForApi(cart);
-
       try {
+        const items = normalizeItemsForApi(cart);
         const res = await appendWaiterOrderItems(Number(orderId), { items });
 
         if (res?.ok) {
@@ -1257,7 +1420,7 @@ export function useStaffCartAndOrder({ tableId }) {
           setCart([]);
 
           setSendToast(
-            "✅ Productos agregados a la orden.",
+            "Productos agregados a la orden.",
           );
 
           await loadExisting({
@@ -1290,6 +1453,11 @@ export function useStaffCartAndOrder({ tableId }) {
         setSendToast(`⚠️ ${res?.message || "No se pudieron agregar productos."}`);
         return { ok: false };
       } catch (e) {
+        if (e instanceof MenuSetPayloadError) {
+          setSendToast(`⚠️ ${e.message}`);
+          return { ok: false, invalidSelection: true };
+        }
+
         const apiError = extractApiErrorInfo(e);
 
         if (isAvailabilityErrorCode(apiError.code)) {
@@ -1408,12 +1576,17 @@ export function useStaffCartAndOrder({ tableId }) {
     setWarehouseDialogOpen(false);
     setWarehouseSelectionContext(null);
     lastLoadedRef.current = { tableId: null, orderId: null };
+
+    if (menuSetNavigationKey) {
+      clearMenuSetNavigationState(menuSetNavigationKey);
+    }
   }
 
   return {
     cart,
     setCart,
     reconcileCartAvailability,
+    reconcileMenuSetAvailability,
     hasInvalidCartItems,
     invalidCartItemsCount,
 

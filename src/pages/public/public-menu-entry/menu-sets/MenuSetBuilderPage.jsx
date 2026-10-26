@@ -158,17 +158,39 @@ export default function MenuSetBuilderPage({
   const activeMenuSetId = positiveId(resolvedSet?.id);
 
   const savedDraft = useMemo(() => {
-    if (readOnly) return null;
-
-    if (navigationKey && activeMenuSetId) {
-      return getMenuSetDraft(navigationKey, activeMenuSetId)
-        || initialSelections || routeState.initialSelections || null;
+    if (readOnly) {
+      return null;
     }
 
-    return initialSelections || routeState.initialSelections || null;
+    const explicitSelections =
+      initialSelections ||
+      routeState.initialSelections ||
+      null;
+
+    /*
+    * Al editar una partida, sus selecciones originales
+    * tienen prioridad sobre cualquier borrador anterior
+    * del mismo Conjunto.
+    */
+    if (editCartKey && explicitSelections) {
+      return explicitSelections;
+    }
+
+    if (navigationKey && activeMenuSetId) {
+      return (
+        getMenuSetDraft(navigationKey, activeMenuSetId) ||
+        explicitSelections
+      );
+    }
+
+    return explicitSelections;
   }, [
-    readOnly, navigationKey, activeMenuSetId,
-    initialSelections, routeState.initialSelections,
+    readOnly,
+    editCartKey,
+    navigationKey,
+    activeMenuSetId,
+    initialSelections,
+    routeState.initialSelections,
   ]);
 
   const showError = useCallback((message, options = {}) => {
@@ -191,11 +213,25 @@ export default function MenuSetBuilderPage({
   });
 
   useEffect(() => {
-    if (!selectionAllowed || !navigationKey || !builder.menuSetId || completedRef.current) {
+    const editingWithOriginalSelections = Boolean(
+      editCartKey &&
+      (initialSelections || routeState.initialSelections)
+    );
+
+    if (
+      !selectionAllowed ||
+      !navigationKey ||
+      !builder.menuSetId ||
+      completedRef.current ||
+      editingWithOriginalSelections
+    ) {
       return;
     }
 
-    const result = saveMenuSetDraft(navigationKey, builder.exportDraft());
+    const result = saveMenuSetDraft(
+      navigationKey,
+      builder.exportDraft(),
+    );
 
     if (!result?.ok) {
       // Se conserva la selección visible si falla el guardado temporal.
@@ -204,6 +240,9 @@ export default function MenuSetBuilderPage({
   }, [
     selectionAllowed,
     navigationKey,
+    editCartKey,
+    initialSelections,
+    routeState.initialSelections,
     builder.menuSetId,
     builder.currentStep,
     builder.selectionsByStage,
@@ -502,6 +541,7 @@ export default function MenuSetBuilderPage({
             showMobileControls={false}
             onBack={handleBack}
             onConfirm={selectionAllowed && !saving ? handleConfirm : undefined}
+            confirmLabel={editCartKey ? "Guardar cambios" : "Agregar al pedido"}
             summaryContent={
               <MenuSetSummary
                 builder={builder}

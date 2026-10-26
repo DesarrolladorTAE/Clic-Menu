@@ -1,5 +1,5 @@
 // Formulario para pedidos en línea
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box, Card, CardContent, Divider, Pagination, Stack, TextField, Typography,
 } from "@mui/material";
@@ -15,6 +15,8 @@ import {
   getPreparedItemDisplayName,
   isPreparedItemLine,
 } from "../../../hooks/menu/preparedItem.utils";
+
+import { isMenuSetCartLine } from "../../../hooks/menu/menu-sets/menuSetPayload.utils";
 
 import { Modal, PillButton } from "../../../pages/public/publicMenu.ui";
 import AppAlert from "../../common/AppAlert";
@@ -150,6 +152,7 @@ export default function PublicOnlineOrderCheckoutModal({
   const [paymentType, setPaymentType] = useState("");
   const [quote, setQuote] = useState(null);
   const [quotedSelection, setQuotedSelection] = useState(null);
+  const [quotedSignature, setQuotedSignature] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [cartPage, setCartPage] = useState(1);
 
@@ -197,6 +200,47 @@ export default function PublicOnlineOrderCheckoutModal({
   );
 
   const cartRows = Array.isArray(cart) ? cart : [];
+
+  const hasPreparedSelections = cartRows.some((item) => {
+    if (isPreparedItemLine(item)) return true;
+    if (!isMenuSetCartLine(item)) return false;
+
+    return (Array.isArray(item.selections) ? item.selections : []).some((stage) =>
+      (Array.isArray(stage?.items) ? stage.items : []).some((option) =>
+        Number(option?.prepared_item_id || 0) > 0
+      )
+    );
+  });
+
+  const preparedTimingConflict = hasPreparedSelections &&
+    (fulfillmentType === "scheduled_point" || timingType === "scheduled");
+
+  const quoteInputSignature = JSON.stringify({
+    cart: cartRows,
+    orderName,
+    customerPhone,
+    customerEmail,
+    customerNotes,
+    fulfillmentType,
+    timingType,
+    requestedForAt,
+    deliveryConceptId,
+    deliveryAddress,
+    scheduledPointId,
+    scheduledDate,
+    scheduledPointTimeBlockId,
+    scheduledTime,
+    paymentType,
+  });
+
+  const latestQuoteInputSignatureRef = useRef(quoteInputSignature);
+  latestQuoteInputSignatureRef.current = quoteInputSignature;
+
+  const validQuote = Boolean(
+    quote && quotedSelection && quotedSignature === quoteInputSignature
+  );
+
+  const displayedQuote = validQuote ? quote : null;
   const cartPageCount = Math.max(1, Math.ceil(cartRows.length / CART_PAGE_SIZE));
 
   const paginatedCart = useMemo(() => {
@@ -311,7 +355,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
   const formReady = useMemo(() => {
     if (fulfillments.length === 0 || paymentMethods.length === 0) return false;
-    if (cartRows.length === 0 || hasInvalidItems) return false;
+    if (cartRows.length === 0 || hasInvalidItems || preparedTimingConflict) return false;
 
     return Object.values(fieldValidity).every(Boolean);
   }, [
@@ -319,6 +363,7 @@ export default function PublicOnlineOrderCheckoutModal({
     paymentMethods.length,
     cartRows.length,
     hasInvalidItems,
+    preparedTimingConflict,
     fieldValidity,
   ]);
 
@@ -349,7 +394,7 @@ export default function PublicOnlineOrderCheckoutModal({
     return fields;
   }, [fieldValidity, fulfillmentType]);
 
-  const primaryActionEnabled = quote
+  const primaryActionEnabled = displayedQuote
     ? Boolean(quotedSelection) && !quoting && !creating
     : formReady && !quoting && !creating;
 
@@ -379,24 +424,8 @@ export default function PublicOnlineOrderCheckoutModal({
 
     setQuote(null);
     setQuotedSelection(null);
-  }, [
-    open,
-    orderName,
-    customerPhone,
-    customerEmail,
-    customerNotes,
-    fulfillmentType,
-    timingType,
-    requestedForAt,
-    deliveryConceptId,
-    deliveryAddress,
-    scheduledPointId,
-    scheduledDate,
-    scheduledPointTimeBlockId,
-    scheduledTime,
-    paymentType,
-    cart,
-  ]);
+    setQuotedSignature("");
+  }, [open, quoteInputSignature]);
 
   function handleFulfillmentChange(value) {
     const nextType = String(value || "");
@@ -592,15 +621,6 @@ export default function PublicOnlineOrderCheckoutModal({
   async function handleQuote() {
     if (quoting || creating || !formReady) return;
 
-    if (hasInvalidItems) {
-      setErrorMessage(
-        invalidItemsCount === 1
-          ? "Hay un producto que debes revisar antes de continuar."
-          : `Hay ${invalidItemsCount} productos que debes revisar antes de continuar.`,
-      );
-      return;
-    }
-
     const selection = buildSelection();
 
     if (!selection.ok) {
@@ -608,14 +628,18 @@ export default function PublicOnlineOrderCheckoutModal({
       return;
     }
 
-    try {
-      const quotePayload = {
-        ...selection.payload,
-      };
+    const requestedSignature = quoteInputSignature;
 
+    try {
+      const quotePayload = { ...selection.payload };
+
+      // La dirección completa se necesita al crear el pedido, no para cotizar.
       delete quotePayload.delivery_address;
 
       const result = await onQuote?.(quotePayload);
+
+      // Si cambió la selección durante la consulta, se descarta el resultado anterior.
+      if (latestQuoteInputSignatureRef.current !== requestedSignature) return;
 
       if (!result?.ok) {
         setErrorMessage(result?.message || "No se pudo calcular el total del pedido.");
@@ -623,33 +647,49 @@ export default function PublicOnlineOrderCheckoutModal({
       }
 
       setQuotedSelection(selection.payload);
+      setQuotedSignature(requestedSignature);
       setQuote(result.data);
     } catch {
+      if (latestQuoteInputSignatureRef.current !== requestedSignature) return;
       setErrorMessage("No se pudo calcular el total del pedido. Intenta nuevamente.");
     }
   }
 
   async function handleCreate() {
-    if (quoting || creating || !quote || !quotedSelection) return;
+    if (quoting || creating || !displayedQuote || !quotedSelection) return;
+
+    const currentSelection = buildSelection();
+
+    if (
+      !currentSelection.ok ||
+      JSON.stringify(currentSelection.payload) !== JSON.stringify(quotedSelection)
+    ) {
+      setQuote(null);
+      setQuotedSelection(null);
+      setQuotedSignature("");
+      setErrorMessage(
+        currentSelection.message || "Los datos del pedido cambiaron. Calcula nuevamente el total.",
+      );
+      return;
+    }
 
     try {
       const result = await onCreate?.(quotedSelection);
-      const created = result?.data && typeof result.data === "object" ? result.data : result;
 
-      const successful =
-        result?.ok === true ||
-        Boolean(created?.tracking_url) ||
-        Boolean(created?.tracking_token);
-
-      if (!successful) {
-        if (result?.preparedItemError) {
+      if (result?.ok !== true) {
+        if (result?.preparedItemError || result?.availabilityError) {
           setQuote(null);
           setQuotedSelection(null);
+          setQuotedSignature("");
         }
 
         setErrorMessage(result?.message || "No se pudo enviar el pedido.");
         return;
       }
+
+      const created = result?.data && typeof result.data === "object"
+        ? result.data
+        : {};
 
       const openedTracking = onCreated?.(created);
 
@@ -696,13 +736,13 @@ export default function PublicOnlineOrderCheckoutModal({
               tone="orange"
               themeColor={accentColor}
               disabled={!primaryActionEnabled}
-              onClick={quote ? handleCreate : handleQuote}
+              onClick={displayedQuote ? handleCreate : handleQuote}
             >
               {quoting
                 ? "Calculando..."
                 : creating
                   ? "Enviando..."
-                  : quote
+                  : displayedQuote
                     ? "Confirmar pedido"
                     : "Calcular total"}
             </PillButton>
@@ -824,6 +864,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
           <OnlineOrderFulfillmentSection
             fulfillments={fulfillments}
+            preparedTimingConflict={preparedTimingConflict}
             fulfillmentType={fulfillmentType}
             selectedFulfillment={selectedFulfillment}
             timingType={timingType}
@@ -991,6 +1032,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
                 <Box sx={{ width: "100%", backgroundColor: "transparent" }}>
                   {paginatedCart.map((item, index) => {
+                    const menuSet = isMenuSetCartLine(item);
                     const prepared = isPreparedItemLine(item);
                     const preparedName = prepared ? getPreparedItemDisplayName(item) : "";
                     const preparedConfiguration = prepared ? getPreparedItemConfigurationSummary(item) : [];
@@ -1000,11 +1042,11 @@ export default function PublicOnlineOrderCheckoutModal({
                       <Box
                         key={item.key}
                         sx={{
-                          minHeight: prepared ? 78 : 52,
-                          py: prepared ? 1.15 : 1,
+                          minHeight: prepared || menuSet ? 78 : 52,
+                          py: prepared || menuSet ? 1.15 : 1,
                           px: { xs: 0.25, sm: 0.5 },
                           display: "flex",
-                          alignItems: prepared ? "flex-start" : "center",
+                          alignItems: prepared || menuSet ? "flex-start" : "center",
                           justifyContent: "space-between",
                           gap: 2,
                           borderBottom: index < paginatedCart.length - 1 ? "1px solid" : "none",
@@ -1013,7 +1055,9 @@ export default function PublicOnlineOrderCheckoutModal({
                         }}
                       >
                         <Box sx={{ minWidth: 0, flex: 1 }}>
-                          {prepared ? (
+                          {menuSet ? (
+                            <MenuSetCheckoutDetail item={item} color={accentColor} />
+                          ) : prepared ? (
                             <>
                               <Box
                                 component="span"
@@ -1156,6 +1200,23 @@ export default function PublicOnlineOrderCheckoutModal({
                       page={cartPage}
                       onChange={(_, nextPage) => setCartPage(nextPage)}
                       size="small"
+                      sx={{
+                        "& .MuiPaginationItem-previousNext": {
+                          borderRadius: "50%",
+                          backgroundColor: accentColor,
+                          color: "#FFFFFF",
+                          "&:hover": { backgroundColor: accentColor, opacity: 0.88 },
+                          "&.Mui-disabled": {
+                            backgroundColor: hexToRgba(accentColor, 0.25),
+                            color: "#FFFFFF",
+                          },
+                        },
+                        "& .MuiPaginationItem-root.Mui-selected": {
+                          backgroundColor: hexToRgba(accentColor, 0.12),
+                          color: accentColor,
+                          fontWeight: 850,
+                        },
+                      }}
                     />
                   </Box>
                 ) : null}
@@ -1163,28 +1224,28 @@ export default function PublicOnlineOrderCheckoutModal({
             </CardContent>
           </Card>
 
-            {!quote &&
-              fulfillments.length > 0 &&
-              paymentMethods.length > 0 &&
-              missingFields.length > 0 ? (
-                <Box
-                  sx={{
-                    px: 1.25,
-                    py: 1,
-                    borderLeft: `3px solid ${accentColor}`,
-                    backgroundColor: hexToRgba(accentColor, 0.045),
-                  }}
-                >
-                  <Typography sx={{ fontSize: 12.5, color: "text.secondary", lineHeight: 1.5 }}>
-                    <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
-                      Falta capturar:
-                    </Box>{" "}
-                    {formatMissingFields(missingFields)}.
-                  </Typography>
-                </Box>
-            ) : null}
+          {!quote &&
+            fulfillments.length > 0 &&
+            paymentMethods.length > 0 &&
+            missingFields.length > 0 ? (
+              <Box
+                sx={{
+                  px: 1.25,
+                  py: 1,
+                  borderLeft: `3px solid ${accentColor}`,
+                  backgroundColor: hexToRgba(accentColor, 0.045),
+                }}
+              >
+                <Typography sx={{ fontSize: 12.5, color: "text.secondary", lineHeight: 1.5 }}>
+                  <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
+                    Falta capturar:
+                  </Box>{" "}
+                  {formatMissingFields(missingFields)}.
+                </Typography>
+              </Box>
+          ) : null}
 
-          {quote ? (
+          {displayedQuote ? (
             <Card
               variant="outlined"
               sx={{ width: "100%", borderWidth: 1, borderRadius: 0, boxShadow: "none" }}
@@ -1194,49 +1255,58 @@ export default function PublicOnlineOrderCheckoutModal({
                   <Typography fontWeight={800}>Resumen de tu pedido</Typography>
 
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Subtotal
-                    </Typography>
-
+                    <Typography variant="body2" color="text.secondary">Subtotal</Typography>
                     <Typography variant="body2" fontWeight={700}>
-                      {money(quote.subtotal || 0)}
+                      {money(displayedQuote.subtotal || 0)}
                     </Typography>
                   </Box>
 
-                  {Number(quote.promotion_discount_total || 0) > 0 ? (
-                    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Promociones
-                      </Typography>
+                  {Number(displayedQuote.promotion_discount_total || 0) > 0 ? (
+                    <>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Promociones
+                        </Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          -{money(displayedQuote.promotion_discount_total)}
+                        </Typography>
+                      </Box>
 
-                      <Typography variant="body2" fontWeight={700}>
-                        -{money(quote.promotion_discount_total)}
-                      </Typography>
-                    </Box>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Productos con descuentos
+                        </Typography>
+                        <Typography variant="body2" fontWeight={700}>
+                          {money(displayedQuote.product_net_total || 0)}
+                        </Typography>
+                      </Box>
+                    </>
                   ) : null}
 
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Entrega
-                    </Typography>
-
+                    <Typography variant="body2" color="text.secondary">Entrega</Typography>
                     <Typography variant="body2" fontWeight={700}>
-                      {money(quote.delivery_fee || 0)}
+                      {money(displayedQuote.delivery_fee || 0)}
                     </Typography>
                   </Box>
 
                   <Divider />
 
-                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                    <Typography fontWeight={800}>Total cotizado</Typography>
-
-                    <Typography fontWeight={900}>
-                      {money(quote.total || 0)}
+                  <Box sx={{
+                    display: "flex", alignItems: "center",
+                    justifyContent: "space-between", gap: 2,
+                  }}>
+                    <Typography fontWeight={850}>Total cotizado</Typography>
+                    <Typography sx={{
+                      fontSize: { xs: 18, sm: 20 },
+                      fontWeight: 900, color: accentColor, whiteSpace: "nowrap",
+                    }}>
+                      {money(displayedQuote.total)}
                     </Typography>
                   </Box>
 
                   <Typography variant="caption" color="text.secondary">
-                    La disponibilidad y los importes se validarán nuevamente al confirmar el pedido.
+                    La disponibilidad y los importes se comprobarán nuevamente al confirmar el pedido.
                   </Typography>
                 </Stack>
               </CardContent>
@@ -1298,4 +1368,88 @@ function formatMissingFields(fields = []) {
   if (fields.length === 2) return `${fields[0]} y ${fields[1]}`;
 
   return `${fields.slice(0, -1).join(", ")} y ${fields[fields.length - 1]}`;
+}
+
+function MenuSetCheckoutDetail({ item, color }) {
+  const stages = Array.isArray(item?.display_stages) ? item.display_stages : [];
+
+  return (
+    <Box sx={{ width: "100%", minWidth: 0, display: "grid", gap: 0.85 }}>
+      <Typography sx={{
+        fontSize: 14, fontWeight: 850, lineHeight: 1.3,
+        color: "text.primary", overflowWrap: "anywhere",
+      }}>
+        {item?.name || "Conjunto"}
+      </Typography>
+
+      {stages.map((stage, stageIndex) => {
+        const selectedItems = Array.isArray(stage?.items) ? stage.items : [];
+
+        return (
+          <Box
+            key={`${stage?.menu_set_stage_definition_id || stageIndex}-${stageIndex}`}
+            sx={{
+              width: "100%", minWidth: 0, p: 1,
+              border: "1px solid",
+              borderColor: hexToRgba(color, 0.2),
+              borderRadius: 1.5,
+              backgroundColor: hexToRgba(color, 0.035),
+            }}
+          >
+            <Typography sx={{ fontSize: 12, fontWeight: 850, color, mb: 0.45 }}>
+              {stage?.menu_set_stage_name_snapshot || `Etapa ${stageIndex + 1}`}
+            </Typography>
+
+            <Stack spacing={0.65}>
+              {selectedItems.map((selection, optionIndex) => {
+                const modifiers = Array.isArray(selection?.modifiers) ? selection.modifiers : [];
+                const components = Array.isArray(selection?.components) ? selection.components : [];
+                const prepared = Number(selection?.prepared_item_id || 0) > 0;
+                const notes = String(selection?.notes || "").trim();
+
+                return (
+                  <Box key={`${selection?.menu_set_product_id || optionIndex}-${optionIndex}`} sx={{ minWidth: 0 }}>
+                    <Typography sx={{
+                      fontSize: 12.5, fontWeight: 750, lineHeight: 1.4,
+                      color: "text.primary", overflowWrap: "anywhere",
+                    }}>
+                      • {selection?.product_name || "Producto seleccionado"}
+                      {selection?.variant_name ? ` · ${selection.variant_name}` : ""}
+                    </Typography>
+
+                    {prepared ? (
+                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
+                        Preparación rápida
+                      </Typography>
+                    ) : null}
+
+                    {modifiers.length > 0 ? (
+                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
+                        Extras personalizados
+                      </Typography>
+                    ) : null}
+
+                    {components.length > 0 ? (
+                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
+                        Componentes configurados
+                      </Typography>
+                    ) : null}
+
+                    {notes ? (
+                      <Typography sx={{
+                        fontSize: 11.5, color: "text.secondary",
+                        pl: 1.2, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+                      }}>
+                        Nota: {notes}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Box>
+        );
+      })}
+    </Box>
+  );
 }

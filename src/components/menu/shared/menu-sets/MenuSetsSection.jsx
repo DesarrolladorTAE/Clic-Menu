@@ -7,7 +7,6 @@ import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 
 import { normalizeMenuSet } from "../../../../hooks/menu/menu-sets/menuSet.utils";
-
 import MenuSetCard from "./MenuSetCard";
 
 function getSafeColor(theme, color) {
@@ -116,7 +115,7 @@ export default function MenuSetsSection({
             position: relative;
             width: 100%;
             min-width: 0;
-            padding: 19px 14px 15px;
+            padding: 15px 13px 12px;
             border: 1px solid var(--cm-menu-sets-border);
             border-radius: 14px;
             background: var(--cm-menu-sets-surface);
@@ -125,43 +124,43 @@ export default function MenuSetsSection({
             box-sizing: border-box;
           }
 
-          .cm-menu-sets-section * {
-            box-sizing: border-box;
-          }
+          .cm-menu-sets-section * { box-sizing: border-box; }
 
           .cm-menu-sets-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 11px;
           }
 
           .cm-menu-sets-title {
             margin: 0;
             color: var(--cm-menu-sets-text);
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 950;
             line-height: 1.2;
             letter-spacing: -0.3px;
           }
 
           .cm-menu-sets-description {
-            margin: 5px 0 0;
+            margin: 4px 0 0;
             color: var(--cm-menu-sets-muted);
-            font-size: 12.5px;
-            line-height: 1.45;
+            font-size: 12px;
+            line-height: 1.4;
           }
 
           .cm-menu-sets-label {
             display: inline-flex;
             align-items: center;
+            flex-shrink: 0;
             border: 1px solid var(--cm-menu-sets-border);
             border-radius: 999px;
-            padding: 6px 11px;
+            padding: 5px 10px;
             color: var(--cm-menu-sets-color);
             background: var(--cm-menu-sets-surface);
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 900;
             white-space: nowrap;
           }
@@ -178,7 +177,7 @@ export default function MenuSetsSection({
             width: 100%;
             min-width: 0;
             gap: 12px;
-            padding: 4px 3px 7px;
+            padding: 3px 3px 6px;
             overflow-x: auto;
             overflow-y: hidden;
             scroll-snap-type: x mandatory;
@@ -188,12 +187,14 @@ export default function MenuSetsSection({
             scrollbar-width: none;
           }
 
-          .cm-menu-sets-rail::-webkit-scrollbar {
-            display: none;
-          }
+          .cm-menu-sets-rail::-webkit-scrollbar { display: none; }
 
+          /*
+           * Tarjetas compactas con ancho controlado.
+           * No se estiran cuando hay pocos conjuntos.
+           */
           .cm-menu-set-slide {
-            flex: 0 0 min(85%, 270px);
+            flex: 0 0 min(80%, 252px);
             display: flex;
             min-width: 0;
             scroll-snap-align: start;
@@ -201,14 +202,15 @@ export default function MenuSetsSection({
 
           .cm-menu-set-slide > article {
             width: 100%;
+            height: 100%;
           }
 
           .cm-menu-sets-arrow {
             position: absolute;
             z-index: 5;
             top: 50%;
-            width: 39px;
-            height: 39px;
+            width: 37px;
+            height: 37px;
             padding: 0;
             display: grid;
             place-items: center;
@@ -235,29 +237,20 @@ export default function MenuSetsSection({
           .cm-menu-sets-arrow-left { left: 1px; }
           .cm-menu-sets-arrow-right { right: 1px; }
 
-          @media (min-width: 640px) {
-            .cm-menu-set-slide {
-              flex-basis: calc((100% - 12px) / 2);
-            }
-          }
-
-          @media (min-width: 950px) {
-            .cm-menu-set-slide {
-              flex-basis: calc((100% - 24px) / 3);
-            }
-          }
-
           @media (max-width: 639px) {
-            .cm-menu-sets-section { padding: 16px 10px 12px; }
-            .cm-menu-sets-title { font-size: 18px; }
-            .cm-menu-sets-arrow { width: 34px; height: 34px; }
+            .cm-menu-sets-section { padding: 13px 10px 10px; }
+            .cm-menu-sets-header { gap: 8px; margin-bottom: 9px; }
+            .cm-menu-sets-title { font-size: 17px; }
+            .cm-menu-sets-description { font-size: 11.5px; }
+            .cm-menu-sets-arrow { width: 33px; height: 33px; }
             .cm-menu-sets-rail { gap: 10px; }
+            .cm-menu-set-slide { flex-basis: min(83%, 238px); }
           }
         `}
       </style>
 
       <header className="cm-menu-sets-header">
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <h2 className="cm-menu-sets-title">ARMA TU MENÚ</h2>
           <p className="cm-menu-sets-description">
             Elige un menú y personalízalo a tu gusto.

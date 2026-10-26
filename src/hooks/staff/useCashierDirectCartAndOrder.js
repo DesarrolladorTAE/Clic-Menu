@@ -1,3 +1,4 @@
+//src/hooks/staff/useCashierDirectCartAndOrder.js
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -42,6 +43,11 @@ import {
   serializePreparedItemLine,
 } from "../menu/preparedItem.utils";
 
+import {
+  isMenuSetCartLine,
+  serializeCartItemsWithMenuSets,
+} from "../menu/menu-sets/menuSetPayload.utils";
+
 const INVALID_CART_MESSAGE =
   "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
 
@@ -74,7 +80,7 @@ function getPreparedItemValidationMessage(source) {
   return message ? String(message) : "";
 }
 
-function normalizeItemsForApi(cart) {
+function normalizeNormalItemsForApi(cart) {
   const arr = Array.isArray(cart) ? cart : [];
 
   return arr.map((it) => {
@@ -136,6 +142,14 @@ function normalizeItemsForApi(cart) {
 
     return out;
   }).filter(Boolean);
+}
+
+/*
+ * Los productos normales y las unidades de Preparación rápida conservan
+ * su serialización. Los Conjuntos utilizan su estructura comercial propia.
+ */
+function normalizeItemsForApi(cart) {
+  return serializeCartItemsWithMenuSets(cart, normalizeNormalItemsForApi);
 }
 
 function hasOwn(source, key) {
@@ -402,6 +416,7 @@ export function useCashierDirectCartAndOrder({
   returnSaleId = null,
   selectedMenuId = null,
   onPreparedItemsRefresh = null,
+  onCommitted = null,
 } = {}) {
   const navigate = useNavigate();
 
@@ -425,7 +440,60 @@ export function useCashierDirectCartAndOrder({
 
   const reconcileCartAvailability = useCallback((menuSource) => {
     if (!menuSource) return;
-    setCart((previous) => reconcilePendingCartAvailability(previous, menuSource));
+
+    setCart((previous) => {
+      const normalItems = previous.filter((item) => !isMenuSetCartLine(item));
+      const reconciled = reconcilePendingCartAvailability(normalItems, menuSource);
+      let normalIndex = 0;
+
+      return previous.map((item) => {
+        if (isMenuSetCartLine(item)) return item;
+        return reconciled[normalIndex++] || item;
+      });
+    });
+  }, []);
+
+  /*
+  * Actualiza la disponibilidad visual de los Conjuntos pendientes.
+  * No calcula inventario ni decide capacidades: usa el resultado del servidor.
+  */
+  const reconcileMenuSetsAvailability = useCallback((availableMenuSets = []) => {
+    const catalog = new Map(
+      (Array.isArray(availableMenuSets) ? availableMenuSets : []).map((set) => [
+        Number(set?.id || 0), set,
+      ])
+    );
+
+    setCart((previous) => previous.map((item) => {
+      if (!isMenuSetCartLine(item)) return item;
+
+      const set = catalog.get(Number(item.menu_set_id || 0));
+      const blocked = !set || set.isSellable === false || set.isActive === false;
+      const status = blocked ? "no_longer_sellable" : "available";
+      const reason = blocked
+        ? set?.source?.unavailability_reason || "Este Conjunto ya no está disponible."
+        : "";
+
+      if (
+        item.availability_status === status &&
+        item.is_available_now === !blocked &&
+        item.availability_reason === reason
+      ) {
+        return item;
+      }
+
+      return {
+        ...item,
+        availability_status: status,
+        availability_reason: reason,
+        is_available_now: !blocked,
+        availability: {
+          status,
+          is_available_now: !blocked,
+          reason: reason || null,
+        },
+      };
+    }));
   }, []);
 
   const markCartAvailabilityError = useCallback((apiError) => {
@@ -797,7 +865,7 @@ export function useCashierDirectCartAndOrder({
 
     setCart((prev) =>
       prev.map((item) =>
-        item.key === key && !isPreparedItemLine(item)
+        item.key === key && !isPreparedItemLine(item) && !isMenuSetCartLine(item)
           ? { ...item, quantity: nextQty }
           : item
       )
@@ -807,7 +875,9 @@ export function useCashierDirectCartAndOrder({
   function setCartNotes(key, notes) {
     setCart((prev) =>
       prev.map((item) =>
-        item.key === key ? { ...item, notes: String(notes || "") } : item
+        item.key === key && !isMenuSetCartLine(item)
+          ? { ...item, notes: String(notes || "") }
+          : item
       )
     );
   }
@@ -1041,6 +1111,7 @@ export function useCashierDirectCartAndOrder({
         const orderId = getOrderIdFromCreateResponse(res);
         const saleId = getSaleIdFromCreateResponse(res);
 
+        onCommitted?.();
         setCart([]);
         setSendOpen(false);
         setSendToast(" Venta directa creada correctamente.");
@@ -1160,6 +1231,7 @@ export function useCashierDirectCartAndOrder({
       }
 
       if (res?.ok) {
+        onCommitted?.();
         setCart([]);
         setSendOpen(false);
         setSendToast("Productos agregados a la venta directa.");
@@ -1503,6 +1575,7 @@ export function useCashierDirectCartAndOrder({
     cart,
     setCart,
     reconcileCartAvailability,
+    reconcileMenuSetsAvailability,
     hasInvalidCartItems,
     invalidCartItemsCount,
     addToCartFromProduct,

@@ -329,9 +329,10 @@ export default function PublicMenuEntryPage() {
     if (!Number.isSafeInteger(menuSetId) || menuSetId <= 0) return;
 
     const editCartKey = String(options?.editCartKey || "").trim();
+    const returnPath = `${location.pathname}${location.search}${location.hash}`;
 
     const prepared = cartOrder.prepareMenuSetNavigation(
-      location.pathname,
+      returnPath,
       menuSetId,
       { editCartKey },
     );
@@ -341,6 +342,8 @@ export default function PublicMenuEntryPage() {
       return;
     }
 
+    setCartDrawerOpen(false);
+
     navigate(`/menu/${encodeURIComponent(token)}/conjuntos/${menuSetId}`, {
       state: {
         menuSet,
@@ -348,7 +351,7 @@ export default function PublicMenuEntryPage() {
         editCartKey,
         navigationContext: cartOrder.menuSetNavigationContext,
         contextKey: cartOrder.menuSetNavigationKey,
-        returnPath: location.pathname,
+        returnPath,
         themeColor,
         canSelect,
       },
@@ -359,6 +362,8 @@ export default function PublicMenuEntryPage() {
     cartOrder.menuSetNavigationContext,
     cartOrder.menuSetNavigationKey,
     location.pathname,
+    location.search,
+    location.hash,
     navigate,
     token,
     themeColor,
@@ -856,8 +861,8 @@ export default function PublicMenuEntryPage() {
     (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0) ||
     pendingOrderItems.length > 0;
 
-  const cartDisplayName = isOnlineOrderFlow ? "Pedido" : "Comanda";
-  const cartInlineName = isOnlineOrderFlow ? "pedido" : "comanda";
+  const cartDisplayName = isWebOrderingFlow ? "Pedido" : "Comanda";
+  const cartInlineName = isWebOrderingFlow ? "pedido" : "comanda";
    
   const handleCancellationContinue = () => {
     if (!cartOrder.cancellationSummary?.can_continue) {
@@ -1254,8 +1259,8 @@ export default function PublicMenuEntryPage() {
     },
     {
       tone: "dark",
-      label: "⚡ Tiempo real",
-      title: "Este flujo se sincroniza por WebSocket sin recargar toda la pantalla",
+      label: "Actualización automática",
+      title: "Los cambios de disponibilidad se muestran sin recargar el menú.",
     },
   ];
 
@@ -1547,7 +1552,7 @@ export default function PublicMenuEntryPage() {
             }
             extraFilterActions={
               canSelect ? (
-                <Badge tone="ok" title="Items nuevos por enviar/agregar">
+                <Badge tone="ok" title="Productos nuevos por enviar">
                   En {cartInlineName}:{" "}
                   <strong style={{ marginLeft: 6 }}>{cartOrder.cart.length}</strong>
                 </Badge>

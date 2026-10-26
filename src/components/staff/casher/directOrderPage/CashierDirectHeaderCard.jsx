@@ -1,22 +1,13 @@
 // src/components/staff/casher/directOrderPage/CashierDirectHeaderCard.jsx
 import React from "react";
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
+  Box, Button, Card, CardContent, Chip, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import PointOfSaleRoundedIcon from "@mui/icons-material/PointOfSaleRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 import KitchenRoundedIcon from "@mui/icons-material/KitchenRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ShoppingCartRoundedIcon from "@mui/icons-material/ShoppingCartRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 
 export default function CashierDirectHeaderCard({
   title = "Venta directa",
@@ -48,7 +39,6 @@ export default function CashierDirectHeaderCard({
   onSearchChange,
   totalVisible = 0,
   onOpenCart,
-  onRefresh,
   syncing = false,
 }) {
   const branchName =
@@ -198,7 +188,7 @@ export default function CashierDirectHeaderCard({
                 <Chip
                   icon={<RestaurantMenuRoundedIcon />}
                   label={
-                    menuLoading || syncing
+                    menuLoading && !resolvedSelectedMenu
                       ? "Cargando menú…"
                       : `Menú: ${selectedMenuName}`
                   }
@@ -250,22 +240,6 @@ export default function CashierDirectHeaderCard({
               sx={{ width: { xs: "100%", lg: "auto" } }}
             >
               <Button
-                variant="outlined"
-                color="inherit"
-                onClick={onRefresh}
-                startIcon={<RefreshRoundedIcon />}
-                disabled={syncing}
-                sx={{
-                  minWidth: { xs: "100%", sm: 150 },
-                  height: 44,
-                  borderRadius: 2,
-                  fontWeight: 800,
-                }}
-              >
-                {syncing ? "Cargando…" : "Recargar"}
-              </Button>
-
-              <Button
                 variant="contained"
                 onClick={onOpenCart}
                 startIcon={<ShoppingCartRoundedIcon />}
@@ -305,9 +279,9 @@ export default function CashierDirectHeaderCard({
               value={
                 cashSession?.cash_register?.name ||
                 cashSession?.cash_register_name ||
-                cashSession?.cash_register_id
-                  ? `Caja #${cashSession?.cash_register_id}`
-                  : "Caja activa"
+                (cashSession?.cash_register_id
+                  ? `Caja #${cashSession.cash_register_id}`
+                  : "Caja activa")
               }
               helper={`Sesión #${cashSession?.id || menuData?.cash_session?.id || "—"}`}
             />
@@ -491,14 +465,14 @@ export default function CashierDirectHeaderCard({
                     mb: 1,
                   }}
                 >
-                  Buscar producto
+                  Buscar en el menú
                 </Typography>
 
                 <TextField
                   fullWidth
                   value={q}
                   onChange={(event) => onSearchChange?.(event.target.value)}
-                  placeholder="Buscar por nombre, categoría o descripción"
+                  placeholder="Buscar productos, conjuntos o categorías"
                   InputProps={{
                     startAdornment: (
                       <SearchRoundedIcon
