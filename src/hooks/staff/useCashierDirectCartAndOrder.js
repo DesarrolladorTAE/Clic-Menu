@@ -1,5 +1,5 @@
 //src/hooks/staff/useCashierDirectCartAndOrder.js
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -33,6 +33,8 @@ import {
   reconcilePendingCartAvailability,
 } from "../menu/menuAvailability.utils";
 
+import { isOldMenuSetRoot } from "../../components/menu/shared/cartPanel/cartPanel.utils";
+
 import { useTransientMessage } from "../menu/useTransientMessage";
 
 import {
@@ -50,6 +52,22 @@ import {
 
 const INVALID_CART_MESSAGE =
   "⚠️ Hay productos que ya no están disponibles. Quítalos para continuar.";
+
+function getDirectOrderValidationMessage(source) {
+  const body = source?.response?.data || source;
+  const errors = body?.errors || body?.data?.errors;
+
+  if (!errors || typeof errors !== "object") return "";
+
+  for (const value of Object.values(errors)) {
+    const messages = Array.isArray(value) ? value : [value];
+    const message = messages.find((entry) => typeof entry === "string" && entry.trim());
+
+    if (message) return message.trim();
+  }
+
+  return "";
+}
 
 function getPreparedItemValidationMessage(source) {
   const errors =
@@ -273,6 +291,59 @@ function buildCashierConfirmedPricingSummary(
   return normalizeConfirmedPricingSummary(source);
 }
 
+function indexSavedOrderItems(items) {
+  const indexed = new Map();
+
+  const visit = (rows, inheritedParentId = null) => {
+    for (const item of Array.isArray(rows) ? rows : []) {
+      if (!item || typeof item !== "object") continue;
+
+      const id = Number(item?.id || item?.order_item_id || 0);
+      const parentId = Number(item?.parent_order_item_id || inheritedParentId || 0);
+
+      if (id > 0) indexed.set(id, { item, parentId });
+      visit(item?.children, id > 0 ? id : inheritedParentId);
+    }
+  };
+
+  visit(items);
+  return indexed;
+}
+
+function belongsToSavedMenuSet(itemId, indexedItems) {
+  let currentId = Number(itemId || 0);
+  const visited = new Set();
+
+  while (currentId > 0 && !visited.has(currentId)) {
+    visited.add(currentId);
+
+    const entry = indexedItems.get(currentId);
+    if (!entry) break;
+
+    const item = entry.item;
+    const context = item?.menu_set_context || item?.menuSetContext || {};
+    const pricing = item?.pricing_snapshot || item?.pricingSnapshot || {};
+    const commercialType = String(item?.commercial_type || pricing?.commercial_type || "");
+
+    const hasMenuSetContext = Number(
+      item?.menu_set_id || context?.menu_set_id || pricing?.menu_set_id || 0
+    ) > 0;
+
+    if (
+      isOldMenuSetRoot(item) ||
+      hasMenuSetContext ||
+      commercialType === "menu_set" ||
+      commercialType === "menu_set_product"
+    ) {
+      return true;
+    }
+
+    currentId = entry.parentId;
+  }
+
+  return false;
+}
+
 function normalizeOldItemsFromResponse(data) {
   if (Array.isArray(data?.items_flat)) return data.items_flat;
   if (Array.isArray(data?.items)) return data.items;
@@ -427,6 +498,13 @@ export function useCashierDirectCartAndOrder({
   const [kitchenFlow, setKitchenFlow] = useState("");
   const [sending, setSending] = useState(false);
   const [sendToast, setSendToast, clearSendToast] = useTransientMessage();
+
+  useEffect(() => {
+    if (!String(sendToast || "").trim()) return;
+
+    const timer = setTimeout(() => clearSendToast(), 3000);
+    return () => clearTimeout(timer);
+  }, [sendToast, clearSendToast]);
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [activeSale, setActiveSale] = useState(null);
@@ -1046,7 +1124,6 @@ export function useCashierDirectCartAndOrder({
 
       /*
        * Para una venta nueva debe existir un menú seleccionado.
-       *
        * Esto evita crear accidentalmente la venta con otro menú
        * cuando el catálogo mostrado todavía no tiene contexto.
        */
@@ -1104,7 +1181,17 @@ export function useCashierDirectCartAndOrder({
           };
         }
 
-        throw error;
+        const message = getDirectOrderValidationMessage(error)
+          || apiError?.message
+          || "No se pudo crear la venta directa.";
+
+        setSendToast(`⚠️ ${message}`);
+
+        return {
+          ok: false,
+          message,
+          data: apiError?.data || null,
+        };
       }
 
       if (res?.ok) {
@@ -1163,10 +1250,15 @@ export function useCashierDirectCartAndOrder({
         };
       }
 
-      setSendToast(`⚠️ ${res?.message || "No se pudo crear la venta directa."}`);
+      const message = getDirectOrderValidationMessage(res)
+        || res?.message
+        || "No se pudo crear la venta directa.";
+
+      setSendToast(`⚠️ ${message}`);
 
       return {
         ok: false,
+        message,
         data: res?.data || null,
       };
     },
@@ -1195,6 +1287,11 @@ export function useCashierDirectCartAndOrder({
 
       if (!targetOrderId) {
         setSendToast("⚠️ No hay una orden activa para agregar productos.");
+        return { ok: false };
+      }
+
+      if (!canAppend || Number(activeOrder?.id || 0) !== targetOrderId) {
+        setSendToast("⚠️ Esta venta ya no permite agregar productos.");
         return { ok: false };
       }
 
@@ -1227,7 +1324,17 @@ export function useCashierDirectCartAndOrder({
           };
         }
 
-        throw error;
+        const message = getDirectOrderValidationMessage(error)
+          || apiError?.message
+          || "No se pudieron agregar los productos.";
+
+        setSendToast(`⚠️ ${message}`);
+
+        return {
+          ok: false,
+          message,
+          data: apiError?.data || null,
+        };
       }
 
       if (res?.ok) {
@@ -1287,12 +1394,15 @@ export function useCashierDirectCartAndOrder({
         };
       }
 
-      setSendToast(
-        `⚠️ ${res?.message || "No se pudieron agregar los productos."}`
-      );
+      const message = getDirectOrderValidationMessage(res)
+        || res?.message
+        || "No se pudieron agregar los productos.";
+
+      setSendToast(`⚠️ ${message}`);
 
       return {
         ok: false,
+        message,
         data: res?.data || null,
       };
     },
@@ -1316,15 +1426,29 @@ export function useCashierDirectCartAndOrder({
       const targetOrderId = Number(activeOrder?.id || 0);
       const targetItemId = Number(orderItemId || 0);
 
-      const existingItem = oldItems.find((item) => {
-        return Number(item?.id || item?.order_item_id || 0) === targetItemId;
-      });
-
+      const indexedItems = indexSavedOrderItems(oldItems);
+      const existingItem = indexedItems.get(targetItemId)?.item || null;
       const removedPreparedItem = isPreparedItemLine(existingItem);
 
-      if (!targetOrderId || !targetItemId) {
+      if (!targetOrderId || !targetItemId || !existingItem) {
         setSendToast("⚠️ No se pudo identificar el producto a eliminar.");
         return { ok: false };
+      }
+
+      if (!canAppend) {
+        setSendToast("⚠️ Esta venta ya no permite retirar productos.");
+        return { ok: false };
+      }
+
+      if (belongsToSavedMenuSet(targetItemId, indexedItems)) {
+        const message = "Este Conjunto ya está guardado. Para retirarlo, utiliza el proceso de cancelación.";
+
+        setSendToast(`⚠️ ${message}`);
+        return {
+          ok: false,
+          code: "DIRECT_MENU_SET_REQUIRES_CANCELLATION",
+          message,
+        };
       }
 
       const res = await removeCashierDirectOrderItem(targetOrderId, targetItemId);
@@ -1369,6 +1493,7 @@ export function useCashierDirectCartAndOrder({
       activeOrder,
       activeSale,
       oldItems,
+      canAppend,
       normalizedReturnSaleId,
       loadExisting,
       navigate,
@@ -1461,9 +1586,9 @@ export function useCashierDirectCartAndOrder({
           };
         }
 
-        const msg =
-          apiError?.message ||
-          "No se pudo validar la venta directa para regresar a cobro.";
+        const msg = getDirectOrderValidationMessage(e)
+          || apiError?.message
+          || "No se pudo validar la venta directa para regresar a cobro.";
 
         setSendToast(`⚠️ ${msg}`);
 
@@ -1491,6 +1616,11 @@ export function useCashierDirectCartAndOrder({
 
   async function submitOrderOrAppend() {
     if (sending) return { ok: false };
+
+    if (activeOrder?.id && !canAppend) {
+      setSendToast("⚠️ Esta venta ya no permite agregar productos.");
+      return { ok: false };
+    }
 
     if (hasInvalidCartItems) {
       setSendToast(INVALID_CART_MESSAGE);

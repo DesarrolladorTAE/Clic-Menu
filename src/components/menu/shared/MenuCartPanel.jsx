@@ -5,6 +5,7 @@ import { Badge, PillButton } from "../../../pages/public/publicMenu.ui";
 
 import MenuCartPanelStyles from "./cartPanel/MenuCartPanelStyles";
 import NoteEditorModal from "./cartPanel/NoteEditorModal";
+import CartProductDetailsDialog from "./cartPanel/CartProductDetailsDialog";
 import OldItemsSection from "./cartPanel/OldItemsSection";
 import NewItemsSection from "./cartPanel/NewItemsSection";
 import OrderCancellationSelection, {
@@ -289,6 +290,7 @@ export default function MenuCartPanel({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  allowOldMenuSetRemoval = true,
 
   requestBillBlock = null,
   cancellation = null,
@@ -296,6 +298,7 @@ export default function MenuCartPanel({
   const [noteItem, setNoteItem] = useState(null);
   const [noteValue, setNoteValue] = useState("");
   const [activeView, setActiveView] = useState("new");
+  const [selectedProductDetail, setSelectedProductDetail] = useState(null);
 
   const hasOld = Array.isArray(oldItems) && oldItems.length > 0;
   const hasNew = Array.isArray(newItems) && newItems.length > 0;
@@ -396,9 +399,24 @@ export default function MenuCartPanel({
   };
 
   const saveNote = (nextValue) => {
-    if (!noteItem?.key) return;
+    if (!noteItem?.key) {
+      return;
+    }
+
     onNotesChange?.(noteItem.key, nextValue);
     closeNoteModal();
+  };
+
+  const openProductDetails = (item, section = "extras", option = null) => {
+    if (!item || !["extras", "notes"].includes(section)) {
+      return;
+    }
+
+    setSelectedProductDetail({ item, section, option });
+  };
+
+  const closeProductDetails = () => {
+    setSelectedProductDetail(null);
   };
 
   const handleSubmit = () => {
@@ -426,6 +444,15 @@ export default function MenuCartPanel({
         onSave={saveNote}
       />
 
+      <CartProductDetailsDialog
+        open={Boolean(selectedProductDetail)}
+        item={selectedProductDetail?.item || null}
+        option={selectedProductDetail?.option || null}
+        section={selectedProductDetail?.section || "extras"}
+        themeColor={resolvedThemeColor}
+        onClose={closeProductDetails}
+      />
+
       <div className="cm-header">
         <div className="cm-header-main">
           <div>
@@ -441,7 +468,7 @@ export default function MenuCartPanel({
           </div>
 
           <div className="cm-actions">
-                        <PillButton
+            <PillButton
               tone="danger"
               onClick={onEmpty}
               title="Vaciar items nuevos"
@@ -639,6 +666,7 @@ export default function MenuCartPanel({
                   onRemove={onRemove}
                   onEditMenuSet={onEditMenuSet}
                   onOpenNote={openNoteModal}
+                  onShowDetails={openProductDetails}
                 />
               ) : (
                 <div className="cm-empty-history">
@@ -649,9 +677,12 @@ export default function MenuCartPanel({
               <OldItemsSection
                 oldItems={oldItems}
                 oldItemsTree={oldItemsTree}
+                themeColor={resolvedThemeColor}
                 onRemoveOldItem={onRemoveOldItem}
                 removingOldItemId={removingOldItemId}
                 oldItemRemoveLabel={oldItemRemoveLabel}
+                allowOldMenuSetRemoval={allowOldMenuSetRemoval}
+                onShowDetails={openProductDetails}
               />
             ) : (
               <div className="cm-empty-history">

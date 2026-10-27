@@ -36,7 +36,6 @@ import KitchenPreparedItemsDrawer from "../../../components/staff/kitchen/Kitche
 import {
   buildConsumptionUi,
   buildKitchenInventoryError,
-  recalcOrderDerived,
 } from "../../../components/staff/kitchen/kitchen.helpers";
 
 const ITEM_WAREHOUSE_SELECTION_FIELD =
@@ -302,29 +301,6 @@ export default function KitchenDashboard() {
       setErr(e?.response?.data?.message || "No se pudieron cargar las comandas de cocina.");
     }
   }, [nav, clearStaff]);
-
-  const patchOrderByItemId = useCallback((itemId, updater) => {
-    if (!itemId) return;
-    setOrders((prev) =>
-      (prev || []).map((order) => {
-        const hasItem =
-          Array.isArray(order?.items) &&
-          order.items.some((it) => Number(it?.id) === Number(itemId));
-        if (!hasItem) return order;
-        return updater(order);
-      })
-    );
-  }, []);
-
-  const patchOrderById = useCallback((orderId, updater) => {
-    if (!orderId) return;
-    setOrders((prev) =>
-      (prev || []).map((order) => {
-        if (Number(order?.id) !== Number(orderId)) return order;
-        return updater(order);
-      })
-    );
-  }, []);
 
   useEffect(() => {
     abortRef.current = false;
@@ -622,58 +598,22 @@ export default function KitchenDashboard() {
     setOkMsg("");
     setItemBusy(id, "start");
 
-    patchOrderByItemId(id, (order) => {
-      const nextItems = (order.items || []).map(
-        (it) => {
-          if (Number(it?.id) !== id) {
-            return it;
-          }
-
-          return {
-            ...it,
-            kitchen_status: "in_progress",
-            kitchen_started_at:
-              it?.kitchen_started_at ||
-              new Date().toISOString(),
-          };
-        }
-      );
-
-      return recalcOrderDerived(
-        {
-          ...order,
-          items: nextItems,
-        },
-        true
-      );
-    });
-
     try {
       const res = await startKitchenItem(
         id,
         requestPayload
       );
 
-      if (res?.ok) {
-        const consumptionUi =
-          buildConsumptionUi(res);
+      if (res?.ok === true) {
+        const consumptionUi = buildConsumptionUi(res);
 
-        setOkMsg(
-          consumptionUi.toast ||
-            "Ítem enviado a preparación."
-        );
-
-        setConsumptionBadge(
-          id,
-          consumptionUi.badge || null
-        );
-
-        /*
-        * El proceso completo terminó correctamente.
-        * Ya no queda ninguna selección pendiente.
-        */
+        setConsumptionBadge(id, consumptionUi.badge || null);
         resetWarehouseDialog();
 
+        // El Backend ya confirmó inventario, capacidad y estado físico.
+        await loadOrders();
+
+        setOkMsg(consumptionUi.toast || "Ítem enviado a preparación.");
         return;
       }
 
@@ -824,33 +764,29 @@ export default function KitchenDashboard() {
   const doReady = async (item) => {
     setErr("");
     setOkMsg("");
-    const id = item?.id;
-    if (!id) return;
+
+    const id = Number(item?.id || 0);
+    if (!id) {
+      return;
+    }
 
     setItemBusy(id, "ready");
 
-    patchOrderByItemId(id, (order) => {
-      const nextItems = (order.items || []).map((it) => {
-        if (Number(it?.id) !== Number(id)) return it;
-        return {
-          ...it,
-          kitchen_status: "ready",
-          kitchen_ready_at: new Date().toISOString(),
-        };
-      });
-
-      return recalcOrderDerived({ ...order, items: nextItems }, true);
-    });
-
     try {
-      await readyKitchenItem(id);
-      setOkMsg("Ítem marcado como listo.");
+      const res = await readyKitchenItem(id);
+
+      if (res?.ok !== true) {
+        await loadOrders();
+        setErr(res?.message || "No se pudo marcar como listo el ítem.");
+        return;
+      }
+
+      // Actualizar productos y agrupaciones desde el Backend.
+      await loadOrders();
+      setOkMsg(res?.message || "Ítem marcado como listo.");
     } catch (e) {
       await loadOrders();
-      setErr(
-        e?.response?.data?.message ||
-          "No se pudo marcar como listo el ítem."
-      );
+      setErr(e?.response?.data?.message || "No se pudo marcar como listo el ítem.");
     } finally {
       setItemBusy(id, null);
     }
@@ -864,20 +800,6 @@ export default function KitchenDashboard() {
     setOkMsg("");
     setNotifyingOrderId(orderId);
 
-    patchOrderById(orderId, (current) =>
-      recalcOrderDerived(
-        {
-          ...current,
-          ready_notice_sent: true,
-          actions: {
-            ...(current?.actions || {}),
-            can_notify_ready: false,
-          },
-        },
-        true
-      )
-    );
-
     const orderSource = String(order?.source || "").trim().toLowerCase();
     const isCashierDirect = orderSource === "cashier_direct";
     const isOnlineOrder = orderSource === "online_order";
@@ -885,6 +807,14 @@ export default function KitchenDashboard() {
 
     try {
       const res = await notifyKitchenOrderReady(orderId);
+
+      if (res?.ok !== true) {
+        await loadOrders();
+        setErr(res?.message || "No se pudo enviar el aviso del pedido listo.");
+        return;
+      }
+
+      await loadOrders();
 
       setOkMsg(
         res?.message ||

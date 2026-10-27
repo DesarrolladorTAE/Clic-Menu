@@ -69,6 +69,23 @@ export function formatWhen(value) {
   }
 }
 
+export function formatKitchenCompactWhen(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const day = date.toLocaleDateString("es-MX", {
+    day: "2-digit", month: "2-digit", year: "2-digit",
+  });
+
+  const time = date.toLocaleTimeString("es-MX", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+
+  return `${day} ${time}`;
+}
+
 export function formatElapsed(createdAt) {
   if (!createdAt) return "—";
   try {
@@ -202,48 +219,152 @@ export function modifierLabel(mod) {
   return qty > 1 ? `${mod?.name} x${qty}` : `${mod?.name}`;
 }
 
-export function buildKitchenItemsView(items = []) {
-  const arr = (Array.isArray(items) ? items : []).filter(isKitchenItemEffective);
-  const independent = [];
-  const compositeMap = new Map();
+export function buildKitchenItemsView(orderOrItems = []) {
+  const order = Array.isArray(orderOrItems) ? { items: orderOrItems } : (orderOrItems || {});
+  const items = (Array.isArray(order.items) ? order.items : []).filter(isKitchenItemEffective);
+  const menuSetContexts = new Map();
 
-  arr.forEach((item) => {
-    const parentId = Number(item?.parent_order_item_id || 0);
-
-    if (!parentId) {
-      independent.push({
-        type: "single",
-        item,
-      });
+  // Recuperar la estructura histórica que entrega el Backend.
+  (Array.isArray(order.menu_sets) ? order.menu_sets : []).forEach((set) => {
+    const rootId = Number(set?.order_item_id || 0);
+    if (!rootId) {
       return;
     }
 
-    if (!compositeMap.has(parentId)) {
-      compositeMap.set(parentId, {
-        type: "composite",
-        parentId,
+    (Array.isArray(set?.stages) ? set.stages : []).forEach((stage) => {
+      const stageId = Number(stage?.stage_definition_id || 0);
+      if (!stageId) {
+        return;
+      }
+
+      (Array.isArray(stage?.items) ? stage.items : []).forEach((item) => {
+        const itemId = Number(item?.id || 0);
+        if (!itemId) {
+          return;
+        }
+
+        menuSetContexts.set(itemId, {
+          menu_set_id: Number(set?.menu_set_id || 0),
+          menu_set_order_item_id: rootId,
+          menu_set_name: String(set?.name || item?.menu_set?.menu_set_name || "Conjunto"),
+          stage_definition_id: stageId,
+          stage_name: String(stage?.name || item?.menu_set?.stage_name || "Etapa"),
+        });
+      });
+    });
+  });
+
+  const regularItems = [];
+  const menuSetMap = new Map();
+
+  items.forEach((item) => {
+    const context = menuSetContexts.get(Number(item?.id)) || item?.menu_set;
+    const rootId = Number(context?.menu_set_order_item_id || 0);
+    const stageId = Number(context?.stage_definition_id || 0);
+
+    if (!rootId || !stageId) {
+      regularItems.push(item);
+      return;
+    }
+
+    if (!menuSetMap.has(rootId)) {
+      menuSetMap.set(rootId, {
+        type: "menu_set",
+        rootId,
+        menuSetId: Number(context?.menu_set_id || 0),
+        name: String(context?.menu_set_name || "Conjunto"),
+        stages: new Map(),
+      });
+    }
+
+    const set = menuSetMap.get(rootId);
+
+    if (!set.stages.has(stageId)) {
+      set.stages.set(stageId, {
+        stageId,
+        name: String(context?.stage_name || "Etapa"),
         items: [],
       });
     }
 
-    compositeMap.get(parentId).items.push(item);
+    set.stages.get(stageId).items.push(item);
   });
 
-  const composites = Array.from(compositeMap.values()).sort(
-    (a, b) => a.parentId - b.parentId
-  );
+  const firstItemId = (entry) => {
+    if (entry?.type === "single") {
+      return Number(entry?.item?.id || 0);
+    }
 
-  const combined = [...independent, ...composites];
+    if (entry?.type === "composite") {
+      return Math.min(...entry.items.map((item) => Number(item?.id || 0)));
+    }
 
-  combined.sort((a, b) => {
-    const getFirstId = (entry) => {
-      if (entry?.type === "single") return Number(entry?.item?.id || 0);
-      return Number(entry?.items?.[0]?.id || 0);
-    };
-    return getFirstId(a) - getFirstId(b);
+    return Number(entry?.sortId || 0);
+  };
+
+  // Agrupa productos físicos sin confundir el root comercial con un compuesto.
+  const buildPhysicalGroups = (rows, menuSetRootId = 0) => {
+    const independent = [];
+    const compositeMap = new Map();
+
+    rows.forEach((item) => {
+      const parentId = Number(item?.parent_order_item_id || 0);
+      const isDirectMenuSetProduct = menuSetRootId > 0 && parentId === menuSetRootId;
+
+      if (!parentId || isDirectMenuSetProduct) {
+        independent.push({ type: "single", item });
+        return;
+      }
+
+      if (!compositeMap.has(parentId)) {
+        compositeMap.set(parentId, {
+          type: "composite",
+          parentId,
+          parent: item?.composite_parent || null,
+          items: [],
+        });
+      }
+
+      const group = compositeMap.get(parentId);
+
+      if (!group.parent && item?.composite_parent) {
+        group.parent = item.composite_parent;
+      }
+
+      group.items.push(item);
+    });
+
+    const groups = [...independent, ...compositeMap.values()];
+    return groups.sort((a, b) => firstItemId(a) - firstItemId(b));
+  };
+
+  const result = buildPhysicalGroups(regularItems);
+
+  menuSetMap.forEach((set) => {
+    const stages = Array.from(set.stages.values()).map((stage) => {
+      const entries = buildPhysicalGroups(stage.items, set.rootId);
+
+      return {
+        stageId: stage.stageId,
+        name: stage.name,
+        entries,
+        sortId: Math.min(...stage.items.map((item) => Number(item.id))),
+      };
+    });
+
+    stages.sort((a, b) => a.sortId - b.sortId);
+
+    result.push({
+      type: "menu_set",
+      rootId: set.rootId,
+      menuSetId: set.menuSetId,
+      name: set.name,
+      stages,
+      sortId: Math.min(...stages.map((stage) => stage.sortId)),
+    });
   });
 
-  return combined;
+  return result.sort((a, b) => firstItemId(a) - firstItemId(b));
 }
 
 function describeKitchenInventoryConsumption(
@@ -954,20 +1075,24 @@ export const noticePendingPill = {
 };
 
 export const ticketItemRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: 12,
+  display: "flex",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  gap: 8,
   padding: "10px 0",
   borderTop: "1px solid #f1f5f9",
 };
 
-export const ticketLeft = { minWidth: 0 };
+export const ticketLeft = {
+  minWidth: 0,
+  flex: "1 1 290px",
+};
 
 export const ticketItemTop = {
   display: "grid",
-  gridTemplateColumns: "auto 1fr",
-  gap: 10,
-  alignItems: "flex-start",
+  gridTemplateColumns: "auto minmax(0, 1fr) auto",
+  gap: 8,
+  alignItems: "center",
 };
 
 export const qtyDot = {
@@ -990,8 +1115,11 @@ export const ticketItemName = {
   fontSize: 13,
   color: "#111827",
   overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflowWrap: "anywhere",
+  lineHeight: 1.35,
 };
 
 export const ticketNotes = {
@@ -1004,15 +1132,29 @@ export const ticketNotes = {
 export const ticketItemMeta = {
   marginTop: 6,
   display: "flex",
-  gap: 8,
+  gap: 6,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "nowrap",
+  minWidth: 0,
   fontSize: 11,
   color: "rgba(17,24,39,0.7)",
 };
 
 export const metaDot = {
   opacity: 0.8,
+};
+
+export const ticketItemDates = {
+  marginTop: 6,
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "nowrap",
+  minWidth: 0,
+  overflowX: "auto",
+  whiteSpace: "nowrap",
+  fontSize: 11,
+  color: "rgba(17,24,39,0.7)",
 };
 
 export const preparedReuseRow = {
@@ -1036,11 +1178,11 @@ export const preparedReusePill = {
 };
 
 export const consumptionRow = {
-  marginTop: 8,
+  marginTop: 0,
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
+  gap: 6,
+  flexWrap: "nowrap",
 };
 
 export const consumptionBadgeApplied = {
@@ -1130,51 +1272,106 @@ export const chipModifier = {
 };
 
 export const compositeGroupWrap = {
-  marginTop: 10,
-  border: "1px solid rgba(249, 168, 37, 0.35)",
-  borderRadius: 14,
-  background: "rgba(255, 247, 237, 0.75)",
+  marginTop: 8,
+  border: "1px solid #bfdbfe",
+  borderRadius: 10,
+  background: "#f8fbff",
   overflow: "hidden",
+  minWidth: 0,
 };
 
 export const compositeGroupHeader = {
-  padding: "10px 12px",
-  borderBottom: "1px solid rgba(249, 168, 37, 0.22)",
-  background: "rgba(254, 243, 199, 0.7)",
+  padding: "7px 9px",
+  background: "#dbeafe",
+  borderBottom: "1px solid #bfdbfe",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  minWidth: 0,
 };
 
 export const compositeGroupTitle = {
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 1000,
-  color: "#9a3412",
-  textTransform: "uppercase",
-  letterSpacing: 0.25,
+  color: "#1e40af",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
+  minWidth: 0,
 };
 
 export const compositeGroupSub = {
-  marginTop: 4,
   fontSize: 11,
-  color: "#92400e",
+  color: "#1e40af",
   opacity: 0.8,
 };
 
 export const compositeGroupBody = {
-  padding: "4px 12px 10px",
+  padding: "3px 9px 7px",
   display: "grid",
-  gap: 8,
+  gap: 2,
+  minWidth: 0,
 };
 
 export const compositeChildRow = {
-  borderTop: "1px dashed rgba(249, 168, 37, 0.22)",
-  paddingTop: 8,
+  borderTop: "1px dashed #dbeafe",
+  paddingTop: 3,
+};
+
+// Conjuntos: agrupación compacta dentro de la comanda.
+export const menuSetGroupWrap = {
+  marginTop: 8,
+  border: "1px solid #bfdbfe",
+  borderRadius: 10,
+  background: "#f8fbff",
+  overflow: "hidden",
+  minWidth: 0,
+};
+
+export const menuSetGroupHeader = {
+  padding: "7px 9px",
+  background: "#dbeafe",
+  borderBottom: "1px solid #bfdbfe",
+};
+
+export const menuSetGroupTitle = {
+  fontSize: 11,
+  fontWeight: 1000,
+  color: "#1e40af",
+  lineHeight: 1.35,
+  overflowWrap: "anywhere",
+};
+
+export const menuSetStageWrap = {
+  padding: "7px 9px",
+  borderBottom: "1px solid #dbeafe",
+  minWidth: 0,
+};
+
+export const menuSetStageTitle = {
+  fontSize: 11,
+  fontWeight: 1000,
+  color: "#1d4ed8",
+  lineHeight: 1.35,
+  marginBottom: 3,
+  overflowWrap: "anywhere",
+};
+
+export const menuSetStageBody = {
+  display: "grid",
+  gap: 3,
+  minWidth: 0,
 };
 
 export const ticketRight = {
   display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  alignItems: "flex-end",
-  justifyContent: "center",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 6,
+  width: "min(100%, 228px)",
+  flexShrink: 0,
+  marginLeft: "auto",
 };
 
 export const btnPrimary = {

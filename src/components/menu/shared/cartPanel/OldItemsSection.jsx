@@ -6,17 +6,33 @@ import {
   buildOldItemsTree,
   classifyOrderHistoryItems,
   isOldMenuSetRoot,
-  renderNotes,
   resolveOrderItemCancellationState,
 } from "./cartPanel.utils";
-import ModifierGroupsBlock from "./ModifierGroupsBlock";
+
 import CompositeDetailBlock from "./CompositeDetailBlock";
+import CartProductDetailIcons from "./CartProductDetailIcons";
 import MenuSetCartDetail from "../menu-sets/MenuSetCartDetail";
+
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 
 const OLD_ITEMS_PAGE_SIZE = 4;
 
 function getOldItemId(item) {
   return Number(item?.id || item?.order_item_id || 0);
+}
+
+function isOldCompositeItem(item) {
+  if (isOldMenuSetRoot(item)) {
+    return false;
+  }
+
+  return (
+    (Array.isArray(item?.children) && item.children.length > 0) ||
+    (Array.isArray(item?.components) && item.components.length > 0) ||
+    (Array.isArray(item?.components_detail) && item.components_detail.length > 0)
+  );
 }
 
 function hasOwn(source, key) {
@@ -313,12 +329,205 @@ function ConfirmedLinePricingBlock({ pricing }) {
   );
 }
 
+function OldCompositeHistoryCard({
+  item,
+  themeColor,
+  onShowDetails,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const pricing = resolveConfirmedItemPricing(item);
+  const cancellation = resolveOrderItemCancellationState(item);
+
+  const label = item?.variant_name
+    ? `${item?.product_name || item?.name || "Producto"} · ${item.variant_name}`
+    : item?.product_name || item?.name || `Producto #${item?.product_id}`;
+
+  const components = [item?.children, item?.components, item?.components_detail]
+    .find((rows) => Array.isArray(rows) && rows.length > 0) || [];
+
+  const productCount = components.length;
+  const hasPromotions = pricing.appliedPromotions.length > 0;
+
+  const color = /^#[0-9A-Fa-f]{6}$/.test(String(themeColor || ""))
+    ? themeColor : "#FF9800";
+
+  return (
+    <article
+      className="cm-history-composite"
+      style={{ "--cm-composite-accent": color }}
+    >
+      <button
+        type="button"
+        className="cm-history-composite-trigger"
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "Ocultar" : "Mostrar"} productos de ${label}`}
+      >
+        <span className="cm-composite-head-icon">
+          <RestaurantMenuRoundedIcon sx={{ fontSize: 20 }} />
+        </span>
+
+        <span className="cm-history-composite-main">
+          <strong className="cm-composite-name">{label}</strong>
+
+          <span className="cm-history-composite-meta">
+            {cancellation.fullyCancelled
+              ? "Cancelado"
+              : `${cancellation.effectiveQuantity} ${cancellation.effectiveQuantity === 1 ? "unidad" : "unidades"}`}
+            {" · "}
+            {productCount} {productCount === 1 ? "producto" : "productos"}
+          </span>
+        </span>
+
+        <span className="cm-history-composite-amount">
+          <strong>{money(pricing.netLineTotal)}</strong>
+          <span>Confirmado</span>
+        </span>
+
+        <span className="cm-composite-chevron">
+          {expanded
+            ? <ExpandLessRoundedIcon sx={{ fontSize: 21 }} />
+            : <ExpandMoreRoundedIcon sx={{ fontSize: 21 }} />}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="cm-history-composite-content">
+          <CompositeDetailBlock
+            item={item}
+            details={item?.components_detail || []}
+            themeColor={color}
+            onShowDetails={onShowDetails}
+          />
+
+          <div className="cm-composite-product-actions">
+            <PreparedReuseBadge item={item} />
+            <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
+          </div>
+
+          {cancellation.hasCancellation ? (
+            <CancellationStateBlock item={item} />
+          ) : null}
+
+          {hasPromotions || pricing.hasDiscount ? (
+            <div className="cm-confirmed-detail-stack">
+              {hasPromotions ? (
+                <AppliedPromotionsBlock promotions={pricing.appliedPromotions} />
+              ) : null}
+
+              {pricing.hasDiscount ? (
+                <ConfirmedLinePricingBlock pricing={pricing} />
+              ) : null}
+            </div>
+          ) : null}
+
+          {typeof onRemoveOldItem === "function" ? (
+            <div className="cm-menu-set-history-actions">
+              <OldRemoveButton
+                item={item}
+                onRemoveOldItem={onRemoveOldItem}
+                removingOldItemId={removingOldItemId}
+                oldItemRemoveLabel={oldItemRemoveLabel}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function OldRegularHistoryCard({
+  item,
+  themeColor,
+  onShowDetails,
+  onRemoveOldItem,
+  removingOldItemId = null,
+  oldItemRemoveLabel = "Quitar",
+}) {
+  const pricing = resolveConfirmedItemPricing(item);
+  const cancellation = resolveOrderItemCancellationState(item);
+
+  const name = item?.product_name || item?.name || `Producto #${item?.product_id}`;
+  const label = item?.variant_name ? `${name} · ${item.variant_name}` : name;
+  const hasPromotions = pricing.appliedPromotions.length > 0;
+
+  const color = /^#[0-9A-Fa-f]{6}$/.test(String(themeColor || ""))
+    ? themeColor : "#FF9800";
+
+  return (
+    <article className="cm-history-composite cm-history-standard" style={{ "--cm-composite-accent": color }}>
+      <div className="cm-history-composite-trigger cm-history-standard-header">
+        <span className="cm-composite-head-icon">
+          <RestaurantMenuRoundedIcon sx={{ fontSize: 20 }} />
+        </span>
+
+        <span className="cm-history-composite-main">
+          <strong className="cm-composite-name">{label}</strong>
+
+          <span className="cm-history-composite-meta">
+            {cancellation.fullyCancelled
+              ? `Cancelado · Cantidad original: ${cancellation.originalQuantity}`
+              : `Cantidad: ${cancellation.effectiveQuantity}`}
+          </span>
+        </span>
+
+        <span className="cm-history-composite-amount">
+          <strong>{money(pricing.netLineTotal)}</strong>
+          <span>Confirmado</span>
+        </span>
+      </div>
+
+      <div className="cm-history-standard-tools">
+        <PreparedReuseBadge item={item} />
+        <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
+      </div>
+
+      {cancellation.hasCancellation ? (
+        <div className="cm-history-standard-section">
+          <CancellationStateBlock item={item} />
+        </div>
+      ) : null}
+
+      {hasPromotions || pricing.hasDiscount ? (
+        <div className="cm-history-standard-section">
+          <div className="cm-confirmed-detail-stack">
+            {hasPromotions ? (
+              <AppliedPromotionsBlock promotions={pricing.appliedPromotions} />
+            ) : null}
+
+            {pricing.hasDiscount ? (
+              <ConfirmedLinePricingBlock pricing={pricing} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {typeof onRemoveOldItem === "function" ? (
+        <div className="cm-history-standard-section cm-menu-set-history-actions">
+          <OldRemoveButton
+            item={item}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function OldMenuSetHistoryDetail({
   item,
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
   themeColor,
+  onShowDetails,
 }) {
   const pricing = resolveConfirmedItemPricing(item);
   const hasPromotions = pricing.appliedPromotions.length > 0;
@@ -329,6 +538,7 @@ function OldMenuSetHistoryDetail({
         item={item}
         themeColor={themeColor}
         defaultExpanded={false}
+        onShowDetails={onShowDetails}
         readOnly
       />
 
@@ -364,89 +574,19 @@ function OldMenuSetHistoryDetail({
   );
 }
 
-function OldChildRow({
-  item,
-  hasActionColumn = false,
-  depth = 1,
-}) {
-  const cancellation = resolveOrderItemCancellationState(item);
-
-  const label = item?.variant_name
-    ? `${item.product_name} · ${item.variant_name}`
-    : item.product_name || `Producto #${item.product_id}`;
-
-  const subtotal = safeNum(
-    item?.line_total,
-    safeNum(item?.unit_price, 0) * safeNum(item?.quantity, 1),
-  );
-
-  const hideMoney =
-    safeNum(item?.unit_price, 0) <= 0 && safeNum(subtotal, 0) <= 0;
-
-  return (
-    <tr>
-      <td
-        className="cm-td cm-child"
-        style={{ paddingLeft: Math.min(10 + depth * 12, 130) }}
-      >
-        <div style={{ fontWeight: 850, fontSize: 12, color: "#3F3A52" }}>
-          ↳ {label}
-        </div>
-
-        <CancellationStateBlock item={item} />
-
-        <ModifierGroupsBlock
-          groups={item?.modifier_groups_display || []}
-          indent={12}
-        />
-
-        {item?.notes ? (
-          <div className="cm-note">• {renderNotes(item.notes)}</div>
-        ) : null}
-      </td>
-
-      <td className="cm-td cm-center cm-child">
-        {cancellation.effectiveQuantity}
-      </td>
-
-      <td className="cm-td cm-right cm-child cm-bold">
-        {hideMoney ? "Incluido" : money(subtotal)}
-      </td>
-
-      {hasActionColumn ? (
-        <td className="cm-td cm-child" aria-hidden="true" />
-      ) : null}
-    </tr>
-  );
-}
-
-function OldNestedChildRows({ item, hasActionColumn = false, depth = 1 }) {
-  const children = Array.isArray(item?.children) ? item.children : [];
-
-  return (
-    <>
-      <OldChildRow item={item} hasActionColumn={hasActionColumn} depth={depth} />
-
-      {children.map((child, index) => (
-        <OldNestedChildRows
-          key={`nested-${getOldItemId(child) || index}-${index}`}
-          item={child}
-          hasActionColumn={hasActionColumn}
-          depth={depth + 1}
-        />
-      ))}
-    </>
-  );
-}
-
 function OldRow({
   item,
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  allowOldMenuSetRemoval = true,
   themeColor,
+  onShowDetails,
 }) {
-  const hasActionColumn = typeof onRemoveOldItem === "function";
+  const resolvedRemoveAction = !allowOldMenuSetRemoval && isOldMenuSetRoot(item)
+    ? null : onRemoveOldItem;
+
+  const hasActionColumn = typeof resolvedRemoveAction === "function";
 
   if (isOldMenuSetRoot(item)) {
     return (
@@ -454,160 +594,53 @@ function OldRow({
         <td className="cm-td cm-menu-set-history-cell" colSpan={hasActionColumn ? 4 : 3}>
           <OldMenuSetHistoryDetail
             item={item}
-            onRemoveOldItem={onRemoveOldItem}
+            onRemoveOldItem={resolvedRemoveAction}
             removingOldItemId={removingOldItemId}
             oldItemRemoveLabel={oldItemRemoveLabel}
             themeColor={themeColor}
+            onShowDetails={onShowDetails}
           />
         </td>
       </tr>
     );
   }
 
-  const label = item?.variant_name
-    ? `${item.product_name} · ${item.variant_name}`
-    : item.product_name || `Producto #${item.product_id}`;
-
-  const pricing = resolveConfirmedItemPricing(item);
-
-  const cancellation = resolveOrderItemCancellationState(item);
-
-  const isCompositeParent =
-    !!item?.is_composite_parent ||
-    (Array.isArray(item?.children) && item.children.length > 0);
-
-  const hasAppliedPromotions =
-    Array.isArray(pricing.appliedPromotions) &&
-    pricing.appliedPromotions.length > 0;
-
-  const hasFullWidthDetail =
-    hasAppliedPromotions || pricing.hasDiscount;
-
-  return (
-    <>
-      <tr>
-
-        <td className={`cm-td ${isCompositeParent ? "cm-combo" : ""}`}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ fontWeight: 950, fontSize: 13, color: "#3F3A52" }}>
-              {label}
-            </div>
-
-            {isCompositeParent ? (
-              <span className="cm-combo-badge">Combo</span>
-            ) : null}
-
-            <PreparedReuseBadge item={item} />
-          </div>
-
-          <CancellationStateBlock item={item} />
-
-          <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-          <CompositeDetailBlock details={item?.components_detail || []} />
-
-          {item?.notes ? (
-            <div className="cm-note">• {renderNotes(item.notes)}</div>
-          ) : null}
-        </td>
-
-        <td className={`cm-td cm-center ${isCompositeParent ? "cm-combo" : ""}`}>
-          {cancellation.effectiveQuantity}
-        </td>
-
+  if (isOldCompositeItem(item)) {
+    return (
+      <tr className="cm-menu-set-history-row cm-history-composite-table-row">
         <td
-          className={`cm-td cm-right cm-bold ${
-            isCompositeParent ? "cm-combo" : ""
-          }`}
-          title="Total histórico confirmado por el servidor"
+          className="cm-td cm-menu-set-history-cell cm-history-composite-table-cell"
+          colSpan={hasActionColumn ? 4 : 3}
         >
-          {money(pricing.netLineTotal)}
+          <OldCompositeHistoryCard
+            item={item}
+            themeColor={themeColor}
+            onShowDetails={onShowDetails}
+            onRemoveOldItem={onRemoveOldItem}
+            removingOldItemId={removingOldItemId}
+            oldItemRemoveLabel={oldItemRemoveLabel}
+          />
         </td>
-
-        {hasActionColumn ? (
-          <td className={`cm-td cm-right ${isCompositeParent ? "cm-combo" : ""}`}>
-            <OldRemoveButton
-              item={item}
-              onRemoveOldItem={onRemoveOldItem}
-              removingOldItemId={removingOldItemId}
-              oldItemRemoveLabel={oldItemRemoveLabel}
-            />
-          </td>
-        ) : null}
       </tr>
-
-      {hasFullWidthDetail ? (
-        <tr className="cm-pricing-detail-row">
-          <td
-            className="cm-td cm-pricing-detail-cell"
-            colSpan={hasActionColumn ? 4 : 3}
-          >
-            <div className="cm-confirmed-detail-stack">
-              {hasAppliedPromotions ? (
-                <AppliedPromotionsBlock
-                  promotions={pricing.appliedPromotions}
-                />
-              ) : null}
-
-              {pricing.hasDiscount ? (
-                <ConfirmedLinePricingBlock pricing={pricing} />
-              ) : null}
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
-  );
-}
-
-function OldNestedChildCard({ item }) {
-  const label = item?.variant_name
-    ? `${item.product_name} · ${item.variant_name}`
-    : item.product_name || `Producto #${item.product_id}`;
-
-  const cancellation = resolveOrderItemCancellationState(item);
-  const children = Array.isArray(item?.children) ? item.children : [];
-
-  const subtotal = safeNum(
-    item?.line_total,
-    safeNum(item?.unit_price, 0) * safeNum(item?.quantity, 1),
-  );
-
-  const hideMoney = safeNum(item?.unit_price, 0) <= 0 && subtotal <= 0;
+    );
+  }
 
   return (
-    <div className="cm-child-card">
-      <div className="cm-mobile-title">↳ {label}</div>
-
-      <div className="cm-mobile-sub">
-        Cantidad: <strong>{cancellation.effectiveQuantity}</strong> ·{" "}
-        {hideMoney ? "Incluido" : money(subtotal)}
-      </div>
-
-      <CancellationStateBlock item={item} />
-      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-
-      {item?.notes ? (
-        <div className="cm-note">• {renderNotes(item.notes)}</div>
-      ) : null}
-
-      {children.length > 0 ? (
-        <div className="cm-children-list">
-          {children.map((child, index) => (
-            <OldNestedChildCard
-              key={`mobile-nested-${getOldItemId(child) || index}-${index}`}
-              item={child}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <tr className="cm-menu-set-history-row">
+      <td
+        className="cm-td cm-menu-set-history-cell cm-history-composite-table-cell"
+        colSpan={hasActionColumn ? 4 : 3}
+      >
+        <OldRegularHistoryCard
+          item={item}
+          themeColor={themeColor}
+          onShowDetails={onShowDetails}
+          onRemoveOldItem={onRemoveOldItem}
+          removingOldItemId={removingOldItemId}
+          oldItemRemoveLabel={oldItemRemoveLabel}
+        />
+      </td>
+    </tr>
   );
 }
 
@@ -616,95 +649,47 @@ function OldItemCard({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  allowOldMenuSetRemoval = true,
   themeColor,
+  onShowDetails,
 }) {
+  const resolvedRemoveAction = !allowOldMenuSetRemoval && isOldMenuSetRoot(item)
+    ? null : onRemoveOldItem;
+
   if (isOldMenuSetRoot(item)) {
     return (
       <OldMenuSetHistoryDetail
         item={item}
-        onRemoveOldItem={onRemoveOldItem}
+        onRemoveOldItem={resolvedRemoveAction}
         removingOldItemId={removingOldItemId}
         oldItemRemoveLabel={oldItemRemoveLabel}
         themeColor={themeColor}
+        onShowDetails={onShowDetails}
       />
     );
   }
 
-  const label = item?.variant_name
-    ? `${item.product_name} · ${item.variant_name}`
-    : item.product_name || `Producto #${item.product_id}`;
-
-  const pricing = resolveConfirmedItemPricing(item);
-
-  const cancellation = resolveOrderItemCancellationState(item);
-
-  const isCompositeParent =
-    !!item?.is_composite_parent ||
-    (Array.isArray(item?.children) && item.children.length > 0);
-
-  return (
-    <div className="cm-mobile-card">
-      <div className="cm-mobile-card-head">
-        <div>
-          <div className="cm-mobile-title">{label}</div>
-
-          {!cancellation.hasCancellation ? (
-            <div className="cm-mobile-sub">
-              Cantidad: <strong>{cancellation.effectiveQuantity}</strong>
-            </div>
-          ) : null}
-
-          <CancellationStateBlock item={item} />
-        </div>
-
-        <div
-          className="cm-mobile-price"
-          title="Total histórico confirmado por el servidor"
-        >
-          {money(pricing.netLineTotal)}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {isCompositeParent ? <span className="cm-combo-badge">Combo</span> : null}
-        <PreparedReuseBadge item={item} />
-      </div>
-
-      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-      <CompositeDetailBlock details={item?.components_detail || []} />
-
-      <AppliedPromotionsBlock
-        promotions={pricing.appliedPromotions}
+  if (isOldCompositeItem(item)) {
+    return (
+      <OldCompositeHistoryCard
+        item={item}
+        themeColor={themeColor}
+        onShowDetails={onShowDetails}
+        onRemoveOldItem={onRemoveOldItem}
+        removingOldItemId={removingOldItemId}
+        oldItemRemoveLabel={oldItemRemoveLabel}
       />
-
-      <ConfirmedLinePricingBlock pricing={pricing} />
-
-      {item?.notes ? (
-        <div className="cm-note">• {renderNotes(item.notes)}</div>
-      ) : null}
-
-      {onRemoveOldItem ? (
-        <div style={{ marginTop: 10, display: "flex", justifyContent: "end" }}>
-          <OldRemoveButton
-            item={item}
-            onRemoveOldItem={onRemoveOldItem}
-            removingOldItemId={removingOldItemId}
-            oldItemRemoveLabel={oldItemRemoveLabel}
-          />
-        </div>
-      ) : null}
-
-      {Array.isArray(item?.children) && item.children.length > 0 ? (
-        <div className="cm-children-list">
-          {item.children.map((child, index) => (
-            <OldNestedChildCard
-              key={`old-mobile-child-${getOldItemId(child) || index}-${index}`}
-              item={child}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+    );
+  }
+  return (
+    <OldRegularHistoryCard
+      item={item}
+      themeColor={themeColor}
+      onShowDetails={onShowDetails}
+      onRemoveOldItem={onRemoveOldItem}
+      removingOldItemId={removingOldItemId}
+      oldItemRemoveLabel={oldItemRemoveLabel}
+    />
   );
 }
 
@@ -716,7 +701,9 @@ function HistoryItemsGroup({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  allowOldMenuSetRemoval = true,
   themeColor,
+  onShowDetails,
 }) {
   const rows = Array.isArray(items) ? items : [];
   const canRemoveOldItems = typeof onRemoveOldItem === "function";
@@ -750,20 +737,8 @@ function HistoryItemsGroup({
         <div className="cm-empty-history">{emptyMessage}</div>
       ) : (
         <>
-          <div className="cm-table-wrap">
+          <div className="cm-table-wrap cm-history-card-table">
             <table className="cm-table">
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th style={{ textAlign: "center" }}>Cant.</th>
-                  <th style={{ textAlign: "right" }}>Total</th>
-
-                  {canRemoveOldItems ? (
-                    <th style={{ textAlign: "right" }}>Acción</th>
-                  ) : null}
-                </tr>
-              </thead>
-
               <tbody>
                 {paginatedItems.map((item) => (
                   <React.Fragment key={`history-${item?.id || item?.order_item_id}`}>
@@ -772,20 +747,10 @@ function HistoryItemsGroup({
                       onRemoveOldItem={onRemoveOldItem}
                       removingOldItemId={removingOldItemId}
                       oldItemRemoveLabel={oldItemRemoveLabel}
+                      allowOldMenuSetRemoval={allowOldMenuSetRemoval}
                       themeColor={themeColor}
+                      onShowDetails={onShowDetails}
                     />
-
-                    {!isOldMenuSetRoot(item) &&
-                      Array.isArray(item?.children) &&
-                      item.children.length > 0
-                        ? item.children.map((child, index) => (
-                            <OldNestedChildRows
-                              key={`history-child-${getOldItemId(child) || index}-${index}`}
-                              item={child}
-                              hasActionColumn={canRemoveOldItems}
-                            />
-                          ))
-                        : null}
                   </React.Fragment>
                 ))}
               </tbody>
@@ -800,7 +765,9 @@ function HistoryItemsGroup({
                 onRemoveOldItem={onRemoveOldItem}
                 removingOldItemId={removingOldItemId}
                 oldItemRemoveLabel={oldItemRemoveLabel}
+                allowOldMenuSetRemoval={allowOldMenuSetRemoval}
                 themeColor={themeColor}
+                onShowDetails={onShowDetails}
               />
             ))}
           </div>
@@ -831,7 +798,9 @@ export default function OldItemsSection({
   onRemoveOldItem,
   removingOldItemId = null,
   oldItemRemoveLabel = "Quitar",
+  allowOldMenuSetRemoval = true,
   themeColor,
+  onShowDetails,
 }) {
   const sectionRef = useRef(null);
   const [inheritedColor, setInheritedColor] = useState("#FF9800");
@@ -872,6 +841,8 @@ export default function OldItemsSection({
         onRemoveOldItem={onRemoveOldItem}
         removingOldItemId={removingOldItemId}
         oldItemRemoveLabel={oldItemRemoveLabel}
+        allowOldMenuSetRemoval={allowOldMenuSetRemoval}
+        onShowDetails={onShowDetails}
       />
 
       {cancelledItems.length > 0 ? (
@@ -883,6 +854,7 @@ export default function OldItemsSection({
           onRemoveOldItem={null}
           removingOldItemId={null}
           oldItemRemoveLabel={oldItemRemoveLabel}
+          onShowDetails={onShowDetails}
         />
       ) : null}
     </div>

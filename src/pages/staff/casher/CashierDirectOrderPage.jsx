@@ -28,6 +28,7 @@ import ProductVariantsModal from "../../../components/menu/shared/ProductVariant
 import CompositeProductModal from "../../../components/menu/shared/CompositeProductModal";
 import ProductExtrasModal from "../../../components/menu/shared/ProductExtrasModal";
 import MenuCartPanel from "../../../components/menu/shared/MenuCartPanel";
+import { buildOldItemsTree } from "../../../components/menu/shared/cartPanel/cartPanel.utils";
 import MenuCartDrawer from "../../../components/menu/shared/MenuCartDrawer";
 import MenuCartFloatingButton from "../../../components/menu/shared/MenuCartFloatingButton";
 import PublicMenuCategoryTabs from "../../../components/menu/shared/menuUi/PublicMenuCategoryTabs";
@@ -399,16 +400,19 @@ export default function CashierDirectOrderPage() {
     mode: "frontend",
   });
 
+  const savedRootCount = useMemo(() => {
+    return buildOldItemsTree(cartOrder.oldItems).length;
+  }, [cartOrder.oldItems]);
+
   const cartDrawerItemCount =
-    Number(cartOrder.cart?.length || 0) +
-    Number(cartOrder.oldItems?.length || 0);
+    Number(cartOrder.cart?.length || 0) + savedRootCount;
 
   const hasCartContent =
     (Array.isArray(cartOrder.cart) && cartOrder.cart.length > 0) ||
     (Array.isArray(cartOrder.oldItems) && cartOrder.oldItems.length > 0);
 
-  const canSelect = true;
   const canAppend = cartOrder.canAppend;
+  const canSelect = !isEditingExistingDirectOrder || canAppend;
   const hasInvalidItems = Boolean(cartOrder.hasInvalidCartItems);
   const invalidItemsCount = Math.max(0, Number(cartOrder.invalidCartItemsCount || 0));
   const submitBlockReason =
@@ -754,6 +758,11 @@ export default function CashierDirectOrderPage() {
   const handleOpenMenuSet = (menuSet, options = {}) => {
     if (syncing) return;
 
+    if (!canSelect) {
+      setMenuSetsNotice("Esta venta ya no permite agregar ni modificar productos.");
+      return;
+    }
+
     if (!menuSet?.id || !menuSetNavigationKey || !menuSetNavigationContext) {
       setMenuSetsNotice("No se pudo identificar el menú de esta venta.");
       return;
@@ -827,9 +836,7 @@ export default function CashierDirectOrderPage() {
   };
 
   const handlePreparedItemSelect = (preparedItem) => {
-    if (syncing) {
-      return;
-    }
+    if (!canSelect || syncing) return;
 
     const result = cartOrder.addPreparedItem(preparedItem);
 
@@ -863,6 +870,8 @@ export default function CashierDirectOrderPage() {
   };
 
   const openProductSelectionFlow = (product) => {
+    if (!canSelect || syncing) return;
+
     if (hasContextualModifiers(product, { selectionScope: "product_only" })) {
       setSelectedExtrasProduct(product);
       setSelectedExtrasVariantId(null);
@@ -883,6 +892,8 @@ export default function CashierDirectOrderPage() {
   };
 
   const openVariantSelectionFlow = (product, variant) => {
+    if (!canSelect || syncing) return;
+
     if (
       hasContextualModifiers(product, {
         variantId: Number(variant?.id || 0),
@@ -908,13 +919,15 @@ export default function CashierDirectOrderPage() {
   };
 
   const openCompositeConfigurator = (product) => {
+    if (!canSelect || syncing) return;
+
     composite.resetDraftForProduct(product);
     setSelectedCompositeProduct(product);
     setCompositeModalOpen(true);
   };
 
   const confirmCompositeSelection = () => {
-    if (!selectedCompositeProduct) return;
+    if (!canSelect || syncing || !selectedCompositeProduct) return;
 
     const draft = composite.getOrInitCompositeDraft(selectedCompositeProduct);
 
@@ -958,7 +971,7 @@ export default function CashierDirectOrderPage() {
   };
 
   const handleConfirmExtras = (result) => {
-    if (!selectedExtrasProduct) {
+    if (!canSelect || syncing || !selectedExtrasProduct) {
       resetExtrasFlow();
       return;
     }
@@ -1026,6 +1039,13 @@ export default function CashierDirectOrderPage() {
     }
 
     if (isEditingExistingDirectOrder) {
+      if (!canAppend && cartOrder.cart.length > 0) {
+        cartOrder.setSendToast(
+          "⚠️ Esta venta ya no permite agregar productos. Quita los productos pendientes para continuar."
+        );
+        return;
+      }
+
       cartOrder.validateAndGoToPayment();
       return;
     }
@@ -1140,9 +1160,12 @@ export default function CashierDirectOrderPage() {
           }
           subtitle={
             isEditingExistingDirectOrder
-              ? "Quita productos sin stock o agrega nuevos productos a la misma venta. Al presionar Cobrar, se validará el stock antes de volver al cobro."
+              ? canAppend
+                ? "Puedes retirar productos permitidos o agregar nuevos a esta venta. Antes de continuar al cobro, se revisará el inventario."
+                : "Esta venta ya no permite modificar sus productos. Puedes revisar su estado antes de continuar al cobro."
               : "Selecciona productos, confirma el cliente y crea una venta tomada por tu caja. Después continuarás al detalle para cobrar."
           }
+
           menuData={data}
           cashSession={cashSession}
           cartCount={cartDrawerItemCount}
@@ -1378,11 +1401,14 @@ export default function CashierDirectOrderPage() {
         }
         subtitle={
           isEditingExistingDirectOrder
-            ? "Quita productos sin stock o agrega nuevos productos. Al presionar Cobrar se validará la venta."
+            ? canAppend
+              ? "Revisa los productos de la venta. Puedes agregar nuevos o retirar los permitidos."
+              : "Esta venta no permite modificar productos. Revisa la información antes de continuar."
             : canAppend
-            ? "Puedes agregar productos a esta venta directa antes de cobrar."
-            : "Revisa los productos seleccionados antes de crear la venta."
+              ? "Puedes agregar productos a esta venta directa antes de cobrar."
+              : "Revisa los productos seleccionados antes de crear la venta."
         }
+
         itemCount={cartDrawerItemCount}
         total={cartOrder.displayTotal}
         totalLabel={cartOrder.totalLabel}
@@ -1398,10 +1424,10 @@ export default function CashierDirectOrderPage() {
           }
           subtitle={
             isEditingExistingDirectOrder
-              ? "Cuando la venta tenga stock suficiente y no esté vacía, podrás volver al cobro."
+              ? "Para continuar al cobro, la venta debe tener productos vigentes y su inventario debe estar validado."
               : canAppend
-              ? "Venta directa activa: puedes agregar productos."
-              : "Selecciona productos y luego crea la venta."
+                ? "Venta directa activa: puedes agregar productos."
+                : "Selecciona productos y luego crea la venta."
           }
           customerName={
             canAppend || isEditingExistingDirectOrder
@@ -1413,14 +1439,17 @@ export default function CashierDirectOrderPage() {
           oldItems={cartOrder.oldItems}
           newItems={cartOrder.cart}
           menuSets={menuSets}
-          onEditMenuSet={handleEditMenuSet}
+          allowOldMenuSetRemoval={false}
+          onEditMenuSet={canSelect ? handleEditMenuSet : undefined}
           sendToast={cartOrder.sendToast}
           sending={cartOrder.sending}
-          canAppend={canAppend || isEditingExistingDirectOrder}
+          canAppend={canAppend}
           canSubmit={
             !hasInvalidItems &&
             (isEditingExistingDirectOrder
-              ? hasOld || cartOrder.cart.length > 0
+              ? canAppend
+                ? hasOld || cartOrder.cart.length > 0
+                : hasOld && cartOrder.cart.length === 0
               : cartOrder.cart.length > 0)
           }
           hasInvalidItems={hasInvalidItems}
@@ -1429,23 +1458,20 @@ export default function CashierDirectOrderPage() {
           submitLabel={isEditingExistingDirectOrder ? "Cobrar" : undefined}
           onEmpty={() => cartOrder.setCart([])}
           onSubmit={handleSubmitCart}
-          onQtyChange={cartOrder.setCartQty}
-          onNotesChange={cartOrder.setCartNotes}
+          onQtyChange={canSelect ? cartOrder.setCartQty : undefined}
+          onNotesChange={canSelect ? cartOrder.setCartNotes : undefined}
           onRemove={cartOrder.removeCartItem}
-          onRemoveOldItem={(orderItem) => {
-            const orderItemId = Number(
-              orderItem?.id || orderItem?.order_item_id || 0
-            );
-
+          onRemoveOldItem={canAppend ? (orderItem) => {
+            const orderItemId = Number(orderItem?.id || orderItem?.order_item_id || 0);
             if (!orderItemId) return;
 
             cartOrder.removeExistingOrderItem(orderItemId, {
               returnToSaleDetail: false,
             });
-          }}
+          } : undefined}
           statusBadges={[
             { tone: "dark", label: "💵 Caja directa" },
-            ...(canAppend || isEditingExistingDirectOrder
+            ...(canAppend
               ? [
                   {
                     tone: "ok",
@@ -1467,7 +1493,7 @@ export default function CashierDirectOrderPage() {
               ? [
                   {
                     tone: "default",
-                    label: `Actuales: ${cartOrder.oldItems.length}`,
+                    label: `Actuales: ${savedRootCount}`,
                     title: "Productos ya guardados",
                   },
                 ]

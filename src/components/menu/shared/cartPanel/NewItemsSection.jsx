@@ -18,11 +18,15 @@ import { isCartItemAvailabilityInvalid } from "../../../../hooks/menu/menuAvaila
 import { isMenuSetCartLine } from "../../../../hooks/menu/menu-sets/menuSetPayload.utils";
 import { normalizeMenuSet } from "../../../../hooks/menu/menu-sets/menuSet.utils";
 import PaginationFooter from "../../../common/PaginationFooter";
-import { buildOldItemsTree, renderNotes } from "./cartPanel.utils";
-import ModifierGroupsBlock from "./ModifierGroupsBlock";
+import { buildOldItemsTree } from "./cartPanel.utils";
 import CompositeDetailBlock from "./CompositeDetailBlock";
+import CartProductDetailIcons, { getCartProductNotes } from "./CartProductDetailIcons";
 import MenuSetCartDetail from "../menu-sets/MenuSetCartDetail";
 import QtyControl from "./QtyControl";
+
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 
 const NEW_ITEMS_PAGE_SIZE = 4;
 
@@ -74,6 +78,14 @@ function isMenuSetRootLine(item) {
     || (item?.product_id == null && item?.menu_set_id != null);
 }
 
+function hasCompositeComponents(item) {
+  return (
+    (Array.isArray(item?.children) && item.children.length > 0) ||
+    (Array.isArray(item?.components) && item.components.length > 0) ||
+    (Array.isArray(item?.components_detail) && item.components_detail.length > 0)
+  );
+}
+
 function getMenuSetDisplayItem(item) {
   if (Array.isArray(item?.stages) && item.stages.length > 0) return item;
   if (!Array.isArray(item?.display_stages) || item.display_stages.length === 0) return item;
@@ -81,8 +93,15 @@ function getMenuSetDisplayItem(item) {
   return { ...item, stages: item.display_stages };
 }
 
+function getCompositeProductCount(item) {
+  const components = [item?.children, item?.components, item?.components_detail]
+    .find((rows) => Array.isArray(rows) && rows.length > 0);
+
+  return components?.length || 0;
+}
+
 function NoteButton({ item, onOpenNote }) {
-  const note = String(item?.notes || "").trim();
+  const note = getCartProductNotes(item);
 
   return (
     <div className="cm-note-button-wrap">
@@ -90,12 +109,10 @@ function NoteButton({ item, onOpenNote }) {
         type="button"
         className={`cm-note-btn ${note ? "cm-note-btn-active" : ""}`}
         onClick={() => onOpenNote?.(item)}
-        title={note ? "Editar nota" : "Agregar nota"}
+        title={note ? "Modificar nota" : "Agregar nota"}
       >
-        📝 {note ? "Editar nota" : "Nota"}
+        📝 {note ? "Modificar nota" : "Agregar nota"}
       </button>
-
-      {note ? <div className="cm-note-preview">“{note}”</div> : null}
     </div>
   );
 }
@@ -113,7 +130,7 @@ function RemoveButton({ item, onRemove }) {
   );
 }
 
-function PreparedNewItemCard({ item, onRemove, onOpenNote }) {
+function PreparedNewItemCard({ item, onRemove, onOpenNote, onShowDetails }) {
   const label = getPreparedItemDisplayName(item);
   const configurationSummary = getPreparedItemConfigurationSummary(item);
   const currentPrice = getPreparedItemCurrentPrice(item);
@@ -145,7 +162,10 @@ function PreparedNewItemCard({ item, onRemove, onOpenNote }) {
           </div>
         </div>
 
-        <RemoveButton item={item} onRemove={onRemove} />
+        <div className="cm-product-actions">
+          <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
+          <RemoveButton item={item} onRemove={onRemove} />
+        </div>
       </div>
 
       <div className="cm-new-controls">
@@ -206,44 +226,18 @@ function getPendingItemTotal(item) {
   );
 }
 
-function PendingChildCard({ item }) {
-  const label = getPendingItemLabel(item);
-  const quantity = getPendingItemQuantity(item);
-  const total = getPendingItemTotal(item);
+function PendingNewItemCard({ item, menuSet = null, themeColor, onShowDetails }) {
+  const [expanded, setExpanded] = useState(false);
 
-  return (
-    <div className="cm-child-card">
-      <div className="cm-mobile-title">↳ {label}</div>
-
-      <div className="cm-mobile-sub">
-        Cantidad: <strong>{quantity}</strong>
-        {total > 0 ? <> · {money(total)}</> : null}
-      </div>
-
-      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-
-      {item?.notes ? (
-        <div className="cm-note">• {renderNotes(item.notes)}</div>
-      ) : null}
-    </div>
-  );
-}
-
-function PendingNewItemCard({ item, menuSet = null, themeColor }) {
   if (isMenuSetRootLine(item)) {
     return (
-      <div className="cm-new-card">
-        <div className="cm-new-meta" style={{ marginBottom: 10 }}>
-          Pedido enviado · Solo lectura
-        </div>
-
-        <MenuSetCartDetail
-          item={getMenuSetDisplayItem(item)}
-          menuSet={menuSet}
-          themeColor={themeColor}
-          readOnly
-        />
-      </div>
+      <MenuSetCartDetail
+        item={getMenuSetDisplayItem(item)}
+        menuSet={menuSet}
+        themeColor={themeColor}
+        onShowDetails={onShowDetails}
+        readOnly
+      />
     );
   }
 
@@ -251,32 +245,89 @@ function PendingNewItemCard({ item, menuSet = null, themeColor }) {
   const quantity = getPendingItemQuantity(item);
   const total = getPendingItemTotal(item);
 
-  const isPrepared =
-    String(item?.fulfillment_source || "") === "prepared_reuse";
+  const isComposite = hasCompositeComponents(item);
+  const isPrepared = String(item?.fulfillment_source || "") === "prepared_reuse";
+
+  const productCount = getCompositeProductCount(item);
+  const color = /^#[0-9A-Fa-f]{6}$/.test(String(themeColor || ""))
+    ? themeColor : "#FF9800";
+
+  if (isComposite) {
+    return (
+      <article
+        className="cm-composite-card"
+        style={{ "--cm-composite-accent": color }}
+      >
+        <button
+          type="button"
+          className="cm-composite-trigger"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Ocultar" : "Mostrar"} productos de ${label}`}
+        >
+          <span className="cm-composite-head-icon">
+            <RestaurantMenuRoundedIcon sx={{ fontSize: 20 }} />
+          </span>
+
+          <span className="cm-composite-copy">
+            <strong className="cm-composite-name">{label}</strong>
+
+            <span className="cm-composite-description">
+              {quantity} {quantity === 1 ? "unidad" : "unidades"} ·{" "}
+              {productCount} {productCount === 1 ? "producto" : "productos"}
+            </span>
+          </span>
+
+          <span className="cm-composite-price">
+            <strong>{money(total)}</strong>
+            <span>En espera</span>
+          </span>
+
+          <span className="cm-composite-chevron">
+            {expanded
+              ? <ExpandLessRoundedIcon sx={{ fontSize: 21 }} />
+              : <ExpandMoreRoundedIcon sx={{ fontSize: 21 }} />}
+          </span>
+        </button>
+
+        {expanded ? (
+          <div className="cm-composite-expanded">
+            <CompositeDetailBlock
+              item={item}
+              details={item?.components_detail || []}
+              themeColor={color}
+              onShowDetails={onShowDetails}
+            />
+
+            <div className="cm-composite-product-actions">
+              {isPrepared ? <span className="cm-prepared-badge">Preparación rápida</span> : null}
+              <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
+            </div>
+          </div>
+        ) : null}
+      </article>
+    );
+  }
 
   return (
     <div className="cm-new-card">
       <div className="cm-new-card-top">
         <div className="cm-new-info">
-          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-            <div className="cm-new-title">{label}</div>
-            <span className="cm-prepared-badge">En espera de aprobación</span>
-
-            {isPrepared ? (
-              <span className="cm-prepared-badge">Preparación rápida</span>
-            ) : null}
-          </div>
-
+          <div className="cm-new-title">{label}</div>
           <div className="cm-new-meta">Pedido enviado · Solo lectura</div>
         </div>
+
+        <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
       </div>
 
-      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-      <CompositeDetailBlock details={item?.components_detail || []} />
-
-      {item?.notes ? (
-        <div className="cm-note">• {renderNotes(item.notes)}</div>
-      ) : null}
+      <div>
+        <span className="cm-prepared-badge">En espera de aprobación</span>
+        {isPrepared ? (
+          <span className="cm-prepared-badge" style={{ marginLeft: 6 }}>
+            Preparación rápida
+          </span>
+        ) : null}
+      </div>
 
       <div className="cm-new-controls">
         <div>
@@ -286,25 +337,11 @@ function PendingNewItemCard({ item, menuSet = null, themeColor }) {
           </div>
         </div>
 
-        <div
-          className="cm-new-total-box"
-          title="Importe correspondiente al pedido enviado."
-        >
+        <div className="cm-new-total-box">
           <span>Total enviado</span>
           <strong>{money(total)}</strong>
         </div>
       </div>
-
-      {Array.isArray(item?.children) && item.children.length > 0 ? (
-        <div className="cm-children-list">
-          {item.children.map((child) => (
-            <PendingChildCard
-              key={`pending-child-${child?.id || child?.order_item_id}`}
-              item={child}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -317,13 +354,17 @@ function NewItemCard({
   onRemove,
   onOpenNote,
   onEditMenuSet,
+  onShowDetails,
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (isMenuSetRootLine(item)) {
     return (
       <MenuSetCartDetail
         item={getMenuSetDisplayItem(item)}
         menuSet={menuSet}
         themeColor={themeColor}
+        onShowDetails={onShowDetails}
         onEdit={typeof onEditMenuSet === "function" ? onEditMenuSet : undefined}
         onRemove={typeof onRemove === "function"
           ? (line) => onRemove(line.key)
@@ -338,6 +379,7 @@ function NewItemCard({
         item={item}
         onRemove={onRemove}
         onOpenNote={onOpenNote}
+        onShowDetails={onShowDetails}
       />
     );
   }
@@ -386,6 +428,8 @@ function NewItemCard({
     ? `${item.name} · ${item.variant_name}`
     : item.name;
 
+  const isComposite = hasCompositeComponents(item);
+
   const itemAvailability =
     getAvailabilityData(item) ||
     (item?.availability_status
@@ -418,7 +462,7 @@ function NewItemCard({
 
   return (
     <div
-      className="cm-new-card"
+      className={`cm-new-card ${isComposite ? "cm-composite-card" : ""}`}
       aria-invalid={invalidItem ? "true" : undefined}
       style={
         invalidItem
@@ -429,22 +473,52 @@ function NewItemCard({
           : undefined
       }
     >
-      <div className="cm-new-card-top">
+      <div className={`cm-new-card-top ${isComposite ? "cm-composite-head" : ""}`}>
         <div className="cm-new-info">
-          <div className="cm-new-title">{label}</div>
+          {isComposite ? (
+            <button
+              type="button"
+              className="cm-composite-trigger"
+              onClick={() => setExpanded((current) => !current)}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? "Ocultar" : "Mostrar"} productos de ${label}`}
+            >
+              <span className="cm-composite-head-icon">
+                <RestaurantMenuRoundedIcon sx={{ fontSize: 20 }} />
+              </span>
+
+              <span className="cm-composite-copy">
+                <strong className="cm-composite-name">{label}</strong>
+
+                <span className="cm-composite-description">
+                  {selectedQty} {selectedQty === 1 ? "unidad" : "unidades"} ·{" "}
+                  {getCompositeProductCount(item)}{" "}
+                  {getCompositeProductCount(item) === 1 ? "producto" : "productos"}
+                </span>
+              </span>
+
+              <span className="cm-composite-price">
+                <strong>{money(lineTotalApproximate)}</strong>
+                <span>Aproximado</span>
+              </span>
+
+              <span className="cm-composite-chevron">
+                {expanded
+                  ? <ExpandLessRoundedIcon sx={{ fontSize: 21 }} />
+                  : <ExpandMoreRoundedIcon sx={{ fontSize: 21 }} />}
+              </span>
+            </button>
+          ) : (
+            <div className="cm-new-title">{label}</div>
+          )}
 
           <div className="cm-new-meta">Precio base</div>
 
           <div className="cm-price-stack">
             {showPromotionalPrice ? (
               <>
-                <span className="cm-price-original">
-                  {money(promotion.originalPrice)}
-                </span>
-
-                <span className="cm-price-promotional">
-                  {money(promotion.displayPrice)}
-                </span>
+                <span className="cm-price-original">{money(promotion.originalPrice)}</span>
+                <span className="cm-price-promotional">{money(promotion.displayPrice)}</span>
               </>
             ) : (
               <strong>{money(unitPriceReference)}</strong>
@@ -454,9 +528,7 @@ function NewItemCard({
           {showPromotionBadge ? (
             <div
               className={`cm-promotion-badge ${
-                promotion.isQuantityPromotion
-                  ? "cm-promotion-badge-quantity"
-                  : ""
+                promotion.isQuantityPromotion ? "cm-promotion-badge-quantity" : ""
               }`}
               title={
                 promotion.promotionName
@@ -467,10 +539,12 @@ function NewItemCard({
               {promotion.promotionLabel}
             </div>
           ) : null}
-
         </div>
 
-        <RemoveButton item={item} onRemove={onRemove} />
+        <div className="cm-product-actions">
+          <CartProductDetailIcons item={item} onShowDetails={onShowDetails} />
+          <RemoveButton item={item} onRemove={onRemove} />
+        </div>
       </div>
 
       {invalidItem ? (
@@ -505,8 +579,16 @@ function NewItemCard({
         </div>
       ) : null}
 
-      <ModifierGroupsBlock groups={item?.modifier_groups_display || []} />
-      <CompositeDetailBlock details={item?.components_detail || []} />
+      {isComposite && expanded ? (
+        <div className="cm-composite-expanded">
+          <CompositeDetailBlock
+            item={item}
+            details={item?.components_detail || []}
+            themeColor={themeColor}
+            onShowDetails={onShowDetails}
+          />
+        </div>
+      ) : null}
 
       {showPromotionalPrice && promotionDiscountPreview > 0 ? (
         <div className="cm-line-discount">
@@ -574,6 +656,7 @@ export default function NewItemsSection({
   onRemove,
   onEditMenuSet,
   onOpenNote,
+  onShowDetails,
 }) {
   const items = Array.isArray(newItems) ? newItems : [];
 
@@ -619,6 +702,7 @@ export default function NewItemsSection({
                 item={item}
                 menuSet={getMenuSetForItem(item)}
                 themeColor={themeColor}
+                onShowDetails={onShowDetails}
               />
             ))}
           </div>
@@ -668,6 +752,7 @@ export default function NewItemsSection({
                 onRemove={onRemove}
                 onOpenNote={onOpenNote}
                 onEditMenuSet={onEditMenuSet}
+                onShowDetails={onShowDetails}
               />
             ))}
           </div>
