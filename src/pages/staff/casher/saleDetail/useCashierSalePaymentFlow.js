@@ -154,6 +154,64 @@ export default function useCashierSalePaymentFlow({
     return Math.round((accountNetAmount + liveTipAmount) * 100) / 100;
   }, [sale, tip]);
 
+  /*
+  * Mantiene sincronizado el monto cuando existe
+  * un único método de pago normal.
+  */
+  useEffect(() => {
+    if (
+      netpayMode ||
+      netpayBusy ||
+      netpayPendingBlocked
+    ) {
+      return;
+    }
+
+    if (payments.length !== 1) {
+      return;
+    }
+
+    if (paymentInitialAmount === null) {
+      return;
+    }
+
+    const nextAmount =
+      paymentInitialAmount > 0
+        ? formatPaymentAmountValue(paymentInitialAmount)
+        : "";
+
+    setPayments((prev) => {
+      if (
+        !Array.isArray(prev) ||
+        prev.length !== 1
+      ) {
+        return prev;
+      }
+
+      const currentAmount = String(
+        prev[0]?.amount ?? ""
+      );
+
+      if (currentAmount === nextAmount) {
+        return prev;
+      }
+
+      return [
+        {
+          ...prev[0],
+          amount: nextAmount,
+        },
+      ];
+    });
+  }, [
+    paymentInitialAmount,
+    payments.length,
+    netpayMode,
+    netpayBusy,
+    netpayPendingBlocked,
+    setPayments,
+  ]);
+
   const syncSinglePaymentAmountToSaleTotal = (nextTotal) => {
     const amount = Number(nextTotal || 0);
     if (!Number.isFinite(amount)) return;

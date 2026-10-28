@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Stack, Typography, useMediaQuery } from "@mui/material";
 import LocalOfferRoundedIcon from "@mui/icons-material/LocalOfferRounded";
 
 import PageContainer from "../../../../components/common/PageContainer";
@@ -39,6 +39,14 @@ export default function CashierOnlineOrderPaymentPage() {
 
   const [activeTool, setActiveTool] = useState(null);
   const [paymentTab, setPaymentTab] = useState("payment");
+
+  // Control visual de las tarjetas: mismo comportamiento que el cobro normal.
+  const isMobile = useMediaQuery((theme) => theme.breakpoints.down("md"));
+  const [itemsExpanded, setItemsExpanded] = useState(false);
+  const [summaryExpansionOverride, setSummaryExpansionOverride] = useState(null);
+
+  const summaryExpanded = summaryExpansionOverride ?? !isMobile;
+  const bothCardsCollapsed = !itemsExpanded && !summaryExpanded;
 
   const [alertState, setAlertState] = useState({
     open: false,
@@ -264,7 +272,14 @@ export default function CashierOnlineOrderPaymentPage() {
   );
 
   useEffect(() => {
-    if (activeTool === "discounts" && !canManageDiscounts) setActiveTool(null);
+    setItemsExpanded(false);
+    setSummaryExpansionOverride(null);
+  }, [onlineOrderId, isMobile]);
+
+  useEffect(() => {
+    if (activeTool === "discounts" && !canManageDiscounts) {
+      setActiveTool(null);
+    }
   }, [activeTool, canManageDiscounts]);
 
   const handleReturnToMyOrders = () => {
@@ -272,6 +287,37 @@ export default function CashierOnlineOrderPaymentPage() {
     closePostPayment();
     goToMyOrders({ replace: true });
   };
+
+  // Resumen de venta reutilizado.
+  const saleSummaryCard = (
+    <CashierSaleSummaryCard
+      sale={sale}
+      check={selectedCheck}
+      liveTip={Number(tip || 0)}
+      preview={preview}
+      previewMode={isNetpayPayment ? "netpay" : "normal"}
+      selectedTaxOption={selectedTaxOption}
+      expanded={summaryExpanded}
+      onToggle={() => setSummaryExpansionOverride(!summaryExpanded)}
+    />
+  );
+
+  // Selector de impuestos reutilizado.
+  const taxSelectorCard = (
+    <CashierTaxSelectorCard
+      taxOptions={taxOptions}
+      value={taxOptionCode}
+      onChange={(nextValue) => {
+        if (financialLocked) {
+          return;
+        }
+
+        setTaxOptionCode(nextValue);
+        setPreview(null);
+      }}
+      disabled={!paymentAvailable || financialLocked || postPaymentOpen}
+    />
+  );
 
   if (loading) {
     return (
@@ -381,39 +427,76 @@ export default function CashierOnlineOrderPaymentPage() {
                   xs: "minmax(0, 1fr)",
                   xl: "1.15fr 0.85fr",
                 },
-                alignItems: "stretch",
+                alignItems: "start",
               }}
             >
-              <Box sx={{ minWidth: 0, height: "100%" }}>
+              {/* Detalle de productos */}
+              <Box
+                sx={{
+                  minWidth: 0,
+                  alignSelf: {
+                    xs: "auto",
+                    xl: bothCardsCollapsed ? "stretch" : "start",
+                  },
+                  display: {
+                    xs: "block",
+                    xl: bothCardsCollapsed ? "flex" : "block",
+                  },
+                  flexDirection: "column",
+                  "& > .MuiCard-root": {
+                    flex: bothCardsCollapsed ? 1 : "initial",
+                  },
+                }}
+              >
                 <CashierOrderItemsCard
                   itemsTree={itemsTree}
                   itemsSummary={onlineOrder?.products_summary || null}
                   selectedCheck={selectedCheck}
+                  expanded={itemsExpanded}
+                  onToggle={() => setItemsExpanded((prev) => !prev)}
                 />
               </Box>
 
-              <Stack spacing={3} sx={{ minWidth: 0, height: "100%" }}>
-                <CashierSaleSummaryCard
-                  sale={sale}
-                  check={selectedCheck}
-                  liveTip={Number(tip || 0)}
-                  preview={preview}
-                  previewMode={isNetpayPayment ? "netpay" : "normal"}
-                  selectedTaxOption={selectedTaxOption}
-                />
-
-                <CashierTaxSelectorCard
-                  taxOptions={taxOptions}
-                  value={taxOptionCode}
-                  onChange={(nextValue) => {
-                    if (financialLocked) return;
-
-                    setTaxOptionCode(nextValue);
-                    setPreview(null);
+              {itemsExpanded ? (
+                /*
+                 * Productos expandidos:
+                 * izquierda productos, derecha resumen e impuestos.
+                 */
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
                   }}
-                  disabled={!paymentAvailable || financialLocked || postPaymentOpen}
-                />
-              </Stack>
+                >
+                  {saleSummaryCard}
+                  {taxSelectorCard}
+                </Box>
+              ) : (
+                /*
+                 * Productos contraídos:
+                 * primera fila productos y resumen.
+                 * segunda fila impuestos a ancho completo desde xl.
+                 */
+                <>
+                  <Box sx={{ minWidth: 0, alignSelf: "start" }}>
+                    {saleSummaryCard}
+                  </Box>
+
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                      gridColumn: {
+                        xs: "auto",
+                        xl: "1 / -1",
+                      },
+                    }}
+                  >
+                    {taxSelectorCard}
+                  </Box>
+                </>
+              )}
             </Box>
 
             <CashierPaymentFormCard

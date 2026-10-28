@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  Box, Button, Card, CardContent, Chip, CircularProgress, Divider, IconButton, Menu, MenuItem, Stack, Typography,
+  Box, Button, Card, CardContent, Chip, CircularProgress, Divider, IconButton, Menu, MenuItem, Stack, Tooltip, Typography,
 } from "@mui/material";
 
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -18,6 +18,7 @@ import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import PrintRoundedIcon from "@mui/icons-material/PrintRounded";
 import RestaurantRoundedIcon from "@mui/icons-material/RestaurantRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 
@@ -50,8 +51,10 @@ export default function CashierOnlineOrderCard({
   order,
   disabled = false,
   busyAction = "",
+  printing = false,
   onOpenDetail,
   onAction,
+  onPrintDelivery,
 }) {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
 
@@ -63,6 +66,8 @@ export default function CashierOnlineOrderCard({
 
   const backendActions = Array.isArray(order?.actions) ? order.actions : [];
   const canCancelOrder = backendActions.includes("cancel");
+  const canPrintDeliveryTicket = order?.can_print_delivery_ticket === true
+    && backendActions.includes("print_delivery_ticket");
   const menuOpen = Boolean(menuAnchorEl);
 
   const orderCheckId = Number(order?.order_check_id || order?.check_id || 0);
@@ -306,10 +311,52 @@ export default function CashierOnlineOrderCard({
             </Stack>
           </Box>
 
-          <Box>
-            <Typography sx={helperLabelSx}>Recibido</Typography>
-            <Typography sx={helperValueSx}>{formatDateTime(order?.created_at)}</Typography>
-          </Box>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={helperLabelSx}>Recibido</Typography>
+              <Typography sx={helperValueSx}>{formatDateTime(order?.created_at)}</Typography>
+            </Box>
+
+            <Tooltip
+              arrow
+              title={
+                canPrintDeliveryTicket
+                  ? "Imprimir documento de entrega"
+                  : "La impresión no está disponible para este pedido."
+              }
+            >
+              <span style={{ display: "inline-flex" }}>
+                <IconButton
+                  type="button"
+                  size="small"
+                  aria-label="Imprimir documento de entrega"
+                  disabled={actionsDisabled || orderMissing || printing || !canPrintDeliveryTicket}
+                  onClick={() => onPrintDelivery?.(order)}
+                  sx={{
+                    width: 38,
+                    height: 38,
+                    flexShrink: 0,
+                    borderRadius: 1,
+                    bgcolor: "#1976D2",
+                    color: "#FFFFFF",
+                    "&:hover": {
+                      bgcolor: "#1565C0",
+                    },
+                    "&.Mui-disabled": {
+                      bgcolor: "#E0E0E0",
+                      color: "#9E9E9E",
+                    },
+                  }}
+                >
+                  {printing ? (
+                    <CircularProgress size={19} color="inherit" />
+                  ) : (
+                    <PrintRoundedIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
 
           {orderMissing ? (
             <Typography sx={{ fontSize: 13, lineHeight: 1.5, color: "error.main", fontWeight: 700 }}>

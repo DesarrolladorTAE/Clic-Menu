@@ -24,6 +24,36 @@ export async function fetchCashierOnlineOrderDetail(onlineOrderId) {
   return res?.data;
 }
 
+/**
+ * Obtiene la configuración de impresión del documento de entrega.
+ */
+export async function fetchCashierOnlineOrderDeliveryPrintConfig(onlineOrderId) {
+  const res = await staffApi.get(
+    `/staff/cashier/online-orders/${onlineOrderId}/delivery-print/config`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
+/**
+ * Obtiene el documento térmico de entrega listo para imprimir.
+ */
+export async function fetchCashierOnlineOrderDeliveryPrintPayload(onlineOrderId) {
+  const res = await staffApi.get(
+    `/staff/cashier/online-orders/${onlineOrderId}/delivery-print/payload`,
+    {
+      params: { _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
 export async function fetchCashierOnlineOrderNewNotifications() {
   const res = await staffApi.get("/staff/cashier/online-order-new-notifications", {
     params: { _t: Date.now() },

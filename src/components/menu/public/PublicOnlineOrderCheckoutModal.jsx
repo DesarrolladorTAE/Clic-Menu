@@ -1,12 +1,14 @@
 // Formulario para pedidos en línea
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Box, Card, CardContent, Divider, Pagination, Stack, TextField, Typography,
+  Box, Card, CardContent, Collapse, Divider, IconButton, Pagination, Stack, TextField, Typography,
 } from "@mui/material";
 
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 
 import { money } from "../../../hooks/public/publicMenu.utils";
 import {
@@ -1371,85 +1373,268 @@ function formatMissingFields(fields = []) {
 }
 
 function MenuSetCheckoutDetail({ item, color }) {
-  const stages = Array.isArray(item?.display_stages) ? item.display_stages : [];
+  const [expanded, setExpanded] = useState(false);
+
+  const stages = Array.isArray(item?.display_stages)
+    ? item.display_stages
+    : [];
+
+  /*
+   * Contar únicamente los productos seleccionados
+   * dentro de las etapas del Conjunto.
+   *
+   * Este contador es visual y no modifica cantidades
+   * ni información comercial.
+   */
+  const selectedProductsCount = stages.reduce(
+    (total, stage) => {
+      const selectedItems = Array.isArray(stage?.items)
+        ? stage.items
+        : [];
+
+      return total + selectedItems.length;
+    },
+    0
+  );
+
+  const handleToggle = () => {
+    setExpanded((prev) => !prev);
+  };
 
   return (
-    <Box sx={{ width: "100%", minWidth: 0, display: "grid", gap: 0.85 }}>
-      <Typography sx={{
-        fontSize: 14, fontWeight: 850, lineHeight: 1.3,
-        color: "text.primary", overflowWrap: "anywhere",
-      }}>
-        {item?.name || "Conjunto"}
-      </Typography>
-
-      {stages.map((stage, stageIndex) => {
-        const selectedItems = Array.isArray(stage?.items) ? stage.items : [];
-
-        return (
-          <Box
-            key={`${stage?.menu_set_stage_definition_id || stageIndex}-${stageIndex}`}
+    <Box
+      sx={{
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      {/* Encabezado del Conjunto */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 1,
+          minWidth: 0,
+        }}
+      >
+        <Box
+          sx={{
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          <Typography
             sx={{
-              width: "100%", minWidth: 0, p: 1,
-              border: "1px solid",
-              borderColor: hexToRgba(color, 0.2),
-              borderRadius: 1.5,
-              backgroundColor: hexToRgba(color, 0.035),
+              fontSize: 14,
+              fontWeight: 850,
+              lineHeight: 1.3,
+              color: "text.primary",
+              overflowWrap: "anywhere",
             }}
           >
-            <Typography sx={{ fontSize: 12, fontWeight: 850, color, mb: 0.45 }}>
-              {stage?.menu_set_stage_name_snapshot || `Etapa ${stageIndex + 1}`}
-            </Typography>
+            {item?.name || "Conjunto"}
+          </Typography>
 
-            <Stack spacing={0.65}>
-              {selectedItems.map((selection, optionIndex) => {
-                const modifiers = Array.isArray(selection?.modifiers) ? selection.modifiers : [];
-                const components = Array.isArray(selection?.components) ? selection.components : [];
-                const prepared = Number(selection?.prepared_item_id || 0) > 0;
-                const notes = String(selection?.notes || "").trim();
+          <Typography
+            sx={{
+              mt: 0.35,
+              fontSize: 12,
+              color: "text.secondary",
+              lineHeight: 1.35,
+            }}
+          >
+            {selectedProductsCount}{" "}
+            {selectedProductsCount === 1
+              ? "producto seleccionado"
+              : "productos seleccionados"}
+          </Typography>
+        </Box>
 
-                return (
-                  <Box key={`${selection?.menu_set_product_id || optionIndex}-${optionIndex}`} sx={{ minWidth: 0 }}>
-                    <Typography sx={{
-                      fontSize: 12.5, fontWeight: 750, lineHeight: 1.4,
-                      color: "text.primary", overflowWrap: "anywhere",
-                    }}>
-                      • {selection?.product_name || "Producto seleccionado"}
-                      {selection?.variant_name ? ` · ${selection.variant_name}` : ""}
-                    </Typography>
+        {/* Botón para expandir o contraer */}
+        <IconButton
+          type="button"
+          size="small"
+          onClick={handleToggle}
+          aria-label={
+            expanded
+              ? `Contraer ${item?.name || "Conjunto"}`
+              : `Expandir ${item?.name || "Conjunto"}`
+          }
+          aria-expanded={expanded}
+          sx={{
+            flexShrink: 0,
+            width: 30,
+            height: 30,
+            border: "1px solid",
+            borderColor: hexToRgba(color, 0.22),
+            borderRadius: 1.5,
+            color,
+            backgroundColor: hexToRgba(color, 0.055),
+            "&:hover": {
+              backgroundColor: hexToRgba(color, 0.11),
+              borderColor: hexToRgba(color, 0.4),
+            },
+          }}
+        >
+          {expanded ? (
+            <ExpandLessRoundedIcon fontSize="small" />
+          ) : (
+            <ExpandMoreRoundedIcon fontSize="small" />
+          )}
+        </IconButton>
+      </Box>
 
-                    {prepared ? (
-                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
-                        Preparación rápida
-                      </Typography>
-                    ) : null}
+      {/* Contenido desplegable del Conjunto */}
+      <Collapse
+        in={expanded}
+        timeout={180}
+        unmountOnExit
+      >
+        <Stack
+          spacing={0.85}
+          sx={{
+            mt: 1.25,
+            width: "100%",
+            minWidth: 0,
+          }}
+        >
+          {stages.map((stage, stageIndex) => {
+            const selectedItems = Array.isArray(stage?.items)
+              ? stage.items
+              : [];
 
-                    {modifiers.length > 0 ? (
-                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
-                        Extras personalizados
-                      </Typography>
-                    ) : null}
+            return (
+              <Box
+                key={`${stage?.menu_set_stage_definition_id || stageIndex}-${stageIndex}`}
+                sx={{
+                  width: "100%",
+                  minWidth: 0,
+                  p: 1,
+                  border: "1px solid",
+                  borderColor: hexToRgba(color, 0.2),
+                  borderRadius: 1.5,
+                  backgroundColor: hexToRgba(color, 0.035),
+                }}
+              >
+                {/* Nombre de la etapa */}
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    fontWeight: 850,
+                    color,
+                    mb: 0.45,
+                  }}
+                >
+                  {stage?.menu_set_stage_name_snapshot ||
+                    `Etapa ${stageIndex + 1}`}
+                </Typography>
 
-                    {components.length > 0 ? (
-                      <Typography sx={{ fontSize: 11.5, color: "text.secondary", pl: 1.2 }}>
-                        Componentes configurados
-                      </Typography>
-                    ) : null}
+                {/* Productos seleccionados en la etapa */}
+                <Stack spacing={0.65}>
+                  {selectedItems.map((selection, optionIndex) => {
+                    const modifiers = Array.isArray(selection?.modifiers)
+                      ? selection.modifiers
+                      : [];
 
-                    {notes ? (
-                      <Typography sx={{
-                        fontSize: 11.5, color: "text.secondary",
-                        pl: 1.2, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-                      }}>
-                        Nota: {notes}
-                      </Typography>
-                    ) : null}
-                  </Box>
-                );
-              })}
-            </Stack>
-          </Box>
-        );
-      })}
+                    const components = Array.isArray(selection?.components)
+                      ? selection.components
+                      : [];
+
+                    const prepared =
+                      Number(selection?.prepared_item_id || 0) > 0;
+
+                    const notes = String(
+                      selection?.notes || ""
+                    ).trim();
+
+                    return (
+                      <Box
+                        key={`${selection?.menu_set_product_id || optionIndex}-${optionIndex}`}
+                        sx={{
+                          minWidth: 0,
+                        }}
+                      >
+                        {/* Producto */}
+                        <Typography
+                          sx={{
+                            fontSize: 12.5,
+                            fontWeight: 750,
+                            lineHeight: 1.4,
+                            color: "text.primary",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          • {selection?.product_name ||
+                            "Producto seleccionado"}
+
+                          {selection?.variant_name
+                            ? ` · ${selection.variant_name}`
+                            : ""}
+                        </Typography>
+
+                        {/* Preparación rápida */}
+                        {prepared ? (
+                          <Typography
+                            sx={{
+                              fontSize: 11.5,
+                              color: "text.secondary",
+                              pl: 1.2,
+                            }}
+                          >
+                            Preparación rápida
+                          </Typography>
+                        ) : null}
+
+                        {/* Modificadores */}
+                        {modifiers.length > 0 ? (
+                          <Typography
+                            sx={{
+                              fontSize: 11.5,
+                              color: "text.secondary",
+                              pl: 1.2,
+                            }}
+                          >
+                            Extras personalizados
+                          </Typography>
+                        ) : null}
+
+                        {/* Componentes */}
+                        {components.length > 0 ? (
+                          <Typography
+                            sx={{
+                              fontSize: 11.5,
+                              color: "text.secondary",
+                              pl: 1.2,
+                            }}
+                          >
+                            Componentes configurados
+                          </Typography>
+                        ) : null}
+
+                        {/* Notas */}
+                        {notes ? (
+                          <Typography
+                            sx={{
+                              fontSize: 11.5,
+                              color: "text.secondary",
+                              pl: 1.2,
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            Nota: {notes}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            );
+          })}
+        </Stack>
+      </Collapse>
     </Box>
   );
 }

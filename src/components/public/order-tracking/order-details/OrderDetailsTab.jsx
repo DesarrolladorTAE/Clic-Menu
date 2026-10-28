@@ -1,7 +1,8 @@
+//src/components/public/order-tracking/order-details/OrderDetailsTab.jsx
 // Tarjeta de datos de la orden
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Button, Card, Chip, Divider, Stack, Typography,
+  Box, Button, Card, Chip, Collapse, Divider, IconButton, Stack, Typography,
 } from "@mui/material";
 
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
@@ -14,6 +15,8 @@ import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 
 import PaginationFooter from "../../../common/PaginationFooter";
 
@@ -458,6 +461,15 @@ function DestinationBlock({ destination, themeColor }) {
 function ProductItem({ item, themeColor, orderCancelled = false, level = 0, isLast = false }) {
   const modifiers = Array.isArray(item?.modifiers) ? item.modifiers : [];
   const components = Array.isArray(item?.components) ? item.components : [];
+
+  const [componentsExpanded, setComponentsExpanded] = useState(false);
+
+  const hasComponents = components.length > 0;
+
+  const handleToggleComponents = () => {
+    setComponentsExpanded((previous) => !previous);
+  };
+
   const notes = normalizeNotes(item?.notes);
   const hasDiscount = Number(item?.discount_total || 0) > 0;
   const nested = level > 0;
@@ -559,31 +571,98 @@ function ProductItem({ item, themeColor, orderCancelled = false, level = 0, isLa
           >
             {orderCancelled ? "Cantidad solicitada" : "Cantidad"}: {displayQuantity}
           </Typography>
-        </Box>
 
-        <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-          {hasDiscount ? (
+          {hasComponents && !componentsExpanded ? (
             <Typography
               sx={{
-                fontSize: 11.5,
+                mt: 0.45,
+                fontSize: 12,
                 color: "text.secondary",
-                textDecoration: "line-through",
+                lineHeight: 1.35,
               }}
             >
-              {money(item?.gross_line_total)}
+              {components.length}{" "}
+              {components.length === 1
+                ? "componente incluido"
+                : "componentes incluidos"}
             </Typography>
           ) : null}
+        </Box>
 
-          <Typography
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          sx={{
+            flexShrink: 0,
+          }}
+        >
+          {/* Precio del producto o Conjunto */}
+          <Box
             sx={{
-              fontSize: nested ? 13.5 : 15,
-              fontWeight: 900,
-              color: "text.primary",
+              textAlign: "right",
             }}
           >
-            {money(item?.net_line_total)}
-          </Typography>
-        </Box>
+            {hasDiscount ? (
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  color: "text.secondary",
+                  textDecoration: "line-through",
+                }}
+              >
+                {money(item?.gross_line_total)}
+              </Typography>
+            ) : null}
+
+            <Typography
+              sx={{
+                fontSize: nested ? 13.5 : 15,
+                fontWeight: 900,
+                color: "text.primary",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {money(item?.net_line_total)}
+            </Typography>
+          </Box>
+
+          {/* Desplegable de componentes */}
+          {hasComponents ? (
+            <IconButton
+              type="button"
+              size="small"
+              onClick={handleToggleComponents}
+              aria-label={
+                componentsExpanded
+                  ? `Contraer componentes de ${item?.name || item?.product_name || "Producto"}`
+                  : `Expandir componentes de ${item?.name || item?.product_name || "Producto"}`
+              }
+              aria-expanded={componentsExpanded}
+              sx={{
+                width: 32,
+                height: 32,
+                flexShrink: 0,
+                border: "1px solid",
+                borderColor: `${themeColor}35`,
+                borderRadius: 1.5,
+                color: themeColor,
+                backgroundColor: `${themeColor}08`,
+                transition: "background-color 150ms ease",
+                "&:hover": {
+                  backgroundColor: `${themeColor}15`,
+                  borderColor: `${themeColor}65`,
+                },
+              }}
+            >
+              {componentsExpanded ? (
+                <ExpandLessRoundedIcon fontSize="small" />
+              ) : (
+                <ExpandMoreRoundedIcon fontSize="small" />
+              )}
+            </IconButton>
+          ) : null}
+        </Stack>
       </Stack>
 
       {modifiers.length ? (
@@ -638,25 +717,42 @@ function ProductItem({ item, themeColor, orderCancelled = false, level = 0, isLa
         </Box>
       ) : null}
 
-      {components.length ? (
-        <Box sx={{ mt: 1.4 }}>
-          <Typography sx={{ mb: 0.8, fontSize: 11.5, fontWeight: 900, color: "text.secondary" }}>
-            Incluye
-          </Typography>
+      {hasComponents ? (
+        <Collapse
+          in={componentsExpanded}
+          timeout={180}
+          unmountOnExit
+        >
+          <Box
+            sx={{
+              mt: 1.4,
+            }}
+          >
+            <Typography
+              sx={{
+                mb: 0.8,
+                fontSize: 11.5,
+                fontWeight: 900,
+                color: "text.secondary",
+              }}
+            >
+              Incluye
+            </Typography>
 
-          <Stack spacing={0.8}>
-            {components.map((component, index) => (
-              <ProductItem
-                key={`${component?.name || "componente"}-${index}`}
-                item={component}
-                themeColor={themeColor}
-                orderCancelled={orderCancelled}
-                level={level + 1}
-                isLast={index === components.length - 1}
-              />
-            ))}
-          </Stack>
-        </Box>
+            <Stack spacing={0.8}>
+              {components.map((component, index) => (
+                <ProductItem
+                  key={`${component?.id || component?.name || "componente"}-${index}`}
+                  item={component}
+                  themeColor={themeColor}
+                  orderCancelled={orderCancelled}
+                  level={level + 1}
+                  isLast={index === components.length - 1}
+                />
+              ))}
+            </Stack>
+          </Box>
+        </Collapse>
       ) : null}
     </Box>
   );

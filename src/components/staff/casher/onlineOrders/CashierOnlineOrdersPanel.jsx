@@ -1,8 +1,18 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Box, Paper, Typography } from "@mui/material";
 
+import AppAlert from "../../../common/AppAlert";
 import PaginationFooter from "../../../common/PaginationFooter";
 import CashierOnlineOrderCard from "./CashierOnlineOrderCard";
+
+import {
+  fetchCashierOnlineOrderDeliveryPrintConfig,
+  fetchCashierOnlineOrderDeliveryPrintPayload,
+} from "../../../../services/staff/casher/onlineOrders/cashierOnlineOrders.service";
+
+import {
+  sendCashierThermalPrintPayload,
+} from "../../../../services/staff/casher/cashierTicket.service";
 
 export default function CashierOnlineOrdersPanel({
   mode = "available",
@@ -23,6 +33,93 @@ export default function CashierOnlineOrdersPanel({
   onAction,
 }) {
   const availableMode = mode === "available";
+
+  const [printingOrderId, setPrintingOrderId] = useState(null);
+  const printingRef = useRef(false);
+  const [printNotice, setPrintNotice] = useState({
+    open: false,
+    severity: "success",
+    message: "",
+  });
+
+  const showPrintNotice = (severity, message) => {
+    setPrintNotice({ open: true, severity, message });
+  };
+
+  /**
+   * Imprime manualmente el documento de entrega reutilizando el transporte térmico.
+   * No modifica el pedido, registra pagos ni genera tickets oficiales.
+   */
+  const handlePrintDelivery = async (order) => {
+    const onlineOrderId = Number(order?.id || 0);
+
+    if (
+      printingRef.current ||
+      actionsDisabled ||
+      Boolean(busyOrderId) ||
+      onlineOrderId <= 0 ||
+      order?.can_print_delivery_ticket !== true
+    ) {
+      return;
+    }
+
+    printingRef.current = true;
+    setPrintingOrderId(onlineOrderId);
+
+    try {
+      // 1. Consultar la configuración actual de impresión.
+      const configResponse = await fetchCashierOnlineOrderDeliveryPrintConfig(onlineOrderId);
+      const config = configResponse?.data;
+
+      if (configResponse?.ok !== true || !config?.enabled || !config?.app_type?.code) {
+        showPrintNotice(
+          "warning",
+          config?.message || configResponse?.message || "La impresión térmica no está disponible para esta sucursal."
+        );
+        return;
+      }
+
+      // 2. Recuperar el documento térmico directamente del backend.
+      const payloadResponse = await fetchCashierOnlineOrderDeliveryPrintPayload(onlineOrderId);
+      const payload = payloadResponse?.payload;
+
+      if (payloadResponse?.ok !== true || !payload || typeof payload !== "object") {
+        showPrintNotice(
+          "error",
+          payloadResponse?.message || "No fue posible preparar el documento de entrega para imprimir."
+        );
+        return;
+      }
+
+      // 3. Verificar que sea el documento correcto y que no abra el cajón.
+      if (payload?.meta?.document_type !== "online_order_delivery" || payload?.openDrawer !== false) {
+        showPrintNotice("error", "La configuración del documento de entrega necesita revisión.");
+        return;
+      }
+
+      // 4. Reutilizar el servicio actual de impresión térmica.
+      const result = await sendCashierThermalPrintPayload(payload, config);
+
+      if (result === false || result?.ok === false) {
+        showPrintNotice("error", "La aplicación de impresión no pudo procesar el documento. Intenta nuevamente.");
+        return;
+      }
+
+      showPrintNotice("success", "Se envió la solicitud de impresión del documento de entrega.");
+    } catch (error) {
+      console.error("Error al imprimir documento de entrega:", error);
+
+      const serverMessage = error?.response?.data?.message;
+      const message = typeof serverMessage === "string" && serverMessage.trim()
+        ? serverMessage.trim()
+        : "No fue posible enviar el documento a la impresora. Revisa la conexión e inténtalo nuevamente.";
+
+      showPrintNotice("error", message);
+    } finally {
+      printingRef.current = false;
+      setPrintingOrderId(null);
+    }
+  };
 
   return (
     <Paper
@@ -84,10 +181,12 @@ export default function CashierOnlineOrdersPanel({
                 <CashierOnlineOrderCard
                   key={`online-order:${orderId}`}
                   order={order}
-                  disabled={actionsDisabled || anotherOrderBusy}
+                  disabled={actionsDisabled || anotherOrderBusy || printingOrderId !== null}
                   busyAction={isBusyOrder ? busyAction : ""}
+                  printing={Number(printingOrderId || 0) === orderId}
                   onOpenDetail={onOpenDetail}
                   onAction={onAction}
+                  onPrintDelivery={handlePrintDelivery}
                 />
               );
             })}
@@ -107,6 +206,20 @@ export default function CashierOnlineOrdersPanel({
           />
         </>
       )}
+
+      <AppAlert
+        open={printNotice.open}
+        severity={printNotice.severity}
+        message={printNotice.message}
+        autoHideDuration={3000}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") {
+            return;
+          }
+
+          setPrintNotice((current) => ({ ...current, open: false }));
+        }}
+      />
     </Paper>
   );
 }

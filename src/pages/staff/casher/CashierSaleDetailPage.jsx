@@ -979,7 +979,9 @@ export default function CashierSaleDetailPage() {
               netpayRecoveryAvailable={paymentFlow.netpayRecoveryAvailable}
               netpayPendingMessage={paymentFlow.netpayPendingMessage}
               onRetryNetpayRecovery={paymentFlow.retryPendingNetpayRecovery}
-              paymentAmountLocked={paymentFlow.netpayMode}
+              paymentAmountLocked={
+                paymentFlow.netpayMode || payments.length === 1
+              }
               bankFieldsLocked={paymentFlow.netpayMode}
               showPrebill={canUsePrebill}
               onPrebill={prebillFlow.handleOpenPrebill}

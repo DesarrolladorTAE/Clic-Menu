@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
+
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Divider, Stack, Typography,
+  Alert, Box, Button, Card, CardContent, Chip, Collapse, Divider, IconButton, Stack, Typography,
 } from "@mui/material";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 
 import {
   actorLabel,
@@ -312,95 +315,542 @@ function ProductsList({ products }) {
   );
 }
 
-function ProductRow({ item }) {
-  const name = item?.product_name || item?.name || "Producto";
+function ProductRow({
+  item,
+  level = 0,
+  hideStageLabel = false,
+}) {
+
+  const isMenuSetRoot =
+    item?.is_menu_set_root === true ||
+    String(item?.commercial_type || "") === "menu_set" ||
+    String(item?.item_kind || "") === "menu_set";
+
+  /*
+   * Resolver el nombre utilizando los snapshots
+   * que proporciona el Backend.
+   */
+  const name =
+    item?.display_name ||
+    (isMenuSetRoot ? item?.menu_set_name_snapshot : null) ||
+    item?.product_name ||
+    item?.name ||
+    "Producto";
+
   const variant = item?.variant_name || "";
+
   const quantity = Number(item?.quantity ?? 1);
-  const originalQuantity = Number(item?.original_quantity ?? quantity);
-  const cancelledQuantity = Number(item?.cancelled_quantity ?? 0);
-  const effectiveQuantity = Number(item?.effective_quantity ?? quantity);
+
+  const originalQuantity = Number(
+    item?.original_quantity ?? quantity
+  );
+
+  const cancelledQuantity = Number(
+    item?.cancelled_quantity ?? 0
+  );
+
+  const effectiveQuantity = Number(
+    item?.effective_quantity ?? quantity
+  );
+
   const hasCancellation = cancelledQuantity > 0;
-  const isPreparedReuse = String(item?.fulfillment_source || "") === "prepared_reuse";
-  const total = item?.net_line_total ?? item?.line_total ?? item?.total ?? item?.subtotal;
+
+  const isPreparedReuse =
+    String(item?.fulfillment_source || "") === "prepared_reuse";
+
+  /*
+   * Importe comercial existente.
+   */
+  const total =
+    item?.net_line_total ??
+    item?.line_total ??
+    item?.total ??
+    item?.subtotal;
+
+  /*
+   * Componentes físicos o comerciales.
+   */
   const children = getProductChildren(item);
+
+  /*
+   * Las etapas solamente se utilizan para
+   * las raíces comerciales de Conjuntos.
+   *
+   * Cada etapa ya contiene sus productos.
+   * No debemos duplicarlos recorriendo
+   * también children.
+   */
+  const stages = (
+    isMenuSetRoot && Array.isArray(item?.stages)
+      ? item.stages
+      : []
+  ).filter((stage) => {
+    return (
+      Array.isArray(stage?.items) &&
+      stage.items.length > 0
+    );
+  });
+
+  const hasStages = stages.length > 0;
+
+  const hasExpandableContent =
+    hasStages || children.length > 0;
+
+  /*
+   * Estado exclusivamente visual.
+   */
+  const [expanded, setExpanded] = useState(false);
+
+  const handleToggle = () => {
+    setExpanded((previous) => !previous);
+  };
+
+  /*
+   * Cantidad de componentes disponibles.
+   */
+  const componentsCount = hasStages
+    ? stages.reduce((totalCount, stage) => {
+        return totalCount + stage.items.length;
+      }, 0)
+    : children.length;
+
+  /*
+   * Información opcional.
+   */
+  const notes =
+    typeof item?.notes === "string"
+      ? item.notes.trim()
+      : "";
+
+  const modifierGroups = Array.isArray(
+    item?.modifier_groups_display
+  )
+    ? item.modifier_groups_display
+    : [];
+
+  const rawModifiers = Array.isArray(item?.modifiers)
+    ? item.modifiers
+    : [];
 
   return (
     <Box
       sx={{
-        p: 1.5,
+        width: "100%",
+        minWidth: 0,
+        p: level > 0 ? 1.15 : 1.5,
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 1,
-        bgcolor: "background.default",
+        backgroundColor:
+          level > 0
+            ? "background.paper"
+            : "background.default",
       }}
     >
       <Stack spacing={1}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-          <Box sx={{ minWidth: 0 }}>
-            <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ gap: 0.75 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", wordBreak: "break-word" }}>
-                {name}
+        {/* Encabezado del producto */}
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={1.25}
+        >
+          <Box
+            sx={{
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: level > 0 ? 13 : 14,
+                fontWeight: 800,
+                color: "text.primary",
+                lineHeight: 1.35,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {name}
+            </Typography>
+
+            {/* Identificación del Conjunto */}
+            {isMenuSetRoot ? (
+              <Chip
+                label="Conjunto"
+                size="small"
+                sx={{
+                  mt: 0.65,
+                  height: 23,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: "primary.main",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  backgroundColor: "background.paper",
+                }}
+              />
+            ) : null}
+
+            {/* Etapa cuando viene en un componente individual */}
+            {level > 0 &&
+            !hideStageLabel &&
+            item?.menu_set_stage_name_snapshot ? (
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: "text.secondary",
+                }}
+              >
+                Etapa: {item.menu_set_stage_name_snapshot}
               </Typography>
+            ) : null}
 
-              {isPreparedReuse ? (
-                <Chip
-                  label="Preparación rápida"
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  sx={{ height: 23, fontSize: 11.5, fontWeight: 800 }}
-                />
-              ) : null}
-            </Stack>
-
+            {/* Variante */}
             {variant ? (
-              <Typography sx={{ mt: 0.25, fontSize: 12, color: "text.secondary" }}>
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  fontSize: 12,
+                  color: "text.secondary",
+                }}
+              >
                 {variant}
               </Typography>
             ) : null}
 
+            {/* Preparación rápida */}
+            {isPreparedReuse ? (
+              <Chip
+                label="Preparación rápida"
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{
+                  mt: 0.65,
+                  height: 23,
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
+              />
+            ) : null}
+
+            {/* Cantidades */}
             {hasCancellation ? (
-              <Stack spacing={0.2} sx={{ mt: 0.6 }}>
-                <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+              <Stack
+                spacing={0.2}
+                sx={{
+                  mt: 0.6,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: "text.secondary",
+                  }}
+                >
                   Cantidad original: {originalQuantity}
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: "error.main", fontWeight: 700 }}>
+
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: "error.main",
+                    fontWeight: 700,
+                  }}
+                >
                   Cancelada: {cancelledQuantity}
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: "text.primary", fontWeight: 800 }}>
+
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: "text.primary",
+                    fontWeight: 800,
+                  }}
+                >
                   Cantidad efectiva: {effectiveQuantity}
                 </Typography>
               </Stack>
             ) : (
-              <Typography sx={{ mt: 0.4, fontSize: 12, color: "text.secondary" }}>
+              <Typography
+                sx={{
+                  mt: 0.4,
+                  fontSize: 12,
+                  color: "text.secondary",
+                }}
+              >
                 Cantidad: {effectiveQuantity}
               </Typography>
             )}
+
+            {/* Resumen compacto */}
+            {hasExpandableContent && !expanded ? (
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: "text.secondary",
+                }}
+              >
+                {componentsCount}{" "}
+                {componentsCount === 1
+                  ? "producto incluido"
+                  : "productos incluidos"}
+
+                {hasStages
+                  ? ` · ${stages.length} ${
+                      stages.length === 1
+                        ? "etapa"
+                        : "etapas"
+                    }`
+                  : ""}
+              </Typography>
+            ) : null}
           </Box>
 
-          {total !== undefined && total !== null ? (
-            <Typography sx={{ fontSize: 14, fontWeight: 800, color: "text.primary", whiteSpace: "nowrap" }}>
-              {formatCurrency(total)}
-            </Typography>
-          ) : null}
+          {/* Precio y desplegable */}
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{
+              flexShrink: 0,
+            }}
+          >
+            {total !== undefined && total !== null ? (
+              <Typography
+                sx={{
+                  fontSize: level > 0 ? 13 : 14,
+                  fontWeight: 800,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {formatCurrency(total)}
+              </Typography>
+            ) : null}
+
+            {hasExpandableContent ? (
+              <IconButton
+                type="button"
+                size="small"
+                onClick={handleToggle}
+                aria-label={
+                  expanded
+                    ? `Contraer componentes de ${name}`
+                    : `Expandir componentes de ${name}`
+                }
+                aria-expanded={expanded}
+                sx={{
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  backgroundColor: "background.paper",
+                  color: "primary.main",
+                  "&:hover": {
+                    backgroundColor: "action.hover",
+                  },
+                }}
+              >
+                {expanded ? (
+                  <ExpandLessRoundedIcon fontSize="small" />
+                ) : (
+                  <ExpandMoreRoundedIcon fontSize="small" />
+                )}
+              </IconButton>
+            ) : null}
+          </Stack>
         </Stack>
 
-        {children.length > 0 ? (
-          <Stack spacing={0.5} pl={1.5} sx={{ borderLeft: "2px solid", borderColor: "divider" }}>
-            {children.map((child, index) => {
-              const childQuantity = child?.effective_quantity ?? child?.quantity;
+        {/* Notas del producto */}
+        {notes ? (
+          <Box
+            sx={{
+              px: 1,
+              py: 0.75,
+              borderLeft: "2px solid",
+              borderColor: "divider",
+              backgroundColor: "background.paper",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: "text.secondary",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+              }}
+            >
+              Nota: {notes}
+            </Typography>
+          </Box>
+        ) : null}
+
+        {/* Modificadores agrupados */}
+        {modifierGroups.length > 0 ? (
+          <Stack spacing={0.5}>
+            {modifierGroups.map((group, groupIndex) => {
+              const options = Array.isArray(group?.options)
+                ? group.options
+                : [];
 
               return (
-                <Typography
-                  key={child?.id || `child:${index}`}
-                  sx={{ fontSize: 12, color: "text.secondary", wordBreak: "break-word" }}
-                >
-                  {child?.product_name || child?.name || child?.option_name || "Complemento"}
-                  {childQuantity !== undefined && childQuantity !== null ? ` · ${childQuantity}` : ""}
-                </Typography>
+                <Box key={`modifier-group:${groupIndex}`}>
+                  <Typography
+                    sx={{
+                      fontSize: 11.5,
+                      fontWeight: 800,
+                      color: "text.secondary",
+                    }}
+                  >
+                    {group?.group_name || "Extras"}
+                  </Typography>
+
+                  {options.map((option, optionIndex) => (
+                    <Typography
+                      key={`modifier-option:${optionIndex}`}
+                      sx={{
+                        mt: 0.25,
+                        fontSize: 12,
+                        color: "text.secondary",
+                      }}
+                    >
+                      + {Number(option?.quantity ?? 1)} ×{" "}
+                      {option?.name ||
+                        option?.name_snapshot ||
+                        "Modificador"}
+                    </Typography>
+                  ))}
+                </Box>
               );
             })}
           </Stack>
+        ) : rawModifiers.length > 0 ? (
+          <Stack spacing={0.3}>
+            {rawModifiers.map((modifier, index) => (
+              <Typography
+                key={`modifier:${modifier?.id || index}`}
+                sx={{
+                  fontSize: 12,
+                  color: "text.secondary",
+                }}
+              >
+                + {Number(modifier?.quantity ?? 1)} ×{" "}
+                {modifier?.name_snapshot ||
+                  modifier?.name ||
+                  "Modificador"}
+              </Typography>
+            ))}
+          </Stack>
+        ) : null}
+
+        {/* Contenido desplegable */}
+        {hasExpandableContent ? (
+          <Collapse
+            in={expanded}
+            timeout={180}
+            unmountOnExit
+          >
+            <Box
+              sx={{
+                mt: 1.25,
+                pt: 1.25,
+                borderTop: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              {hasStages ? (
+                /*
+                 * CONJUNTOS:
+                 * Mostrar los productos agrupados por etapa.
+                 */
+                <Stack spacing={1.25}>
+                  {stages.map((stage, stageIndex) => {
+                    const stageItems = Array.isArray(
+                      stage?.items
+                    )
+                      ? stage.items
+                      : [];
+
+                    const stageName =
+                      stage?.menu_set_stage_name_snapshot ||
+                      `Etapa ${stageIndex + 1}`;
+
+                    return (
+                      <Box
+                        key={
+                          stage?.menu_set_stage_definition_id ||
+                          `stage:${stageIndex}`
+                        }
+                        sx={{
+                          minWidth: 0,
+                          p: { xs: 1, sm: 1.25 },
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderLeft: "3px solid",
+                          borderLeftColor: "primary.main",
+                          borderRadius: 1,
+                          backgroundColor: "background.paper",
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            mb: 0.85,
+                            fontSize: 12,
+                            fontWeight: 900,
+                            color: "text.primary",
+                            textTransform: "uppercase",
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          {stageName}
+                        </Typography>
+
+                        <Stack spacing={0.75}>
+                          {stageItems.map((stageItem, index) => (
+                            <ProductRow
+                              key={
+                                stageItem?.id ||
+                                `stage-item:${index}`
+                              }
+                              item={stageItem}
+                              level={level + 1}
+                              hideStageLabel
+                            />
+                          ))}
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              ) : (
+                /*
+                 * PRODUCTOS COMPUESTOS:
+                 * Mostrar los componentes normalmente,
+                 * conservando cualquier nivel anidado.
+                 */
+                <Stack spacing={0.75}>
+                  {children.map((child, index) => (
+                    <ProductRow
+                      key={
+                        child?.id ||
+                        child?.order_item_id ||
+                        `component:${index}`
+                      }
+                      item={child}
+                      level={level + 1}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          </Collapse>
         ) : null}
       </Stack>
     </Box>
@@ -567,8 +1017,19 @@ function StatusHistory({ rows }) {
 }
 
 function getProductChildren(item) {
-  const candidates = [item?.children, item?.components, item?.modifiers];
-  return candidates.find((rows) => Array.isArray(rows) && rows.length > 0) || [];
+  const children = Array.isArray(item?.children)
+    ? item.children
+    : [];
+
+  if (children.length > 0) {
+    return children;
+  }
+
+  const components = Array.isArray(item?.components)
+    ? item.components
+    : [];
+
+  return components;
 }
 
 function extractDestinationValues(snapshot) {

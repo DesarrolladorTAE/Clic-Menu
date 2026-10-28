@@ -649,14 +649,17 @@ function normalizeCheckItem(item) {
       safeItem.notes ??
       meta.notes ??
       null,
-    item_kind:
-      safeItem.item_kind ??
-      meta.item_kind ??
-      null,
+    item_kind: safeItem.item_kind ?? meta.item_kind ?? null,
+    item_type: safeItem.item_type ?? meta.item_type ?? null,
+    commercial_root_type: safeItem.commercial_root_type ?? meta.commercial_root_type ?? null,
+    menu_set_id: safeItem.menu_set_id ?? meta.menu_set_id ?? null,
+    menu_set_context: safeItem.menu_set_context ?? meta.menu_set_context ?? null,
+    flags: safeItem.flags ?? meta.flags ?? {},
+    is_menu_set_root: safeItem.is_menu_set_root ?? meta.is_menu_set_root ?? false,
     is_composite_parent: Boolean(
       safeItem.is_composite_parent ??
-        meta.is_composite_parent ??
-        children.length > 0
+      meta.is_composite_parent ??
+      children.length > 0
     ),
     modifier_groups_display: modifierGroups,
     modifiers,
@@ -1022,16 +1025,33 @@ function resolveItemName(item) {
 }
 
 function resolveItemTypeLabel(item, level) {
-  const children = Array.isArray(item?.children)
-    ? item.children
-    : [];
+  const children = Array.isArray(item?.children) ? item.children : [];
 
-  const isMenuSetRoot =
-    level === 0 &&
-    (
-      item?.item_type === "menu_set" ||
-      item?.flags?.is_menu_set_root === true
-    );
+  const itemTypes = [
+    item?.item_type,
+    item?.item_kind,
+    item?.commercial_root_type,
+  ].map((value) => String(value ?? "").trim().toLowerCase());
+
+  const hasMenuSetType = itemTypes.some((type) =>
+    ["menu_set", "menu_set_root"].includes(type)
+  );
+
+  const menuSetId = Number(
+    item?.menu_set_id ?? item?.menu_set_context?.menu_set_id ?? 0
+  );
+
+  const hasMenuSetIdentity =
+    menuSetId > 0 &&
+    Number(item?.product_id || 0) <= 0 &&
+    children.length > 0;
+
+  const isMenuSetRoot = level === 0 && (
+    hasMenuSetType ||
+    item?.flags?.is_menu_set_root === true ||
+    item?.is_menu_set_root === true ||
+    hasMenuSetIdentity
+  );
 
   if (isMenuSetRoot) {
     return "Conjunto";
