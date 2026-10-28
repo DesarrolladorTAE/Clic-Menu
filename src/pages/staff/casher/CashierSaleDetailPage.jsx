@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, CircularProgress, Stack, Typography } from "@mui/material";
+import {
+  Box, CircularProgress, Stack, Typography, useMediaQuery,
+} from "@mui/material";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import LocalOfferRoundedIcon from "@mui/icons-material/LocalOfferRounded";
@@ -51,6 +53,25 @@ export default function CashierSaleDetailPage() {
   const [activeTool, setActiveTool] = useState(null);
   const [paymentTab, setPaymentTab] = useState("payment");
 
+  /*
+   * Control exclusivamente visual de las tarjetas.
+   * Móvil: ambas contraídas.
+   * Computadora: productos contraídos, resumen expandido.
+   */
+  const isMobile = useMediaQuery((theme) =>
+    theme.breakpoints.down("md")
+  );
+
+  const [itemsExpanded, setItemsExpanded] = useState(false);
+
+  const [
+    summaryExpansionOverride,
+    setSummaryExpansionOverride,
+  ] = useState(null);
+
+  const summaryExpanded = summaryExpansionOverride ?? !isMobile;
+  const bothCardsCollapsed = !itemsExpanded && !summaryExpanded;
+  
   const [detailData, setDetailData] = useState(null);
   const [saleCheckContext, setSaleCheckContext] = useState(null);
   const [selectedCheck, setSelectedCheck] = useState(null);
@@ -680,6 +701,11 @@ export default function CashierSaleDetailPage() {
   });
 
   useEffect(() => {
+    setItemsExpanded(false);
+    setSummaryExpansionOverride(null);
+  }, [saleId, isMobile]);
+
+  useEffect(() => {
     loadFlow.load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saleId]);
@@ -719,6 +745,34 @@ export default function CashierSaleDetailPage() {
     pageBusy ||
     paymentFlow.netpayPendingBlocked ||
     postPaymentOpen;
+
+  /*
+   * Tarjetas reutilizadas en la distribución responsive.
+   * Sus propiedades financieras permanecen intactas.
+   */
+  const saleSummaryCard = (
+    <CashierSaleSummaryCard
+      sale={sale}
+      check={selectedCheck}
+      liveTip={Number(tip || 0)}
+      preview={preview}
+      previewMode={paymentFlow.previewMode}
+      selectedTaxOption={selectedTaxOption}
+      expanded={summaryExpanded}
+      onToggle={() => {
+        setSummaryExpansionOverride(!summaryExpanded);
+      }}
+    />
+  );
+
+  const taxSelectorCard = (
+    <CashierTaxSelectorCard
+      taxOptions={taxOptions}
+      value={taxOptionCode}
+      onChange={paymentFlow.handleTaxOptionChange}
+      disabled={!canOperate || financialDisabled}
+    />
+  );
 
   if (loading) {
     return (
@@ -795,7 +849,8 @@ export default function CashierSaleDetailPage() {
             },
           }}
         >
-          <Stack spacing={3}>
+          <Stack spacing={3}>       
+            
             <Box
               sx={{
                 display: "grid",
@@ -804,46 +859,93 @@ export default function CashierSaleDetailPage() {
                   xs: "1fr",
                   xl: "1.15fr 0.85fr",
                 },
-                alignItems: "stretch",
+                alignItems: "start",
               }}
             >
-              <Box sx={{ height: "100%", minWidth: 0 }}>
+              {/* Detalle de productos */}
+              <Box
+                sx={{
+                  minWidth: 0,
+
+                  alignSelf: {
+                    xs: "auto",
+                    xl: bothCardsCollapsed ? "stretch" : "start",
+                  },
+
+                  display: {
+                    xs: "block",
+                    xl: bothCardsCollapsed ? "flex" : "block",
+                  },
+
+                  flexDirection: "column",
+
+                  "& > .MuiCard-root": {
+                    flex: bothCardsCollapsed ? 1 : "initial",
+                  },
+                }}
+              >
                 <CashierOrderItemsCard
                   itemsTree={itemsTree}
                   itemsSummary={itemsSummary}
                   selectedCheck={selectedCheck}
+                  expanded={itemsExpanded}
+                  onToggle={() => {
+                    setItemsExpanded((prev) => !prev);
+                  }}
                 />
               </Box>
 
-              <Box
-                sx={{
-                  minWidth: 0,
-                  height: "100%",
-                  display: "grid",
-                  gap: 3,
-                  gridTemplateRows: {
-                    xs: "auto auto",
-                    xl: "minmax(0, 1fr) auto",
-                  },
-                  alignItems: "stretch",
-                }}
-              >
-                <CashierSaleSummaryCard
-                  sale={sale}
-                  check={selectedCheck}
-                  liveTip={Number(tip || 0)}
-                  preview={preview}
-                  previewMode={paymentFlow.previewMode}
-                  selectedTaxOption={selectedTaxOption}
-                />
+              {itemsExpanded ? (
+                /*
+                 * Productos expandidos:
+                 * conserva la distribución original.
+                 *
+                 * Izquierda: productos.
+                 * Derecha: resumen e impuestos.
+                 */
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
+                  }}
+                >
+                  {saleSummaryCard}
 
-                <CashierTaxSelectorCard
-                  taxOptions={taxOptions}
-                  value={taxOptionCode}
-                  onChange={paymentFlow.handleTaxOptionChange}
-                  disabled={!canOperate || financialDisabled}
-                />
-              </Box>
+                  {taxSelectorCard}
+                </Box>
+              ) : (
+                /*
+                 * Productos contraídos:
+                 *
+                 * Primera fila: productos y resumen.
+                 * Segunda fila: impuestos a ancho completo
+                 * solamente desde el breakpoint xl.
+                 */
+                <>
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                      alignSelf: "start",
+                    }}
+                  >
+                    {saleSummaryCard}
+                  </Box>
+
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                      gridColumn: {
+                        xs: "auto",
+                        xl: "1 / -1",
+                      },
+                    }}
+                  >
+                    {taxSelectorCard}
+                  </Box>
+                </>
+              )}
             </Box>
 
             <CashierPaymentFormCard

@@ -1,10 +1,12 @@
 // src/components/staff/casher/saleDetailPage/CashierSaleSummaryCard.jsx
 // Tarjetita de resumen de cobro
-
 import React from "react";
 import {
-  Box, Card, CardContent, Divider, Stack, Typography,
+  Box, Card, CardContent, Collapse, Divider, IconButton, Stack, Typography,
 } from "@mui/material";
+
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 
 export default function CashierSaleSummaryCard({
   sale,
@@ -12,6 +14,8 @@ export default function CashierSaleSummaryCard({
   preview = null,
   previewMode = null,
   selectedTaxOption = null,
+  expanded = true,
+  onToggle,
 }) {
   const hasPreview =
     preview !== null &&
@@ -64,6 +68,26 @@ export default function CashierSaleSummaryCard({
     selectedTaxOption?.label ||
     selectedTaxOption?.name ||
     "Pendiente";
+  
+  /*
+   * El importe compacto utiliza únicamente valores existentes.
+   * No recalcula el cobro ni reemplaza la validación del Backend.
+   */
+  const compactTotalLabel = isNetpayPreview
+    ? "Total esperado NetPay"
+    : hasPreview
+    ? "Total validado"
+    : "Neto sincronizado";
+
+  const compactTotalValue = isNetpayPreview
+    ? hasField(preview, "expected_total")
+      ? formatCurrency(preview.expected_total)
+      : "Pendiente"
+    : hasPreview
+    ? hasField(preview, "final_total")
+      ? formatCurrency(preview.final_total)
+      : "Pendiente"
+    : formatCurrency(saleNetTotal);
 
   return (
     <Card
@@ -75,8 +99,14 @@ export default function CashierSaleSummaryCard({
         backgroundColor: "background.paper",
       }}
     >
+      
       <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-        <Stack spacing={2}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          spacing={1}
+        >
           <Typography
             sx={{
               fontSize: 22,
@@ -87,176 +117,243 @@ export default function CashierSaleSummaryCard({
             Resumen de cobro
           </Typography>
 
-          {!hasPreview ? (
-            <Stack spacing={1}>
-              <SummaryRow
-                label="Subtotal de la cuenta"
-                value={formatCurrency(saleSubtotal)}
-              />
-
-              <SummaryRow
-                label="Promociones"
-                value={formatDiscountCurrency(salePromotionDiscountTotal)}
-              />
-
-              <SummaryRow
-                label="Descuento manual"
-                value={formatDiscountCurrency(saleManualDiscountTotal)}
-              />
-
-              <SummaryRow
-                label="Descuento total"
-                value={formatDiscountCurrency(saleDiscountTotal)}
-              />
-
-              <Divider sx={{ my: 0.5 }} />
-
-              <SummaryRow
-                label="Neto sincronizado"
-                value={formatCurrency(saleNetTotal)}
-              />
-
-              <SummaryRow
-                label="Propina capturada"
-                value={formatCurrency(liveTipAmount)}
-              />
-
-              <SummaryRow
-                label="Total pendiente de validar"
-                value="Pendiente"
-                strong
-              />
-            </Stack>
-          ) : isNetpayPreview ? (
-            <NetpayPreviewSummary preview={preview} />
-          ) : (
-            <Stack spacing={1}>
-              <SummaryRow
-                label="Subtotal de la cuenta"
-                value={formatCurrency(previewSubtotal)}
-              />
-
-              <SummaryRow
-                label="Promociones"
-                value={formatDiscountCurrency(previewPromotionDiscountTotal)}
-              />
-
-              <SummaryRow
-                label="Descuento manual"
-                value={formatDiscountCurrency(previewManualDiscountTotal)}
-              />
-
-              <SummaryRow
-                label="Descuento total"
-                value={formatDiscountCurrency(previewDiscountTotal)}
-              />
-
-              <Divider sx={{ my: 0.5 }} />
-
-              <SummaryRow
-                label="Neto validado"
-                value={formatCurrency(previewTaxableAmount)}
-              />
-
-              <SummaryRow
-                label="Propina validada"
-                value={formatCurrency(previewTip)}
-              />
-
-              <SummaryRow
-                label="Base gravable"
-                value={formatCurrency(previewTaxBase)}
-              />
-
-              <SummaryRow
-                label="Impuesto incluido"
-                value={formatCurrency(previewTaxTotal)}
-              />
-
-              <SummaryRow
-                label="Total validado"
-                value={formatCurrency(previewFinalTotal)}
-                strong
-              />
-
-              <SummaryRow
-                label="Suma de pagos"
-                value={formatCurrency(previewSumPayments)}
-              />
-
-              <SummaryRow
-                label="Cambio"
-                value={formatCurrency(previewTotalChange)}
-              />
-            </Stack>
-          )}
-
-          {hasPreview ? (
-            <Box
+          {typeof onToggle === "function" ? (
+            <IconButton
+              onClick={onToggle}
+              aria-label={
+                expanded
+                  ? "Contraer resumen de cobro"
+                  : "Expandir resumen de cobro"
+              }
+              aria-expanded={expanded}
+              size="small"
               sx={{
+                flexShrink: 0,
                 border: "1px solid",
                 borderColor: "divider",
-                borderRadius: 1,
-                backgroundColor: "#FCFCFC",
-                p: 1.5,
+                borderRadius: 1.5,
               }}
             >
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  fontWeight: 800,
-                  color: "text.primary",
-                }}
-              >
-                {isNetpayPreview
-                  ? "Vista previa NetPay validada por Clic Menu"
-                  : "Vista previa validada"}
-              </Typography>
+              {expanded ? (
+                <ExpandLessRoundedIcon />
+              ) : (
+                <ExpandMoreRoundedIcon />
+              )}
+            </IconButton>
+          ) : null}
+        </Stack>
 
+        {!expanded ? (
+          <Box sx={{ mt: 1.5 }}>
+            <SummaryRow
+              label={compactTotalLabel}
+              value={compactTotalValue}
+              strong
+            />
+
+            {!hasPreview && liveTipAmount > 0 ? (
               <Typography
                 sx={{
-                  mt: 0.5,
-                  fontSize: 13,
+                  mt: 0.75,
+                  fontSize: 12,
                   color: "text.secondary",
-                  lineHeight: 1.5,
                 }}
               >
-                {isNetpayPreview
-                  ? "Los importes mostrados fueron calculados y validados por Clic Menu. React únicamente presenta la información recibida del Backend y no recalcula el importe que será enviado a NetPay."
-                  : "Se validaron los importes de la cuenta, los descuentos, la propina, el impuesto incluido, la suma de pagos y el cambio."}
+                Propina capturada: {formatCurrency(liveTipAmount)}
               </Typography>
-            </Box>
-          ) : (
-            <Box
+            ) : null}
+
+            <Typography
               sx={{
-                border: "1px dashed",
-                borderColor: "divider",
-                borderRadius: 1,
-                p: 1.5,
+                mt: 0.75,
+                fontSize: 12,
+                color: "text.secondary",
               }}
             >
-              <Typography
+              {hasPreview
+                ? "Importe confirmado por la vista previa de Clic Menu."
+                : "Total definitivo pendiente de validar."}
+            </Typography>
+          </Box>
+        ) : null}
+
+        <Collapse
+          in={expanded}
+          timeout="auto"
+          unmountOnExit
+        >
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            {!hasPreview ? (
+              <Stack spacing={1}>
+                <SummaryRow
+                  label="Subtotal de la cuenta"
+                  value={formatCurrency(saleSubtotal)}
+                />
+
+                <SummaryRow
+                  label="Promociones"
+                  value={formatDiscountCurrency(salePromotionDiscountTotal)}
+                />
+
+                <SummaryRow
+                  label="Descuento manual"
+                  value={formatDiscountCurrency(saleManualDiscountTotal)}
+                />
+
+                <SummaryRow
+                  label="Descuento total"
+                  value={formatDiscountCurrency(saleDiscountTotal)}
+                />
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <SummaryRow
+                  label="Neto sincronizado"
+                  value={formatCurrency(saleNetTotal)}
+                />
+
+                <SummaryRow
+                  label="Propina capturada"
+                  value={formatCurrency(liveTipAmount)}
+                />
+
+                <SummaryRow
+                  label="Total pendiente de validar"
+                  value="Pendiente"
+                  strong
+                />
+              </Stack>
+            ) : isNetpayPreview ? (
+              <NetpayPreviewSummary preview={preview} />
+            ) : (
+              <Stack spacing={1}>
+                <SummaryRow
+                  label="Subtotal de la cuenta"
+                  value={formatCurrency(previewSubtotal)}
+                />
+
+                <SummaryRow
+                  label="Promociones"
+                  value={formatDiscountCurrency(previewPromotionDiscountTotal)}
+                />
+
+                <SummaryRow
+                  label="Descuento manual"
+                  value={formatDiscountCurrency(previewManualDiscountTotal)}
+                />
+
+                <SummaryRow
+                  label="Descuento total"
+                  value={formatDiscountCurrency(previewDiscountTotal)}
+                />
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <SummaryRow
+                  label="Neto validado"
+                  value={formatCurrency(previewTaxableAmount)}
+                />
+
+                <SummaryRow
+                  label="Propina validada"
+                  value={formatCurrency(previewTip)}
+                />
+
+                <SummaryRow
+                  label="Base gravable"
+                  value={formatCurrency(previewTaxBase)}
+                />
+
+                <SummaryRow
+                  label="Impuesto incluido"
+                  value={formatCurrency(previewTaxTotal)}
+                />
+
+                <SummaryRow
+                  label="Total validado"
+                  value={formatCurrency(previewFinalTotal)}
+                  strong
+                />
+
+                <SummaryRow
+                  label="Suma de pagos"
+                  value={formatCurrency(previewSumPayments)}
+                />
+
+                <SummaryRow
+                  label="Cambio"
+                  value={formatCurrency(previewTotalChange)}
+                />
+              </Stack>
+            )}
+
+            {hasPreview ? (
+              <Box
                 sx={{
-                  fontSize: 13,
-                  color: "text.secondary",
-                  lineHeight: 1.5,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  backgroundColor: "#FCFCFC",
+                  p: 1.5,
                 }}
               >
-                Impuesto seleccionado:{" "}
-                <Box
-                  component="span"
+                <Typography
                   sx={{
+                    fontSize: 13,
                     fontWeight: 800,
                     color: "text.primary",
                   }}
                 >
-                  {selectedTaxLabel}
-                </Box>
-                . Genera la vista previa para conocer y validar el total final de esta cuenta.
-              </Typography>
-            </Box>
-          )}
-        </Stack>
+                  {isNetpayPreview
+                    ? "Vista previa NetPay validada por Clic Menu"
+                    : "Vista previa validada"}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: 13,
+                    color: "text.secondary",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {isNetpayPreview
+                    ? "Los importes mostrados fueron calculados y validados por Clic Menu. React únicamente presenta la información recibida del Backend y no recalcula el importe que será enviado a NetPay."
+                    : "Se validaron los importes de la cuenta, los descuentos, la propina, el impuesto incluido, la suma de pagos y el cambio."}
+                </Typography>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  border: "1px dashed",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  p: 1.5,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    color: "text.secondary",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Impuesto seleccionado:{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      fontWeight: 800,
+                      color: "text.primary",
+                    }}
+                  >
+                    {selectedTaxLabel}
+                  </Box>
+                  . Genera la vista previa para conocer y validar el total final de esta cuenta.
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        </Collapse>
       </CardContent>
     </Card>
   );

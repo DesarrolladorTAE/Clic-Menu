@@ -1,16 +1,22 @@
 // src/components/staff/casher/saleDetailPage/CashierOrderItemsCard.jsx
 import React, { useMemo } from "react";
 import {
-  Box, Card, CardContent, Chip, Divider, Stack, Typography,
+  Box, Card, CardContent, Chip, Collapse, Divider, IconButton, Stack, Typography,
 } from "@mui/material";
+
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 
 import PaginationFooter from "../../../common/PaginationFooter";
 import usePagination from "../../../../hooks/usePagination";
 
 const PAGE_SIZE = 5;
 
+
 export default function CashierOrderItemsCard({
   itemsTree = [],
+  expanded = true,
+  onToggle,
 }) {
   const normalizedItems = useMemo(() => {
     return normalizeCheckItems(itemsTree);
@@ -43,7 +49,6 @@ export default function CashierOrderItemsCard({
   return (
     <Card
       sx={{
-        height: "100%",
         display: "flex",
         flexDirection: "column",
         border: "1px solid",
@@ -57,11 +62,18 @@ export default function CashierOrderItemsCard({
       <CardContent
         sx={{
           p: { xs: 2, sm: 3 },
-          flex: 1,
+          "&:last-child": {
+            pb: { xs: 2, sm: 3 },
+          },
         }}
       >
-        <Stack spacing={2}>
-          <Box>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={1}
+        >
+          <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography
               sx={{
                 fontSize: 22,
@@ -79,126 +91,165 @@ export default function CashierOrderItemsCard({
                 color: "text.secondary",
               }}
             >
-              Productos asignados exclusivamente a la cuenta seleccionada.
+              {expanded
+                ? "Productos asignados exclusivamente a la cuenta seleccionada."
+                : hasItems
+                ? `${itemsSummary.parent_items_count} principales · ${itemsSummary.children_items_count} componentes`
+                : "Sin productos asignados"}
             </Typography>
           </Box>
 
-          {hasItems ? (
-            <Stack
-              direction="row"
-              flexWrap="wrap"
-              useFlexGap
+          {typeof onToggle === "function" ? (
+            <IconButton
+              onClick={onToggle}
+              aria-label={
+                expanded
+                  ? "Contraer detalle de productos"
+                  : "Expandir detalle de productos"
+              }
+              aria-expanded={expanded}
+              size="small"
               sx={{
-                columnGap: { xs: 1, sm: 1.25 },
-                rowGap: { xs: 1.25, sm: 1 },
-                alignItems: "center",
-                "& .MuiChip-root": {
-                  maxWidth: "100%",
-                  height: "auto",
-                  minHeight: 24,
-                },
-                "& .MuiChip-label": {
-                  display: "block",
-                  whiteSpace: "normal",
-                  lineHeight: 1.3,
-                  py: 0.35,
-                },
-              }}
-            >
-              <Chip
-                label={`${itemsSummary.items_count} ítems`}
-                size="small"
-              />
-
-              <Chip
-                label={`${itemsSummary.parent_items_count} principales`}
-                size="small"
-              />
-
-              <Chip
-                label={`${itemsSummary.children_items_count} componentes`}
-                size="small"
-              />
-
-              <Chip
-                label={`${itemsSummary.modifiers_count} modificadores`}
-                size="small"
-              />
-            </Stack>
-          ) : null}
-
-          {hasItems ? (
-            <Box
-              sx={{
+                flexShrink: 0,
                 border: "1px solid",
                 borderColor: "divider",
-                borderRadius: 1,
-                backgroundColor: "#FCFCFC",
-                overflow: "hidden",
+                borderRadius: 1.5,
               }}
             >
+              {expanded ? (
+                <ExpandLessRoundedIcon />
+              ) : (
+                <ExpandMoreRoundedIcon />
+              )}
+            </IconButton>
+          ) : null}
+        </Stack>
+
+        <Collapse
+          in={expanded}
+          timeout="auto"
+          unmountOnExit
+        >
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            {hasItems ? (
+              <Stack
+                direction="row"
+                flexWrap="wrap"
+                useFlexGap
+                sx={{
+                  columnGap: { xs: 1, sm: 1.25 },
+                  rowGap: { xs: 1.25, sm: 1 },
+                  alignItems: "center",
+                  "& .MuiChip-root": {
+                    maxWidth: "100%",
+                    height: "auto",
+                    minHeight: 24,
+                  },
+                  "& .MuiChip-label": {
+                    display: "block",
+                    whiteSpace: "normal",
+                    lineHeight: 1.3,
+                    py: 0.35,
+                  },
+                }}
+              >
+                <Chip
+                  label={`${itemsSummary.items_count} ítems`}
+                  size="small"
+                />
+
+                <Chip
+                  label={`${itemsSummary.parent_items_count} principales`}
+                  size="small"
+                />
+
+                <Chip
+                  label={`${itemsSummary.children_items_count} componentes`}
+                  size="small"
+                />
+
+                <Chip
+                  label={`${itemsSummary.modifiers_count} modificadores`}
+                  size="small"
+                />
+              </Stack>
+            ) : null}
+
+            {hasItems ? (
               <Box
                 sx={{
-                  maxHeight: { xs: 520, md: 620 },
-                  overflowY: "auto",
-                  px: { xs: 1.5, sm: 2 },
-                  py: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  backgroundColor: "#FCFCFC",
+                  overflow: "hidden",
                 }}
               >
-                <Stack spacing={1.5}>
-                  {paginatedItems.map((item, index) => (
-                    <Box
-                      key={
-                        item?.order_check_item_id ||
-                        item?.id ||
-                        `${item?.order_item_id || "item"}-${index}`
-                      }
-                    >
-                      <OrderItemBlock item={item} />
+                <Box
+                  sx={{
+                    maxHeight: { xs: 520, md: 620 },
+                    overflowY: "auto",
+                    px: { xs: 1.5, sm: 2 },
+                    py: 1,
+                  }}
+                >
+                  <Stack spacing={1.5}>
+                    {paginatedItems.map((item, index) => (
+                      <Box
+                        key={
+                          item?.order_check_item_id ||
+                          item?.id ||
+                          `${item?.order_item_id || "item"}-${index}`
+                        }
+                      >
+                        <OrderItemBlock item={item} />
 
-                      {index < paginatedItems.length - 1 ? <Divider /> : null}
-                    </Box>
-                  ))}
-                </Stack>
+                        {index < paginatedItems.length - 1 ? (
+                          <Divider />
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
               </Box>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1,
-                backgroundColor: "#FCFCFC",
-                px: 2,
-                py: 4,
-                textAlign: "center",
-              }}
-            >
-              <Typography
+            ) : (
+              <Box
                 sx={{
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "text.primary",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  backgroundColor: "#FCFCFC",
+                  px: 2,
+                  py: 4,
+                  textAlign: "center",
                 }}
               >
-                No hay ítems para mostrar
-              </Typography>
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "text.primary",
+                  }}
+                >
+                  No hay ítems para mostrar
+                </Typography>
 
-              <Typography
-                sx={{
-                  mt: 1,
-                  fontSize: 14,
-                  color: "text.secondary",
-                }}
-              >
-                La cuenta seleccionada no tiene productos asignados.
-              </Typography>
-            </Box>
-          )}
-        </Stack>
+                <Typography
+                  sx={{
+                    mt: 1,
+                    fontSize: 14,
+                    color: "text.secondary",
+                  }}
+                >
+                  La cuenta seleccionada no tiene productos asignados.
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        </Collapse>
       </CardContent>
 
-      {hasItems ? (
+      {expanded && hasItems ? (
         <PaginationFooter
           page={page}
           totalPages={totalPages}
@@ -270,6 +321,21 @@ function OrderItemBlock({ item, level = 0 }) {
   const itemTypeLabel = resolveItemTypeLabel(item, level);
   const noteText = formatNotes(item?.notes);
 
+  const isMenuSetComponent =
+    level > 0 &&
+    (
+      item?.commercial_root_type === "menu_set" ||
+      item?.flags?.is_menu_set_member === true
+    );
+
+  const menuSetStageName = isMenuSetComponent
+    ? String(
+        item?.menu_set_stage_name_snapshot ??
+        item?.menu_set_context?.menu_set_stage_name_snapshot ??
+        ""
+      ).trim()
+    : "";
+
   return (
     <Box sx={{ pl: level > 0 ? 2.5 : 0 }}>
       <Stack spacing={0.8} sx={{ py: 0.75 }}>
@@ -328,8 +394,20 @@ function OrderItemBlock({ item, level = 0 }) {
                   sx={{ height: 24, fontSize: 12, fontWeight: 800, flexShrink: 0 }}
                 />
               ) : null}
-
             </Stack>
+
+            {menuSetStageName ? (
+              <Typography
+                sx={{
+                  mt: 0.35,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "text.secondary",
+                }}
+              >
+                Etapa: {menuSetStageName}
+              </Typography>
+            ) : null}
 
             {hasCancellationDetails ? (
               <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary" }}>
@@ -947,6 +1025,17 @@ function resolveItemTypeLabel(item, level) {
   const children = Array.isArray(item?.children)
     ? item.children
     : [];
+
+  const isMenuSetRoot =
+    level === 0 &&
+    (
+      item?.item_type === "menu_set" ||
+      item?.flags?.is_menu_set_root === true
+    );
+
+  if (isMenuSetRoot) {
+    return "Conjunto";
+  }
 
   if (item?.is_composite_parent || children.length > 0) {
     return "Compuesto";
