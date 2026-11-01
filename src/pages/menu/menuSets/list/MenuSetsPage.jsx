@@ -434,6 +434,7 @@ export default function MenuSetsPage() {
                 spacing={1.5}
                 sx={{ width: { xs: "100%", md: "auto" } }}
               >
+                {/*
                 <Button
                   type="button"
                   variant="outlined"
@@ -448,7 +449,7 @@ export default function MenuSetsPage() {
                 >
                   Panel operativo
                 </Button>
-
+                */}
                 <Button
                   type="button"
                   variant="contained"

@@ -1,7 +1,7 @@
 //src/components/menu/menuSets/create/MenuSetCreateForm.jsx
 import {
-  Box, Button, ButtonBase, Chip, CircularProgress,
-  InputAdornment, Paper, Stack, TextField, Typography,
+  Box, Button, ButtonBase, Chip, CircularProgress, InputAdornment,
+  MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -73,6 +73,8 @@ export default function MenuSetCreateForm({
     onSubmit();
   };
 
+  const serviceDays = Array.isArray(form.service_days) ? form.service_days : [];
+
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={3}>
@@ -84,10 +86,7 @@ export default function MenuSetCreateForm({
               description="Registra los datos principales que identificarán este conjunto."
             />
 
-            <FieldBlock
-              label="Sucursal"
-              help="El conjunto pertenecerá únicamente a esta sucursal."
-            >
+            <FieldBlock label="Sucursal" help="El conjunto pertenecerá únicamente a esta sucursal.">
               <TextField
                 fullWidth
                 value={branchName || "Sucursal no disponible"}
@@ -107,7 +106,7 @@ export default function MenuSetCreateForm({
                   placeholder="Ej. Menú Ejecutivo"
                   inputProps={{ maxLength: 150 }}
                   error={Boolean(errors.name)}
-                  helperText={errors.name}
+                  helperText={errors.name || ""}
                   disabled={saving}
                 />
               </FieldBlock>
@@ -123,7 +122,7 @@ export default function MenuSetCreateForm({
                   placeholder="Ej. Menú Ejecutivo"
                   inputProps={{ maxLength: 150 }}
                   error={Boolean(errors.billing_name)}
-                  helperText={errors.billing_name}
+                  helperText={errors.billing_name || ""}
                   disabled={saving}
                 />
               </FieldBlock>
@@ -145,7 +144,7 @@ export default function MenuSetCreateForm({
                     endAdornment: <InputAdornment position="end">MXN</InputAdornment>,
                   }}
                   error={Boolean(errors.price)}
-                  helperText={errors.price}
+                  helperText={errors.price || ""}
                   disabled={saving}
                 />
               </FieldBlock>
@@ -155,22 +154,65 @@ export default function MenuSetCreateForm({
                 help="Los conjuntos con un número menor aparecerán primero."
               >
                 <TextField
-                    fullWidth
-                    type="text"
-                    value={form.sort_order}
-                    onChange={(event) => {
-                        const value = event.target.value;
-                        if (/^\d*$/.test(value)) {
-                            onFieldChange("sort_order", value);
-                        }
-                    }}
-                    inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-                    error={Boolean(errors.sort_order)}
-                    helperText={errors.sort_order}
-                    disabled={saving}
+                  fullWidth
+                  type="text"
+                  value={form.sort_order}
+                  onChange={(event) => {
+                    const value = event.target.value;
+
+                    if (/^\d*$/.test(value)) {
+                      onFieldChange("sort_order", value);
+                    }
+                  }}
+                  inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
+                  error={Boolean(errors.sort_order)}
+                  helperText={errors.sort_order || ""}
+                  disabled={saving}
                 />
               </FieldBlock>
             </Stack>
+          </Stack>
+        </Paper>
+
+        {/* Calendario comercial */}
+        <Paper sx={panelSx}>
+          <Stack spacing={2.5}>
+            <SectionTitle
+              title="Calendario comercial"
+              description="Define cuándo comienza cada semana comercial de este conjunto. Este dato se utiliza para organizar los periodos y calcular las capacidades semanales."
+            />
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <FieldBlock
+                label="Inicio de semana comercial *"
+                help="Selecciona el día de inicio. Una vez que el conjunto tenga historial de operaciones, publicaciones o reservas, este dato no podrá modificarse."
+              >
+                <TextField
+                  select
+                  fullWidth
+                  value={form.commercial_week_start_day ?? ""}
+                  onChange={(event) => onFieldChange("commercial_week_start_day", event.target.value)}
+                  error={Boolean(errors.commercial_week_start_day)}
+                  helperText={errors.commercial_week_start_day || ""}
+                  disabled={saving}
+                >
+                  <MenuItem value="" disabled>Selecciona un día</MenuItem>
+
+                  {DAYS.map((day) => (
+                    <MenuItem key={day.value} value={String(day.value)}>
+                      {day.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </FieldBlock>
+
+              <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
+            </Stack>
+
+            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+              El inicio de semana comercial es independiente de los días de servicio.
+              Puedes ofrecer el conjunto cualquier día que selecciones abajo.
+            </Typography>
           </Stack>
         </Paper>
 
@@ -179,7 +221,7 @@ export default function MenuSetCreateForm({
           <Stack spacing={2.5}>
             <SectionTitle
               title="Días de servicio"
-              description="Selecciona los días de servicio iniciales. Su modificación posterior dependerá de la modalidad de administración elegida."
+              description="Selecciona los días en que inicialmente se ofrecerá el conjunto. Después podrás ajustarlos conforme a las reglas de las operaciones existentes."
             />
 
             <Box sx={{
@@ -192,7 +234,7 @@ export default function MenuSetCreateForm({
               gap: 1.25,
             }}>
               {DAYS.map((day) => {
-                const selected = form.service_days.includes(day.value);
+                const selected = serviceDays.includes(day.value);
 
                 return (
                   <ButtonBase
@@ -222,8 +264,7 @@ export default function MenuSetCreateForm({
                     }}
                   >
                     <Typography sx={{
-                      fontSize: 14,
-                      fontWeight: 800,
+                      fontSize: 14, fontWeight: 800,
                       color: selected ? "secondary.main" : "text.primary",
                     }}>
                       {day.short}
@@ -234,9 +275,9 @@ export default function MenuSetCreateForm({
             </Box>
 
             <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-              {form.service_days.length === 0
+              {serviceDays.length === 0
                 ? "No has seleccionado días de servicio."
-                : `${form.service_days.length} ${form.service_days.length === 1 ? "día seleccionado" : "días seleccionados"}.`}
+                : `${serviceDays.length} ${serviceDays.length === 1 ? "día seleccionado" : "días seleccionados"}.`}
             </Typography>
 
             {errors.service_days ? (
@@ -267,7 +308,7 @@ export default function MenuSetCreateForm({
                   placeholder="Ej. 90101501"
                   inputProps={{ maxLength: 20 }}
                   error={Boolean(errors.sat_product_service || errors.sat)}
-                  helperText={errors.sat_product_service}
+                  helperText={errors.sat_product_service || ""}
                   disabled={saving}
                 />
               </FieldBlock>
@@ -283,7 +324,7 @@ export default function MenuSetCreateForm({
                   placeholder="Ej. E48"
                   inputProps={{ maxLength: 20 }}
                   error={Boolean(errors.sat_unit || errors.sat)}
-                  helperText={errors.sat_unit || errors.sat}
+                  helperText={errors.sat_unit || errors.sat || ""}
                   disabled={saving}
                 />
               </FieldBlock>
@@ -293,14 +334,19 @@ export default function MenuSetCreateForm({
 
         {/* Estado inicial */}
         <Paper sx={panelSx}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+          >
             <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
                 Estado inicial
               </Typography>
 
               <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-                El conjunto se guardará inactivo. Después elegirás cómo administrarlo y completarás su configuración antes de activarlo.
+                El conjunto se guardará inactivo. Después configurarás sus etapas,
+                productos y capacidades antes de activarlo.
               </Typography>
             </Box>
 
@@ -310,17 +356,17 @@ export default function MenuSetCreateForm({
 
         {/* Acciones */}
         <Paper sx={{ ...panelSx, p: { xs: 1.5, sm: 2 } }}>
-            <Stack direction="row" justifyContent="flex-end">
-                <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={saving}
-                    startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveOutlinedIcon />}
-                    sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
-                >
-                {saving ? "Creando…" : "Crear Conjunto"}
-                </Button>
-            </Stack>
+          <Stack direction="row" justifyContent="flex-end">
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveOutlinedIcon />}
+              sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44, fontWeight: 800 }}
+            >
+              {saving ? "Creando…" : "Crear Conjunto"}
+            </Button>
+          </Stack>
         </Paper>
       </Stack>
     </Box>

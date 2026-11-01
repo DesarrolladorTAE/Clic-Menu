@@ -12,6 +12,7 @@ import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRou
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 
 import { updateMenuSet } from "../../../../services/menu/menuSets/menuSet.service";
+import { SHOW_MENU_SET_ADMINISTRATION } from "./MenuSetManageTabs";
 
 const panelSx = {
   p: { xs: 2, sm: 2.5 },
@@ -22,21 +23,22 @@ const panelSx = {
   boxShadow: "none",
 };
 
+// Se conserva Administración para reactivarla posteriormente.
 const STEPS = [
-  { key: "general", number: 1, title: "General" },
-  { key: "administration", number: 2, title: "Administración" },
-  { key: "stages", number: 3, title: "Etapas y productos" },
-  { key: "programming", number: 4, title: "Programación" },
-  { key: "activation", number: 5, title: "Activación" },
-  { key: "availability", number: 6, title: "Disponibilidad" },
-];
+  { key: "general", title: "General" },
+  { key: "administration", title: "Administración" },
+  { key: "stages", title: "Etapas y productos" },
+  { key: "programming", title: "Programación" },
+  { key: "activation", title: "Activación" },
+  { key: "availability", title: "Disponibilidad" },
+]
+  .filter((step) => SHOW_MENU_SET_ADMINISTRATION || step.key !== "administration")
+  .map((step, index) => ({ ...step, number: index + 1 }));
 
 function getErrorMessage(error) {
   const data = error?.response?.data;
-
   const errors = data?.errors && typeof data.errors === "object"
-    ? Object.values(data.errors).flat()
-    : [];
+    ? Object.values(data.errors).flat() : [];
 
   return errors.find((message) => typeof message === "string")
     || data?.message
@@ -50,12 +52,15 @@ function getErrorMessage(error) {
 |--------------------------------------------------------------------------
 */
 function getStepState(step, details, isActive, canActivate, issuesCount) {
-  if (step.key === "availability") {
+  if (step.key === "availability")
+  {
     return { label: "Consulta independiente", color: "default" };
   }
 
-  if (step.key === "activation") {
-    if (isActive) {
+  if (step.key === "activation")
+  {
+    if (isActive)
+    {
       return issuesCount > 0
         ? { label: "Activo con pendientes", color: "warning" }
         : { label: "Activo", color: "success" };
@@ -66,11 +71,13 @@ function getStepState(step, details, isActive, canActivate, issuesCount) {
       : { label: "Pendiente", color: "warning" };
   }
 
-  if (details?.is_complete === true) {
+  if (details?.is_complete === true)
+  {
     return { label: "Completado", color: "success" };
   }
 
-  if (details?.is_complete === false) {
+  if (details?.is_complete === false)
+  {
     return { label: "Pendiente", color: "warning" };
   }
 
@@ -90,39 +97,19 @@ function StepCard({
 
   return (
     <Box sx={{
-      width: "100%",
-      height: "100%",
-      minWidth: 0,
-      minHeight: 180,
-      p: 1.75,
-      borderRadius: 1,
-      border: "1px solid",
-      borderColor: "divider",
-      bgcolor: "background.default",
+      width: "100%", height: "100%", minWidth: 0, minHeight: 180,
+      p: 1.75, borderRadius: 1, border: "1px solid",
+      borderColor: "divider", bgcolor: "background.default",
     }}>
       <Stack spacing={1.25} sx={{ height: "100%" }}>
         {/* Número e icono de estado */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          spacing={1}
-        >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
           <Box sx={{
-            width: 38,
-            height: 38,
-            flexShrink: 0,
-            borderRadius: 1.5,
-            display: "grid",
-            placeItems: "center",
-            bgcolor: primaryBackground,
-            color: "primary.main",
+            width: 38, height: 38, flexShrink: 0,
+            borderRadius: 1.5, display: "grid", placeItems: "center",
+            bgcolor: primaryBackground, color: "primary.main",
           }}>
-            <Typography sx={{
-              fontSize: 18,
-              fontWeight: 800,
-              color: "inherit",
-            }}>
+            <Typography sx={{ fontSize: 18, fontWeight: 800, color: "inherit" }}>
               {step.number}
             </Typography>
           </Box>
@@ -140,11 +127,8 @@ function StepCard({
 
         {/* Nombre del paso */}
         <Typography sx={{
-          fontSize: 14,
-          fontWeight: 800,
-          color: "text.primary",
-          lineHeight: 1.45,
-          overflowWrap: "anywhere",
+          fontSize: 14, fontWeight: 800, color: "text.primary",
+          lineHeight: 1.45, overflowWrap: "anywhere",
         }}>
           {step.title}
         </Typography>
@@ -157,8 +141,7 @@ function StepCard({
             size="small"
             variant="outlined"
             sx={{
-              fontWeight: 800,
-              maxWidth: "100%",
+              fontWeight: 800, maxWidth: "100%",
               "& .MuiChip-label": {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -169,11 +152,8 @@ function StepCard({
 
         {/* Descripción */}
         <Typography sx={{
-          fontSize: 13,
-          color: "text.secondary",
-          lineHeight: 1.55,
-          overflowWrap: "anywhere",
-          flex: 1,
+          fontSize: 13, color: "text.secondary", lineHeight: 1.55,
+          overflowWrap: "anywhere", flex: 1,
         }}>
           {details?.message || "La información de este paso no está disponible."}
         </Typography>
@@ -213,6 +193,7 @@ export default function MenuSetActivationTab({
   const configurationComplete = issues.length === 0;
   const canChangeStatus = isActive ? canDeactivate : canActivate;
 
+  // La información interna de Administración se conserva aunque su tarjeta esté oculta.
   const resolvedSteps = {
     general: steps.general,
     administration: steps.administration || {
@@ -246,15 +227,15 @@ export default function MenuSetActivationTab({
   | Resumen de la configuración
   |--------------------------------------------------------------------------
   */
-    const statusDescription = isActive
-      ? configurationComplete
-        ? "El conjunto está activo. Su disponibilidad para venderse depende de la fecha, la programación, los cupos y los productos disponibles."
-        : "El conjunto sigue activo, pero tiene configuraciones pendientes que pueden limitar su disponibilidad."
-      : canActivate
-        ? "La configuración cumple las condiciones de activación. Puedes habilitar el conjunto."
-        : issues.length > 0
-          ? "Completa los puntos pendientes para poder activar el conjunto."
-          : menuSet?.activate_block_reason || "El conjunto todavía no reúne las condiciones necesarias para activarse.";
+  const statusDescription = isActive
+    ? configurationComplete
+      ? "El conjunto está activo. Su disponibilidad para venderse depende de la fecha, la programación, los cupos y los productos disponibles."
+      : "El conjunto sigue activo, pero tiene configuraciones pendientes que pueden limitar su disponibilidad."
+    : canActivate
+      ? "La configuración cumple las condiciones de activación. Puedes habilitar el conjunto."
+      : issues.length > 0
+        ? "Completa los puntos pendientes para poder activar el conjunto."
+        : menuSet?.activate_block_reason || "El conjunto todavía no reúne las condiciones necesarias para activarse.";
 
   /*
   |--------------------------------------------------------------------------
@@ -262,7 +243,8 @@ export default function MenuSetActivationTab({
   |--------------------------------------------------------------------------
   */
   const handleChangeStatus = async () => {
-    if (savingRef.current || saving || checking || !canChangeStatus || !menuSet?.id) {
+    if (savingRef.current || saving || checking || !canChangeStatus || !menuSet?.id)
+    {
       return;
     }
 
@@ -273,15 +255,13 @@ export default function MenuSetActivationTab({
 
     try {
       const response = await updateMenuSet(
-        restaurantId,
-        branchId,
-        menuSet.id,
-        { is_active: nextStatus }
+        restaurantId, branchId, menuSet.id, { is_active: nextStatus }
       );
 
       const updatedSet = response?.menu_set;
 
-      if (!updatedSet?.id) {
+      if (!updatedSet?.id)
+      {
         throw new Error("No se recibió la información actualizada del conjunto.");
       }
 
@@ -294,13 +274,17 @@ export default function MenuSetActivationTab({
           ? "El conjunto se activó correctamente."
           : "El conjunto se desactivó correctamente.",
       });
-    } catch (error) {
+    }
+    catch (error)
+    {
       onAlert?.({
         severity: "error",
         title: "No se pudo cambiar el estado",
         message: getErrorMessage(error),
       });
-    } finally {
+    }
+    finally
+    {
       savingRef.current = false;
       setSaving(false);
     }
@@ -312,25 +296,19 @@ export default function MenuSetActivationTab({
       <Paper sx={panelSx}>
         <Stack spacing={2}>
           <Box>
-            <Typography sx={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: "text.primary",
-            }}>
+            <Typography sx={{ fontSize: 16, fontWeight: 800, color: "text.primary" }}>
               Estado de configuración
             </Typography>
 
             <Typography sx={{
-              mt: 0.5,
-              fontSize: 13,
-              color: "text.secondary",
-              lineHeight: 1.55,
+              mt: 0.5, fontSize: 13,
+              color: "text.secondary", lineHeight: 1.55,
             }}>
               {statusDescription}
             </Typography>
           </Box>
 
-          {/* Seis apartados de configuración */}
+          {/* Cinco apartados visibles; Administración permanece disponible internamente */}
           <Box sx={{
             display: "grid",
             gridTemplateColumns: {
@@ -339,9 +317,7 @@ export default function MenuSetActivationTab({
               lg: "repeat(3, minmax(0, 1fr))",
             },
             gridAutoRows: "1fr",
-            gap: 1.5,
-            width: "100%",
-            alignItems: "stretch",
+            gap: 1.5, width: "100%", alignItems: "stretch",
           }}>
             {STEPS.map((step) => (
               <StepCard
@@ -369,16 +345,10 @@ export default function MenuSetActivationTab({
               sx={{ flexWrap: "wrap", rowGap: 1 }}
             >
               <ErrorOutlineRoundedIcon sx={{
-                fontSize: 23,
-                color: "warning.main",
-                flexShrink: 0,
+                fontSize: 23, color: "warning.main", flexShrink: 0,
               }} />
 
-              <Typography sx={{
-                fontSize: 18,
-                fontWeight: 800,
-                color: "text.primary",
-              }}>
+              <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
                 Configuración pendiente
               </Typography>
 
@@ -392,9 +362,7 @@ export default function MenuSetActivationTab({
             </Stack>
 
             <Typography sx={{
-              fontSize: 13,
-              color: "text.secondary",
-              lineHeight: 1.55,
+              fontSize: 13, color: "text.secondary", lineHeight: 1.55,
             }}>
               Revisa los siguientes puntos para completar la configuración del conjunto.
             </Typography>
@@ -407,25 +375,18 @@ export default function MenuSetActivationTab({
                   spacing={1.25}
                   alignItems="flex-start"
                   sx={{
-                    p: 1.5,
-                    borderRadius: 1,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    bgcolor: "background.default",
+                    p: 1.5, borderRadius: 1, border: "1px solid",
+                    borderColor: "divider", bgcolor: "background.default",
                   }}
                 >
                   <ErrorOutlineRoundedIcon sx={{
-                    fontSize: 19,
-                    color: "warning.main",
-                    mt: 0.1,
-                    flexShrink: 0,
+                    fontSize: 19, color: "warning.main",
+                    mt: 0.1, flexShrink: 0,
                   }} />
 
                   <Typography sx={{
-                    fontSize: 13,
-                    color: "text.primary",
-                    lineHeight: 1.55,
-                    overflowWrap: "anywhere",
+                    fontSize: 13, color: "text.primary",
+                    lineHeight: 1.55, overflowWrap: "anywhere",
                   }}>
                     {issue}
                   </Typography>
@@ -439,11 +400,7 @@ export default function MenuSetActivationTab({
       {/* Activación del Conjunto */}
       <Paper sx={panelSx}>
         <Stack spacing={2.5}>
-          <Typography sx={{
-            fontSize: 18,
-            fontWeight: 800,
-            color: "text.primary",
-          }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
             {isActive ? "Estado del conjunto" : "Activar conjunto"}
           </Typography>
 
@@ -454,38 +411,25 @@ export default function MenuSetActivationTab({
             spacing={2}
           >
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Stack
-                direction="row"
-                spacing={1.25}
-                alignItems="flex-start"
-              >
+              <Stack direction="row" spacing={1.25} alignItems="flex-start">
                 <Box sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 1,
-                  flexShrink: 0,
-                  display: "grid",
-                  placeItems: "center",
-                  bgcolor: primaryBackground,
-                  color: "primary.main",
+                  width: 40, height: 40, borderRadius: 1, flexShrink: 0,
+                  display: "grid", placeItems: "center",
+                  bgcolor: primaryBackground, color: "primary.main",
                 }}>
                   <PowerSettingsNewRoundedIcon fontSize="small" />
                 </Box>
 
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography sx={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: "text.primary",
+                    fontSize: 14, fontWeight: 800, color: "text.primary",
                   }}>
                     {isActive ? "Conjunto habilitado" : "Conjunto desactivado"}
                   </Typography>
 
                   <Typography sx={{
-                    mt: 0.5,
-                    fontSize: 13,
-                    color: "text.secondary",
-                    lineHeight: 1.55,
+                    mt: 0.5, fontSize: 13,
+                    color: "text.secondary", lineHeight: 1.55,
                   }}>
                     {isActive
                       ? "Puedes desactivar el conjunto cuando no existan operaciones pendientes que impidan el cambio."
@@ -497,11 +441,8 @@ export default function MenuSetActivationTab({
                     || (!isActive && menuSet?.activate_block_reason)
                   ) ? (
                     <Typography sx={{
-                      mt: 1,
-                      fontSize: 12,
-                      color: "text.secondary",
-                      lineHeight: 1.5,
-                      overflowWrap: "anywhere",
+                      mt: 1, fontSize: 12, color: "text.secondary",
+                      lineHeight: 1.5, overflowWrap: "anywhere",
                     }}>
                       {isActive
                         ? menuSet.deactivate_block_reason

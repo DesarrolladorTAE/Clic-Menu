@@ -8,10 +8,14 @@ import {
 
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
+
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
 
-import MenuSetManageTabs from "../../../../components/menu/menuSets/manage/MenuSetManageTabs";
+import MenuSetManageTabs, {
+  SHOW_MENU_SET_ADMINISTRATION,
+} from "../../../../components/menu/menuSets/manage/MenuSetManageTabs";
+
 import MenuSetGeneralTab from "../../../../components/menu/menuSets/manage/MenuSetGeneralTab";
 import MenuSetAdministrationTab from "../../../../components/menu/menuSets/manage/MenuSetAdministrationTab";
 import MenuSetStagesTab from "../../../../components/menu/menuSets/manage/stages/MenuSetStagesTab";
@@ -34,16 +38,19 @@ const panelSx = {
 function getErrorMessage(error, fallback) {
   const data = error?.response?.data;
   const fieldErrors = data?.errors && typeof data.errors === "object"
-    ? Object.values(data.errors).flat()
-    : [];
+    ? Object.values(data.errors).flat() : [];
 
   return fieldErrors.find((message) => typeof message === "string")
     || data?.message || error?.message || fallback;
 }
 
 function normalizeTab(value) {
-  if (value === "capacities") {
-    return "programming";
+  const tab = value === "capacities" ? "programming" : value;
+
+  // Administración queda inaccesible mientras esté oculta.
+  if (tab === "administration" && !SHOW_MENU_SET_ADMINISTRATION)
+  {
+    return "stages";
   }
 
   const validTabs = [
@@ -55,7 +62,7 @@ function normalizeTab(value) {
     "availability",
   ];
 
-  return validTabs.includes(value) ? value : "general";
+  return validTabs.includes(tab) ? tab : "general";
 }
 
 export default function MenuSetManagePage() {
@@ -91,16 +98,25 @@ export default function MenuSetManagePage() {
   }, []);
 
   const closeAlert = (_, reason) => {
-    if (reason === "clickaway") return;
+    if (reason === "clickaway")
+    {
+      return;
+    }
 
-    setAlertState((previous) => ({
-      ...previous,
-      open: false,
-    }));
+    setAlertState((previous) => ({ ...previous, open: false }));
   };
 
+  // Evita conservar Administración activa al ocultar la pestaña.
   useEffect(() => {
-    if (!restaurantId || !branchId || !menuSetId) {
+    if (!SHOW_MENU_SET_ADMINISTRATION && activeTab === "administration")
+    {
+      setActiveTab("stages");
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!restaurantId || !branchId || !menuSetId)
+    {
       setMenuSet(null);
       setManagement(null);
       setLoading(false);
@@ -120,13 +136,17 @@ export default function MenuSetManagePage() {
           getMenuSetManagement(restaurantId, branchId, menuSetId),
         ]);
 
-        if (!active) {
+        if (!active)
+        {
           return;
         }
 
-        if (setResult.status === "fulfilled" && setResult.value?.id) {
+        if (setResult.status === "fulfilled" && setResult.value?.id)
+        {
           setMenuSet(setResult.value);
-        } else {
+        }
+        else
+        {
           setMenuSet(null);
 
           const error = setResult.status === "rejected"
@@ -138,29 +158,30 @@ export default function MenuSetManagePage() {
           });
         }
 
-        if (
-          managementResult.status === "fulfilled"
-          && managementResult.value?.management_mode
-        ) {
+        if (managementResult.status === "fulfilled" && managementResult.value?.management_mode)
+        {
           setManagement(managementResult.value);
-        } else {
+        }
+        else
+        {
           setManagement(null);
 
-          if (setResult.status === "fulfilled" && setResult.value?.id) {
+          if (setResult.status === "fulfilled" && setResult.value?.id)
+          {
             const error = managementResult.status === "rejected"
               ? managementResult.reason
               : new Error("No se recibió la modalidad de administración.");
 
             showAlert({
-              message: getErrorMessage(
-                error,
-                "No se pudo consultar la administración del conjunto."
-              ),
+              message: getErrorMessage(error, "No se pudo consultar la administración del conjunto."),
             });
           }
         }
-      } finally {
-        if (active) {
+      }
+      finally
+      {
+        if (active)
+        {
           setLoading(false);
           setLoadingManagement(false);
         }
@@ -180,7 +201,8 @@ export default function MenuSetManagePage() {
   |--------------------------------------------------------------------------
   */
   useEffect(() => {
-    if (activeTab !== "activation" || !menuSet?.id) {
+    if (activeTab !== "activation" || !menuSet?.id)
+    {
       return undefined;
     }
 
@@ -191,21 +213,35 @@ export default function MenuSetManagePage() {
       try {
         const updatedSet = await getMenuSet(restaurantId, branchId, menuSetId);
 
-        if (!active) return;
+        if (!active)
+        {
+          return;
+        }
 
-        if (updatedSet?.id) {
+        if (updatedSet?.id)
+        {
           setMenuSet(updatedSet);
         }
-      } catch (error) {
-        if (!active) return;
+      }
+      catch (error)
+      {
+        if (!active)
+        {
+          return;
+        }
 
         showAlert({
           severity: "error",
           title: "No se pudo comprobar",
           message: getErrorMessage(error, "No se pudo consultar la configuración actual del conjunto."),
         });
-      } finally {
-        if (active) setCheckingActivation(false);
+      }
+      finally
+      {
+        if (active)
+        {
+          setCheckingActivation(false);
+        }
       }
     };
 
@@ -215,15 +251,11 @@ export default function MenuSetManagePage() {
       active = false;
     };
   }, [
-    activeTab,
-    menuSet?.id,
-    restaurantId,
-    branchId,
-    menuSetId,
-    showAlert,
+    activeTab, menuSet?.id, restaurantId,
+    branchId, menuSetId, showAlert,
   ]);
 
-    const handleBack = () => {
+  const handleBack = () => {
     navigate("..", {
       relative: "path",
       state: { branchId },
@@ -231,7 +263,8 @@ export default function MenuSetManagePage() {
   };
 
   const handleOpenReminders = () => {
-    if (!restaurantId || !branchId) {
+    if (!restaurantId || !branchId)
+    {
       return;
     }
 
@@ -245,15 +278,18 @@ export default function MenuSetManagePage() {
     setMenuSet(updatedSet);
   };
 
+  // Se conserva para reactivar la administración sin reconstruir su lógica.
   const handleManagementUpdated = (updatedManagement) => {
-    if (!updatedManagement?.management_mode) {
+    if (!updatedManagement?.management_mode)
+    {
       return;
     }
 
     setManagement(updatedManagement);
 
     setMenuSet((current) => {
-      if (!current) {
+      if (!current)
+      {
         return current;
       }
 
@@ -282,7 +318,8 @@ export default function MenuSetManagePage() {
     // Obtener los permisos y la configuración definitivos sin recargar la página.
     getMenuSet(restaurantId, branchId, menuSetId)
       .then((updatedSet) => {
-        if (updatedSet?.id && String(updatedSet.id) === String(menuSetId)) {
+        if (updatedSet?.id && String(updatedSet.id) === String(menuSetId))
+        {
           setMenuSet(updatedSet);
         }
       })
@@ -295,9 +332,12 @@ export default function MenuSetManagePage() {
     const tab = normalizeTab(nextTab);
     setActiveTab(tab);
 
-    const requiresManagement = tab === "administration" || tab === "programming";
+    // Programación sigue necesitando conocer el modo real del Backend.
+    const requiresManagement = tab === "programming"
+      || (SHOW_MENU_SET_ADMINISTRATION && tab === "administration");
 
-    if (!requiresManagement || management || loadingManagement || managementRetryRef.current) {
+    if (!requiresManagement || management || loadingManagement || managementRetryRef.current)
+    {
       return;
     }
 
@@ -320,7 +360,10 @@ export default function MenuSetManagePage() {
   };
 
   const handleConfigureProducts = (stage) => {
-    if (!stage?.id || !branchId || !menuSetId) return;
+    if (!stage?.id || !branchId || !menuSetId)
+    {
+      return;
+    }
 
     navigate(
       `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stages/${stage.id}/products?branchId=${encodeURIComponent(branchId)}`,
@@ -335,7 +378,10 @@ export default function MenuSetManagePage() {
   };
 
   const handleManageTypes = () => {
-    if (!restaurantId || !branchId || !menuSetId) return;
+    if (!restaurantId || !branchId || !menuSetId)
+    {
+      return;
+    }
 
     navigate(
       `/owner/restaurants/${restaurantId}/operation/menu-sets/${menuSetId}/stage-definitions?branchId=${encodeURIComponent(branchId)}`,
@@ -360,25 +406,18 @@ export default function MenuSetManagePage() {
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{
-              fontSize: { xs: 30, md: 42 },
-              fontWeight: 800,
-              color: "text.primary",
-              lineHeight: 1.1,
+              fontSize: { xs: 30, md: 42 }, fontWeight: 800,
+              color: "text.primary", lineHeight: 1.1,
             }}>
               Administrar Conjunto
             </Typography>
 
             <Typography sx={{
-              mt: 1,
-              fontSize: { xs: 14, md: 17 },
-              lineHeight: 1.55,
-              color: "text.secondary",
+              mt: 1, fontSize: { xs: 14, md: 17 },
+              lineHeight: 1.55, color: "text.secondary",
             }}>
               Configura los datos y la disponibilidad de{" "}
-              <Box component="span" sx={{
-                color: "primary.main",
-                fontWeight: 800,
-              }}>
+              <Box component="span" sx={{ color: "primary.main", fontWeight: 800 }}>
                 {menuSet?.name || "tu conjunto"}
               </Box>.
             </Typography>
@@ -423,9 +462,7 @@ export default function MenuSetManagePage() {
 
         {loading ? (
           <Box sx={{
-            minHeight: "45vh",
-            display: "grid",
-            placeItems: "center",
+            minHeight: "45vh", display: "grid", placeItems: "center",
           }}>
             <Stack spacing={2} alignItems="center">
               <CircularProgress color="primary" />
@@ -437,19 +474,12 @@ export default function MenuSetManagePage() {
           </Box>
         ) : !menuSet ? (
           <Paper sx={panelSx}>
-            <Typography sx={{
-              fontSize: 20,
-              fontWeight: 800,
-              color: "text.primary",
-            }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 800, color: "text.primary" }}>
               Conjunto no disponible
             </Typography>
 
             <Typography sx={{
-              mt: 1,
-              fontSize: 14,
-              color: "text.secondary",
-              lineHeight: 1.55,
+              mt: 1, fontSize: 14, color: "text.secondary", lineHeight: 1.55,
             }}>
               Regresa al listado y selecciona el conjunto que deseas administrar.
             </Typography>
@@ -457,10 +487,7 @@ export default function MenuSetManagePage() {
         ) : (
           <>
             {/* Pestañas */}
-            <MenuSetManageTabs
-              value={activeTab}
-              onChange={handleTabChange}
-            />
+            <MenuSetManageTabs value={activeTab} onChange={handleTabChange} />
 
             {/* 1. General */}
             {activeTab === "general" ? (
@@ -473,8 +500,8 @@ export default function MenuSetManagePage() {
               />
             ) : null}
 
-            {/* 2. Administración */}
-            {activeTab === "administration" ? (
+            {/* Administración: conservada, temporalmente oculta */}
+            {SHOW_MENU_SET_ADMINISTRATION && activeTab === "administration" ? (
               <MenuSetAdministrationTab
                 restaurantId={restaurantId}
                 branchId={branchId}
@@ -486,7 +513,7 @@ export default function MenuSetManagePage() {
               />
             ) : null}
 
-            {/* 3. Etapas y productos */}
+            {/* 2. Etapas y productos */}
             {activeTab === "stages" ? (
               <MenuSetStagesTab
                 restaurantId={restaurantId}
@@ -499,7 +526,7 @@ export default function MenuSetManagePage() {
               />
             ) : null}
 
-            {/* 4. Programación */}
+            {/* 3. Programación */}
             {activeTab === "programming" ? (
               <MenuSetProgrammingTab
                 key={`${branchId}-${menuSet.id}`}
@@ -513,7 +540,7 @@ export default function MenuSetManagePage() {
               />
             ) : null}
 
-            {/* 5. Activación */}
+            {/* 4. Activación */}
             {activeTab === "activation" ? (
               <MenuSetActivationTab
                 restaurantId={restaurantId}
@@ -526,7 +553,7 @@ export default function MenuSetManagePage() {
               />
             ) : null}
 
-            {/* 6. Disponibilidad */}
+            {/* 5. Disponibilidad */}
             {activeTab === "availability" ? (
               <MenuSetAvailabilityTab
                 key={`${branchId}-${menuSet.id}`}

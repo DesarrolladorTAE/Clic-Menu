@@ -137,10 +137,13 @@ export async function previewMenuSetImport(
 }
 
 // Publicar una importación previamente revisada.
-export async function publishMenuSetImport(restaurantId, branchId, menuSetId, importId) {
+export async function publishMenuSetImport(
+  restaurantId, branchId, menuSetId, importId, signal = undefined
+) {
   const { data } = await api.post(
     `${importUrl(restaurantId, branchId, menuSetId)}/publish`,
-    { import_id: importId }
+    { import_id: Number(importId) },
+    { signal }
   );
 
   return data;
@@ -148,11 +151,15 @@ export async function publishMenuSetImport(restaurantId, branchId, menuSetId, im
 
 // Consultar el historial de intentos con paginación de cinco registros.
 export async function getMenuSetImportHistory(
-  restaurantId, branchId, menuSetId, page = 1, perPage = 5
+  restaurantId, branchId, menuSetId, page = 1, perPageOrSignal = 5, signal = undefined
 ) {
+  const perPage = typeof perPageOrSignal === "number" ? perPageOrSignal : 5;
+  const requestSignal = typeof perPageOrSignal === "number"
+    ? signal : (perPageOrSignal ?? signal);
+
   const { data } = await api.get(
     `${importUrl(restaurantId, branchId, menuSetId)}/history`,
-    { params: { page, per_page: perPage } }
+    { params: { page, per_page: perPage }, signal: requestSignal }
   );
 
   return validateResponse(data, "data", "No se recibió el historial de importaciones.");
@@ -165,29 +172,6 @@ export async function getMenuSetImportDetail(restaurantId, branchId, menuSetId, 
   );
 
   return validateResponse(data, "data", "No se recibió el detalle de la importación.");
-}
-
-// Consultar el historial de publicaciones y sus revisiones.
-export async function getMenuSetPublicationHistory(
-  restaurantId, branchId, menuSetId, page = 1, perPage = 5
-) {
-  const { data } = await api.get(
-    `${importUrl(restaurantId, branchId, menuSetId)}/publications`,
-    { params: { page, per_page: perPage } }
-  );
-
-  return validateResponse(data, "data", "No se recibió el historial de publicaciones.");
-}
-export async function publishMenuSetImport(
-  restaurantId, branchId, menuSetId, importId, signal = undefined
-) {
-  const { data } = await api.post(
-    `${importUrl(restaurantId, branchId, menuSetId)}/publish`,
-    { import_id: Number(importId) },
-    { signal }
-  );
-
-  return data;
 }
 
 export async function downloadMenuSetImportCurrent(
@@ -224,17 +208,6 @@ export async function downloadMenuSetImportCurrent(
     blob: response.data,
     filename: filename || `programacion_vigente_${serviceDate}.${extension}`,
   };
-}
-
-export async function getMenuSetImportHistory(
-  restaurantId, branchId, menuSetId, page = 1, signal = undefined
-) {
-  const { data } = await api.get(
-    `${importUrl(restaurantId, branchId, menuSetId)}/history`,
-    { params: { page, per_page: 5 }, signal }
-  );
-
-  return data?.data;
 }
 
 export async function getMenuSetImportHistoryDetail(

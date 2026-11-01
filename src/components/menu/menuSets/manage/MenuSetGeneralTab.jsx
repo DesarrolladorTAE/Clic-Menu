@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Box, Button, ButtonBase, CircularProgress, InputAdornment,
-  Paper, Stack, TextField, Tooltip, Typography,
+  MenuItem, Paper, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -11,8 +11,14 @@ import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 import RestaurantMenuRoundedIcon from "@mui/icons-material/RestaurantMenuRounded";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 
-import { updateMenuSet } from "../../../../services/menu/menuSets/menuSet.service";
+import {
+  updateMenuSet, uploadMenuSetImage, deleteMenuSetImage,
+} from "../../../../services/menu/menuSets/menuSet.service";
+
 import ContextOverview from "../../../common/ContextOverview";
 
 const DAYS = [
@@ -24,6 +30,9 @@ const DAYS = [
   { value: 6, label: "Sábado", short: "Sáb" },
   { value: 7, label: "Domingo", short: "Dom" },
 ];
+
+const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const panelSx = {
   p: { xs: 2, sm: 2.5 },
@@ -42,15 +51,29 @@ function normalizeDays(days) {
   )].sort((a, b) => a - b);
 }
 
+function normalizeCommercialWeekStart(value) {
+  const day = Number(value);
+  return Number.isInteger(day) && day >= 1 && day <= 7 ? String(day) : "";
+}
+
 function mapMenuSetToForm(menuSet) {
   return {
     name: menuSet?.name ?? "",
     billing_name: menuSet?.billing_name ?? menuSet?.name ?? "",
     price: String(menuSet?.price ?? ""),
     sort_order: String(menuSet?.sort_order ?? 0),
+    commercial_week_start_day: normalizeCommercialWeekStart(menuSet?.commercial_week_start_day),
     service_days: normalizeDays(menuSet?.service_days),
     sat_product_service: menuSet?.sat?.sat_product_service ?? "",
     sat_unit: menuSet?.sat?.sat_unit ?? "",
+  };
+}
+
+function mapMenuSetImage(menuSet) {
+  return {
+    image_url: menuSet?.image_url || null,
+    image_thumbnail_url: menuSet?.image_thumbnail_url || null,
+    image_medium_url: menuSet?.image_medium_url || null,
   };
 }
 
@@ -78,6 +101,10 @@ function getChanges(form, menuSet) {
 
   if (form.sort_order.trim() !== original.sort_order) {
     changes.sort_order = form.sort_order.trim();
+  }
+
+  if (form.commercial_week_start_day !== original.commercial_week_start_day) {
+    changes.commercial_week_start_day = Number(form.commercial_week_start_day);
   }
 
   if (JSON.stringify(normalizeDays(form.service_days)) !== JSON.stringify(original.service_days)) {
@@ -131,6 +158,12 @@ function validateForm(form, changes) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(changes, "commercial_week_start_day")) {
+    if (!DAYS.some((day) => String(day.value) === form.commercial_week_start_day)) {
+      errors.commercial_week_start_day = "Selecciona un día válido para iniciar la semana comercial.";
+    }
+  }
+
   if (
     form.sat_product_service.trim().length > 20 ||
     form.sat_unit.trim().length > 20
@@ -145,6 +178,15 @@ function validateForm(form, changes) {
   return errors;
 }
 
+function getImageErrorMessage(error, fallback) {
+  const data = error?.response?.data;
+  const messages = data?.errors && typeof data.errors === "object"
+    ? Object.values(data.errors).flat() : [];
+
+  return messages.find((message) => typeof message === "string")
+    || data?.message || error?.message || fallback;
+}
+
 function SectionTitle({ title, description }) {
   return (
     <Box>
@@ -153,10 +195,7 @@ function SectionTitle({ title, description }) {
       </Typography>
 
       {description ? (
-        <Typography sx={{
-          mt: 0.5, fontSize: 13,
-          color: "text.secondary", lineHeight: 1.55,
-        }}>
+        <Typography sx={{ mt: 0.5, fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
           {description}
         </Typography>
       ) : null}
@@ -174,17 +213,11 @@ function FieldBlock({ label, help, reason, children }) {
       {children}
 
       {reason ? (
-        <Typography sx={{
-          mt: 0.75, fontSize: 12,
-          color: "text.secondary", lineHeight: 1.5,
-        }}>
+        <Typography sx={{ mt: 0.75, fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
           {reason}
         </Typography>
       ) : help ? (
-        <Typography sx={{
-          mt: 0.75, fontSize: 12,
-          color: "text.secondary", lineHeight: 1.5,
-        }}>
+        <Typography sx={{ mt: 0.75, fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
           {help}
         </Typography>
       ) : null}
@@ -204,9 +237,16 @@ export default function MenuSetGeneralTab({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
+  const [image, setImage] = useState(() => mapMenuSetImage(menuSet));
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imagePreviewError, setImagePreviewError] = useState(false);
+  const imageBusyRef = useRef(false);
+  const imageInputRef = useRef(null);
+
   useEffect(() => {
     setForm(mapMenuSetToForm(menuSet));
     setErrors({});
+    setImage(mapMenuSetImage(menuSet));
   }, [menuSet]);
 
   const changes = useMemo(() => getChanges(form, menuSet), [form, menuSet]);
@@ -215,6 +255,19 @@ export default function MenuSetGeneralTab({
   const canEditCommercial = menuSet?.can_edit_commercial_data === true;
   const canEditSat = menuSet?.can_edit_sat === true;
   const canEditOrder = menuSet?.can_edit === true;
+
+  const historySources = menuSet?.history_sources;
+  const hasHistory = menuSet?.has_history === true || (
+    historySources && typeof historySources === "object" &&
+    Object.values(historySources).some((value) => value === true)
+  );
+
+  const canEditCommercialWeekStart = canEditCommercial && !hasHistory;
+  const commercialWeekStartReason = hasHistory
+    ? "El inicio de semana comercial no puede modificarse porque el conjunto ya tiene publicaciones, pedidos, cuentas, ventas o reservas registradas."
+    : !canEditCommercial
+      ? menuSet?.edit_commercial_data_block_reason || "No puedes modificar este dato en este momento."
+      : null;
 
   const isMassImport = menuSet?.management_mode === "mass_import";
   const canEditServiceDays = !isMassImport || menuSet?.structural_editing_allowed === true;
@@ -227,6 +280,13 @@ export default function MenuSetGeneralTab({
   const removableDays = normalizeDays(menuSet?.removable_service_days);
   const availableDaysToAdd = normalizeDays(menuSet?.available_service_days_to_add);
   const removalReasons = menuSet?.service_day_removal_block_reasons ?? {};
+
+  const imageUrl = image.image_medium_url || image.image_url || image.image_thumbnail_url;
+  const canManageImage = !saving && !imageBusy && !hasChanges;
+
+  useEffect(() => {
+    setImagePreviewError(false);
+  }, [imageUrl]);
 
   const contextItems = [
     {
@@ -299,10 +359,117 @@ export default function MenuSetGeneralTab({
     setErrors({});
   };
 
+  const handleSelectImage = () => {
+    if (!canManageImage || imageBusyRef.current) {
+      return;
+    }
+
+    imageInputRef.current?.click();
+  };
+
+  const handleImageChange = async (event) => {
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+
+    if (!file || !canManageImage || imageBusyRef.current) {
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      onAlert?.({
+        severity: "error",
+        title: "Imagen no válida",
+        message: "Selecciona una imagen en formato JPG, JPEG, PNG o WEBP.",
+      });
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      onAlert?.({
+        severity: "error",
+        title: "Imagen demasiado grande",
+        message: "La imagen no debe exceder 4 MB.",
+      });
+      return;
+    }
+
+    imageBusyRef.current = true;
+    setImageBusy(true);
+
+    try {
+      const response = await uploadMenuSetImage(restaurantId, branchId, menuSet.id, file);
+      const result = response?.data;
+
+      if (!result?.image_url) {
+        throw new Error("No se recibió la imagen actualizada del conjunto.");
+      }
+
+      const updatedImage = {
+        image_url: result.image_url,
+        image_thumbnail_url: result.image_thumbnail_url || null,
+        image_medium_url: result.image_medium_url || null,
+      };
+
+      setImage(updatedImage);
+      onUpdated?.({ ...menuSet, ...updatedImage });
+
+      onAlert?.({
+        severity: "success",
+        title: "Hecho",
+        message: response?.message || "Imagen del conjunto guardada correctamente.",
+      });
+    } catch (error) {
+      onAlert?.({
+        severity: "error",
+        title: "No se pudo guardar la imagen",
+        message: getImageErrorMessage(error, "Ocurrió un error al subir la imagen del conjunto."),
+      });
+    } finally {
+      imageBusyRef.current = false;
+      setImageBusy(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!imageUrl || !canManageImage || imageBusyRef.current) {
+      return;
+    }
+
+    imageBusyRef.current = true;
+    setImageBusy(true);
+
+    try {
+      const response = await deleteMenuSetImage(restaurantId, branchId, menuSet.id);
+      const emptyImage = {
+        image_url: null,
+        image_thumbnail_url: null,
+        image_medium_url: null,
+      };
+
+      setImage(emptyImage);
+      onUpdated?.({ ...menuSet, ...emptyImage });
+
+      onAlert?.({
+        severity: "success",
+        title: "Hecho",
+        message: response?.message || "Imagen del conjunto eliminada correctamente.",
+      });
+    } catch (error) {
+      onAlert?.({
+        severity: "error",
+        title: "No se pudo eliminar la imagen",
+        message: getImageErrorMessage(error, "Ocurrió un error al eliminar la imagen del conjunto."),
+      });
+    } finally {
+      imageBusyRef.current = false;
+      setImageBusy(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!hasChanges || savingRef.current || saving) {
+    if (!hasChanges || savingRef.current || saving || imageBusyRef.current) {
       return;
     }
 
@@ -311,6 +478,18 @@ export default function MenuSetGeneralTab({
         severity: "error",
         title: "Cambio no permitido",
         message: serviceDaysBlockReason,
+      });
+      return;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(changes, "commercial_week_start_day") &&
+      !canEditCommercialWeekStart
+    ) {
+      onAlert?.({
+        severity: "error",
+        title: "Cambio no permitido",
+        message: commercialWeekStartReason || "No puedes cambiar el inicio de semana comercial.",
       });
       return;
     }
@@ -371,7 +550,6 @@ export default function MenuSetGeneralTab({
         Object.entries(serverErrors).forEach(([field, messages]) => {
           const message = Array.isArray(messages) ? messages[0] : String(messages);
           const key = field.startsWith("sat.") ? field.replace("sat.", "") : field;
-
           mappedErrors[key] = message;
         });
 
@@ -492,6 +670,40 @@ export default function MenuSetGeneralTab({
             </FieldBlock>
           </Stack>
 
+          {/* Calendario comercial */}
+          <SectionTitle
+            title="Calendario comercial"
+            description="Establece el día en que comienza cada periodo comercial de siete días. Es independiente de los días de servicio y del día de actualización de la administración masiva."
+          />
+
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            <FieldBlock
+              label="Inicio de semana comercial *"
+              help="Este día determina el inicio y fin de las semanas comerciales del conjunto."
+              reason={commercialWeekStartReason}
+            >
+              <TextField
+                select
+                fullWidth
+                value={form.commercial_week_start_day}
+                onChange={(event) => handleFieldChange("commercial_week_start_day", event.target.value)}
+                error={Boolean(errors.commercial_week_start_day)}
+                helperText={errors.commercial_week_start_day || ""}
+                disabled={saving || !canEditCommercialWeekStart}
+              >
+                <MenuItem value="" disabled>Selecciona un día</MenuItem>
+
+                {DAYS.map((day) => (
+                  <MenuItem key={day.value} value={String(day.value)}>
+                    {day.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </FieldBlock>
+
+            <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
+          </Stack>
+
           {/* Días de servicio */}
           <SectionTitle
             title="Días de servicio"
@@ -533,12 +745,7 @@ export default function MenuSetGeneralTab({
                     : "";
 
               return (
-                <Tooltip
-                  key={day.value}
-                  title={blocked ? reason : ""}
-                  arrow
-                  enterTouchDelay={0}
-                >
+                <Tooltip key={day.value} title={blocked ? reason : ""} arrow enterTouchDelay={0}>
                   <Box sx={{ minWidth: 0 }}>
                     <ButtonBase
                       type="button"
@@ -563,8 +770,7 @@ export default function MenuSetGeneralTab({
                       }}
                     >
                       <Typography sx={{
-                        fontSize: 14,
-                        fontWeight: 800,
+                        fontSize: 14, fontWeight: 800,
                         color: selected ? "secondary.main" : "text.primary",
                       }}>
                         {day.short}
@@ -621,11 +827,7 @@ export default function MenuSetGeneralTab({
           </Stack>
 
           {!canEditSat && menuSet?.sat_block_reason ? (
-            <Typography sx={{
-              fontSize: 12,
-              color: "text.secondary",
-              lineHeight: 1.5,
-            }}>
+            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
               {menuSet.sat_block_reason}
             </Typography>
           ) : null}
@@ -633,6 +835,112 @@ export default function MenuSetGeneralTab({
           {errors.sat ? (
             <Typography sx={{ fontSize: 12, color: "error.main" }}>
               {errors.sat}
+            </Typography>
+          ) : null}
+
+          {/* Imagen del conjunto */}
+          <SectionTitle
+            title="Subir imagen del conjunto"
+            description="Agrega una imagen para identificar visualmente este conjunto en el catálogo y los menús digitales. Puedes cargarla, reemplazarla o eliminarla cuando lo necesites."
+          />
+
+          <Box
+            component="input"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            ref={imageInputRef}
+            onChange={handleImageChange}
+            disabled={!canManageImage}
+            sx={{ display: "none" }}
+          />
+
+          <Box sx={{
+            minHeight: { xs: 220, sm: 320 },
+            border: "1px dashed",
+            borderColor: "divider",
+            borderRadius: 1,
+            bgcolor: "background.default",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            position: "relative",
+          }}>
+            {imageUrl && !imagePreviewError ? (
+              <Box
+                component="img"
+                src={imageUrl}
+                alt={`Imagen del conjunto ${menuSet?.name || ""}`}
+                onError={() => setImagePreviewError(true)}
+                sx={{
+                  display: "block",
+                  width: "100%",
+                  maxHeight: { xs: 240, sm: 320 },
+                  objectFit: "contain",
+                }}
+              />
+            ) : (
+              <Stack spacing={1} alignItems="center" sx={{ p: 3, textAlign: "center" }}>
+                <ImageOutlinedIcon sx={{ fontSize: 48, color: "text.disabled" }} />
+
+                <Typography sx={{ fontSize: 14, fontWeight: 700, color: "text.primary" }}>
+                  {imageUrl ? "No se pudo mostrar la imagen" : "Este conjunto no tiene imagen"}
+                </Typography>
+
+                <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+                  {imageUrl
+                    ? "Puedes intentar reemplazarla por otra imagen."
+                    : "Selecciona una imagen para mostrarla en este espacio."}
+                </Typography>
+              </Stack>
+            )}
+
+            {imageBusy ? (
+              <Box sx={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "rgba(255,255,255,0.75)",
+              }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : null}
+          </Box>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ xs: "stretch", sm: "center" }}>
+            <Button
+              type="button"
+              variant="outlined"
+              startIcon={imageBusy ? <CircularProgress size={18} color="inherit" /> : <CloudUploadOutlinedIcon />}
+              onClick={handleSelectImage}
+              disabled={!canManageImage}
+              sx={{ minWidth: { xs: "100%", sm: 205 }, height: 44, fontWeight: 800 }}
+            >
+              {imageBusy ? "Procesando…" : imageUrl ? "Reemplazar imagen" : "Subir imagen"}
+            </Button>
+
+            {imageUrl ? (
+              <Button
+                type="button"
+                variant="text"
+                startIcon={<DeleteOutlineRoundedIcon />}
+                onClick={handleDeleteImage}
+                disabled={!canManageImage}
+                sx={{ minWidth: { xs: "100%", sm: 165 }, height: 44, fontWeight: 800 }}
+              >
+                Eliminar imagen
+              </Button>
+            ) : null}
+          </Stack>
+
+          <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+            Formatos permitidos: JPG, JPEG, PNG y WEBP. Tamaño máximo: 4 MB.
+          </Typography>
+
+          {hasChanges ? (
+            <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.5 }}>
+              Guarda o descarta los cambios de configuración general antes de modificar la imagen.
             </Typography>
           ) : null}
 
@@ -648,7 +956,7 @@ export default function MenuSetGeneralTab({
               variant="outlined"
               startIcon={<RestartAltRoundedIcon />}
               onClick={handleDiscard}
-              disabled={!hasChanges || saving}
+              disabled={!hasChanges || saving || imageBusy}
               sx={{
                 minWidth: { xs: "100%", sm: 190 },
                 height: 44,
@@ -664,7 +972,7 @@ export default function MenuSetGeneralTab({
               startIcon={saving
                 ? <CircularProgress size={18} color="inherit" />
                 : <SaveOutlinedIcon />}
-              disabled={!hasChanges || saving}
+              disabled={!hasChanges || saving || imageBusy}
               sx={{
                 minWidth: { xs: "100%", sm: 190 },
                 height: 44,

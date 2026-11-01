@@ -57,3 +57,26 @@ export async function updateMenuSet(restaurantId, branchId, menuSetId, payload) 
 
   return data;
 }
+
+// Subir o reemplazar la imagen de un conjunto.
+export async function uploadMenuSetImage(restaurantId, branchId, menuSetId, file) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const { data } = await api.post(
+    `/restaurants/${restaurantId}/branches/${branchId}/menu-sets/${menuSetId}/image`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+
+  return data;
+}
+
+// Eliminar la imagen de un conjunto.
+export async function deleteMenuSetImage(restaurantId, branchId, menuSetId) {
+  const { data } = await api.delete(
+    `/restaurants/${restaurantId}/branches/${branchId}/menu-sets/${menuSetId}/image`
+  );
+
+  return data;
+}

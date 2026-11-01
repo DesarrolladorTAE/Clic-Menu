@@ -2,8 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  Box, Button, ButtonBase, Chip, CircularProgress, Dialog,
-  DialogActions, DialogContent, DialogTitle, MenuItem,
+  Box, Button, ButtonBase, Chip, CircularProgress, MenuItem,
   Paper, Stack, TextField, Typography,
 } from "@mui/material";
 
@@ -11,9 +10,9 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import { updateMenuSetManagement } from "../../../../services/menu/menuSets/menuSetManagement.service";
+import MenuSetManagementConfirmModal from "./MenuSetManagementConfirmModal";
 
 const DAYS = [
   { value: 1, label: "Lunes" },
@@ -29,7 +28,7 @@ const MODES = [
   {
     value: "manual",
     title: "Administración manual",
-    description: "Configura directamente los días y las capacidades de los productos de cada etapa.",
+    description: "Configura los días, productos y capacidades desde sus respectivas pestañas. No requiere programar actualizaciones semanales.",
     icon: TuneOutlinedIcon,
   },
   {
@@ -96,8 +95,7 @@ function validateForm(form) {
 function getErrorMessage(error, fallback) {
   const data = error?.response?.data;
   const errors = data?.errors && typeof data.errors === "object"
-    ? Object.values(data.errors).flat()
-    : [];
+    ? Object.values(data.errors).flat() : [];
 
   return errors.find((message) => typeof message === "string")
     || data?.message || error?.message || fallback;
@@ -118,8 +116,7 @@ function sourceLabel(management) {
 
   if (management?.effective_source === "publication") {
     return management?.has_exact_publication
-      ? "Publicación del periodo"
-      : "Publicación anterior aplicada";
+      ? "Publicación del periodo" : "Publicación anterior aplicada";
   }
 
   return "No informada";
@@ -198,6 +195,9 @@ export default function MenuSetAdministrationTab({
   const modeChanged = Boolean(management)
     && form.management_mode !== management.management_mode;
 
+  const enteringMassImport = management?.management_mode !== "mass_import"
+    && form.management_mode === "mass_import";
+
   const hasChanges = useMemo(() => {
     if (!management) {
       return false;
@@ -222,13 +222,13 @@ export default function MenuSetAdministrationTab({
     setForm((current) => ({ ...current, [field]: value }));
 
     setErrors((current) => {
-        if (field === "management_mode") {
-            return {};
-        }
+      if (field === "management_mode") {
+        return {};
+      }
 
-        const next = { ...current };
-        delete next[field];
-        return next;
+      const next = { ...current };
+      delete next[field];
+      return next;
     });
   };
 
@@ -240,6 +240,20 @@ export default function MenuSetAdministrationTab({
 
   const saveManagement = async () => {
     if (!management || !menuSet?.id || savingRef.current || !hasChanges) {
+      return;
+    }
+
+    const validationErrors = validateForm(form);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setConfirmOpen(false);
+
+      onAlert?.({
+        severity: "error",
+        title: "Revisa la configuración",
+        message: Object.values(validationErrors)[0],
+      });
       return;
     }
 
@@ -258,6 +272,10 @@ export default function MenuSetAdministrationTab({
       const response = await updateMenuSetManagement(
         restaurantId, branchId, menuSet.id, payload
       );
+
+      if (!response?.management) {
+        throw new Error("No se recibió la administración actualizada del conjunto.");
+      }
 
       setConfirmOpen(false);
       setErrors({});
@@ -305,12 +323,12 @@ export default function MenuSetAdministrationTab({
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
-        onAlert?.({
-            severity: "error",
-            title: "Revisa la configuración",
-            message: "Completa los campos señalados antes de guardar los cambios.",
-        });
-        return;
+      onAlert?.({
+        severity: "error",
+        title: "Revisa la configuración",
+        message: "Completa los campos señalados antes de guardar los cambios.",
+      });
+      return;
     }
 
     if (modeChanged) {
@@ -378,16 +396,11 @@ export default function MenuSetAdministrationTab({
                       onClick={() => handleChange("management_mode", option.value)}
                       aria-pressed={selected}
                       sx={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: 150,
-                        p: 2,
-                        borderRadius: 1,
-                        border: "1px solid",
+                        width: "100%", height: "100%", minHeight: 150,
+                        p: 2, borderRadius: 1, border: "1px solid",
                         borderColor: selected ? "secondary.main" : "divider",
                         bgcolor: selected ? "rgba(214, 122, 58, 0.10)" : "background.default",
-                        textAlign: "left",
-                        alignItems: "stretch",
+                        textAlign: "left", alignItems: "stretch",
                         "&:hover": {
                           borderColor: "secondary.main",
                           bgcolor: "rgba(214, 122, 58, 0.07)",
@@ -434,51 +447,26 @@ export default function MenuSetAdministrationTab({
             </Stack>
           </Paper>
 
-          {/* Información manual */}
-          {form.management_mode === "manual" ? (
-            <Paper sx={panelSx}>
-              <Stack spacing={2}>
-                <SectionTitle
-                  title="Programación manual"
-                  description="Los días y las capacidades se administran directamente desde las opciones del conjunto."
-                />
-
-                <Box sx={{
-                  p: 1.75, borderRadius: 1, border: "1px solid",
-                  borderColor: "divider", bgcolor: "background.default",
-                }}>
-                  <Stack direction="row" spacing={1.25} alignItems="flex-start">
-                    <InfoOutlinedIcon sx={{ color: "primary.main", fontSize: 20, flexShrink: 0 }} />
-
-                    <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-                      Modalidad de capacidad manual actual:{" "}
-                      <Box component="span" sx={{ fontWeight: 800, color: "text.primary" }}>
-                        {capacityLabel(management.manual_capacity_mode)}
-                      </Box>.
-                      {" "}Puedes administrar las cantidades desde la pestaña Programación.
-                    </Typography>
-                  </Stack>
-                </Box>
-              </Stack>
-            </Paper>
-          ) : null}
-
           {/* Configuración masiva */}
           {form.management_mode === "mass_import" ? (
             <Paper sx={panelSx}>
               <Stack spacing={3}>
                 <SectionTitle
-                  title="Programación de actualizaciones"
-                  description="Establece cuándo corresponde actualizar la programación comercial del conjunto."
+                  title="Actualización del menú por archivos"
+                  description={
+                    enteringMassImport
+                      ? "Puedes activar la administración masiva cualquier día. Configura cuándo realizarás los cambios estructurales de las siguientes semanas comerciales. La hora límite se utiliza para recordatorios y no impide publicar archivos posteriormente."
+                      : "Define el día autorizado para modificar la estructura de las siguientes semanas comerciales. La hora límite se utiliza para recordatorios y no impide publicar archivos posteriormente."
+                  }
                 />
 
                 <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                   <FieldBlock
                     label="Día de actualización *"
                     help={
-                        management.management_mode === "mass_import"
-                            ? "Los cambios de programación administrativa se autorizan el día de actualización previamente guardado."
-                            : "Para iniciar la administración masiva, selecciona el día actual de la sucursal. Después podrás actualizar la programación en ese día."
+                      enteringMassImport
+                        ? "Selecciona el día en que administrarás los cambios estructurales. Puedes cambiar a masivo hoy, aunque elijas otro día de la semana."
+                        : "Para modificar esta configuración masiva, el Backend exige que sea el día de actualización previamente guardado. Esto no limita la publicación de archivos."
                     }
                   >
                     <TextField
@@ -502,7 +490,7 @@ export default function MenuSetAdministrationTab({
 
                   <FieldBlock
                     label="Hora límite *"
-                    help="Se interpreta utilizando la zona horaria configurada para la sucursal."
+                    help="Se interpreta con la zona horaria de la sucursal. Es informativa y se utiliza para los recordatorios de actualización."
                   >
                     <TextField
                       fullWidth
@@ -575,160 +563,123 @@ export default function MenuSetAdministrationTab({
                 ) : null}
 
                 <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-                  Esta modalidad corresponde a la próxima importación. Las publicaciones vigentes
-                  mantienen las capacidades con las que fueron registradas.
+                  La capacidad seleccionada se utilizará en la próxima programación que publiques.
+                  No modifica la capacidad manual actual ni las publicaciones anteriores.
                 </Typography>
               </Stack>
             </Paper>
           ) : null}
 
-          {/* Configuración efectiva */}
-          <Paper sx={panelSx}>
-            <Stack spacing={2}>
-              <SectionTitle
-                title="Configuración vigente"
-                description="Información actual de la programación que se utiliza para consultar la disponibilidad."
-              />
+          {/* Configuración vigente */}
+          {form.management_mode === "mass_import" ? (
+            <Paper sx={panelSx}>
+              <Stack spacing={2}>
+                <SectionTitle
+                  title="Programación actualmente en uso"
+                  description={
+                    enteringMassImport
+                      ? "Estos datos corresponden a la configuración vigente antes de guardar el cambio. La configuración manual se conservará como respaldo hasta que exista una publicación masiva aplicable."
+                      : "Muestra la configuración que se utiliza en este momento. Puede ser diferente de la próxima programación que estás preparando."
+                  }
+                />
 
-              <Box sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
-                gridAutoRows: "1fr",
-                gap: 1.5,
-              }}>
-                {[
-                  {
-                    title: "Origen de la programación",
-                    value: sourceLabel(management),
-                  },
-                  {
-                    title: "Capacidad efectiva",
-                    value: capacityLabel(management.effective_capacity_mode),
-                  },
-                  {
-                    title: "Próximo periodo comercial",
-                    value: management.next_week_start && management.next_week_end
-                      ? `${formatDate(management.next_week_start)} – ${formatDate(management.next_week_end)}`
-                      : "No informado",
-                  },
-                  {
-                    title: "Inicio de semana comercial",
-                    value: DAYS.find((day) =>
-                      day.value === Number(management.commercial_week_start_day)
-                    )?.label || "No informado",
-                  },
-                ].map((item) => (
-                  <Box key={item.title} sx={{
-                    minWidth: 0, height: "100%", p: 1.75,
-                    borderRadius: 1, border: "1px solid",
-                    borderColor: "divider", bgcolor: "background.default",
-                  }}>
-                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary" }}>
-                      {item.title}
-                    </Typography>
-
-                    <Typography sx={{
-                      mt: 0.75, fontSize: 15, fontWeight: 800,
-                      color: "text.primary", lineHeight: 1.45, overflowWrap: "anywhere",
+                <Box sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                  gridAutoRows: "1fr",
+                  gap: 1.5,
+                }}>
+                  {[
+                    {
+                      title: "Origen de la programación actual",
+                      value: sourceLabel(management),
+                    },
+                    {
+                      title: "Capacidad aplicada actualmente",
+                      value: capacityLabel(management.effective_capacity_mode),
+                    },
+                    {
+                      title: "Próxima semana a programar",
+                      value: management.next_week_start && management.next_week_end
+                        ? `${formatDate(management.next_week_start)} – ${formatDate(management.next_week_end)}`
+                        : "No informado",
+                    },
+                    {
+                      title: "Inicio de la semana comercial",
+                      value: DAYS.find((day) =>
+                        day.value === Number(management.commercial_week_start_day)
+                      )?.label || "No informado",
+                    },
+                  ].map((item) => (
+                    <Box key={item.title} sx={{
+                      minWidth: 0, height: "100%", p: 1.75,
+                      borderRadius: 1, border: "1px solid",
+                      borderColor: "divider", bgcolor: "background.default",
                     }}>
-                      {item.value}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Stack>
-          </Paper>
+                      <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary" }}>
+                        {item.title}
+                      </Typography>
 
-          {/* Guardar cambios */}
-          <Paper sx={{ ...panelSx, p: { xs: 1.5, sm: 2 } }}>
-            <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              justifyContent="flex-end"
-              spacing={1.5}
-            >
-              <Button
-                type="button"
-                variant="outlined"
-                startIcon={<RestartAltRoundedIcon />}
-                onClick={handleDiscard}
-                disabled={!hasChanges || saving}
-                sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44 }}
-              >
-                Descartar cambios
-              </Button>
+                      <Typography sx={{
+                        mt: 0.75, fontSize: 15, fontWeight: 800,
+                        color: "text.primary", lineHeight: 1.45, overflowWrap: "anywhere",
+                      }}>
+                        {item.value}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Stack>
+            </Paper>
+          ) : null}
 
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={!hasChanges || saving}
-                startIcon={saving
-                  ? <CircularProgress size={18} color="inherit" />
-                  : <SaveOutlinedIcon />}
-                sx={{
-                  minWidth: { xs: "100%", sm: 190 },
-                  height: 44, fontWeight: 800,
-                }}
+          {/* Acciones */}
+          {(form.management_mode === "mass_import" || modeChanged) ? (
+            <Paper sx={{ ...panelSx, p: { xs: 1.5, sm: 2 } }}>
+              <Stack
+                direction={{ xs: "column-reverse", sm: "row" }}
+                justifyContent="flex-end"
+                spacing={1.5}
               >
-                {saving ? "Guardando…" : "Guardar cambios"}
-              </Button>
-            </Stack>
-          </Paper>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={<RestartAltRoundedIcon />}
+                  onClick={handleDiscard}
+                  disabled={!hasChanges || saving}
+                  sx={{ minWidth: { xs: "100%", sm: 190 }, height: 44 }}
+                >
+                  Descartar cambios
+                </Button>
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={!hasChanges || saving}
+                  startIcon={saving
+                    ? <CircularProgress size={18} color="inherit" />
+                    : <SaveOutlinedIcon />}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 190 },
+                    height: 44, fontWeight: 800,
+                  }}
+                >
+                  {saving ? "Guardando…" : "Guardar cambios"}
+                </Button>
+              </Stack>
+            </Paper>
+          ) : null}
         </Stack>
       </Box>
 
-      {/* Confirmación de cambio de modalidad */}
-      <Dialog
+      {/* Modal de confirmación independiente */}
+      <MenuSetManagementConfirmModal
         open={confirmOpen}
-        onClose={saving ? undefined : () => setConfirmOpen(false)}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{ sx: { borderRadius: 1 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, color: "text.primary" }}>
-          Confirmar cambio de administración
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={1.5}>
-            <Typography sx={{ fontSize: 14, color: "text.primary", lineHeight: 1.6 }}>
-              {form.management_mode === "mass_import"
-                ? "Este conjunto pasará a administración masiva. Su configuración manual se conservará como respaldo hasta que exista una publicación aplicable."
-                : "Este conjunto pasará a administración manual. Se utilizará la configuración efectiva correspondiente y se conservará el historial de publicaciones."}
-            </Typography>
-
-            <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.55 }}>
-              El cambio está sujeto a las restricciones operativas del conjunto.
-            </Typography>
-          </Stack>
-        </DialogContent>
-
-        <DialogActions sx={{
-          px: 3, pb: 2.5,
-          flexDirection: { xs: "column-reverse", sm: "row" },
-          gap: 1,
-        }}>
-          <Button
-            type="button"
-            variant="outlined"
-            disabled={saving}
-            onClick={() => setConfirmOpen(false)}
-            sx={{ width: { xs: "100%", sm: "auto" } }}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            type="button"
-            variant="contained"
-            disabled={saving}
-            onClick={saveManagement}
-            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : null}
-            sx={{ width: { xs: "100%", sm: "auto" } }}
-          >
-            {saving ? "Guardando…" : "Confirmar cambio"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={saveManagement}
+        managementMode={form.management_mode}
+        saving={saving}
+      />
     </>
   );
 }
