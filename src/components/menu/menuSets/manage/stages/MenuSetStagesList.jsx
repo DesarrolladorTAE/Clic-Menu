@@ -1,3 +1,4 @@
+//src/components/menu/manage/stages/MenuSetStageList.jsx
 import {
   Box, Button, Chip, CircularProgress, FormControlLabel,
   IconButton, Paper, Stack, Switch, Table, TableBody,

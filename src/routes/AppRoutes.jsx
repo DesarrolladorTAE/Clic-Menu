@@ -92,12 +92,13 @@ import CompositeComponentVariantModifierCatalogPage from "../pages/menu/modifier
 //Sucursales
 import BranchesPage from "../pages/restaurant/BranchesPage";
 
-//Conjuntos 
+//Conjuntos
 import MenuSetsPage from "../pages/menu/menuSets/list/MenuSetsPage";
 import MenuSetCreatePage from "../pages/menu/menuSets/create/MenuSetCreatePage";
 import MenuSetManagePage from "../pages/menu/menuSets/manage/MenuSetManagePage";
 import MenuSetStageProductsPage from "../pages/menu/menuSets/manage/products/MenuSetStageProductsPage";
 import MenuSetStageDefinitionsPage from "../pages/menu/menuSets/manage/definitions/MenuSetStageDefinitionsPage";
+import OwnerOperationalDashboardPage from "../pages/menu/menuSets/dashboard/OwnerOperationalDashboardPage";
 
 //Menu y así
 import MenuManager from "../pages/menu/MenuManager";
@@ -287,6 +288,7 @@ export default function AppRoutes() {
 
           <Route path="menu-sets" element={<MenuSetsPage />} />
           <Route path="menu-sets/new" element={<MenuSetCreatePage />} />
+          <Route path="menu-sets/panel-operativo" element={<OwnerOperationalDashboardPage />} />
           <Route path="menu-sets/:menuSetId" element={<MenuSetManagePage />} />
           <Route path="menu-sets/:menuSetId/stages/:stageId/products" element={<MenuSetStageProductsPage />}/>
           <Route path="menu-sets/:menuSetId/stage-definitions" element={<MenuSetStageDefinitionsPage />}/>

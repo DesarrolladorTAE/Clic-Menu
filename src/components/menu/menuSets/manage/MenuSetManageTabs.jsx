@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/manage/MenuSetManageTabs.js
 import { Box, Stack, Tab, Tabs, Typography } from "@mui/material";
 
 function StepLabel({ number, label }) {
@@ -35,6 +36,8 @@ function StepLabel({ number, label }) {
 }
 
 export default function MenuSetManageTabs({ value = "general", onChange }) {
+  const normalizedValue = value === "capacities" ? "programming" : value;
+
   const handleChange = (_, nextValue) => {
     if (typeof onChange === "function") {
       onChange(nextValue);
@@ -71,7 +74,7 @@ export default function MenuSetManageTabs({ value = "general", onChange }) {
       borderColor: "divider",
     }}>
       <Tabs
-        value={value}
+        value={normalizedValue}
         onChange={handleChange}
         variant="scrollable"
         scrollButtons="auto"
@@ -115,43 +118,12 @@ export default function MenuSetManageTabs({ value = "general", onChange }) {
           },
         }}
       >
-        <Tab
-          value="general"
-          label={<StepLabel number={1} label="General" />}
-          disableRipple
-          sx={tabSx}
-        />
-
-        <Tab
-          value="stages"
-          label={<StepLabel number={2} label="Etapas" />}
-          disableRipple
-          sx={tabSx}
-        />
-
-        <Tab
-          value="capacities"
-          label={<StepLabel number={3} label="Capacidades" />}
-          disableRipple
-          sx={tabSx}
-        />
-
-        <Tab
-          value="activation"
-          label={<StepLabel number={4} label="Activación" />}
-          disableRipple
-          sx={tabSx}
-        />
-
-        <Tab
-          value="availability"
-          label="Disponibilidad"
-          disableRipple
-          sx={{
-            ...tabSx,
-            fontSize: { xs: 14, sm: 16 },
-          }}
-        />
+        <Tab value="general" label={<StepLabel number={1} label="General" />} disableRipple sx={tabSx} />
+        <Tab value="administration" label={<StepLabel number={2} label="Administración" />} disableRipple sx={tabSx} />
+        <Tab value="stages" label={<StepLabel number={3} label="Etapas y productos" />} disableRipple sx={tabSx} />
+        <Tab value="programming" label={<StepLabel number={4} label="Programación" />} disableRipple sx={tabSx} />
+        <Tab value="activation" label={<StepLabel number={5} label="Activación" />} disableRipple sx={tabSx} />
+        <Tab value="availability" label={<StepLabel number={6} label="Disponibilidad" />} disableRipple sx={tabSx} />
       </Tabs>
     </Box>
   );

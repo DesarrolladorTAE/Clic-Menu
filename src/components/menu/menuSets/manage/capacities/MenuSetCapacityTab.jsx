@@ -1,3 +1,4 @@
+//src/components/menu/manage/capacities/MenuSetCapacityTab.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -401,7 +402,10 @@ export default function MenuSetCapacityTab({
   onAlert,
 }) {
   const menuSetId = menuSet?.id;
+  const isManual = menuSet?.management_mode === "manual";
   const currentMode = menuSet?.capacity_mode || "none";
+
+  const canEditCapacityLimits = isManual && menuSet?.can_edit_capacity_limits === true;
 
   const [mode, setMode] = useState(currentMode);
   const [savedMode, setSavedMode] = useState(currentMode);
@@ -419,7 +423,7 @@ export default function MenuSetCapacityTab({
   const mountedRef = useRef(false);
   const savingRef = useRef(false);
 
-  const canChangeCapacity = menuSet?.can_change_capacity_mode === true;
+  const canChangeCapacity = isManual && menuSet?.can_change_capacity_mode === true;
   const modeChanged = mode !== savedMode;
 
   useEffect(() => {
@@ -468,6 +472,12 @@ export default function MenuSetCapacityTab({
   }, [restaurantId, branchId, menuSetId]);
 
   useEffect(() => {
+    if (!isManual) {
+      setLoading(false);
+      setLoadFailed(false);
+      return undefined;
+    }
+
     if (!restaurantId || !branchId || !menuSetId) {
       setLoading(false);
       setLoadFailed(true);
@@ -511,7 +521,7 @@ export default function MenuSetCapacityTab({
     return () => {
       active = false;
     };
-  }, [restaurantId, branchId, menuSetId, loadProducts, onAlert]);
+  }, [restaurantId, branchId, menuSetId, isManual, loadProducts, onAlert]);
 
   const filteredProducts = useMemo(() => {
     if (stageFilter === "all") return products;
@@ -521,7 +531,7 @@ export default function MenuSetCapacityTab({
 
   const pagination = usePagination({
     items: filteredProducts,
-    pageSize: 4,
+    pageSize: 5,
     resetKey: `${menuSetId}|${stageFilter}|${mode}`,
   });
 
@@ -539,7 +549,7 @@ export default function MenuSetCapacityTab({
   };
 
   const handleCapacityChange = (productId, field, value, day = null) => {
-    if (saving) return;
+    if (saving || !canEditCapacityLimits) return;
 
     setInputs((current) => {
       const previous = current[productId] || {};
@@ -574,7 +584,7 @@ export default function MenuSetCapacityTab({
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!hasChanges || saving || savingRef.current) return;
+    if (!isManual || !hasChanges || saving || savingRef.current) return;
 
     if (modeChanged && !canChangeCapacity) {
       onAlert?.({
@@ -738,6 +748,20 @@ export default function MenuSetCapacityTab({
       }
     }
   };
+
+  if (!isManual) {
+    return (
+      <Paper sx={{ ...panelSx, p: { xs: 2, sm: 2.5 } }}>
+        <Typography sx={{ fontSize: 18, fontWeight: 800, color: "text.primary" }}>
+          Programación administrada mediante archivos
+        </Typography>
+
+        <Typography sx={{ mt: 1, fontSize: 13, color: "text.secondary", lineHeight: 1.6 }}>
+          Los días y las capacidades de este conjunto se administran desde su programación por archivos.
+        </Typography>
+      </Paper>
+    );
+  }
 
   if (loading) {
     return (
@@ -918,9 +942,9 @@ export default function MenuSetCapacityTab({
                 gap: 1.5,
               }}>
                 {pagination.paginatedItems.map((product) => {
-                  const editable = modeChanged
-                    ? canChangeCapacity
-                    : product.canEditCapacity;
+                  const editable = canEditCapacityLimits && (
+                    modeChanged ? canChangeCapacity : product.canEditCapacity
+                  );
 
                   return (
                     <Tooltip

@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/manage/MenuSetGeneralTab.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -215,6 +216,11 @@ export default function MenuSetGeneralTab({
   const canEditSat = menuSet?.can_edit_sat === true;
   const canEditOrder = menuSet?.can_edit === true;
 
+  const isMassImport = menuSet?.management_mode === "mass_import";
+  const canEditServiceDays = !isMassImport || menuSet?.structural_editing_allowed === true;
+  const serviceDaysBlockReason = menuSet?.structural_editing_block_reason
+    || "Los días generales no pueden modificarse en este momento.";
+
   const originalDays = normalizeDays(menuSet?.service_days);
   const selectedDays = normalizeDays(form.service_days);
 
@@ -266,6 +272,10 @@ export default function MenuSetGeneralTab({
   };
 
   const handleToggleDay = (day) => {
+    if (!canEditServiceDays || savingRef.current) {
+      return;
+    }
+
     const selected = selectedDays.includes(day);
     const original = originalDays.includes(day);
 
@@ -292,7 +302,18 @@ export default function MenuSetGeneralTab({
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!hasChanges || savingRef.current || saving) return;
+    if (!hasChanges || savingRef.current || saving) {
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(changes, "service_days") && !canEditServiceDays) {
+      onAlert?.({
+        severity: "error",
+        title: "Cambio no permitido",
+        message: serviceDaysBlockReason,
+      });
+      return;
+    }
 
     const validationErrors = validateForm(form, changes);
     setErrors(validationErrors);
@@ -474,7 +495,12 @@ export default function MenuSetGeneralTab({
           {/* Días de servicio */}
           <SectionTitle
             title="Días de servicio"
-            description="Selecciona los días generales del conjunto. Después podrás configurar los productos y capacidades correspondientes."
+            description={isMassImport
+              ? canEditServiceDays
+                ? "Puedes preparar los días generales del siguiente periodo comercial. Las programaciones ya publicadas conservarán su configuración."
+                : "Los días generales se muestran para consulta. Solo podrás modificarlos durante el periodo de actualización autorizado."
+              : "Selecciona los días generales del conjunto. Después podrás configurar los productos y capacidades correspondientes."
+            }
           />
 
           <Box sx={{
@@ -496,13 +522,15 @@ export default function MenuSetGeneralTab({
               const blockedAddition = !selected && !original
                 && !availableDaysToAdd.includes(day.value);
 
-              const blocked = blockedRemoval || blockedAddition;
+              const blocked = !canEditServiceDays || blockedRemoval || blockedAddition;
 
-              const reason = blockedRemoval
-                ? removalReasons[day.value] || menuSet?.remove_service_days_block_reason || ""
-                : blockedAddition
-                  ? menuSet?.add_service_days_block_reason || "No puedes agregar este día."
-                  : "";
+              const reason = !canEditServiceDays
+                ? serviceDaysBlockReason
+                : blockedRemoval
+                  ? removalReasons[day.value] || menuSet?.remove_service_days_block_reason || ""
+                  : blockedAddition
+                    ? menuSet?.add_service_days_block_reason || "No puedes agregar este día."
+                    : "";
 
               return (
                 <Tooltip
@@ -599,12 +627,6 @@ export default function MenuSetGeneralTab({
               lineHeight: 1.5,
             }}>
               {menuSet.sat_block_reason}
-            </Typography>
-          ) : null}
-
-          {errors.sat ? (
-            <Typography sx={{ fontSize: 12, color: "error.main" }}>
-              {errors.sat}
             </Typography>
           ) : null}
 

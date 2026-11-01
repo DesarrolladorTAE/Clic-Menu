@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/manage/availability/MenuSetAvailabilityResults.jsx
 import { useMemo } from "react";
 
 import {
@@ -14,7 +15,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PaginationFooter from "../../../../common/PaginationFooter";
 import usePagination from "../../../../../hooks/usePagination";
 
-const STAGES_PAGE_SIZE = 2;
+const STAGES_PAGE_SIZE = 5;
 const PRODUCTS_PAGE_SIZE = 5;
 
 const STATUS_CONFIG = {
@@ -35,7 +36,7 @@ const STATUS_CONFIG = {
     color: "error",
   },
   configuration_unavailable: {
-    label: "No disponible",
+    label: "Configuración no disponible",
     color: "default",
   },
 };
@@ -100,17 +101,22 @@ function getStatus(availability) {
 }
 
 function getPreparedMessage(availability) {
-  if (!availability?.prepared_selection_required) return null;
-
-  const choices = Array.isArray(availability.prepared_choices)
+  const choices = Array.isArray(availability?.prepared_choices)
     ? availability.prepared_choices : [];
 
-  const count = choices.length;
-  if (count === 0) return null;
+  if (availability?.available_via_prepared_item === true) {
+    return availability.prepared_selection_required
+      ? "Disponible mediante una preparación específica. Debes seleccionarla al registrar el pedido."
+      : "La disponibilidad corresponde a una preparación específica.";
+  }
 
-  return count === 1
-    ? "Existe una preparación rápida alternativa que requiere selección específica."
-    : `Existen ${count} preparaciones rápidas alternativas que requieren selección específica.`;
+  if (!availability?.prepared_selection_required || choices.length === 0) {
+    return null;
+  }
+
+  return choices.length === 1
+    ? "Existe una preparación alternativa que requiere selección específica."
+    : `Existen ${choices.length} preparaciones alternativas que requieren selección específica.`;
 }
 
 function getReason(availability) {
@@ -118,6 +124,10 @@ function getReason(availability) {
 
   if (typeof reason === "string" && reason.trim()) {
     return reason.trim();
+  }
+
+  if (availability?.is_available === true && availability?.available_via_prepared_item === true) {
+    return "La opción puede ofrecerse mediante una preparación disponible.";
   }
 
   if (availability?.is_available === true) {
@@ -654,7 +664,7 @@ export default function MenuSetAvailabilityResults({
           fontWeight: 800,
           color: "text.primary",
         }}>
-          No hay productos para consultar
+          No hay opciones para esta consulta
         </Typography>
 
         <Typography sx={{
@@ -663,7 +673,8 @@ export default function MenuSetAvailabilityResults({
           color: "text.secondary",
           lineHeight: 1.55,
         }}>
-          Este conjunto todavía no tiene productos registrados en sus etapas.
+          No se recibieron opciones para la fecha y cantidad consultadas.
+          Esto no significa necesariamente que el conjunto carezca de productos registrados.
         </Typography>
       </Paper>
     );

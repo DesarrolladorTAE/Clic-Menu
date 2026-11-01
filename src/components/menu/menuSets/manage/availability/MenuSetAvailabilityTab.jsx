@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/manage/availability/MenuSetAvailabilityTab.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -103,6 +104,7 @@ export default function MenuSetAvailabilityTab({
   menuSet,
   onAlert,
 }) {
+  const menuSetId = menuSet?.id;
   const timezone = menuSet?.branch?.timezone || "America/Mexico_City";
 
   const [serviceDate, setServiceDate] = useState(() => getCurrentDate(timezone));
@@ -114,6 +116,18 @@ export default function MenuSetAvailabilityTab({
 
   const requestRef = useRef(null);
   const consultingRef = useRef(false);
+
+  useEffect(() => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    consultingRef.current = false;
+
+    setConsulting(false);
+    setResult(null);
+    setErrors({});
+    setServiceDate(getCurrentDate(timezone));
+    setQuantity("1");
+  }, [menuSetId, timezone]);
 
   useEffect(() => {
     return () => {
@@ -337,7 +351,6 @@ export default function MenuSetAvailabilityTab({
       {/* Resultados */}
       {result ? (
         <MenuSetAvailabilityResults
-          key={`${result.menu_set_id}-${result.service_date}-${result.quantity}-${JSON.stringify(result.options)}`}
           result={result}
           queryChanged={queryChanged}
         />

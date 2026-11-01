@@ -1,3 +1,4 @@
+//src/pages/menu/menuSets/create/MenuSetCreatePage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -20,7 +21,6 @@ const INITIAL_FORM = {
   price: "",
   sort_order: "0",
   service_days: [],
-  capacity_mode: "none",
   sat_product_service: "",
   sat_unit: "",
 };
@@ -211,7 +211,7 @@ export default function MenuSetCreatePage() {
       price: Number(String(form.price).trim().replace(",", ".")),
       sort_order: Number(form.sort_order),
       service_days: [...form.service_days].sort((a, b) => a - b),
-      capacity_mode: form.capacity_mode,
+      capacity_mode: "none",
       is_active: false,
     };
 
@@ -243,6 +243,7 @@ export default function MenuSetCreatePage() {
         state: {
           branchId,
           createdSet,
+          activeTab: "administration",
           successMessage: response?.message || "Conjunto creado correctamente.",
         },
       });

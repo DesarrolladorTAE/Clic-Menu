@@ -1,3 +1,4 @@
+//src/pages/owner/restaurants/operation/menuSets/MenuSetsPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -14,6 +15,7 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import PauseCircleOutlineOutlinedIcon from "@mui/icons-material/PauseCircleOutlineOutlined";
+import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
 
 import PageContainer from "../../../../components/common/PageContainer";
 import AppAlert from "../../../../components/common/AppAlert";
@@ -304,8 +306,18 @@ export default function MenuSetsPage() {
     }
   };
 
-  const handleManage = (menuSet) => {
+    const handleManage = (menuSet) => {
     navigate(`${menuSet.id}?branchId=${encodeURIComponent(selectedBranchId)}`, {
+      state: { branchId: selectedBranchId },
+    });
+  };
+
+  const handleOpenOperationalPanel = () => {
+    if (!selectedBranchId) {
+      return;
+    }
+
+    navigate(`panel-operativo?branchId=${encodeURIComponent(selectedBranchId)}`, {
       state: { branchId: selectedBranchId },
     });
   };
@@ -417,22 +429,43 @@ export default function MenuSetsPage() {
                 </Typography>
               </Box>
 
-              <Button
-                type="button"
-                variant="contained"
-                startIcon={<AddOutlinedIcon />}
-                disabled={!selectedBranch || loadingMenuSets || deleting}
-                onClick={() => navigate(`new?branchId=${encodeURIComponent(selectedBranchId)}`, {
-                  state: { branchId: selectedBranchId },
-                })}
-                sx={{
-                  minWidth: { xs: "100%", sm: 190 },
-                  height: 44,
-                  fontWeight: 800,
-                }}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                sx={{ width: { xs: "100%", md: "auto" } }}
               >
-                Nuevo conjunto
-              </Button>
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={<DashboardOutlinedIcon />}
+                  disabled={!selectedBranch || loadingMenuSets || deleting}
+                  onClick={handleOpenOperationalPanel}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 190 },
+                    height: 44,
+                    fontWeight: 800,
+                  }}
+                >
+                  Panel operativo
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="contained"
+                  startIcon={<AddOutlinedIcon />}
+                  disabled={!selectedBranch || loadingMenuSets || deleting}
+                  onClick={() => navigate(`new?branchId=${encodeURIComponent(selectedBranchId)}`, {
+                    state: { branchId: selectedBranchId },
+                  })}
+                  sx={{
+                    minWidth: { xs: "100%", sm: 190 },
+                    height: 44,
+                    fontWeight: 800,
+                  }}
+                >
+                  Nuevo conjunto
+                </Button>
+              </Stack>
             </Stack>
 
             {/* Instrucciones */}

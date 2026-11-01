@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/manage/stages/MenuSetGeneralTab.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -64,6 +65,13 @@ export default function MenuSetStagesTab({
   onManageTypes,
 }) {
   const menuSetId = menuSet?.id;
+
+  const isMassImport = menuSet?.management_mode === "mass_import";
+  const canEditStructure = !isMassImport || menuSet?.structural_editing_allowed === true;
+  const canAddStages = canEditStructure && menuSet?.can_add_stages === true;
+  const structureBlockReason = menuSet?.structural_editing_block_reason
+    || menuSet?.add_stages_block_reason
+    || "Las etapas de este conjunto no pueden modificarse en este momento.";
 
   const [stages, setStages] = useState([]);
   const [definitions, setDefinitions] = useState([]);
@@ -228,6 +236,24 @@ export default function MenuSetStagesTab({
     resetKey: `${menuSetId}|${search}|${statusFilter}`,
   });
 
+  const visibleStages = useMemo(() => {
+    if (canEditStructure) {
+      return pagination.paginatedItems;
+    }
+
+    return pagination.paginatedItems.map((stage) => ({
+      ...stage,
+      can_edit: false,
+      edit_block_reason: structureBlockReason,
+      can_activate: false,
+      activate_block_reason: structureBlockReason,
+      can_deactivate: false,
+      deactivate_block_reason: structureBlockReason,
+      can_delete: false,
+      delete_block_reason: structureBlockReason,
+    }));
+  }, [pagination.paginatedItems, canEditStructure, structureBlockReason]);
+
   const contextItems = [
     {
       key: "total",
@@ -256,7 +282,17 @@ export default function MenuSetStagesTab({
   ];
 
   const openForm = (mode, stage = null) => {
-    if (busy || operationRef.current) return;
+    if (busy || operationRef.current || !canEditStructure) {
+      return;
+    }
+
+    if (mode === "create" && !canAddStages) {
+      return;
+    }
+
+    if (mode === "edit" && stage?.can_edit !== true) {
+      return;
+    }
 
     setFormMode(mode);
     setEditingStage(stage);
@@ -271,7 +307,9 @@ export default function MenuSetStagesTab({
   };
 
   const handleSave = async (payload, stage) => {
-    if (operationRef.current) return;
+    if (operationRef.current || !canEditStructure || (!stage && !canAddStages)) {
+      return;
+    }
 
     operationRef.current = true;
     setSaving(true);
@@ -324,7 +362,9 @@ export default function MenuSetStagesTab({
   };
 
   const handleStatusChange = async (stage, checked) => {
-    if (operationRef.current || busy) return;
+    if (operationRef.current || busy || !canEditStructure) {
+      return;
+    }
 
     const allowed = checked
       ? stage.can_activate === true
@@ -389,12 +429,17 @@ export default function MenuSetStagesTab({
   };
 
   const handleDeleteRequest = (stage) => {
-    if (busy || stage.can_delete !== true) return;
+    if (busy || !canEditStructure || stage.can_delete !== true) {
+      return;
+    }
+
     setStageToDelete(stage);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!stageToDelete?.id || operationRef.current || deleting) return;
+    if (!stageToDelete?.id || operationRef.current || deleting || !canEditStructure) {
+      return;
+    }
 
     const stageId = stageToDelete.id;
 
@@ -548,7 +593,12 @@ export default function MenuSetStagesTab({
                 mt: 0.5, fontSize: 13,
                 color: "text.secondary", lineHeight: 1.55,
               }}>
-                Organiza las etapas y define cuántos productos podrá seleccionar el cliente.
+                {isMassImport
+                  ? canEditStructure
+                    ? "Prepara las etapas y sus reglas de selección para el siguiente periodo comercial."
+                    : "Consulta las etapas y sus reglas de selección. Los cambios estructurales solo se permiten durante el periodo autorizado."
+                  : "Organiza las etapas y define cuántos productos podrá seleccionar el cliente."
+                }
               </Typography>
             </Box>
 
@@ -582,11 +632,13 @@ export default function MenuSetStagesTab({
               </Tooltip>
 
               <Tooltip
-                title={!definitionsLoaded
-                  ? "No se pudieron consultar los tipos de etapas disponibles."
-                  : availableDefinitions.length === 0
-                    ? "No hay más tipos de etapas disponibles para agregar."
-                    : ""}
+                title={!canAddStages
+                  ? structureBlockReason
+                  : !definitionsLoaded
+                    ? "No se pudieron consultar los tipos de etapas disponibles."
+                    : availableDefinitions.length === 0
+                      ? "No hay más tipos de etapas disponibles para agregar."
+                      : ""}
                 arrow
               >
                 <span>
@@ -594,7 +646,7 @@ export default function MenuSetStagesTab({
                     type="button"
                     variant="contained"
                     startIcon={<AddOutlinedIcon />}
-                    disabled={busy || !definitionsLoaded || availableDefinitions.length === 0}
+                    disabled={busy || !canAddStages || !definitionsLoaded || availableDefinitions.length === 0}
                     onClick={() => openForm("create")}
                     sx={{
                       width: { xs: "100%", sm: "auto" },
@@ -612,7 +664,7 @@ export default function MenuSetStagesTab({
 
         {/* Listado */}
         <MenuSetStagesList
-          stages={pagination.paginatedItems}
+          stages={visibleStages}
           busy={busy}
           updatingStageId={updatingStageId}
           hasFilters={Boolean(search.trim()) || statusFilter !== "all"}

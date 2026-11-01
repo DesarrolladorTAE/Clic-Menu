@@ -1,3 +1,4 @@
+//src/components/menu/menuSets/list/MenuSetsList.jsx
 import {
   Box, Button, Chip, CircularProgress, FormControlLabel,
   IconButton, LinearProgress, Paper, Stack, Switch,
@@ -27,6 +28,18 @@ function formatDays(days) {
     .filter((day) => day >= 1 && day <= 7)
     .map((day) => DAYS[day - 1])
     .join(", ");
+}
+
+function getManagementLabel(menuSet) {
+  if (menuSet?.management_mode === "manual") {
+    return "Administración manual";
+  }
+
+  if (menuSet?.management_mode === "mass_import") {
+    return "Administración masiva";
+  }
+
+  return "Modalidad no informada";
 }
 
 function PermissionInfo({ reason }) {
@@ -177,12 +190,21 @@ function MenuSetCard({ menuSet, updating, onStatusChange, onDelete, onManage }) 
     }}>
       <Box sx={{ px: 2, py: 1.75, borderBottom: "1px solid", borderColor: "divider" }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-          <Typography sx={{
-            fontSize: 17, fontWeight: 800, color: "text.primary",
-            lineHeight: 1.35, overflowWrap: "anywhere", minWidth: 0,
-          }}>
-            {menuSet.name || "Conjunto sin nombre"}
-          </Typography>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{
+              fontSize: 17, fontWeight: 800, color: "text.primary",
+              lineHeight: 1.35, overflowWrap: "anywhere",
+            }}>
+              {menuSet.name || "Conjunto sin nombre"}
+            </Typography>
+
+            <Typography sx={{
+              mt: 0.5, fontSize: 12, fontWeight: 700,
+              color: "text.secondary", lineHeight: 1.4,
+            }}>
+              {getManagementLabel(menuSet)}
+            </Typography>
+          </Box>
 
           <Chip
             size="small"
@@ -330,10 +352,22 @@ export default function MenuSetsList({
                       }}
                     >
                       <TableCell sx={{
-                        maxWidth: 230, fontWeight: 800,
-                        color: "text.primary", overflowWrap: "anywhere",
+                        maxWidth: 230, color: "text.primary",
+                        overflowWrap: "anywhere",
                       }}>
-                        {menuSet.name}
+                        <Typography sx={{
+                          fontSize: 14, fontWeight: 800,
+                          color: "text.primary", overflowWrap: "anywhere",
+                        }}>
+                          {menuSet.name || "Conjunto sin nombre"}
+                        </Typography>
+
+                        <Typography sx={{
+                          mt: 0.35, fontSize: 12, fontWeight: 700,
+                          color: "text.secondary",
+                        }}>
+                          {getManagementLabel(menuSet)}
+                        </Typography>
                       </TableCell>
 
                       <TableCell sx={{ fontWeight: 800, color: "primary.main" }}>

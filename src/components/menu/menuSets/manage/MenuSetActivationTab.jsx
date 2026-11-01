@@ -1,7 +1,8 @@
+//src/components/menu/menuSets/manage/MenuSetActivationTab.jsx
 import { useRef, useState } from "react";
 
 import {
-  Box, Button, Chip, CircularProgress, Paper, Stack, Typography,
+  Box, Chip, CircularProgress, FormControlLabel, Paper, Stack, Switch, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 
@@ -22,10 +23,12 @@ const panelSx = {
 };
 
 const STEPS = [
-  { key: "general", number: 1, title: "Datos generales y días" },
-  { key: "stages", number: 2, title: "Etapas y productos" },
-  { key: "capacity", number: 3, title: "Capacidades" },
-  { key: "activation", number: 4, title: "Activación" },
+  { key: "general", number: 1, title: "General" },
+  { key: "administration", number: 2, title: "Administración" },
+  { key: "stages", number: 3, title: "Etapas y productos" },
+  { key: "programming", number: 4, title: "Programación" },
+  { key: "activation", number: 5, title: "Activación" },
+  { key: "availability", number: 6, title: "Disponibilidad" },
 ];
 
 function getErrorMessage(error) {
@@ -46,26 +49,32 @@ function getErrorMessage(error) {
 | Estado de cada paso
 |--------------------------------------------------------------------------
 */
-function getStepState(step, details, isActive) {
+function getStepState(step, details, isActive, canActivate, issuesCount) {
+  if (step.key === "availability") {
+    return { label: "Consulta independiente", color: "default" };
+  }
+
   if (step.key === "activation") {
-    if (isActive && details?.is_complete) {
-      return { label: "Completado", color: "success" };
-    }
-
     if (isActive) {
-      return { label: "Activo con pendientes", color: "warning" };
+      return issuesCount > 0
+        ? { label: "Activo con pendientes", color: "warning" }
+        : { label: "Activo", color: "success" };
     }
 
-    if (details?.is_ready === true) {
-      return { label: "Listo para activar", color: "success" };
-    }
+    return canActivate
+      ? { label: "Listo para activar", color: "success" }
+      : { label: "Pendiente", color: "warning" };
+  }
 
+  if (details?.is_complete === true) {
+    return { label: "Completado", color: "success" };
+  }
+
+  if (details?.is_complete === false) {
     return { label: "Pendiente", color: "warning" };
   }
 
-  return details?.is_complete === true
-    ? { label: "Completado", color: "success" }
-    : { label: "Pendiente", color: "warning" };
+  return { label: "Por verificar", color: "default" };
 }
 
 /*
@@ -73,8 +82,10 @@ function getStepState(step, details, isActive) {
 | Tarjeta de configuración
 |--------------------------------------------------------------------------
 */
-function StepCard({ step, details, isActive, primaryBackground }) {
-  const state = getStepState(step, details, isActive);
+function StepCard({
+  step, details, isActive, canActivate, issuesCount, primaryBackground,
+}) {
+  const state = getStepState(step, details, isActive, canActivate, issuesCount);
   const complete = state.color === "success";
 
   return (
@@ -193,6 +204,7 @@ export default function MenuSetActivationTab({
   const canDeactivate = menuSet?.can_deactivate === true;
 
   const steps = menuSet?.configuration_steps || {};
+  const managementMode = menuSet?.management_mode;
 
   const issues = Array.isArray(menuSet?.activation_issues)
     ? menuSet.activation_issues.filter((issue) => typeof issue === "string" && issue.trim())
@@ -201,6 +213,32 @@ export default function MenuSetActivationTab({
   const configurationComplete = issues.length === 0;
   const canChangeStatus = isActive ? canDeactivate : canActivate;
 
+  const resolvedSteps = {
+    general: steps.general,
+    administration: steps.administration || {
+      is_complete: ["manual", "mass_import"].includes(managementMode) ? true : null,
+      message: managementMode === "manual"
+        ? "El conjunto utiliza administración manual."
+        : managementMode === "mass_import"
+          ? "El conjunto utiliza administración mediante archivos."
+          : "No se pudo identificar la modalidad de administración.",
+    },
+    stages: steps.stages,
+    programming: steps.programming || (
+      managementMode === "manual"
+        ? steps.capacity
+        : {
+          is_complete: null,
+          message: "La programación de cada periodo se valida mediante sus publicaciones. Consulta el apartado Programación para revisar el periodo correspondiente.",
+        }
+    ),
+    activation: steps.activation,
+    availability: {
+      is_complete: null,
+      message: "Consulta la disponibilidad de los productos por fecha y cantidad. El estado de venta del conjunto completo se determina por separado.",
+    },
+  };
+
   const primaryBackground = alpha(theme.palette.primary.main, 0.12);
 
   /*
@@ -208,13 +246,15 @@ export default function MenuSetActivationTab({
   | Resumen de la configuración
   |--------------------------------------------------------------------------
   */
-  const statusDescription = isActive
-    ? configurationComplete
-      ? "El conjunto está activo y todos sus días de servicio están configurados."
-      : "El conjunto sigue activo. Los días pendientes no estarán disponibles hasta completar su configuración."
-    : configurationComplete
-      ? "Todos los pasos están preparados. Ya puedes activar el conjunto."
-      : "Completa los pasos pendientes para poder activar el conjunto.";
+    const statusDescription = isActive
+      ? configurationComplete
+        ? "El conjunto está activo. Su disponibilidad para venderse depende de la fecha, la programación, los cupos y los productos disponibles."
+        : "El conjunto sigue activo, pero tiene configuraciones pendientes que pueden limitar su disponibilidad."
+      : canActivate
+        ? "La configuración cumple las condiciones de activación. Puedes habilitar el conjunto."
+        : issues.length > 0
+          ? "Completa los puntos pendientes para poder activar el conjunto."
+          : menuSet?.activate_block_reason || "El conjunto todavía no reúne las condiciones necesarias para activarse.";
 
   /*
   |--------------------------------------------------------------------------
@@ -290,13 +330,13 @@ export default function MenuSetActivationTab({
             </Typography>
           </Box>
 
-          {/* Cuatro tarjetas de configuración */}
+          {/* Seis apartados de configuración */}
           <Box sx={{
             display: "grid",
             gridTemplateColumns: {
               xs: "1fr",
               sm: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
+              lg: "repeat(3, minmax(0, 1fr))",
             },
             gridAutoRows: "1fr",
             gap: 1.5,
@@ -307,8 +347,10 @@ export default function MenuSetActivationTab({
               <StepCard
                 key={step.key}
                 step={step}
-                details={steps[step.key]}
+                details={resolvedSteps[step.key]}
                 isActive={isActive}
+                canActivate={canActivate}
+                issuesCount={issues.length}
                 primaryBackground={primaryBackground}
               />
             ))}
@@ -452,7 +494,7 @@ export default function MenuSetActivationTab({
 
                   {!canChangeStatus && !checking && (
                     (isActive && menuSet?.deactivate_block_reason)
-                    || (!isActive && issues.length === 0 && menuSet?.activate_block_reason)
+                    || (!isActive && menuSet?.activate_block_reason)
                   ) ? (
                     <Typography sx={{
                       mt: 1,
@@ -470,29 +512,35 @@ export default function MenuSetActivationTab({
               </Stack>
             </Box>
 
-            <Button
-              type="button"
-              variant={isActive ? "outlined" : "contained"}
-              startIcon={saving || checking
-                ? <CircularProgress size={18} color="inherit" />
-                : <PowerSettingsNewRoundedIcon />}
-              onClick={handleChangeStatus}
-              disabled={saving || checking || !canChangeStatus}
-              sx={{
-                minWidth: { xs: "100%", md: 210 },
-                height: 44,
-                fontWeight: 800,
-                flexShrink: 0,
-              }}
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent={{ xs: "space-between", md: "flex-end" }}
+              spacing={1.5}
+              sx={{ minWidth: { xs: "100%", md: 210 }, flexShrink: 0 }}
             >
-              {saving
-                ? "Guardando…"
-                : checking
-                  ? "Comprobando…"
-                  : isActive
-                    ? "Desactivar conjunto"
-                    : "Activar conjunto"}
-            </Button>
+              {saving || checking ? <CircularProgress size={18} /> : null}
+
+              <FormControlLabel
+                sx={{ m: 0 }}
+                control={
+                  <Switch
+                    color="primary"
+                    checked={isActive}
+                    onChange={handleChangeStatus}
+                    disabled={saving || checking || !canChangeStatus}
+                    inputProps={{
+                      "aria-label": isActive ? "Desactivar conjunto" : "Activar conjunto",
+                    }}
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+                    {saving ? "Guardando…" : checking ? "Comprobando…" : isActive ? "Activo" : "Inactivo"}
+                  </Typography>
+                }
+              />
+            </Stack>
           </Stack>
         </Stack>
       </Paper>

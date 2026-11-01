@@ -1,3 +1,4 @@
+//src/components/menu/manage/products/MenuSetProductList.jsx
 import {
   Box, Chip, CircularProgress, FormControlLabel,
   IconButton, Paper, Stack, Switch, Table, TableBody,

@@ -1,3 +1,4 @@
+//src/pages/menu/menuSets/manage/products/MenuSetStageProductsPage.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -115,6 +116,12 @@ export default function MenuSetStageProductsPage() {
 
   const busy = saving || deleting || updatingOptionId !== null;
 
+  const isMass = menuSet?.management_mode === "mass_import";
+  const canManageProducts = !isMass || menuSet?.structural_editing_allowed === true;
+
+  const managementBlockReason = menuSet?.structural_editing_block_reason
+    || "La administración de productos no está disponible en este momento.";
+
   // Consultar información inicial de la etapa.
   useEffect(() => {
     if (!restaurantId || !branchId || !menuSetId || !stageId) {
@@ -198,6 +205,7 @@ export default function MenuSetStageProductsPage() {
     const results = await Promise.allSettled([
       getMenuSetStageProducts(restaurantId, branchId, menuSetId, stageId),
       getMenuSetStage(restaurantId, branchId, menuSetId, stageId),
+      getMenuSet(restaurantId, branchId, menuSetId),
     ]);
 
     if (!mountedRef.current) return;
@@ -208,6 +216,10 @@ export default function MenuSetStageProductsPage() {
 
     if (results[1].status === "fulfilled" && results[1].value?.id) {
       setStage(results[1].value);
+    }
+
+    if (results[2].status === "fulfilled" && results[2].value?.id) {
+      setMenuSet(results[2].value);
     }
   };
 
@@ -296,7 +308,7 @@ export default function MenuSetStageProductsPage() {
   };
 
   const openForm = (mode, option = null) => {
-    if (busy || operationRef.current) return;
+    if (busy || operationRef.current || !canManageProducts) return;
 
     setFormMode(mode);
     setEditingOption(option);
@@ -311,6 +323,10 @@ export default function MenuSetStageProductsPage() {
   };
 
   const handleSave = async (payload, option) => {
+    if (!canManageProducts) {
+      throw new Error(managementBlockReason);
+    }
+
     if (operationRef.current) return;
 
     operationRef.current = true;
@@ -364,7 +380,7 @@ export default function MenuSetStageProductsPage() {
   };
 
   const handleStatusChange = async (option, checked) => {
-    if (operationRef.current || busy) return;
+    if (operationRef.current || busy || !canManageProducts) return;
 
     const allowed = checked
       ? option.can_activate === true
@@ -423,12 +439,12 @@ export default function MenuSetStageProductsPage() {
   };
 
   const handleDeleteRequest = (option) => {
-    if (busy || option.can_delete !== true) return;
+    if (busy || !canManageProducts || option.can_delete !== true) return;
     setOptionToDelete(option);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!optionToDelete?.id || deleting || operationRef.current) return;
+    if (!optionToDelete?.id || deleting || operationRef.current || !canManageProducts) return;
 
     const optionId = optionToDelete.id;
 
@@ -599,7 +615,9 @@ export default function MenuSetStageProductsPage() {
             <Paper sx={{
               p: 0,
               overflow: "hidden",
-              borderRadius: 0,
+              borderRadius: 1,
+              border: "1px solid",
+              borderColor: "divider",
               backgroundColor: "background.paper",
               boxShadow: "none",
             }}>
@@ -624,11 +642,13 @@ export default function MenuSetStageProductsPage() {
                 </Typography>
 
                 <Tooltip
-                  title={!eligibleLoaded
-                    ? "No se pudieron consultar los productos disponibles."
-                    : availableProducts.length === 0
-                      ? "No hay más productos disponibles para agregar."
-                      : ""}
+                  title={!canManageProducts
+                    ? managementBlockReason
+                    : !eligibleLoaded
+                      ? "No se pudieron consultar los productos disponibles."
+                      : availableProducts.length === 0
+                        ? "No hay más productos disponibles para agregar."
+                        : ""}
                   arrow
                 >
                   <span style={{ width: "auto", maxWidth: "100%" }}>
@@ -636,7 +656,7 @@ export default function MenuSetStageProductsPage() {
                       type="button"
                       variant="contained"
                       startIcon={<AddOutlinedIcon />}
-                      disabled={busy || !eligibleLoaded || availableProducts.length === 0}
+                      disabled={busy || !canManageProducts || !eligibleLoaded || availableProducts.length === 0}
                       onClick={() => openForm("create")}
                       sx={{
                         minWidth: { xs: "100%", sm: 170 },
@@ -654,7 +674,7 @@ export default function MenuSetStageProductsPage() {
               {/* Tabla y tarjetas responsivas */}
               <MenuSetProductsList
                 options={pagination.paginatedItems}
-                busy={busy}
+                busy={busy || !canManageProducts}
                 updatingOptionId={updatingOptionId}
                 hasFilters={Boolean(search.trim()) || statusFilter !== "all"}
                 onStatusChange={handleStatusChange}
