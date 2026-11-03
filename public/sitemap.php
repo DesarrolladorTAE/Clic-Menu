@@ -90,12 +90,12 @@ function getSitemapUrls(): array
 {
     $urls = [
         SITE_URL . '/' => null,
-        SITE_URL . '/planes' => null,
-        SITE_URL . '/contacto' => null,
-        SITE_URL . '/terminos-y-condiciones' => null,
-        SITE_URL . '/blog' => null,
-        SITE_URL . '/recursos/menu-qr-con-canva' => null,
-        SITE_URL . '/recursos/como-elegir-menu-qr' => null,
+        SITE_URL . '/planes/' => null,
+        SITE_URL . '/contacto/' => null,
+        SITE_URL . '/terminos-y-condiciones/' => null,
+        SITE_URL . '/blog/' => null,
+        SITE_URL . '/recursos/menu-qr-con-canva/' => null,
+        SITE_URL . '/recursos/como-elegir-menu-qr/' => null,
     ];
 
     $page = 1;

@@ -44,7 +44,7 @@ export const MENU_QR_CANVA_SEO = {
   keywords:
     "menú qr canva, crear menú digital con canva, menú qr restaurante, menú digital restaurante, clic menu",
 
-  url: "https://clicmenu.com.mx/recursos/menu-qr-con-canva",
+  url: "https://clicmenu.com.mx/recursos/menu-qr-con-canva/",
 
   robots: "index, follow",
   ogType: "article",
@@ -80,7 +80,7 @@ export const MENU_QR_CANVA_SEO = {
 
         mainEntityOfPage: {
           "@type": "WebPage",
-          "@id": "https://clicmenu.com.mx/recursos/menu-qr-con-canva",
+          "@id": "https://clicmenu.com.mx/recursos/menu-qr-con-canva/",
         },
       },
       {
@@ -99,21 +99,21 @@ export const MENU_QR_CANVA_SEO = {
             name: "Digital",
             price: "290",
             priceCurrency: "MXN",
-            url: "https://clicmenu.com.mx/planes",
+            url: "https://clicmenu.com.mx/planes/",
           },
           {
             "@type": "Offer",
             name: "Gestión",
             price: "590",
             priceCurrency: "MXN",
-            url: "https://clicmenu.com.mx/planes",
+            url: "https://clicmenu.com.mx/planes/",
           },
           {
             "@type": "Offer",
             name: "Total",
             price: "950",
             priceCurrency: "MXN",
-            url: "https://clicmenu.com.mx/planes",
+            url: "https://clicmenu.com.mx/planes/",
           },
         ],
       },
@@ -332,8 +332,8 @@ export default function MenuQrCanvaPage({ skipSeo = false }) {
 
         <p className="cm-resource-table-note">
           Pago mensual. También hay pago semestral (pagas 5 meses y recibes 6)
-          y anual (pagas 10 y recibes 12). Precios en pesos mexicanos.{" "}
-          <a href="/planes">Ver el detalle de cada plan</a>.
+          y anual (pagas 10 meses y recibes 12). Precios en pesos mexicanos.{" "}
+          <a href="/planes/">Ver el detalle de cada plan</a>.
         </p>
 
         <p>
@@ -384,7 +384,7 @@ export default function MenuQrCanvaPage({ skipSeo = false }) {
 
             <a
               className="cm-resource-button cm-resource-button-secondary"
-              href="/contacto"
+              href="/contacto/"
             >
               Hablar con el equipo
             </a>

@@ -66,7 +66,7 @@ export default function LandingTermsPage({ skipSeo = false }) {
           title="Términos y Condiciones | Clic Menu"
           description="Consulta los términos, condiciones de uso y políticas aplicables al servicio de Clic Menu."
           keywords="terminos clic menu, condiciones servicio clic menu"
-          url="https://clicmenu.com.mx/terminos-y-condiciones"
+          url="https://clicmenu.com.mx/terminos-y-condiciones/"
           robots="index, follow"
         />
       )}

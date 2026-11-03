@@ -36,13 +36,13 @@ const RESOURCE_GUIDES = [
   {
     title: "Menú QR con Canva: hasta dónde alcanza",
     description: "Descubre qué puedes hacer con Canva, cuáles son sus límites y cuándo conviene utilizar un sistema para tu restaurante.",
-    href: "/recursos/menu-qr-con-canva",
+    href: "/recursos/menu-qr-con-canva/",
     category: "Menú digital",
   },
   {
     title: "Cómo elegir un menú QR para tu restaurante",
     description: "Conoce las siete preguntas que debes hacer antes de contratar un menú digital para tu negocio.",
-    href: "/recursos/como-elegir-menu-qr",
+    href: "/recursos/como-elegir-menu-qr/",
     category: "Guía práctica",
   },
 ];
@@ -305,10 +305,7 @@ export default function BlogPostsPage({
     blog?.cover?.url ||
     undefined;
 
-  const seoUrl =
-    blog?.seo?.canonical_url ||
-    blog?.open_graph?.url ||
-    "https://clicmenu.com.mx/blog";
+  const seoUrl = "https://clicmenu.com.mx/blog/";
 
   const seoRobots = [
     blog?.seo?.robots_index === false

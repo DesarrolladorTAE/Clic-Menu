@@ -39,7 +39,7 @@ export const COMO_ELEGIR_MENU_QR_SEO = {
   keywords:
     "cómo elegir menú qr, mejor menú qr restaurante, comparar menú digital, sistema menú qr, menú qr méxico",
 
-  url: "https://clicmenu.com.mx/recursos/como-elegir-menu-qr",
+  url: "https://clicmenu.com.mx/recursos/como-elegir-menu-qr/",
 
   robots: "index, follow",
   ogType: "article",
@@ -65,8 +65,8 @@ export const COMO_ELEGIR_MENU_QR_SEO = {
         dateModified: "2026-10-19",
 
         mainEntityOfPage:
-          "https://clicmenu.com.mx/recursos/como-elegir-menu-qr",
-
+          "https://clicmenu.com.mx/recursos/como-elegir-menu-qr/",
+        
         author: {
           "@type": "Organization",
           name: "Tecnologías Administrativas ELAD",
@@ -381,7 +381,7 @@ export default function ComoElegirMenuQrPage({ skipSeo = false }) {
         <p>
           Si ya tienes un menú QR hecho a mano y quieres saber hasta dónde
           alcanza, lo tratamos en{" "}
-          <a href="/recursos/menu-qr-con-canva">
+          <a href="/recursos/menu-qr-con-canva/">
             Menú QR con Canva: hasta dónde alcanza
           </a>.
         </p>
@@ -414,7 +414,7 @@ export default function ComoElegirMenuQrPage({ skipSeo = false }) {
 
             <a
               className="cm-resource-button cm-resource-button-secondary"
-              href="/planes"
+              href="/planes/"
             >
               Ver planes
             </a>

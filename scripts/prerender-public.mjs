@@ -86,7 +86,7 @@ const CONTACT_SEO = {
   keywords:
     "contactar software restaurante, asesoría sistema restaurante, digitalizar restaurante, implementar menú qr",
 
-  url: "https://clicmenu.com.mx/contacto",
+  url: "https://clicmenu.com.mx/contacto/",
 };
 
 const PLANS_SEO = {
@@ -98,7 +98,7 @@ const PLANS_SEO = {
   keywords:
     "planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio",
 
-  url: "https://clicmenu.com.mx/planes",
+  url: "https://clicmenu.com.mx/planes/",
 };
 
 const TERMS_SEO = {
@@ -110,7 +110,7 @@ const TERMS_SEO = {
   keywords:
     "terminos clic menu, condiciones servicio clic menu",
 
-  url: "https://clicmenu.com.mx/terminos-y-condiciones",
+  url: "https://clicmenu.com.mx/terminos-y-condiciones/",
 };
 
 function escapeHtmlAttribute(value) {
@@ -518,14 +518,8 @@ async function generateContact(template) {
     );
   }
 
-  if (
-    !html.includes(
-      'https://clicmenu.com.mx/contacto'
-    )
-  ) {
-    throw new Error(
-      "La página de Contacto no contiene su URL canónica."
-    );
+  if (!html.includes(`href="${CONTACT_SEO.url}"`)) {
+    throw new Error("La página de Contacto no contiene su URL canónica.");
   }
 
   const directory = path.dirname(CONTACT_OUTPUT_PATH);
@@ -594,7 +588,7 @@ async function generatePlans(template) {
     throw new Error("No fue posible agregar el marcador de Planes.");
   }
 
-  if ( !html.includes('href="https://clicmenu.com.mx/planes"')) {
+  if (!html.includes(`href="${PLANS_SEO.url}"`)) {
     throw new Error("La página de Planes no contiene su canonical correcta.");
   }
 
@@ -686,7 +680,7 @@ async function generateTerms(template) {
     throw new Error("No fue posible agregar el marcador de Términos.");
   }
 
-  if (!html.includes('href="https://clicmenu.com.mx/terminos-y-condiciones"')) {
+  if (!html.includes(`href="${TERMS_SEO.url}"`)) {
     throw new Error("La página de Términos no contiene su canonical correcta.");
   }
 

@@ -27,7 +27,7 @@ export default function ResourceArticleLayout({
             <Box component="nav" aria-label="Ruta de navegación" className="cm-resource-breadcrumb">
               <a href="/">Inicio</a>
               <span>/</span>
-              <a href="/blog">Blog</a>
+              <a href="/blog/">Blog</a>
               <span>/</span>
               <span>Guías y recursos</span>
             </Box>
@@ -68,8 +68,8 @@ export default function ResourceArticleLayout({
 
             {/* Regresar al blog */}
             <Box component="nav" aria-label="Navegación de recursos" className="cm-resource-back">
-              <a href="/blog">← Volver al blog de Clic Menu</a>
-              <a href="/planes">Conocer los planes →</a>
+              <a href="/blog/">← Volver al blog de Clic Menu</a>
+              <a href="/planes/">Conocer los planes →</a>
             </Box>
           </Box>
         </Box>

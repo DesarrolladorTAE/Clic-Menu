@@ -1,12 +1,6 @@
 import React, { useState } from "react";
 import {
-  AppBar,
-  Box,
-  Button,
-  Container,
-  Drawer,
-  IconButton,
-  Stack,
+  AppBar, Box, Button, Container, Drawer, IconButton, Stack,
 } from "@mui/material";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -16,14 +10,10 @@ import { landingColors } from "../../../theme/landingTheme";
 
 const menuItems = [
   { label: "Inicio", path: "/", enabled: true },
-  { label: "Planes", path: "/planes", enabled: true },
-  { label: "Contáctanos", path: "/contacto", enabled: true },
-  {
-    label: "Términos y condiciones",
-    path: "/terminos-y-condiciones",
-    enabled: true,
-  },
-  { label: "Blogs", path: "/blog", enabled: true },
+  { label: "Planes", path: "/planes/", enabled: true },
+  { label: "Contáctanos", path: "/contacto/", enabled: true },
+  { label: "Términos y condiciones", path: "/terminos-y-condiciones/", enabled: true },
+  { label: "Blogs", path: "/blog/", enabled: true },
 ];
 
 const authItems = [

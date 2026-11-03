@@ -15,6 +15,11 @@ DirectoryIndex index.html
 
 RewriteEngine On
 
+# Redirecciones 301 de las páginas públicas hacia su URL oficial.
+# Solo se redirigen las variantes que no tienen barra final.
+RewriteRule ^(planes|contacto|terminos-y-condiciones|blog)$ /$1/ [R=301,L]
+RewriteRule ^recursos/(menu-qr-con-canva|como-elegir-menu-qr)$ /recursos/$1/ [R=301,L]
+
 # Servir la portada real prerenderizada únicamente en /.
 RewriteRule ^$ landing.html [L]
 

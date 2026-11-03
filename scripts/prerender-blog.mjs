@@ -417,12 +417,11 @@ function normalizeMeta(entity, kind, slug = null) {
     "Contenido relacionado con restaurantes, menús digitales, ventas y administración gastronómica.";
 
   const canonicalUrl =
-    kind === "post" && slug
-      ? `${SITE_URL}/blog/${slug}`
-      : seo.canonical_url ||
-        openGraph.url ||
-        entity?.url ||
-        (kind === "blog" ? `${SITE_URL}/blog` : SITE_URL);
+    kind === "blog"
+      ? `${SITE_URL}/blog/`
+      : kind === "post" && slug
+        ? `${SITE_URL}/blog/${slug}`
+        : seo.canonical_url || openGraph.url || entity?.url || SITE_URL;
 
   const imageObject = openGraph.image || entity?.cover || {};
   const imageUrl = imageObject?.url || DEFAULT_IMAGE;

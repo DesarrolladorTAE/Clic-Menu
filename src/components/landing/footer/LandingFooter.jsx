@@ -1,11 +1,6 @@
 import React from "react";
 import {
-  Box,
-  Container,
-  IconButton,
-  Link,
-  Stack,
-  Typography,
+  Box, Container, IconButton, Link, Stack, Typography,
 } from "@mui/material";
 
 import FacebookRoundedIcon from "@mui/icons-material/FacebookRounded";
@@ -23,10 +18,10 @@ import {
 
 const footerLinks = [
   { label: "Inicio", href: "/" },
-  { label: "Planes", href: "/planes" },
-  { label: "Contáctanos", href: "/contacto" },
-  { label: "Términos y condiciones", href: "/terminos-y-condiciones" },
-  { label: "Blogs", href: "/blog" },
+  { label: "Planes", href: "/planes/" },
+  { label: "Contáctanos", href: "/contacto/" },
+  { label: "Términos y condiciones", href: "/terminos-y-condiciones/" },
+  { label: "Blogs", href: "/blog/" },
 ];
 
 const socialLinks = [

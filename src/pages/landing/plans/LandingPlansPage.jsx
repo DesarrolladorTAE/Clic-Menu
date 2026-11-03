@@ -123,7 +123,7 @@ export default function LandingPlansPage({ skipSeo = false }) {
           title="Planes Clic Menu | Software para Restaurantes a tu Medida"
           description="Conoce los planes de Clic Menu y elige las herramientas que necesita tu restaurante: menú QR, ventas, inventarios, reportes y más."
           keywords="planes software restaurante, precio punto de venta restaurante, sistema restaurante mensual, menú digital qr precio"
-          url="https://clicmenu.com.mx/planes"
+          url="https://clicmenu.com.mx/planes/"
         />
       )}
 

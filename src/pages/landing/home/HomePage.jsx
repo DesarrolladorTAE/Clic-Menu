@@ -38,7 +38,7 @@ export default function HomePage({ skipSeo = false }) {
         title="Clic Menu | Menú QR y Punto de Venta para Restaurantes"
         description="Digitaliza tu restaurante con Clic Menu. Menú QR, punto de venta, pedidos, caja, inventarios y reportes en una sola plataforma."
         keywords="menú qr restaurante, punto de venta restaurante, software para restaurantes, sistema para restaurantes, pos restaurante, comandas digitales"
-        url="https://clicmenu.com.mx"
+        url="https://clicmenu.com.mx/"
       />
     )}
 
