@@ -61,6 +61,7 @@ export default function CashierOnlineOrderCard({
   const orderMissing = order?.order_missing === true;
   const scheduledValue = order?.requested_for_at || order?.estimated_for_at;
   const deliveryAddress = String(order?.delivery_address ?? "").trim();
+  const deliveryInstructions = String(order?.delivery_instructions ?? "").trim();
   const customerNotes = String(order?.customer_notes ?? "").trim();
   const actionsDisabled = disabled || Boolean(busyAction);
 
@@ -267,6 +268,14 @@ export default function CashierOnlineOrderCard({
                 icon={<PlaceRoundedIcon fontSize="small" />}
                 label="Dirección de entrega"
                 value={deliveryAddress}
+              />
+            ) : null}
+
+            {order?.fulfillment_type === "internal_location" && deliveryInstructions ? (
+              <DetailRow
+                icon={<PlaceRoundedIcon fontSize="small" />}
+                label="Indicaciones de entrega"
+                value={deliveryInstructions}
               />
             ) : null}
 

@@ -398,6 +398,11 @@ function DestinationBlock({ destination, themeColor }) {
   const details = destination?.details || {};
   const rows = [];
 
+  const deliveryInstructions =
+    destination?.type === "internal_location"
+      ? String(destination?.delivery_instructions ?? "").trim()
+      : "";
+
   addDestinationRow(rows, "Nombre", details?.name);
   addDestinationRow(rows, "Zona", details?.zone_name);
   addDestinationRow(rows, "Área", details?.internal_area);
@@ -428,8 +433,15 @@ function DestinationBlock({ destination, themeColor }) {
       >
         <LocationOnOutlinedIcon sx={{ color: themeColor, fontSize: 20 }} />
 
-        <Typography sx={{ fontSize: 14, fontWeight: 900, color: "text.primary" }}>
-          {destination?.label || "Destino"}
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 900,
+            color: "text.primary",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {deliveryInstructions || destination?.label || "Destino"}
         </Typography>
       </Stack>
 

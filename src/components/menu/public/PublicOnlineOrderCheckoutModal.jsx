@@ -146,6 +146,7 @@ export default function PublicOnlineOrderCheckoutModal({
 
   const [deliveryConceptId, setDeliveryConceptId] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [scheduledPointId, setScheduledPointId] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledPointTimeBlockId, setScheduledPointTimeBlockId] = useState("");
@@ -228,6 +229,7 @@ export default function PublicOnlineOrderCheckoutModal({
     requestedForAt,
     deliveryConceptId,
     deliveryAddress,
+    deliveryInstructions,
     scheduledPointId,
     scheduledDate,
     scheduledPointTimeBlockId,
@@ -438,6 +440,7 @@ export default function PublicOnlineOrderCheckoutModal({
     setRequestedForAt("");
     setDeliveryConceptId("");
     setDeliveryAddress("");
+    setDeliveryInstructions("");
     setScheduledPointId("");
     setScheduledDate("");
     setScheduledPointTimeBlockId("");
@@ -447,6 +450,7 @@ export default function PublicOnlineOrderCheckoutModal({
   function handleDeliveryConceptChange(value) {
     setDeliveryConceptId(value);
     setDeliveryAddress("");
+    setDeliveryInstructions("");
   }
 
   function handleTimingTypeChange(value) {
@@ -478,6 +482,7 @@ export default function PublicOnlineOrderCheckoutModal({
     const email = String(customerEmail || "").trim();
     const notes = String(customerNotes || "").trim();
     const address = String(deliveryAddress || "").trim();
+    const instructions = String(deliveryInstructions || "").trim();
 
     if (!name) return { ok: false, message: "Escribe el nombre para tu pedido." };
 
@@ -546,6 +551,14 @@ export default function PublicOnlineOrderCheckoutModal({
       }
     }
 
+    if (fulfillmentType === "internal_location" && instructions.length > 500)
+    {
+      return {
+        ok: false,
+        message: "Las indicaciones de entrega no pueden superar los 500 caracteres.",
+      };
+    }
+
     if (!paymentType) {
       return {
         ok: false,
@@ -571,6 +584,11 @@ export default function PublicOnlineOrderCheckoutModal({
 
     if (fulfillmentType === "home_delivery") {
       payload.delivery_address = address;
+    }
+
+    if (fulfillmentType === "internal_location")
+    {
+      payload.delivery_instructions = instructions || null;
     }
 
     if (isScheduledPoint) {
@@ -635,8 +653,9 @@ export default function PublicOnlineOrderCheckoutModal({
     try {
       const quotePayload = { ...selection.payload };
 
-      // La dirección completa se necesita al crear el pedido, no para cotizar.
+      // Los datos particulares del destino se necesitan al crear el pedido.
       delete quotePayload.delivery_address;
+      delete quotePayload.delivery_instructions;
 
       const result = await onQuote?.(quotePayload);
 
@@ -873,6 +892,7 @@ export default function PublicOnlineOrderCheckoutModal({
             requestedForAt={requestedForAt}
             deliveryConceptId={deliveryConceptId}
             deliveryAddress={deliveryAddress}
+            deliveryInstructions={deliveryInstructions}
             deliveryConcepts={deliveryConcepts}
             selectedDeliveryConcept={selectedDeliveryConcept}
             scheduledPointId={scheduledPointId}
@@ -890,6 +910,7 @@ export default function PublicOnlineOrderCheckoutModal({
             onRequestedForAtChange={setRequestedForAt}
             onDeliveryConceptChange={handleDeliveryConceptChange}
             onDeliveryAddressChange={setDeliveryAddress}
+            onDeliveryInstructionsChange={setDeliveryInstructions}
             onScheduledPointChange={handleScheduledPointChange}
             onScheduledDateChange={handleScheduledDateChange}
             onBlockChange={handleBlockChange}

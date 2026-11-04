@@ -180,6 +180,7 @@ export default function OnlineOrderFulfillmentSection({
   requestedForAt,
   deliveryConceptId,
   deliveryAddress,
+  deliveryInstructions,
   deliveryConcepts,
   selectedDeliveryConcept,
   scheduledPointId,
@@ -197,6 +198,7 @@ export default function OnlineOrderFulfillmentSection({
   onRequestedForAtChange,
   onDeliveryConceptChange,
   onDeliveryAddressChange,
+  onDeliveryInstructionsChange,
   onScheduledPointChange,
   onScheduledDateChange,
   onBlockChange,
@@ -504,6 +506,27 @@ export default function OnlineOrderFulfillmentSection({
                   inputProps={{
                     maxLength: 500,
                   }}
+                  disabled={disabled}
+                  sx={selectFieldSx(accentColor)}
+                />
+              }
+            />
+          ) : null}
+
+          {fulfillmentType === "internal_location" && selectedDeliveryConcept ? (
+            <FieldBlock
+              label="Indicaciones de entrega (opcional)"
+              help="Indica dónde deseas recibir tu pedido dentro de la ubicación seleccionada."
+              input={
+                <TextField
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  value={deliveryInstructions}
+                  onChange={(e) => onDeliveryInstructionsChange?.(e.target.value)}
+                  placeholder="Ej. Habitación 305, camastro 8 o alguna referencia"
+                  inputProps={{ maxLength: 500 }}
                   disabled={disabled}
                   sx={selectFieldSx(accentColor)}
                 />

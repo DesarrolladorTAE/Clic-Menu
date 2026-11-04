@@ -130,7 +130,14 @@ export default function CashierOnlineOrderDetailView({
             <InfoRow label="Fecha programada" value={formatDate(order.destination.scheduled_date)} />
           ) : null}
 
-          <DestinationSnapshot snapshot={order?.destination?.destination_snapshot} />
+          <DestinationSnapshot
+            snapshot={order?.destination?.destination_snapshot}
+            deliveryInstructions={
+              order?.fulfillment_type === "internal_location"
+                ? order?.destination?.delivery_instructions
+                : null
+            }
+          />
 
           {order?.fulfillment_type === "home_delivery" &&
             order?.destination?.delivery_address ? (
@@ -857,17 +864,27 @@ function ProductRow({
   );
 }
 
-function DestinationSnapshot({ snapshot }) {
+function DestinationSnapshot({ snapshot, deliveryInstructions }) {
   const values = extractDestinationValues(snapshot);
+  const instructions = String(deliveryInstructions ?? "").trim();
 
-  if (values.length === 0) return null;
+  if (values.length === 0 && !instructions) {
+    return null;
+  }
 
   return (
     <>
       <Divider />
 
       <Box>
-        <Typography sx={{ mb: 0.75, fontSize: 12, fontWeight: 800, color: "text.secondary" }}>
+        <Typography
+          sx={{
+            mb: 0.75,
+            fontSize: 12,
+            fontWeight: 800,
+            color: "text.secondary",
+          }}
+        >
           Destino
         </Typography>
 
@@ -875,11 +892,42 @@ function DestinationSnapshot({ snapshot }) {
           {values.map((value, index) => (
             <Typography
               key={`${value}:${index}`}
-              sx={{ fontSize: 13, color: "text.primary", wordBreak: "break-word" }}
+              sx={{
+                fontSize: 13,
+                color: "text.primary",
+                wordBreak: "break-word",
+              }}
             >
               {value}
             </Typography>
           ))}
+
+          {instructions ? (
+            <Box sx={{ pt: 0.75 }}>
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: "text.secondary",
+                }}
+              >
+                Indicaciones de entrega
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 14,
+                  color: "text.primary",
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {instructions}
+              </Typography>
+            </Box>
+          ) : null}
         </Stack>
       </Box>
     </>
@@ -1064,7 +1112,10 @@ function extractDestinationValues(snapshot) {
     }
 
     if (typeof value === "number" && Number.isFinite(value)) {
-      values.push(String(value));
+      if (value !== 0) {
+        values.push(String(value));
+      }
+
       return;
     }
 
