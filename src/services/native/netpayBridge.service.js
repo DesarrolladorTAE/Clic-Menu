@@ -203,6 +203,14 @@ export function startNetpayVoucherReprint(payload) {
   );
 }
 
+export function startNetpayFolioReprint(payload) {
+  return callBridgeJsonMethod(
+    "reprintByFolio",
+    payload,
+    "Android no devolvió una respuesta válida al iniciar la reimpresión NetPay por folio."
+  );
+}
+
 export function getNetpayPendingOperation() {
   return callBridgeJsonMethod(
     "getPendingOperation",
@@ -222,6 +230,20 @@ export function acknowledgeNetpayPendingOperation({
       operation_uuid: operationUuid || null,
     },
     "Android no devolvió una respuesta válida al confirmar la operación NetPay pendiente."
+  );
+}
+
+export function acknowledgeNetpayFolioReprintReview({
+  netpayTransactionId,
+  operationUuid,
+}) {
+  return callBridgeJsonMethod(
+    "acknowledgeFolioReprintReview",
+    {
+      netpay_transaction_id: Number(netpayTransactionId),
+      operation_uuid: operationUuid,
+    },
+    "Android no devolvió una respuesta válida al confirmar la revisión NetPay."
   );
 }
 

@@ -1,15 +1,17 @@
 // src/components/staff/casher/refunds/CashierRefundsHeroCard.jsx
 import React from "react";
 import {
-  Box, Card, CardContent, Chip, Stack, Typography,
+  Box, Button, Card, CardContent, Chip, Stack, Typography,
 } from "@mui/material";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
 
 export default function CashierRefundsHeroCard({
   syncing = false,
   rows = [],
+  onOpenNetpayOperations,
 }) {
   const refundableCount = rows.filter((row) => {
     const status = String(row?.status || "").trim().toLowerCase();
@@ -71,15 +73,37 @@ export default function CashierRefundsHeroCard({
               </Typography>
             </Box>
 
-            <Chip
-              icon={<HistoryRoundedIcon />}
-              label={syncing ? "Sincronizando…" : "Vista histórica"}
-              sx={{
-                fontWeight: 800,
-                bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
-                color: syncing ? "#8A6D3B" : "#0A7A2F",
-              }}
-            />
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              spacing={1.5}
+              sx={{ width: { xs: "100%", lg: "auto" }, flexShrink: 0 }}
+            >
+              <Button
+                type="button"
+                variant="contained"
+                startIcon={<AccountBalanceRoundedIcon />}
+                onClick={onOpenNetpayOperations}
+                sx={{
+                  minHeight: 42,
+                  fontWeight: 800,
+                  textTransform: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Operaciones NetPay
+              </Button>
+
+              <Chip
+                icon={<HistoryRoundedIcon />}
+                label={syncing ? "Sincronizando…" : "Vista histórica"}
+                sx={{
+                  fontWeight: 800,
+                  bgcolor: syncing ? "#FFF4D9" : "#E7F8EB",
+                  color: syncing ? "#8A6D3B" : "#0A7A2F",
+                }}
+              />
+            </Stack>
           </Stack>
 
           <Box

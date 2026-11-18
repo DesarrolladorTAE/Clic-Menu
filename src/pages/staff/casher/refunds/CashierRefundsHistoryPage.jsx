@@ -32,6 +32,14 @@ import {
 } from "../../../../services/staff/casher/cashierNetpayPayment.service";
 
 import {
+  resumeCashierPendingNetpayFolioReprint,
+} from "../../../../services/staff/casher/cashierNetpayFolioReprint.service";
+
+import {
+  subscribeNetpayResult,
+} from "../../../../services/native/netpayBridge.service";
+
+import {
   sendCashierSaleTicketWhatsapp,
   fetchCashierSaleTicketPrintConfig,
   fetchCashierSaleTicketPrintPayload,
@@ -39,13 +47,14 @@ import {
 } from "../../../../services/staff/casher/cashierTicket.service";
 
 import CashierRefundsHeroCard from "../../../../components/staff/casher/refunds/CashierRefundsHeroCard";
+import CashierNetpayFolioReprintDialog from "../../../../components/staff/casher/refunds/CashierNetpayFolioReprintDialog";
 import CashierRefundHistoryFiltersCard from "../../../../components/staff/casher/refunds/CashierRefundHistoryFiltersCard";
 import CashierRefundSalesPanel from "../../../../components/staff/casher/refunds/CashierRefundSalesPanel";
 import CashierRefundTicketActionsDialog from "../../../../components/staff/casher/refunds/CashierRefundTicketActionsDialog";
 import CashierRefundSaleDetailDialog from "../../../../components/staff/casher/refunds/CashierRefundSaleDetailDialog";
 import CashierRefundFullCancelDialog from "../../../../components/staff/casher/refunds/CashierRefundFullCancelDialog";
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 5;
 
 export default function CashierRefundsHistoryPage() {
   const nav = useNavigate();
@@ -64,6 +73,8 @@ export default function CashierRefundsHistoryPage() {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [netpayOperationsOpen, setNetpayOperationsOpen] = useState(false);
+  const [netpayOperationsRevision, setNetpayOperationsRevision] = useState(0);
   const [selectedSummary, setSelectedSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
@@ -84,6 +95,7 @@ export default function CashierRefundsHistoryPage() {
 
   const pollRef = useRef(null);
   const pendingNetpayResumeRef = useRef(false);
+  const lastFolioNoticeRef = useRef("");
 
   const showAlert = ({ severity = "info", title, message }) => {
     if (!message) return;
@@ -342,6 +354,56 @@ export default function CashierRefundsHistoryPage() {
         "La reimpresión del voucher NetPay no pudo confirmarse.",
     });
 
+        return false;
+  };
+
+  const handleResolvedNetpayFolioReprint = (result, { resumed = false } = {}) => {
+    const outcome = String(result?.outcome || "").toLowerCase();
+
+    if (["none", "different_operation_type", "in_progress"].includes(outcome)) {
+      return false;
+    }
+
+    const noticeKey = [
+      result?.operationUuid || "",
+      result?.eventUuid || "",
+      outcome,
+    ].join(":");
+
+    if (lastFolioNoticeRef.current === noticeKey) return false;
+    lastFolioNoticeRef.current = noticeKey;
+
+    setNetpayOperationsRevision((prev) => prev + 1);
+
+    if (outcome === "reprinted") {
+      showAlert({
+        severity: "success",
+        title: resumed ? "Reimpresión recuperada" : "Comprobante NetPay",
+        message: result?.message || "NetPay confirmó la reimpresión del comprobante.",
+      });
+      return true;
+    }
+
+    if (["review_required", "local_review_required", "review_pending"].includes(outcome)) {
+      setNetpayOperationsOpen(true);
+      showAlert({
+        severity: "warning",
+        title: "Revisión necesaria",
+        message: result?.message ||
+          "Esta consulta necesita revisión antes de solicitar otra reimpresión.",
+      });
+      return false;
+    }
+
+    if (outcome === "not_reprinted") {
+      showAlert({
+        severity: "warning",
+        title: "Reimpresión no confirmada",
+        message: result?.message ||
+          "NetPay no confirmó la reimpresión del comprobante.",
+      });
+    }
+
     return false;
   };
 
@@ -381,11 +443,21 @@ export default function CashierRefundsHistoryPage() {
           pending.operation.operationType || ""
         ).trim().toLowerCase();
 
-        if (operationType === "cancellation") {
+                if (operationType === "cancellation") {
           const result = await resumeCashierPendingNetpayCancellation();
           if (!active) return;
 
           await handleResolvedNetpayCancellation(result, { resumed: true });
+          return;
+        }
+
+        if (operationType === "folio_reprint") {
+          setNetpayOperationsOpen(true);
+
+          const result = await resumeCashierPendingNetpayFolioReprint();
+          if (!active) return;
+
+          handleResolvedNetpayFolioReprint(result, { resumed: true });
           return;
         }
 
@@ -450,6 +522,51 @@ export default function CashierRefundsHistoryPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+
+  useEffect(() => {
+    let active = true;
+
+    const processPendingFolioResult = async () => {
+      try {
+        const result = await resumeCashierPendingNetpayFolioReprint();
+        if (!active) return;
+
+        handleResolvedNetpayFolioReprint(result);
+      } catch (e) {
+        if (!active) return;
+
+        showAlert({
+          severity: "error",
+          title: "No se pudo registrar la consulta",
+          message: pickErr(
+            e,
+            "El resultado permanece guardado en la terminal y podrá procesarse nuevamente."
+          ),
+        });
+      }
+    };
+
+    const unsubscribe = subscribeNetpayResult((result) => {
+      if (String(result?.operation || "") !== "folio_reprint_result") return;
+      processPendingFolioResult();
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        processPendingFolioResult();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      active = false;
+      unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredRows = useMemo(() => {
     const query = String(filters?.query || "").trim().toLowerCase();
@@ -950,7 +1067,11 @@ export default function CashierRefundsHistoryPage() {
   return (
     <PageContainer>
       <Stack spacing={3}>
-        <CashierRefundsHeroCard syncing={refreshing} rows={rows} />
+        <CashierRefundsHeroCard
+          syncing={refreshing}
+          rows={rows}
+          onOpenNetpayOperations={() => setNetpayOperationsOpen(true)}
+        />
 
         <CashierRefundHistoryFiltersCard
           filters={filters}
@@ -991,7 +1112,7 @@ export default function CashierRefundsHistoryPage() {
           Number(ticketActionsSale?.sale_id || 0)
         }
         voucherReprintAvailable={
-          ticketActionsSale?.can_reprint_netpay_voucher === true &&
+           ticketActionsSale?.can_reprint_netpay_voucher === true &&
           Number(ticketActionsSale?.netpay_transaction_id || 0) > 0
         }
         onReprintNetpayVoucher={handleReprintNetpayVoucher}
@@ -1017,14 +1138,22 @@ export default function CashierRefundsHistoryPage() {
         busy={cancelBusy}
         disabled={!selectedCanRefund}
       />
-      
+
+      <CashierNetpayFolioReprintDialog
+        open={netpayOperationsOpen}
+        onClose={() => setNetpayOperationsOpen(false)}
+        onNotify={showAlert}
+        reloadToken={netpayOperationsRevision}
+        onChanged={() => setNetpayOperationsRevision((prev) => prev + 1)}
+      />
+
       <AppAlert
         open={alertState.open}
         onClose={closeAlert}
         severity={alertState.severity}
         title={alertState.title}
         message={alertState.message}
-        autoHideDuration={4200}
+        autoHideDuration={3000}
       />
     </PageContainer>
   );

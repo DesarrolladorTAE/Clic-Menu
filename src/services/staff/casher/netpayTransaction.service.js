@@ -190,3 +190,61 @@ export async function storeNetpayVoucherReprintResult(
 
   return res?.data;
 }
+
+// Historial independiente de intentos NetPay
+export async function fetchNetpayFolioReprints(page = 1, perPage = 5) {
+  const res = await staffApi.get(
+    "/staff/cashier/netpay-transactions/folio-reprints",
+    {
+      params: { page, per_page: perPage, _t: Date.now() },
+      headers: NO_CACHE_HEADERS,
+    }
+  );
+
+  return res?.data;
+}
+
+// Autorizar una consulta y reimpresión por folio
+export async function requestNetpayFolioReprint(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/folio-reprint`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+// Registrar el resultado recibido desde Android
+export async function storeNetpayFolioReprintResult(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/folio-reprint-result`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
+
+// Registrar el cierre de una revisión
+export async function closeNetpayFolioReprintReview(
+  saleId,
+  netpayTransactionId,
+  payload
+) {
+  const res = await staffApi.post(
+    `/staff/cashier/sales/${saleId}/netpay-transactions/${netpayTransactionId}/folio-reprint/review-close`,
+    payload,
+    { headers: NO_CACHE_HEADERS }
+  );
+
+  return res?.data;
+}
