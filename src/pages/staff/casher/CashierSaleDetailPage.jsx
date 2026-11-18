@@ -372,8 +372,7 @@ export default function CashierSaleDetailPage() {
     return (
       ["open", "locked", "paying"].includes(checkStatus) &&
       (!groupStatus || ["open", "partially_paid"].includes(groupStatus)) &&
-      hasTable &&
-      !isCashierDirect &&
+      (hasTable || isCashierDirect) &&
       !isOnlineOrder &&
       !hasPaymentEvidence
     );

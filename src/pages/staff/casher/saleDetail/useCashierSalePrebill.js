@@ -40,7 +40,7 @@ export default function useCashierSalePrebill({
       showAlert?.({
         severity: "warning",
         title: "PRECUENTA",
-        message: "La PRECUENTA solo está disponible para cuentas de mesa pendientes de pago.",
+        message: "La PRECUENTA solo está disponible para cuentas de mesa o ventas directas pendientes de pago.",
       });
       return false;
     }
